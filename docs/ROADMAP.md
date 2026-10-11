@@ -133,7 +133,7 @@ Statuses: DONE / IN_PROGRESS / BLOCKED / PLANNED. Mark DONE only with code, test
 - [ ] Reproducible experiment manifests; no benchmark presented as proof of AGI.
 
 ## M7 — Personal assistant experience
-- [ ] Windows tray process and lifecycle controls.
+- [x] User-started Windows tray process with pause/resume and a minimal local status dialog.
 - [ ] Native notifications with user-configurable quiet/pause controls.
 - [ ] Permission and retention settings.
 - [ ] Diagnostics/action history and memory review.
