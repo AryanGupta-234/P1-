@@ -30,6 +30,7 @@ def test_foreground_observer_emits_only_on_change():
     provider = WindowsForegroundProvider(
         api=api,
         process_lookup=lambda pid: "msedge.exe",
+        process_factory=lambda pid: FakeProcess(),
     )
 
     first = list(provider.collect_snapshot())
