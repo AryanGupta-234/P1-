@@ -135,9 +135,11 @@ def test_uia_scan_timeout_does_not_accumulate_worker_threads():
                 "focusable": False,
             }]
 
-    monitor = provider(reader=SlowReader(), timeout=0.1)
+    clock_now = [100.0]
+    monitor = provider(reader=SlowReader(), timeout=0.1, clock=lambda: clock_now[0])
     assert monitor.collect_snapshot() == []
     assert started.wait(1.0)
+    clock_now[0] += 11.0
     assert monitor.collect_snapshot() == []
     release.set()
     assert monitor._scan_lock.acquire(timeout=1.0)
