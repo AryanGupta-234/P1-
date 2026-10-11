@@ -20,6 +20,7 @@ from aie.config import (
     execution_enabled_path,
     execution_kill_switch_path,
     memory_database_path,
+    notification_preferences_path,
     observer_is_paused,
     policy_audit_database_path,
     set_observer_paused,
@@ -47,6 +48,85 @@ def run_observer_tray() -> None:
     except OSError as exc:
         console.print(f"[red]Tray startup failed:[/red] {type(exc).__name__}")
         raise typer.Exit(2) from exc
+
+
+@app.command("notifications-status")
+def notifications_status() -> None:
+    """Show whether local diagnostic balloon notifications are enabled."""
+    from aie.desktop.notifications import NotificationPreferencesStore
+
+    try:
+        preferences = NotificationPreferencesStore(notification_preferences_path()).load()
+    except ValueError as exc:
+        console.print(f"[red]Notification preferences invalid:[/red] {exc}")
+        raise typer.Exit(2) from exc
+    state = "enabled" if preferences.enabled else "disabled"
+    quiet = (
+        "disabled" if preferences.quiet_start == preferences.quiet_end
+        else f"{preferences.quiet_start}-{preferences.quiet_end} local time"
+    )
+    console.print(f"Diagnostic notifications: {state}")
+    console.print(f"Quiet hours: {quiet}")
+    console.print(f"Observer paused: {observer_is_paused()}")
+    console.print("Delivery requires the user-started tray process: aie tray")
+
+
+@app.command("notifications-enable")
+def notifications_enable(
+    confirm: bool = typer.Option(False, "--confirm", help="Enable local diagnostic balloon notifications."),
+) -> None:
+    """Enable generic local diagnostic notices; they remain quiet during configured hours."""
+    from aie.desktop.notifications import NotificationPreferencesStore
+
+    if not confirm:
+        console.print("[yellow]Pass --confirm to enable notifications.[/yellow]")
+        raise typer.Exit(2)
+    store = NotificationPreferencesStore(notification_preferences_path())
+    try:
+        preferences = store.load().model_copy(update={"enabled": True})
+        store.save(preferences)
+    except ValueError as exc:
+        console.print(f"[red]Notification preferences rejected:[/red] {exc}")
+        raise typer.Exit(2) from exc
+    console.print("[green]Diagnostic notifications enabled.[/green] Start the tray with aie tray.")
+
+
+@app.command("notifications-disable")
+def notifications_disable() -> None:
+    """Disable diagnostic balloon notifications immediately."""
+    from aie.desktop.notifications import NotificationPreferencesStore
+
+    store = NotificationPreferencesStore(notification_preferences_path())
+    try:
+        store.save(store.load().model_copy(update={"enabled": False}))
+    except ValueError as exc:
+        console.print(f"[red]Notification preferences rejected:[/red] {exc}")
+        raise typer.Exit(2) from exc
+    console.print("[green]Diagnostic notifications disabled.[/green]")
+
+
+@app.command("notifications-quiet-hours")
+def notifications_quiet_hours(
+    quiet_start: str = typer.Argument(..., help="Local quiet-hour start in HH:MM."),
+    quiet_end: str = typer.Argument(..., help="Local quiet-hour end in HH:MM."),
+) -> None:
+    """Set local quiet hours; use equal start/end values to disable quiet hours."""
+    from aie.desktop.notifications import NotificationPreferences, NotificationPreferencesStore
+
+    store = NotificationPreferencesStore(notification_preferences_path())
+    try:
+        current = store.load()
+        updated = NotificationPreferences(
+            enabled=current.enabled,
+            quiet_start=quiet_start,
+            quiet_end=quiet_end,
+        )
+        store.save(updated)
+    except ValueError as exc:
+        console.print(f"[red]Quiet hours rejected:[/red] {exc}")
+        raise typer.Exit(2) from exc
+    quiet = "disabled" if quiet_start == quiet_end else f"{quiet_start}-{quiet_end}"
+    console.print(f"[green]Quiet hours saved:[/green] {quiet} local time")
 
 
 @app.command("health")
