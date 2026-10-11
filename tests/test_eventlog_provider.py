@@ -132,7 +132,7 @@ class FailingEventLogApi(FakeEventLogApi):
         raise PermissionError("private details should not be copied")
 
 
-def test_eventlog_access_error_is_reported_once_without_error_message():
+def test_eventlog_access_error_is_reported_without_error_message():
     api = FailingEventLogApi()
     provider = WindowsEventLogProvider(channels=["System"], api=api)
 
@@ -143,7 +143,9 @@ def test_eventlog_access_error_is_reported_once_without_error_message():
     assert first[0].event_type == "windows.eventlog.provider_error"
     assert first[0].data["error_type"] == "PermissionError"
     assert "message" not in first[0].data
-    assert second == []
+    assert len(second) == 1
+    assert second[0].event_type == "windows.eventlog.provider_error"
+    assert second[0].data["error_type"] == "PermissionError"
 
 
 
