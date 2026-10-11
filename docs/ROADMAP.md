@@ -35,9 +35,11 @@ Statuses: DONE / IN_PROGRESS / BLOCKED / PLANNED. Mark DONE only with code, test
 - [x] Event Log provider wired into observer runtime with bounded polling and per-pass record cap.
 - [x] Opt-in allowlisted UI Automation structural tree sampler with node/depth/time bounds.
 - [x] Global per-user observer pause/resume, status and age-based retention pruning.
-- [ ] ETW process telemetry and event-loss metrics.
+- [x] Provider health transitions, sanitized error classes, UIA timeout/recovery signals and the `aie health` status view.
+- [x] Event Log retention-rollover gap counts and explicit provider recovery; log resets remain unknown-loss incidents.
+- [ ] ETW process lifecycle telemetry, owned-session shutdown and ETW buffer-loss metrics.
 - [ ] Systemwide per-process CPU/memory/disk/network sampling.
-- [ ] Export/delete-all controls and observer health view.
+- [ ] Export/delete-all controls.
 - [ ] Validate Event Log/UIA permissions and data collection on the target Windows desktop.
 
 ## M1.5 — Video intelligence
@@ -111,10 +113,10 @@ Statuses: DONE / IN_PROGRESS / BLOCKED / PLANNED. Mark DONE only with code, test
 - [ ] Desktop UI after core telemetry and policy APIs stabilize.
 
 ## Immediate dev sprint
-1. Verify Event Log runtime integration tests on the current Windows CI matrix.
-2. Add observer health telemetry for permission errors, sensor timeouts and event loss.
-3. Validate browser/native-host, UIA and Event Log behavior on the target Windows desktop.
-4. Implement ETW process telemetry with explicit coverage boundaries.
+1. Validate browser/native-host, UIA and Event Log behavior on the target Windows desktop.
+2. Implement ETW process lifecycle telemetry with owned-session shutdown and explicit buffer-loss reporting.
+3. Measure observer overhead, ETW delivery latency, lost buffers and reconciliation coverage.
+4. Add systemwide per-process sampling only after measuring current observer overhead.
 5. Update this tracker and Architecture Spotlight with each implementation increment.
 
 ## Risk register
