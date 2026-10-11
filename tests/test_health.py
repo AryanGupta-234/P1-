@@ -38,14 +38,18 @@ def test_health_tracker_records_healthy_degraded_and_recovery_transitions():
     assert degraded[-1].data["status"] == "degraded"
     assert degraded[-1].data["consecutive_failures"] == 1
 
-    recovered = tracker.collect("windows.test", lambda: [])
+    no_evidence = tracker.collect("windows.test", lambda: [])
+    assert not any(event.event_type == "observer.provider_health" for event in no_evidence)
+    assert tracker.summary_events()[0].data["status"] == "degraded"
+
+    recovered = tracker.collect("windows.test", lambda: [sample_event()])
     assert recovered[-1].data["status"] == "healthy"
     assert recovered[-1].data["consecutive_failures"] == 0
 
     summary = tracker.summary_events()
     assert len(summary) == 1
     assert summary[0].event_type == "observer.provider_health_summary"
-    assert summary[0].data["collections"] == 3
+    assert summary[0].data["collections"] == 4
     assert summary[0].data["failures"] == 1
 
 
