@@ -35,3 +35,8 @@ def set_observer_paused(paused: bool) -> None:
         marker.unlink()
     except FileNotFoundError:
         pass
+
+
+def memory_database_path() -> Path:
+    """Private local database for user-authored persistent memories."""
+    return data_dir() / "memory.sqlite3"
