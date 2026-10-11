@@ -94,6 +94,21 @@ def inventory(output: Path | None = typer.Option(None, "--output", "-o")) -> Non
         console.print(rendered)
 
 
+
+def _print_video_diagnostic(event) -> None:
+    """Present a new diagnostic suggestion without executing its recommendation."""
+    severity = str(event.data.get("severity", "medium")).upper()
+    cause = str(event.data.get("cause", event.entity.name))
+    confidence = float(event.data.get("confidence", 0.0))
+    recommendation = str(event.data.get("recommendation", "Review diagnostic evidence."))
+    color = "red" if severity == "HIGH" else "yellow"
+    console.print(
+        f"\\n[{color}]P1 video intelligence: {cause} ({severity}, {confidence:.0%})[/{color}]"
+    )
+    console.print(recommendation)
+    console.print("[dim]Suggestion only — no action was executed.[/dim]")
+
+
 @app.command()
 def observe(
     duration: int = typer.Option(60, min=1, max=86400),
@@ -132,6 +147,7 @@ def observe(
             include_foreground=foreground,
             include_window_titles=include_window_titles,
             foreground_sample_interval=foreground_sample_interval,
+            on_diagnostic=_print_video_diagnostic,
         )
     except OSError as exc:
         console.print(f"[red]Observer unavailable:[/red] {exc}")
