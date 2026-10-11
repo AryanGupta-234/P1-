@@ -153,6 +153,12 @@ def _signal_title(event: AIEEvent) -> tuple[str, str | None]:
         suffix = "; top: " + ", ".join(summaries) if summaries else ""
         return f"System process snapshot ({sampled_text} sampled){suffix}", None
 
+    if event_type in {"process.etw_start", "process.etw_stop"}:
+        app = _safe_process_name(data.get("process_name"))
+        lifecycle = "started" if event_type == "process.etw_start" else "stopped"
+        name = app or "Process"
+        return f"Process {lifecycle}: {name}", app
+
     if event_type == "process.foreground_resource_sample":
         app = _safe_process_name(data.get("process_name"))
         cpu = _safe_number(data, "cpu_pct", maximum=100)
