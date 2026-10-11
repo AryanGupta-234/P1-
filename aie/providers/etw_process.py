@@ -308,6 +308,18 @@ class WindowsETWProcessProvider:
         if not 1 <= duration_seconds <= 1800:
             raise ValueError("duration_seconds must be between 1 and 1800")
 
+        from aie.providers.etw_catalog import discover_etw_providers
+
+        try:
+            registered = discover_etw_providers(runner=self._runner, timeout=20.0)
+        except RuntimeError as exc:
+            raise ETWProcessCaptureError("provider_catalog_unavailable") from exc
+        if not any(
+            provider.guid.casefold() == KERNEL_PROCESS_GUID
+            for provider in registered
+        ):
+            raise ETWProcessCaptureError("kernel_process_provider_not_registered")
+
         machine_id = self._machine_id or host_id()
         session_name = f"AIE-Proc-{uuid4().hex[:12]}"
         workspace = Path(tempfile.mkdtemp(prefix="aie-etw-", dir=self._temp_root))
