@@ -19,6 +19,9 @@ __all__ = [
     "new_task_session",
     "TaskSessionPromptContext",
     "build_task_session_prompt_context",
+    "CorrelationRule",
+    "CorrelatedEvidence",
+    "correlate_events",
 ]
 
 
@@ -37,6 +40,9 @@ def __getattr__(name: str):
         return getattr(module, name)
     if name in {"TaskSessionPromptContext", "build_task_session_prompt_context"}:
         module = import_module("aie.context.task_session.context")
+        return getattr(module, name)
+    if name in {"CorrelationRule", "CorrelatedEvidence", "correlate_events"}:
+        module = import_module("aie.context.temporal")
         return getattr(module, name)
     if name == "build_video_observation_context":
         module = import_module("aie.context.video")
