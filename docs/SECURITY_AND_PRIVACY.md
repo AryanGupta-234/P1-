@@ -14,7 +14,7 @@ AIE observes local Windows activity and may later propose or execute scoped acti
 - OS actions require policy-broker authorization, scoped capability, budgets, timeout and audit.
 - Approval for destructive, privileged, financial, external or difficult-to-reverse actions.
 - Every action has a postcondition verifier; failed verification stops execution rather than blindly retrying.
-- Cloud model routing must respect explicit egress policy and minimize/redact telemetry.
+- Cloud model routing must respect explicit per-request egress policy and minimize/redact telemetry. The CLI sends only the prompt explicitly supplied to `aie ask`; observer events, screen metadata and browser telemetry are not attached automatically.
 
 ## Screen and UI Automation observation
 Structural UI Automation sampling is off by default and requires an explicit per-process allowlist. The initial provider records only control type, class, automation ID and geometry, with strict depth/node/time bounds. It does not query control text, values, passwords or screenshots. Window-title capture remains separately opt-in and sensitive.
