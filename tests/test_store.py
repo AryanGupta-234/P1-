@@ -104,3 +104,56 @@ def test_query_events_rejects_naive_or_inverted_time_windows(tmp_path):
         store.query_events(since=aware, until=aware - timedelta(seconds=1))
     with pytest.raises(ValueError, match="limit"):
         store.query_events(limit=0)
+
+
+def test_export_jsonl_excludes_sensitive_by_default(tmp_path):
+    from aie.contracts import AIEEvent, EntityRef
+
+    store = EventStore(tmp_path / "events.sqlite3")
+    store.append_many([
+        AIEEvent(
+            event_id="normal-export",
+            host_id="test",
+            source="unit",
+            event_type="sample",
+            entity=EntityRef(type="test", name="normal"),
+            data={"value": 1},
+        ),
+        AIEEvent(
+            event_id="sensitive-export",
+            host_id="test",
+            source="unit",
+            event_type="sensitive",
+            entity=EntityRef(type="test", name="private"),
+            data={"value": "private"},
+            sensitivity="sensitive",
+        ),
+    ])
+
+    destination = tmp_path / "export.jsonl"
+    assert store.export_jsonl(destination) == 1
+    exported = destination.read_text(encoding="utf-8")
+    assert "normal-export" in exported
+    assert "sensitive-export" not in exported
+
+    assert store.export_jsonl(destination, include_sensitive=True) == 2
+    assert "sensitive-export" in destination.read_text(encoding="utf-8")
+
+
+def test_export_rejects_database_overwrite(tmp_path):
+    store = EventStore(tmp_path / "events.sqlite3")
+    with pytest.raises(ValueError, match="must not overwrite"):
+        store.export_jsonl(store.path)
+
+
+def test_delete_all_removes_every_event(tmp_path):
+    store = EventStore(tmp_path / "delete-all.sqlite3")
+    store.append_many([event(), AIEEvent(
+        event_id="second",
+        host_id="test",
+        source="unit",
+        event_type="sample",
+        entity=EntityRef(type="test", name="second"),
+    )])
+    assert store.delete_all() == 2
+    assert store.count() == 0
