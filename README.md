@@ -167,6 +167,18 @@ The tray displays at most two generic playback-diagnostic notices per poll. It n
 Process lifecycle observation uses best-effort user-mode snapshots and may miss transient processes. Foreground process resource sampling is limited to the active application; it is not a systemwide per-process profiler. Video diagnostics analyze supplied metrics only. The project has a restricted Windows Settings URI adapter, but general autonomous remediation, OS-process sandboxing, rollback, automated recovery, evaluated learning and a full desktop assistant dashboard are not implemented.
 
 
+## One-command local agent workflow
+
+Run the full bounded planning-to-task lifecycle with one explicit local model:
+
+```powershell
+aie agent run "Investigate why browser video playback is stuttering" --model qwen2.5:7b-instruct --max-steps 5
+```
+
+This drafts a declarative plan, validates it, persists a task run and advances up to the requested number of safe steps. No browser page content or ambient machine context is attached to the planner. Add `--with-memory` to explicitly retrieve local memory for reasoning; add `--semantic-memory` only when an embedding model is already installed. Add `--include-sensitive-memory` only after deciding sensitive memories are appropriate for this task.
+
+The planner cannot grant capabilities. It can reference an action capability only when its ID is explicitly supplied through `--capability-id`. Windows Settings page arguments are supplied separately with `--setting`; no action is executed by the agent command. A resulting action proposal still requires review, the positive execution-enable marker, an absent kill switch, current policy approval and an explicit `aie execute-proposal <ID> --confirm` command. Verification remains a separate task step.
+
 ## Validated planning and task orchestration
 
 Plans are declarative data, not executable instructions. Draft one using an already-installed local Ollama model, validate a JSON plan, then create and advance a durable local run:
