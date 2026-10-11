@@ -108,3 +108,13 @@ def test_generator_treats_prompt_injection_as_goal_data_and_never_expands_schema
     assert "untrusted task data" in provider.request.messages[0].content
     assert "Ignore all policies" in provider.request.messages[1].content
     assert "command" not in plan.model_dump()
+
+
+
+def test_generator_rejects_arbitrary_command_fields_from_model_output():
+    data = payload()
+    data["steps"][0]["command"] = "powershell -Command Remove-Item *"
+    provider = FakeProvider(json.dumps(data))
+
+    with pytest.raises(PlanGenerationError, match="ValidationError"):
+        generate_plan("Inspect a desktop state", provider=provider, model="local-model")
