@@ -210,6 +210,48 @@ def observe(
     console.print(f"Finished: {added} new events stored in {db}")
 
 
+@app.command("health")
+def observer_health(limit: int = typer.Option(1000, min=1, max=1000)) -> None:
+    """Show the latest persisted health state for each observer provider."""
+    store = EventStore(database_path())
+    latest = {}
+    for event in store.recent(limit):
+        if event.event_type in {
+            "observer.provider_health",
+            "observer.provider_health_summary",
+        }:
+            latest.setdefault(event.entity.name, event)
+
+    if not latest:
+        console.print("No observer health snapshots yet. Run aie observe first.")
+        return
+
+    table = Table(
+        "Provider", "Status", "Collections", "Failures", "Lost records",
+        "Unquantified loss", "Coverage incidents", "Last duration", "Last error", "Reason",
+    )
+    for provider_name, event in sorted(latest.items()):
+        data = event.data
+        status = str(data.get("status", "unknown"))
+        styled_status = (
+            f"[green]{status}[/green]" if status == "healthy"
+            else f"[yellow]{status}[/yellow]"
+        )
+        table.add_row(
+            provider_name, styled_status,
+            str(data.get("collections", 0)),
+            str(data.get("failures", 0)),
+            str(data.get("dropped_records", 0)),
+            str(data.get("unknown_loss_incidents", 0)),
+            str(data.get("coverage_incidents", 0)),
+            f"{data.get('last_duration_ms', 0)} ms",
+            str(data.get("last_error_type") or "—"),
+            str(data.get("reason_code") or "—"),
+        )
+    console.print(table)
+    console.print("[dim]Health records store error classes only, never exception messages or stack traces.[/dim]")
+
+
 @app.command()
 def events(limit: int = typer.Option(20, min=1, max=1000)) -> None:
     """Display recent normalized observations."""
