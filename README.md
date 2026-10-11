@@ -337,10 +337,15 @@ aie proposals
 aie approve-proposal <PROPOSAL_ID>
 aie execution-enable --confirm
 aie execute-proposal <PROPOSAL_ID> --confirm
+# After inspecting the result, append a one-time human postcondition outcome:
+aie verify-proposal <PROPOSAL_ID> confirmed --evidence-code user_checked_settings_page --summary "Display Settings is visible" --confirm
+# Or record a negative outcome with: not-confirmed
+# Inspect the append-only review, execution and verification history:
+aie proposal-audit <PROPOSAL_ID>
 # Immediate stop for every registered adapter:
 aie execution-kill
 # Disable the positive execution marker:
 aie execution-disable
 ```
 
-`aie execution-resume --confirm` clears the kill switch, but does not itself enable execution. Each proposal is single-attempt and receives an append-only execution receipt. A successful `ms-settings:` dispatch is not proof that the requested page reached a specific state; inspect the desktop and use a separate verified task step when a postcondition matters. No shell, arbitrary executable, file-write, network or privileged adapter is included.
+`aie execution-resume --confirm` clears the kill switch, but does not itself enable execution. Each proposal is single-attempt and receives an append-only execution receipt. A successful `ms-settings:` dispatch is not proof that the requested page reached a specific state. After inspecting the desktop, `aie verify-proposal` appends one explicit human outcome (confirmed or not-confirmed) to the hash-chained audit ledger; it cannot overwrite an earlier result and does not independently inspect Windows UI state. No shell, arbitrary executable, file-write, network or privileged adapter is included.
