@@ -47,16 +47,17 @@ Build persistent personal intelligence that observes explicitly permitted signal
 ## Current capability state
 **Foundation present:** Python package/CLI, versioned event contract, SQLite store, read-only Windows inventory, best-effort process reconciliation, provider interface, hardware/model selection utilities.
 
-**Integrated on dev:** deterministic video-buffering triage and synthetic tests. Checks throughput, packet loss, RTT, CPU and dropped-frame evidence. It is not live monitoring and executes no fixes.
+**Integrated on dev:** deterministic video-buffering triage and synthetic tests; bounded read-only network sampling for interface counters, gateway/external TCP reachability and DNS timing. The network provider is not yet wired into the runtime CLI. These are telemetry building blocks, not a live browser monitor, and no fixes are executed.
 
-**Not implemented:** ETW subscriptions, Event Log provider, network sampler, browser bridge, screen capture/UIA, context graph, model gateway, persistent memory layers, policy broker, sandboxed executor, autonomous remediation or assistant dashboard.
+**Not implemented:** ETW subscriptions, Event Log provider, scheduled network sampler/runtime integration, browser bridge, screen capture/UIA, context graph, model gateway, persistent memory layers, policy broker, sandboxed executor, autonomous remediation or assistant dashboard.
 
 ## Immediate engineering sequence
 1. Windows CI and full tests on Python 3.11/3.12.
-2. Improve Windows telemetry: network, service/process resources, pause/retention controls.
-3. Opt-in Edge/Chrome playback telemetry bridge.
-4. Correlate browser and OS metrics into timestamped evidence.
-5. Context/state model and uncertainty-aware diagnosis.
+2. Wire bounded network provider into observer CLI with explicit probe policy and interval.
+3. Add service/process resource samples and pause/retention controls.
+4. Opt-in Edge/Chrome playback telemetry bridge.
+5. Correlate browser and OS metrics into timestamped evidence.
+6. Context/state model and uncertainty-aware diagnosis.
 6. Local Ollama adapter; optional cloud only through explicit egress policy.
 7. Capability manifests, policy broker, sandbox, audit and verification.
 8. Memory/feedback and held-out generalization evaluation.
