@@ -52,3 +52,8 @@ def capability_manifest_dir() -> Path:
 def policy_audit_database_path() -> Path:
     """Separate append-only proposal-review audit database."""
     return data_dir() / "policy-audit.sqlite3"
+
+
+def task_session_database_path() -> Path:
+    """Private local database for explicit user-controlled task sessions."""
+    return data_dir() / "task-sessions.sqlite3"
