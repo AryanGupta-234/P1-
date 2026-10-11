@@ -115,7 +115,7 @@ The current integrated Windows build passed [GitHub Actions run #448](https://gi
 Windows CI passed on the current development baseline for Python 3.11 and 3.12, including Ruff, extension JavaScript syntax checks and pytest. See [run #206](https://github.com/AryanGupta-234/P1-/actions/runs/38118517008). This does not replace testing the browser extension/native host and UI Automation against your own Windows desktop.
 
 ## Current limitations
-Process lifecycle observation uses best-effort user-mode snapshots and may miss transient processes. Foreground process resource sampling is limited to the active application; it is not a systemwide per-process profiler. Video diagnostics analyze supplied metrics only; live browser telemetry, screen perception, model gateway, persistent learning and autonomous remediation are not implemented.
+Process lifecycle observation uses best-effort user-mode snapshots and may miss transient processes. Foreground process resource sampling is limited to the active application; it is not a systemwide per-process profiler. Video diagnostics analyze supplied metrics only. The project has a restricted Windows Settings URI adapter, but general autonomous remediation, process sandboxing, rollback, evaluated learning and the desktop assistant UI are not implemented.
 
 
 ## Validated planning and task orchestration
