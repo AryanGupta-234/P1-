@@ -456,6 +456,35 @@ def recover_task(
             console.print(f"  {step.step_id}: inspect side effects and record an explicit result")
 
 
+@task_app.command("retry")
+def retry_task_step(
+    run_id: str = typer.Argument(...),
+    step_id: str = typer.Argument(...),
+    confirm: bool = typer.Option(
+        False, "--confirm", help="Confirm re-running this non-mutating step."
+    ),
+) -> None:
+    """Retry an awaiting-input observe/reason/inform step after correcting its configuration."""
+    if not confirm:
+        console.print(
+            "[yellow]Pass --confirm to reset this safe step to pending. "
+            "Actions and verification steps cannot be retried this way.[/yellow]"
+        )
+        raise typer.Exit(2)
+    try:
+        run = _engine().retry_step(run_id, step_id)
+    except ValueError as exc:
+        console.print(f"[red]Retry rejected:[/red] {exc}")
+        raise typer.Exit(2) from exc
+    console.print(
+        f"[green]Step reset to pending.[/green] Run {run.run_id} · "
+        f"State: {run.status} · Step: {step_id}"
+    )
+    console.print(
+        f"Advance with corrected options: aie task advance {run.run_id} --max-steps 1"
+    )
+
+
 @task_app.command("pause")
 def pause_task(run_id: str = typer.Argument(...)) -> None:
     """Pause a task between handler invocations."""
