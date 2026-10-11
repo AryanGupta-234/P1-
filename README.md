@@ -102,6 +102,9 @@ The `aie.policy` module currently evaluates action proposals against explicit ca
 
 A provider-neutral request/response contract and Ollama adapter are available under `aie/models/`. The router selects only installed local models using available RAM; it never pulls a model. `aie ask` is local-only by default. A remote Ollama endpoint requires an explicit `--allow-remote-ollama` flag and HTTPS.
 
+## Latest CI validation
+The current integrated Windows build passed [GitHub Actions run #448](https://github.com/AryanGupta-234/P1-/actions/runs/38122160376) on Python 3.11 and 3.12. It includes lint, Windows-only optional imports, PowerShell parsing, browser JavaScript checks and the complete pytest suite, including Event Log runtime wiring, systemwide process telemetry, context packaging and audit integrity.
+
 ## CI validation
 Windows CI passed on the current development baseline for Python 3.11 and 3.12, including Ruff, extension JavaScript syntax checks and pytest. See [run #206](https://github.com/AryanGupta-234/P1-/actions/runs/38118517008). This does not replace testing the browser extension/native host and UI Automation against your own Windows desktop.
 
