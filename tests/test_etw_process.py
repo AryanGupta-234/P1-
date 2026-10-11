@@ -106,6 +106,12 @@ def test_capture_starts_stops_owned_session_and_persists_bounded_metadata(tmp_pa
 
     def runner(command, **kwargs):
         calls.append(command)
+        if command[:3] == ["logman.exe", "query", "providers"]:
+            return subprocess.CompletedProcess(
+                command, 0,
+                f"Microsoft-Windows-Kernel-Process {{{KERNEL_PROCESS_GUID}}}",
+                "",
+            )
         if command[:3] == ["logman.exe", "create", "trace"]:
             etl = Path(command[command.index("-o") + 1])
             etl.write_bytes(b"synthetic-etl")
@@ -138,8 +144,10 @@ def test_capture_starts_stops_owned_session_and_persists_bounded_metadata(tmp_pa
     assert capture.buffers_lost == 0
     assert capture.duration_seconds == 5.0
     assert capture.etl_size_bytes == len(b"synthetic-etl")
-    create = calls[0]
-    stop = calls[1]
+    catalog = calls[0]
+    create = calls[1]
+    stop = calls[2]
+    assert catalog == ["logman.exe", "query", "providers"]
     assert create[:4] == ["logman.exe", "create", "trace", capture.session_name]
     assert create[create.index("-p") + 1] == f"{{{KERNEL_PROCESS_GUID}}}"
     assert create[create.index("-p") + 2] == "0x10"
@@ -177,6 +185,12 @@ def test_capture_validates_duration_before_running_commands():
 
 def test_failed_stop_preserves_workspace_and_reports_exact_session_command(tmp_path):
     def runner(command, **kwargs):
+        if command[:3] == ["logman.exe", "query", "providers"]:
+            return subprocess.CompletedProcess(
+                command, 0,
+                f"Microsoft-Windows-Kernel-Process {{{KERNEL_PROCESS_GUID}}}",
+                "",
+            )
         if command[:3] == ["logman.exe", "create", "trace"]:
             Path(command[command.index("-o") + 1]).write_bytes(b"etl")
             return subprocess.CompletedProcess(command, 0, "", "")
@@ -206,6 +220,12 @@ def test_capture_cleans_workspace_when_session_start_fails(tmp_path):
 
     def runner(command, **kwargs):
         calls.append(command)
+        if command[:3] == ["logman.exe", "query", "providers"]:
+            return subprocess.CompletedProcess(
+                command, 0,
+                f"Microsoft-Windows-Kernel-Process {{{KERNEL_PROCESS_GUID}}}",
+                "",
+            )
         return subprocess.CompletedProcess(command, 5, "", "")
 
     provider = WindowsETWProcessProvider(
@@ -218,4 +238,29 @@ def test_capture_cleans_workspace_when_session_start_fails(tmp_path):
         provider.collect()
 
     assert len(calls) == 1
+    assert list(tmp_path.iterdir()) == []
+
+
+
+def test_capture_requires_kernel_process_provider_registration(tmp_path):
+    calls = []
+
+    def runner(command, **kwargs):
+        calls.append(command)
+        return subprocess.CompletedProcess(
+            command, 0,
+            "Microsoft-Windows-Kernel-Image {2cb15d1d-5fc1-11d2-abe1-00a0c911f518}",
+            "",
+        )
+
+    provider = WindowsETWProcessProvider(
+        runner=runner,
+        is_windows=True,
+        temp_root=tmp_path,
+        machine_id="host-test",
+    )
+    with pytest.raises(ETWProcessCaptureError, match="kernel_process_provider_not_registered"):
+        provider.collect()
+
+    assert calls == [["logman.exe", "query", "providers"]]
     assert list(tmp_path.iterdir()) == []
