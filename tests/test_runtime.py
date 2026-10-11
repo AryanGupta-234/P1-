@@ -285,3 +285,63 @@ def test_opt_in_etw_provider_is_polled_and_closed(tmp_path, monkeypatch):
     assert calls
     assert added >= 1
     assert EventStore(db_path).get("etw-001") is not None
+
+
+def test_etw_loss_is_reflected_in_observer_health(tmp_path: Path, monkeypatch):
+    from datetime import datetime, timezone
+
+    from aie.contracts import AIEEvent, EntityRef
+    from aie.store import EventStore
+
+    provider = FakeWindowsProvider()
+
+    class FakeETWProvider:
+        name = "windows.etw.process"
+
+        def __init__(self, *, max_events_per_poll):
+            assert max_events_per_poll == 7
+            self.calls = 0
+
+        def collect_snapshot(self):
+            self.calls += 1
+            if self.calls > 1:
+                return []
+            return [AIEEvent(
+                event_id="etw-health-001",
+                timestamp=datetime.now(timezone.utc),
+                host_id="host-a",
+                source=self.name,
+                event_type="process.etw_health.queue_drop",
+                entity=EntityRef(type="etw_session", name="kernel_process"),
+                data={"dropped_events": 4, "loss_kind": "consumer_queue_drop"},
+            )]
+
+        def pause(self):
+            pass
+
+        def resume(self):
+            pass
+
+        def close(self):
+            pass
+
+    install_fake_clock(monkeypatch)
+    monkeypatch.setattr(runtime, "WindowsProvider", lambda: provider)
+    monkeypatch.setattr(runtime, "WindowsETWProcessProvider", FakeETWProvider)
+    monkeypatch.setattr(runtime, "observer_is_paused", lambda: False)
+
+    db_path = tmp_path / "etw-loss.sqlite3"
+    total = runtime.observe(
+        duration=1,
+        interval=0.5,
+        db_path=db_path,
+        include_network=False,
+        include_foreground=False,
+        include_etw=True,
+        etw_max_events_per_poll=7,
+        include_video_diagnostics=False,
+    )
+
+    health_events = EventStore(db_path).query_events(event_types=["observer.health"], limit=10)
+    assert total == 2
+    assert health_events[-1].data["providers"]["windows.etw.process"]["event_loss"] == 4
