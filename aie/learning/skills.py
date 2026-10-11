@@ -172,11 +172,17 @@ def save_skill_candidate(
     *,
     memory_store,
     task_run_store: TaskRunStore,
+    policy_ledger: PolicyLedger | None = None,
     sensitivity: str = "sensitive",
 ) -> MemoryRecord:
     """Persist a reviewed candidate as procedural memory with task-run provenance."""
     source = task_run_store.get(candidate.task_run_id)
     if source is None or source.status != "completed":
         raise SkillInductionError("source task run must still exist and be completed")
+    rebuilt = build_skill_candidate(source, policy_ledger=policy_ledger)
+    if rebuilt != candidate:
+        raise SkillInductionError(
+            "candidate no longer matches the persisted task run and audit evidence"
+        )
     record = candidate.to_memory_record(sensitivity=sensitivity)
     return memory_store.save(record, task_run_store=task_run_store)
