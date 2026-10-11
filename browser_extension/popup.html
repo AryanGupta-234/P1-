@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AIE Playback Observer</title>
+  <style>
+    body { min-width: 280px; margin: 0; padding: 16px; font: 14px Segoe UI, sans-serif; color: #172033; }
+    h1 { margin: 0 0 12px; font-size: 17px; }
+    label { display: flex; align-items: center; gap: 10px; font-weight: 600; }
+    input { width: 18px; height: 18px; }
+    p { line-height: 1.45; color: #596579; }
+    #status { padding: 8px; border-radius: 8px; background: #f0f3f8; overflow-wrap: anywhere; }
+  </style>
+</head>
+<body>
+  <h1>AIE Playback Observer</h1>
+  <label><input type="checkbox" id="enabled"> Enable playback monitoring</label>
+  <p>When enabled, AIE receives video playback state and limited performance counters. It does not collect page text, URLs, cookies, passwords, form values, or browsing history.</p>
+  <p id="status">Bridge status: checking…</p>
+  <script src="popup.js"></script>
+</body>
+</html>
