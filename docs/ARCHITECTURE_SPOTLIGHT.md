@@ -88,6 +88,7 @@ Build persistent personal intelligence that observes explicitly permitted signal
 **Governance**
 - Default-deny user-managed capability manifests, low-risk autonomy declarations, approval gates, bounded flat parameters and rate limits.
 - Typed dry-run executor verifies proposal/policy alignment without performing OS actions; `aie dry-run-proposal` exposes that boundary explicitly.
+- Fail-closed execution control exposes a positive enable marker, a global kill switch and bounded execution budgets; no mutating executor is wired to these controls yet.
 - CLI proposal queue and separate append-only SQLite ledger for policy evaluation, user approval and rejection, with SHA-256 chain verification.
 - Global pause/resume, local retention pruning and outcome-feedback capture.
 - Approval records authorization for a future executor only. Policy decisions do not execute actions; no OS executor or autonomous remediation is implemented.
