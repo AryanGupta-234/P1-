@@ -71,7 +71,7 @@ Build persistent personal intelligence that observes explicitly permitted signal
 - Explicit per-request context packaging from user memories and safe activity timelines; no automatic context injection.
 - Local Ollama client and hardware-aware selection of already-installed models; no implicit model pulls.
 - Optional OpenAI-compatible HTTPS provider requiring explicit `--provider cloud --allow-cloud-egress`.
-- Cloud requests contain only the prompt explicitly supplied to `aie ask` unless the user additionally enables `--with-memory` and `--confirm-memory-egress`; observer telemetry is never automatically attached. Sensitive memory is blocked from remote model requests.
+- Cloud requests contain only the prompt explicitly supplied to `aie ask` unless the user separately enables `--with-memory` or `--with-activity` and confirms the relevant remote-egress flag. Observer telemetry is never automatically attached. Sensitive memories are blocked from remote model requests.
 
 **Context and memory**
 - Indexed event queries and `aie activity` temporal sessions across the normalized event categories.
@@ -86,7 +86,7 @@ Build persistent personal intelligence that observes explicitly permitted signal
 - Approval records authorization for a future executor only. Policy decisions do not execute actions; no OS executor or autonomous remediation is implemented.
 
 ## Pending validation and implementation
-- Full latest Windows CI run for Event Log runtime wiring and its runtime-level persistence test.
+- Windows CI run [#448](https://github.com/AryanGupta-234/P1-/actions/runs/38122160376) passed on Python 3.11 and 3.12, including systemwide process telemetry and activity-summary privacy tests.
 - Target-desktop Chrome/Edge extension/native-host installation and live playback validation.
 - Target-desktop UIA and Application/System Event Log permission/behavior validation.
 - ETW subscriptions and higher-fidelity process telemetry.
