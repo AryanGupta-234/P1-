@@ -20,6 +20,7 @@ from aie.config import (
     observer_is_paused,
     policy_audit_database_path,
     set_observer_paused,
+    task_session_database_path,
 )
 from aie.hardware import runtime_profile
 from aie.model_policy import choose_local_model, discover_local_models
