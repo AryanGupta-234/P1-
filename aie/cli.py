@@ -114,6 +114,7 @@ def observe(
         "--include-window-titles",
         help="Opt in to collecting sensitive foreground window titles.",
     ),
+    foreground_sample_interval: float = typer.Option(5.0, min=1.0, max=60.0),
 ) -> None:
     """Observe selected Windows metadata (read-only)."""
     from aie.runtime import observe as run_observer
@@ -128,6 +129,7 @@ def observe(
             network_interval=network_interval,
             include_foreground=foreground,
             include_window_titles=include_window_titles,
+            foreground_sample_interval=foreground_sample_interval,
         )
     except OSError as exc:
         console.print(f"[red]Observer unavailable:[/red] {exc}")
