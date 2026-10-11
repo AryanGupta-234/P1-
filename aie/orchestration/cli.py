@@ -191,17 +191,31 @@ def task_events(
 def advance_task(
     run_id: str = typer.Argument(...),
     max_steps: int = typer.Option(1, "--max-steps", min=1, max=25),
+    setting: Literal[
+        "display", "sound", "bluetooth", "network",
+        "windows_update", "apps", "privacy"
+    ] | None = typer.Option(
+        None,
+        "--setting",
+        help="Explicit page choice for the built-in windows.settings.open capability.",
+    ),
 ) -> None:
     """Advance ready steps using local observation, local model and policy handlers."""
     try:
         manifests = load_capability_manifests(capability_manifest_dir())
         broker = CapabilityPolicyBroker(manifests)
         ledger = PolicyLedger(policy_audit_database_path())
+        trusted_parameters = (
+            {"windows.settings.open": {"setting": setting}}
+            if setting is not None
+            else {}
+        )
         handlers = build_default_handlers(
             event_store=EventStore(database_path()),
             broker=broker,
             ledger=ledger,
             model_router=LocalModelRouter(OllamaClient()),
+            proposal_parameters=trusted_parameters,
         )
         run = _engine().advance(run_id, handlers, max_steps=max_steps)
     except Exception as exc:  # noqa: BLE001 - do not leak provider payloads into task state.
