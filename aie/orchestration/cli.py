@@ -199,6 +199,17 @@ def advance_task(
         "--setting",
         help="Explicit page choice for the built-in windows.settings.open capability.",
     ),
+    with_memory: bool = typer.Option(
+        False, "--with-memory", help="Explicitly attach bounded local memory to reasoning."
+    ),
+    include_sensitive_memory: bool = typer.Option(
+        False, "--include-sensitive-memory", help="Also retrieve sensitive memories."
+    ),
+    semantic_memory: bool = typer.Option(
+        False, "--semantic-memory", help="Use an already-installed local embedding model."
+    ),
+    embedding_model: str = typer.Option("nomic-embed-text:latest", "--embedding-model"),
+    memory_limit: int = typer.Option(5, "--memory-limit", min=1, max=10),
 ) -> None:
     """Advance ready steps using local observation, local model and policy handlers."""
     try:
@@ -210,12 +221,35 @@ def advance_task(
             if setting is not None
             else {}
         )
+        if include_sensitive_memory and not with_memory:
+            raise ValueError("--include-sensitive-memory requires --with-memory")
+        if semantic_memory and not with_memory:
+            raise ValueError("--semantic-memory requires --with-memory")
+
+        memory_context_builder = None
+        if with_memory:
+            from aie.memory.prompt_context import build_memory_prompt_context
+            from aie.memory.store import MemoryStore
+
+            embedding_client = OllamaClient() if semantic_memory else None
+
+            def memory_context_builder(query: str):
+                return build_memory_prompt_context(
+                    query,
+                    MemoryStore(memory_database_path()),
+                    include_sensitive=include_sensitive_memory,
+                    limit=memory_limit,
+                    semantic_model=embedding_model if semantic_memory else None,
+                    embedding_provider=embedding_client,
+                )
+
         handlers = build_default_handlers(
             event_store=EventStore(database_path()),
             broker=broker,
             ledger=ledger,
             model_router=LocalModelRouter(OllamaClient()),
             proposal_parameters=trusted_parameters,
+            memory_context_builder=memory_context_builder,
         )
         run = _engine().advance(run_id, handlers, max_steps=max_steps)
     except Exception as exc:  # noqa: BLE001 - do not leak provider payloads into task state.
