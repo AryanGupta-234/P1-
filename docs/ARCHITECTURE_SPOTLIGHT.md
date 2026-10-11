@@ -96,6 +96,8 @@ Build persistent personal intelligence that observes explicitly permitted signal
 - The only built-in mutating adapter is `windows.settings.open`, which dispatches one of seven fixed `ms-settings:` URIs. It cannot alter settings, invoke a shell, launch arbitrary processes, write files or use the network. It is disabled unless a user creates and enables its manifest.
 - Each attempted execution is recorded once in the SHA-256 chained policy ledger. URI dispatch is not treated as postcondition verification; a separate verify step requires an explicit user assertion.
 - The task engine persists plan/run/step state and its event journal locally. Pause/cancel apply between handler invocations; in-flight external handlers are not force-killed and interrupted running steps fail closed for manual review.
+- Capability manifests can be inspected and enabled/disabled with dedicated CLI commands. Enabling is limited to an application-registered adapter and preserves mandatory approval/no-autonomy fields; the executor enable marker and kill switch remain separate.
+- A read-only retention inventory reports event-age deletion candidates, expired memories and bounded task/proposal status counts. It never deletes records. Pruning remains a separate explicit confirmation path.
 - Approval and execution are separate operations. The execution gate remains disabled by default; no autonomous remediation is enabled.
 - These orchestration/execution additions currently live on `feat/agent-orchestration-core`; they are not represented as merged into `dev` until the pull request is reviewed and integrated.
 
