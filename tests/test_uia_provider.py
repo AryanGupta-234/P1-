@@ -1,4 +1,3 @@
-from types import SimpleNamespace
 import threading
 
 import pytest
@@ -47,9 +46,9 @@ class FakeReader:
         return self.nodes
 
 
-def provider(reader=None, *, app="msedge.exe", clock=None, timeout=0.2):
+def provider(reader=None, *, app="msedge.exe", allowed_apps=None, clock=None, timeout=0.2):
     return WindowsUIATreeProvider(
-        allowed_process_names={app},
+        allowed_process_names=allowed_apps if allowed_apps is not None else {app},
         reader=reader or FakeReader(),
         api=FakeForegroundApi(),
         process_lookup=lambda pid: app,
@@ -85,7 +84,7 @@ def test_uia_refuses_empty_allowlist():
 
 
 def test_uia_ignores_non_allowlisted_foreground_app():
-    monitor = provider(app="notepad.exe")
+    monitor = provider(app="notepad.exe", allowed_apps={"chrome.exe"})
     assert monitor.collect_snapshot() == []
 
 
