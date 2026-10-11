@@ -155,6 +155,7 @@ def show_context(
 ) -> None:
     """Show the latest correlated video, foreground-app and network context."""
     from aie.context.video import build_video_observation_context
+    from aie.diagnostics.video_buffering import diagnose_video_buffering
 
     store = EventStore(database_path())
     context = build_video_observation_context(
@@ -169,6 +170,7 @@ def show_context(
         )
         return
 
+    diagnosis = diagnose_video_buffering(context.metrics)
     table = Table("Signal", "Value")
     table.add_row("Playback", context.playback_state)
     table.add_row("Stall count", str(context.metrics.stall_count))
@@ -227,6 +229,22 @@ def show_context(
             table.add_row(f"Network: {evidence.target}", value)
 
     console.print(table)
+    if diagnosis.status == "findings":
+        diagnostic_table = Table("Hypothesis", "Severity", "Confidence", "Evidence")
+        for finding in diagnosis.findings:
+            diagnostic_table.add_row(
+                finding.cause,
+                finding.severity,
+                f"{finding.confidence:.0%}",
+                "; ".join(finding.evidence),
+            )
+        console.print("\n[bold]Diagnostic hypotheses[/bold]")
+        console.print(diagnostic_table)
+    else:
+        console.print(
+            "No root-cause hypothesis met the current evidence thresholds. "
+            "Keep collecting signals; unknown measurements remain unknown."
+        )
     console.print(
         f"Evidence records: {len(context.evidence_event_ids)} · "
         f"Context age: {(context.generated_at - context.observed_at).total_seconds():.1f}s"
