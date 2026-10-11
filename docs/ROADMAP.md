@@ -94,7 +94,7 @@ Statuses: DONE / IN_PROGRESS / BLOCKED / PLANNED. Mark DONE only with code, test
 - [x] Default-deny capability manifests and policy decision contracts.
 - [x] Low-risk-only pre-authorized autonomy, parameter allowlists and rate limits.
 - [x] Explicit approval decisions for medium/high risk; critical-risk actions blocked.
-- [ ] Policy broker integration with a reviewed proposal queue and append-only audit.
+- [x] Policy broker integration with a reviewed proposal queue and separate append-only SQLite audit ledger (approval never executes).
 - [ ] Least-privilege executor and restricted tool manifests.
 - [ ] Sandbox, command/time/resource budgets and global execution kill switch.
 - [ ] Rollback/recovery and postcondition verification.
