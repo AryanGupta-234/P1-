@@ -103,8 +103,48 @@ class WindowsEventLogProvider:
                     self._error_channels.discard(channel)
                     continue
 
-                # A cleared or wrapped log starts a new record-number sequence.
-                if newest < previous or previous < oldest - 1:
+                # A cleared log has an unknowable loss count; rollover has an exact gap.
+                if newest < previous:
+                    events.append(AIEEvent(
+                        timestamp=datetime.now(timezone.utc),
+                        host_id=host_id(),
+                        source=self.name,
+                        event_type="windows.eventlog.sequence_reset",
+                        entity=EntityRef(
+                            type="windows_eventlog_channel",
+                            name=channel,
+                        ),
+                        data={
+                            "channel": channel,
+                            "loss_count_known": False,
+                            "reason_code": "record_sequence_reset",
+                        },
+                        sensitivity="internal",
+                        confidence=1.0,
+                        evidence_kind="observed",
+                    ))
+                    previous = oldest - 1
+                elif previous < oldest - 1:
+                    dropped_records = oldest - previous - 1
+                    events.append(AIEEvent(
+                        timestamp=datetime.now(timezone.utc),
+                        host_id=host_id(),
+                        source=self.name,
+                        event_type="windows.eventlog.records_lost",
+                        entity=EntityRef(
+                            type="windows_eventlog_channel",
+                            name=channel,
+                        ),
+                        data={
+                            "channel": channel,
+                            "dropped_records": dropped_records,
+                            "loss_count_known": True,
+                            "reason_code": "retention_rollover",
+                        },
+                        sensitivity="internal",
+                        confidence=1.0,
+                        evidence_kind="observed",
+                    ))
                     previous = oldest - 1
 
                 start_record = max(oldest, previous + 1)
