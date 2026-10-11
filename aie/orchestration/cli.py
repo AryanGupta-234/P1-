@@ -19,6 +19,7 @@ from aie.config import (
 )
 from aie.models.ollama import OllamaClient
 from aie.models.router import LocalModelRouter
+from aie.orchestration.agent import start_agent_run
 from aie.orchestration.engine import TaskOrchestrator
 from aie.orchestration.handlers import build_default_handlers
 from aie.orchestration.store import TaskRunStore
@@ -32,6 +33,7 @@ from aie.store import EventStore
 
 plan_app = typer.Typer(no_args_is_help=True, help="Draft and validate bounded task plans.")
 task_app = typer.Typer(no_args_is_help=True, help="Create, advance and inspect durable task runs.")
+agent_app = typer.Typer(no_args_is_help=True, help="Run a bounded local agent task.")
 console = Console()
 
 
@@ -106,6 +108,132 @@ def draft_plan(
         raise typer.Exit(2) from exc
     console.print(f"[green]Validated plan saved:[/green] {output}")
     console.print(f"Plan ID: {plan.plan_id} · Steps: {len(plan.steps)}")
+
+
+@agent_app.command("run")
+def run_agent(
+    goal: str = typer.Argument(..., help="The outcome the assistant should work toward."),
+    model: str = typer.Option(..., "--model", help="An already-installed local Ollama model."),
+    capability_id: list[str] = typer.Option(
+        [],
+        "--capability-id",
+        help="Explicit capability IDs the drafted plan may reference; none are allowed by default.",
+    ),
+    setting: Literal[
+        "display", "sound", "bluetooth", "network",
+        "windows_update", "apps", "privacy"
+    ] | None = typer.Option(
+        None,
+        "--setting",
+        help="Explicit page choice for windows.settings.open proposals.",
+    ),
+    max_steps: int = typer.Option(5, "--max-steps", min=1, max=25),
+    with_memory: bool = typer.Option(
+        False, "--with-memory", help="Explicitly attach bounded local memory to reasoning."
+    ),
+    include_sensitive_memory: bool = typer.Option(
+        False, "--include-sensitive-memory", help="Also retrieve sensitive memories."
+    ),
+    semantic_memory: bool = typer.Option(
+        False, "--semantic-memory", help="Use an already-installed local embedding model."
+    ),
+    embedding_model: str = typer.Option("nomic-embed-text:latest", "--embedding-model"),
+    memory_limit: int = typer.Option(5, "--memory-limit", min=1, max=10),
+    context_file: Path | None = typer.Option(
+        None, "--context-file", help="Optional user-selected context file; never read implicitly."
+    ),
+) -> None:
+    """Draft a local plan, persist its run and advance safe steps until a gate is reached."""
+    if include_sensitive_memory and not with_memory:
+        raise typer.BadParameter("--include-sensitive-memory requires --with-memory")
+    if semantic_memory and not with_memory:
+        raise typer.BadParameter("--semantic-memory requires --with-memory")
+    if context_file is not None:
+        if context_file.is_symlink() or not context_file.is_file():
+            raise typer.BadParameter("context file must be a regular local file")
+        if context_file.stat().st_size > 24 * 1024:
+            raise typer.BadParameter("context file exceeds 24 KiB")
+    explicit_context = (
+        context_file.read_text(encoding="utf-8") if context_file is not None else None
+    )
+
+    try:
+        provider = OllamaClient()
+        engine = _engine()
+        launch = start_agent_run(
+            goal,
+            provider=provider,
+            model=model,
+            orchestrator=engine,
+            allowed_capability_ids=set(capability_id),
+            explicit_context=explicit_context,
+        )
+        manifests = load_capability_manifests(capability_manifest_dir())
+        broker = CapabilityPolicyBroker(manifests)
+        ledger = PolicyLedger(policy_audit_database_path())
+
+        memory_context_builder = None
+        if with_memory:
+            from aie.memory.prompt_context import build_memory_prompt_context
+            from aie.memory.store import MemoryStore
+
+            embedding_client = OllamaClient() if semantic_memory else None
+
+            def memory_context_builder(query: str):
+                return build_memory_prompt_context(
+                    query,
+                    MemoryStore(memory_database_path()),
+                    include_sensitive=include_sensitive_memory,
+                    limit=memory_limit,
+                    semantic_model=embedding_model if semantic_memory else None,
+                    embedding_provider=embedding_client,
+                )
+
+        handlers = build_default_handlers(
+            event_store=EventStore(database_path()),
+            broker=broker,
+            ledger=ledger,
+            model_router=LocalModelRouter(provider),
+            proposal_parameters=(
+                {"windows.settings.open": {"setting": setting}}
+                if setting is not None
+                else {}
+            ),
+            memory_context_builder=memory_context_builder,
+        )
+        advanced = engine.advance(
+            launch.run.run_id,
+            handlers,
+            max_steps=max_steps,
+        )
+    except Exception as exc:  # noqa: BLE001 - errors are bounded; no external provider payload is persisted.
+        console.print(f"[red]Agent run failed:[/red] {type(exc).__name__}: {exc}")
+        raise typer.Exit(2) from exc
+
+    console.print(
+        f"[bold]P1- task[/bold] · Run: {advanced.run_id} · "
+        f"State: {advanced.status} · Version: {advanced.version}"
+    )
+    console.print(f"Goal: {advanced.plan.goal}")
+    console.print(f"Plan: {advanced.plan.plan_id} · Steps: {len(advanced.steps)}")
+    table = Table("Step", "Kind", "State", "Attempts", "Proposal")
+    plan_steps = {item.step_id: item for item in advanced.plan.steps}
+    for state in advanced.steps:
+        table.add_row(
+            state.step_id,
+            plan_steps[state.step_id].kind,
+            state.status,
+            str(state.attempts),
+            state.proposal_id or "-",
+        )
+    console.print(table)
+    if advanced.status == "awaiting_approval":
+        console.print("[yellow]Review the pending proposal with aie proposals, then approve it explicitly.[/yellow]")
+    elif advanced.status == "awaiting_input":
+        console.print("[yellow]User input or verification is required. Inspect the run with aie task show.[/yellow]")
+    elif advanced.status == "completed":
+        console.print("[green]All plan steps reached their recorded completion states.[/green]")
+    console.print(f"Continue with: aie task advance {advanced.run_id} --max-steps 3")
 
 
 @task_app.command("start")
