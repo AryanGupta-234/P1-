@@ -43,6 +43,16 @@ Thresholds and confidence values are heuristics, not calibrated probabilities. R
 
 The registration helper writes a per-user native-messaging manifest under `%LOCALAPPDATA%\AIE` and registers it under HKCU. Use `scripts/unregister-native-host.ps1 -Browser Chrome` (or Edge) to remove the browser registration.
 
+## Recording diagnostic outcomes
+Use `aie events` to find a `diagnostic.video_finding` event ID, then run:
+
+```powershell
+aie feedback <EVENT_ID> --outcome resolved
+aie feedback <EVENT_ID> --outcome not_resolved --note "Playback still stalls after quality change"
+```
+
+Supported outcomes are `resolved`, `not_resolved` and `not_attempted`. Feedback is stored as a separate local event linked to the finding; an optional note is marked sensitive. The data is not yet used to update model weights or automatically change future actions.
+
 ## Limitations and next validation
 
 The extension sees HTML video elements, not proprietary player internals. Some protected or embedded players may expose no useful metrics. The network sampler does not measure sustained streaming throughput or packet loss. Native host registration and end-to-end operation still need validation on the target Windows desktop. No autonomous remediation is implemented: the current system diagnoses and suggests only.
