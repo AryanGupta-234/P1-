@@ -73,6 +73,9 @@ Use `aie events` to find a `diagnostic.video_finding` event ID, then record the 
 ## Systemwide process resource snapshots (optional)
 Run `aie observe --process-resources --process-resource-interval 10 --process-resource-max-processes 256` to opt in to bounded process CPU/RSS/thread/I/O metadata. It samples at most 256 processes each pass and reports the top 20 CPU consumers (or memory consumers during CPU warm-up). Command lines, executable paths and window content are never collected. The sensor is off by default.
 
+## ETW process telemetry (optional)
+Install the optional Windows extra, then run `aie observe --etw --duration 600`. Kernel ETW process tracing requires an elevated Windows token. P1- stores only process lifecycle metadata (PID, parent PID, image basename and event kind), not command lines or executable paths. ETW collection is paused with `aie pause`; a bounded consumer queue reports its own drops as health events.
+
 ## Windows Event Log metadata (optional)
 Install optional Windows dependencies with `python -m pip install -e ".[dev,windows]"`. Use `aie observe --event-logs --event-log-channels Application,System --event-log-interval 30` to opt in to bounded metadata-only polling of the Windows Application/System logs. It skips historical backlog on startup and does not collect event message text or XML. The optional `windows` extra supplies pywin32.
 
