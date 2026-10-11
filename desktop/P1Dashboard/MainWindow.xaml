@@ -105,7 +105,7 @@
                     <StackPanel>
                         <TextBlock Text="EXECUTION" FontSize="9" FontWeight="Bold" Foreground="{StaticResource TextMutedBrush}"/>
                         <TextBlock x:Name="ExecutionValue" Text="Disabled" FontSize="20" FontWeight="SemiBold" Margin="0,9,0,0"/>
-                        <TextBlock Text="Separate user-controlled gate" FontSize="10" Foreground="{StaticResource TextMutedBrush}" Margin="0,4,0,0"/>
+                        <TextBlock Text="Enable marker, approval and kill switch are independent" FontSize="10" Foreground="{StaticResource TextMutedBrush}" Margin="0,4,0,0"/>
                     </StackPanel>
                 </Border>
             </UniformGrid>
