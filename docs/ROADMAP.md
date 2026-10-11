@@ -102,7 +102,8 @@ Statuses: DONE / IN_PROGRESS / BLOCKED / PLANNED. Mark DONE only with code, test
 - [x] Low-risk-only pre-authorized autonomy, parameter allowlists and rate limits.
 - [x] Explicit approval decisions for medium/high risk; critical-risk actions blocked.
 - [x] Policy broker integration with a reviewed proposal queue and separate append-only SQLite audit ledger (approval never executes).
-- [ ] Least-privilege executor and restricted tool manifests.
+- [x] Typed non-mutating dry-run executor validates proposal/policy alignment without OS mutation.
+- [ ] Least-privilege real executor and restricted tool manifests.
 - [ ] Sandbox, command/time/resource budgets and global execution kill switch.
 - [ ] Rollback/recovery and postcondition verification.
 - [ ] Prompt-injection and tool-misuse red-team tests.
