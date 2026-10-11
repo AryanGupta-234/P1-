@@ -57,3 +57,8 @@ def policy_audit_database_path() -> Path:
 def task_session_database_path() -> Path:
     """Private local database for explicit user-controlled task sessions."""
     return data_dir() / "task-sessions.sqlite3"
+
+
+def egress_audit_database_path() -> Path:
+    """Private local audit database for remote model egress decisions."""
+    return data_dir() / "egress-audit.sqlite3"
