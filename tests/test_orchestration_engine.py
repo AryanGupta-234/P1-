@@ -143,3 +143,49 @@ def test_pause_resume_and_cancel_are_durable(tmp_path):
     cancelled = engine.cancel(run.run_id, reason="user requested stop")
     assert cancelled.status == "cancelled"
     assert cancelled.steps[0].status == "skipped"
+
+def test_waiting_non_mutating_step_can_be_confirmed_and_retried(tmp_path):
+    engine = TaskOrchestrator(TaskRunStore(tmp_path / "retry.sqlite3"))
+    plan = TaskPlan(
+        goal="Reason over explicit optional context",
+        steps=(step("reason", kind="reason"),),
+    )
+    run = engine.create(plan)
+    handler = QueueHandler(
+        HandlerResult.awaiting_input("Memory retrieval failed."),
+        HandlerResult.completed("Retried without memory."),
+    )
+
+    waiting = engine.advance(run.run_id, {"reason": handler})
+    assert waiting.status == "awaiting_input"
+    assert waiting.steps[0].attempts == 1
+
+    retried = engine.retry_step(run.run_id, "reason")
+    assert retried.status == "queued"
+    assert retried.steps[0].status == "pending"
+    assert retried.steps[0].attempts == 1
+
+    completed = engine.advance(run.run_id, {"reason": handler})
+    assert completed.status == "completed"
+    assert completed.steps[0].attempts == 2
+    assert completed.steps[0].summary == "Retried without memory."
+
+
+def test_retry_rejects_action_and_verification_steps(tmp_path):
+    engine = TaskOrchestrator(TaskRunStore(tmp_path / "retry-reject.sqlite3"))
+    for plan_step in (
+        step("action", kind="propose_action", capability_id="windows.settings.open"),
+        step("verify", kind="verify"),
+    ):
+        run = engine.create(TaskPlan(goal="Review gated steps", steps=(plan_step,)))
+        waiting = engine.advance(
+            run.run_id,
+            {plan_step.kind: QueueHandler(HandlerResult.awaiting_input("Human review."))},
+        )
+        assert waiting.status == "awaiting_input"
+        try:
+            engine.retry_step(run.run_id, plan_step.step_id)
+        except ValueError as exc:
+            assert "own gates" in str(exc)
+        else:
+            raise AssertionError("actions and verify steps must retain separate gates")
