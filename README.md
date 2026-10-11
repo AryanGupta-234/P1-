@@ -116,3 +116,55 @@ Windows CI passed on the current development baseline for Python 3.11 and 3.12, 
 
 ## Current limitations
 Process lifecycle observation uses best-effort user-mode snapshots and may miss transient processes. Foreground process resource sampling is limited to the active application; it is not a systemwide per-process profiler. Video diagnostics analyze supplied metrics only; live browser telemetry, screen perception, model gateway, persistent learning and autonomous remediation are not implemented.
+
+
+## Validated planning and task orchestration
+
+Plans are declarative data, not executable instructions. Draft one using an already-installed local Ollama model, validate a JSON plan, then create and advance a durable local run:
+
+```powershell
+aie plan draft "Inspect why a desktop application is slow" --model qwen2.5:7b-instruct --output task-plan.json
+aie plan validate task-plan.json
+aie task start task-plan.json
+aie task advance <RUN_ID> --max-steps 3
+aie task show <RUN_ID>
+aie task events <RUN_ID>
+```
+
+Plan drafting does not pull models, attach observations automatically or select a remote provider. Optional context must be supplied explicitly with `--context-file`. The local reasoning handler receives only the plan and bounded summaries from completed steps. If local inference is unavailable, the run pauses for explicit user input. Verification steps cannot complete without `aie task complete <RUN_ID> <STEP_ID> --summary "..." --verified`. Use `aie task pause`, `resume` and `cancel` for lifecycle controls. Cancellation and pause apply between handler invocations; an in-flight external handler is not force-killed.
+
+Action steps queue policy proposals. Review them with `aie approve-proposal <PROPOSAL_ID>`; approval alone never executes anything. A separate `aie execute-proposal` command is required and the execution gate is disabled by default.
+
+## Restricted Windows Settings capability
+
+The only built-in action adapter opens one fixed Windows Settings page; it does not change a setting, run commands or launch arbitrary processes. To enable this adapter, create a user-managed manifest at `%LOCALAPPDATA%\AIE\capabilities\windows-settings-open.json` with:
+
+```json
+{
+  "capability_id": "windows.settings.open",
+  "description": "Open one fixed Windows Settings page.",
+  "risk_tier": "low",
+  "enabled": true,
+  "allow_autonomous": false,
+  "approval_required": true,
+  "allowed_parameters": ["setting"],
+  "max_invocations_per_minute": 3,
+  "max_execution_seconds": 5
+}
+```
+
+Only the keys `display`, `sound`, `bluetooth`, `network`, `windows_update`, `apps` and `privacy` are supported. The manifest must be explicitly enabled and each proposal separately approved.
+
+```powershell
+aie propose windows.settings.open "Open Display Settings" --parameters '{"setting":"display"}'
+aie proposals
+aie approve-proposal <PROPOSAL_ID>
+aie execution-enable --confirm
+aie execute-proposal <PROPOSAL_ID> --confirm
+# Immediate stop for every registered adapter:
+aie execution-kill
+# Disable the positive execution marker:
+aie execution-disable
+```
+
+`aie execution-resume --confirm` clears the kill switch, but does not itself enable execution. Each proposal is single-attempt and receives an append-only execution receipt. A successful `ms-settings:` dispatch is not proof that the requested page reached a specific state; inspect the desktop and use a separate verified task step when a postcondition matters. No shell, arbitrary executable, file-write, network or privileged adapter is included.
