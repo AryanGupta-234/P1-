@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=69", "wheel"]
+requires = ["setuptools>=83.0.0,<100", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -11,7 +11,7 @@ requires-python = ">=3.11"
 dependencies = ["pydantic>=2.7,<3", "psutil>=5.9,<8", "typer>=0.12,<1", "rich>=13.7,<15"]
 
 [project.optional-dependencies]
-dev = ["pytest>=8,<9", "pytest-cov>=5,<7", "ruff>=0.5,<1"]
+dev = ["pytest>=9.0.3,<10", "pytest-cov>=5,<7", "ruff>=0.5,<1"]
 windows = ["pywinauto>=0.6.8,<1", "pywin32>=306,<400", "pyetwkit==3.2.0"]
 
 [project.scripts]
