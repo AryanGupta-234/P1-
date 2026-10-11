@@ -86,7 +86,7 @@ Statuses: DONE / IN_PROGRESS / BLOCKED / PLANNED. Mark DONE only with code, test
 - [ ] Structured output modes, streaming and cancellation.
 - [ ] Inference concurrency, memory/token budgets and latency metrics.
 - [x] Central remote-model egress gateway, high-confidence credential redaction and metadata-only audit.
-- [x] Bounded declarative task-plan contract with strict fields, typed steps, explicit dependencies, cycle rejection, deterministic topological ordering and readiness queries; no step execution.
+- [x] Bounded declarative task-plan contract with strict fields, typed steps, explicit dependencies, cycle rejection, deterministic topological ordering and readiness queries; no step execution. Validated by Windows CI run [#590](https://github.com/AryanGupta-234/P1-/actions/runs/38131262921) on Python 3.11 and 3.12.
 - [ ] Model-backed plan generation, persisted state transitions, cancellation/recovery and tool-selection evaluation.
 - [ ] Reasoning and tool-selection evaluation harness.
 
