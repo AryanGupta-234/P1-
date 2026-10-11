@@ -21,7 +21,12 @@ def test_probe_timeout_is_bounded(monkeypatch):
 def test_external_target_count_is_bounded(monkeypatch):
     monkeypatch.setattr("aie.providers.network.os.name", "nt")
     with pytest.raises(ValueError):
-        WindowsNetworkProvider(external_targets=[ProbeTarget(str(i), "localhost") for i in range(5)])
+        WindowsNetworkProvider(
+            external_targets=[
+                ProbeTarget(str(index), "localhost")
+                for index in range(5)
+            ]
+        )
 
 
 def test_tcp_probe_returns_none_on_connection_error(monkeypatch):
