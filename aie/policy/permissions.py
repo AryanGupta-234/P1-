@@ -5,6 +5,8 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
+from pydantic import ValidationError
+
 from aie.policy.models import CapabilityManifest
 
 
@@ -44,23 +46,33 @@ def set_capability_enabled(
         try:
             original_bytes = path.read_bytes()
             manifest = CapabilityManifest.model_validate_json(original_bytes)
-        except (OSError, UnicodeError, ValueError) as exc:
+        except OSError as exc:
+            raise CapabilityPermissionError(
+                f"{path.name}: unable to read manifest ({type(exc).__name__})"
+            ) from exc
+        except ValidationError as exc:
+            messages = " ".join(error.get("msg", "") for error in exc.errors())
+            if "Autonomous capabilities cannot also require per-action approval" in messages:
+                raise CapabilityPermissionError(
+                    "allow_autonomous=true requires approval_required=false; "
+                    "autonomous execution is not eligible for this enable operation"
+                ) from exc
+            raise CapabilityPermissionError(
+                f"{path.name}: invalid manifest ({type(exc).__name__})"
+            ) from exc
+        except ValueError as exc:
             raise CapabilityPermissionError(
                 f"{path.name}: invalid manifest ({type(exc).__name__})"
             ) from exc
         if manifest.capability_id in seen:
-            raise CapabilityPermissionError(
-                f"duplicate capability ID: {manifest.capability_id}"
-            )
+            raise CapabilityPermissionError(f"duplicate capability ID: {manifest.capability_id}")
         seen.add(manifest.capability_id)
         if manifest.capability_id == capability_id:
             matches.append((path, manifest, original_bytes))
 
     if len(matches) != 1:
-        raise CapabilityPermissionError(
-            "exactly one matching capability manifest must exist"
-        )
-    path, manifest, original_bytes = matches[0]
+        raise CapabilityPermissionError("exactly one matching capability manifest must exist")
+    path, manifest, _original_bytes = matches[0]
     if enabled:
         if capability_id not in registered_capability_ids:
             raise CapabilityPermissionError(
