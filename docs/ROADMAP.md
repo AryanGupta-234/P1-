@@ -86,7 +86,8 @@ Statuses: DONE / IN_PROGRESS / BLOCKED / PLANNED. Mark DONE only with code, test
 - [ ] Structured output modes, streaming and cancellation.
 - [ ] Inference concurrency, memory/token budgets and latency metrics.
 - [x] Central remote-model egress gateway, high-confidence credential redaction and metadata-only audit.
-- [ ] Planner/state machine with deterministic fallback.
+- [x] Bounded declarative task-plan contract with strict fields, typed steps, explicit dependencies, cycle rejection, deterministic topological ordering and readiness queries; no step execution.
+- [ ] Model-backed plan generation, persisted state transitions, cancellation/recovery and tool-selection evaluation.
 - [ ] Reasoning and tool-selection evaluation harness.
 
 ## M4 — Persistent memory and learning
@@ -139,6 +140,7 @@ Statuses: DONE / IN_PROGRESS / BLOCKED / PLANNED. Mark DONE only with code, test
 3. Evaluate freshness/contradiction signals and add calibrated confidence metrics without treating heuristics as probabilities.
 4. Evaluate semantic memory retrieval and review consolidation proposals before any automatic merge/learning path.
 5. Continue the policy sandbox/audit path before any mutating executor work.
+6. Extend the declarative plan contract into a persisted, cancellable state machine only after step outcomes and policy hand-offs have explicit provenance.
 
 ## Risk register
 | Risk | Mitigation | State |
