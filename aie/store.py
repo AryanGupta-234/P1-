@@ -47,6 +47,17 @@ class EventStore:
             )
             return db.total_changes - before
 
+    def get(self, event_id: str) -> AIEEvent | None:
+        """Fetch one event by stable ID."""
+        with self._connect() as db:
+            row = db.execute(
+                "SELECT payload FROM events WHERE event_id = ?",
+                (event_id,),
+            ).fetchone()
+        if row is None:
+            return None
+        return AIEEvent.model_validate(json.loads(row[0]))
+
     def recent(self, limit: int = 50) -> list[AIEEvent]:
         if not 1 <= limit <= 1000:
             raise ValueError("limit must be between 1 and 1000")
