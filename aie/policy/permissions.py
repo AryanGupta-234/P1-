@@ -1,0 +1,96 @@
+"""Safe edits to user-managed capability manifests."""
+
+from __future__ import annotations
+
+import json
+import os
+from pathlib import Path
+
+from aie.policy.models import CapabilityManifest
+
+
+class CapabilityPermissionError(ValueError):
+    """Raised when a manifest permission change would exceed supported policy."""
+
+
+def set_capability_enabled(
+    directory: Path,
+    capability_id: str,
+    *,
+    enabled: bool,
+    registered_capability_ids: set[str] | frozenset[str],
+) -> CapabilityManifest:
+    """Change only the enabled flag on one trusted, registered capability manifest.
+
+    Enabling is rejected for unknown/unregistered adapters, approval-free manifests
+    and manifests that permit autonomous use. Other risk/parameter/budget fields are
+    preserved exactly. Writes are atomic and the manifest directory and target file
+    may not be symlinks.
+    """
+    if not isinstance(capability_id, str) or not capability_id.strip():
+        raise CapabilityPermissionError("capability_id is required")
+    if not isinstance(enabled, bool):
+        raise CapabilityPermissionError("enabled must be a boolean")
+    if directory.is_symlink():
+        raise CapabilityPermissionError("capability directory cannot be a symlink")
+    directory.mkdir(parents=True, exist_ok=True)
+
+    matches: list[tuple[Path, CapabilityManifest]] = []
+    seen: set[str] = set()
+    for path in sorted(directory.glob("*.json")):
+        if path.is_symlink() or not path.is_file():
+            continue
+        if path.stat().st_size > 64 * 1024:
+            raise CapabilityPermissionError(f"{path.name}: manifest exceeds 64 KiB")
+        try:
+            manifest = CapabilityManifest.model_validate_json(
+                path.read_text(encoding="utf-8")
+            )
+        except (OSError, UnicodeError, ValueError) as exc:
+            raise CapabilityPermissionError(
+                f"{path.name}: invalid manifest ({type(exc).__name__})"
+            ) from exc
+        if manifest.capability_id in seen:
+            raise CapabilityPermissionError(
+                f"duplicate capability ID: {manifest.capability_id}"
+            )
+        seen.add(manifest.capability_id)
+        if manifest.capability_id == capability_id:
+            matches.append((path, manifest))
+
+    if len(matches) != 1:
+        raise CapabilityPermissionError(
+            "exactly one matching capability manifest must exist"
+        )
+    path, manifest = matches[0]
+    if enabled:
+        if capability_id not in registered_capability_ids:
+            raise CapabilityPermissionError(
+                "capability has no application-registered trusted adapter"
+            )
+        if not manifest.approval_required or manifest.allow_autonomous:
+            raise CapabilityPermissionError(
+                "execution requires approval_required=true and allow_autonomous=false"
+            )
+
+    updated = manifest.model_copy(update={"enabled": enabled})
+    temporary = path.with_name(path.name + ".tmp")
+    if temporary.is_symlink():
+        raise CapabilityPermissionError("manifest temporary path cannot be a symlink")
+    payload = updated.model_dump_json(indent=2)
+    try:
+        with temporary.open("x", encoding="utf-8", newline="\n") as stream:
+            stream.write(payload)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, path)
+    except FileExistsError as exc:
+        raise CapabilityPermissionError(
+            "manifest temporary file already exists; inspect and remove it manually"
+        ) from exc
+    finally:
+        try:
+            temporary.unlink()
+        except FileNotFoundError:
+            pass
+    return updated
