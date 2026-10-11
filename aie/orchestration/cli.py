@@ -72,6 +72,60 @@ def validate_plan_file(path: Path = typer.Argument(..., exists=True, dir_okay=Fa
     console.print(table)
 
 
+@plan_app.command("evaluate")
+def evaluate_plans(
+    dataset: Path = typer.Argument(..., exists=True, dir_okay=False),
+    model: str = typer.Option(..., "--model", help="An already-installed local Ollama model."),
+) -> None:
+    """Evaluate local planner outputs against a user-authored relevance dataset."""
+    from aie.planning.evaluation import (
+        PlanEvaluationError,
+        evaluate_planner,
+        load_plan_evaluation_dataset,
+    )
+
+    try:
+        benchmark = load_plan_evaluation_dataset(dataset)
+        report = evaluate_planner(
+            benchmark,
+            provider=OllamaClient(),
+            model=model,
+        )
+    except (PlanEvaluationError, OSError, ValueError, RuntimeError) as exc:
+        console.print(f"[red]Planner evaluation failed:[/red] {type(exc).__name__}: {exc}")
+        raise typer.Exit(2) from exc
+
+    console.print(
+        f"[bold]Planner evaluation[/bold] · Dataset: {report.dataset_id} · "
+        f"Model: {report.model} · Cases: {len(report.cases)}"
+    )
+    table = Table("Metric", "Score")
+    table.add_row("Valid plan rate", f"{report.valid_rate:.1%}")
+    table.add_row("Goal preservation", f"{report.goal_preservation_rate:.1%}")
+    table.add_row("Required step-kind coverage", f"{report.step_kind_coverage:.1%}")
+    table.add_row("Capability precision", f"{report.capability_precision:.1%}")
+    table.add_row("Capability recall", f"{report.capability_recall:.1%}")
+    table.add_row("Forbidden capability rate", f"{report.forbidden_capability_rate:.1%}")
+    console.print(table)
+
+    rows = Table("Case", "Valid", "Goal kept", "Kinds", "Expected caps", "Forbidden caps", "Error")
+    for item in report.cases:
+        rows.add_row(
+            item.case_id,
+            str(item.valid),
+            str(item.goal_preserved),
+            f"{item.required_step_kinds_found}/{item.required_step_kind_count}",
+            f"{item.expected_capabilities_found}/{item.expected_capability_count}",
+            str(item.forbidden_capabilities_found),
+            item.error_type or "-",
+        )
+    console.print(rows)
+    console.print(
+        f"[dim]Evaluated at {report.evaluated_at_utc}. "
+        "No model weights, prompts or memory records were modified.[/dim]"
+    )
+
+
 @plan_app.command("draft")
 def draft_plan(
     goal: str = typer.Argument(..., help="The user's requested outcome."),
