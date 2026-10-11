@@ -75,7 +75,8 @@ Build persistent personal intelligence that observes explicitly permitted signal
 - Local Ollama client and hardware-aware selection of already-installed models; no implicit model pulls.
 - Optional OpenAI-compatible HTTPS provider requiring explicit `--provider cloud --allow-cloud-egress`.
 - Cloud/remote-Ollama requests pass through a centralized local egress gateway. Only explicitly selected context is attached; activity, memory and session context require separate confirmation, sensitive memory is blocked, high-confidence credential patterns are redacted, payload size is bounded, and a metadata-only local audit record is written. Observer telemetry is never automatically attached.
-- Bounded declarative plans use typed steps, explicit success criteria and dependencies; a deterministic topological validator exposes readiness without starting work. Action steps can reference a capability ID but cannot embed arbitrary commands or tool arguments. The implementation and full test suite passed Windows CI run [#590](https://github.com/AryanGupta-234/P1-/actions/runs/38131262921) on Python 3.11 and 3.12.
+- Bounded declarative plans use typed steps, explicit success criteria and dependencies; model-backed drafting is optional, local-Ollama by default, exact-goal preserving, schema-validated and restricted to caller-allowlisted capability IDs.
+- Persisted task orchestration uses SQLite compare-and-swap versions and append-only lifecycle events. The engine advances dependency-ready steps through injected handlers, pauses for approval/input, and requires an explicit positive assertion for verify steps. Local model reasoning receives only the plan and bounded completed-step summaries; no tools are exposed to the model.
 
 **Context and memory**
 - A bounded synchronous unified event bus fans normalized observations to the durable SQLite store and optional JSONL sink before downstream diagnostics/correlation.
@@ -89,11 +90,12 @@ Build persistent personal intelligence that observes explicitly permitted signal
 
 **Governance**
 - Default-deny user-managed capability manifests, low-risk autonomy declarations, approval gates, bounded flat parameters and rate limits.
-- Typed dry-run executor verifies proposal/policy alignment without performing OS actions; `aie dry-run-proposal` exposes that boundary explicitly.
-- Fail-closed execution control exposes a positive enable marker, a global kill switch and bounded execution budgets; no mutating executor is wired to these controls yet.
-- CLI proposal queue and separate append-only SQLite ledger for policy evaluation, user approval and rejection, with SHA-256 chain verification.
-- Global pause/resume, local retention pruning and outcome-feedback capture.
-- Approval records authorization for a future executor only. Policy decisions do not execute actions; no OS executor or autonomous remediation is implemented.
+- Typed dry-run executor remains available for non-mutating policy checks.
+- A registered adapter executor now requires an approved ledger proposal, valid audit-chain integrity, current policy re-evaluation, the positive execution-enable marker, an absent kill switch and a matching trusted adapter.
+- The only built-in mutating adapter is `windows.settings.open`, which dispatches one of seven fixed `ms-settings:` URIs. It cannot alter settings, invoke a shell, launch arbitrary processes, write files or use the network. It is disabled unless a user creates and enables its manifest.
+- Each attempted execution is recorded once in the SHA-256 chained policy ledger. URI dispatch is not treated as postcondition verification; a separate verify step requires an explicit user assertion.
+- The task engine persists plan/run/step state and its event journal locally. Pause/cancel apply between handler invocations; in-flight external handlers are not force-killed and interrupted running steps fail closed for manual review.
+- Approval and execution are separate operations. The execution gate remains disabled by default; no autonomous remediation is enabled.
 
 ## Pending validation and implementation
 - Windows CI run [#581](https://github.com/AryanGupta-234/P1-/actions/runs/38123875398) passed on Python 3.11 and 3.12, including the current observer-health, ETW lifecycle/loss, task-session, dry-run governance and privacy-control tests.
@@ -105,8 +107,9 @@ Build persistent personal intelligence that observes explicitly permitted signal
 - Embedding retrieval quality evaluation, reviewed consolidation/contradiction handling and evaluated learning from verified outcomes.
 - Evaluated learning from user-confirmed feedback; no automatic model retraining yet.
 - Cloud egress gateway/redaction policy and model request budgets.
-- Sandboxed OS executor, rollback, postcondition verification and actual autonomous remediation.
-- Model-backed plan generation, persisted plan state transitions, cancellation/recovery, tool selection and plan-quality evaluation; the current plan contract is validation/readiness only.
+- OS-process sandboxing, rollback and automatic recovery for interrupted handlers.
+- Postcondition verification beyond explicit human checks; the fixed Settings URI adapter reports dispatch, not verified application state.
+- Tool-selection/plan-quality evaluation and held-out task-family benchmarks.
 - Windows tray/desktop assistant UI.
 
 ## Immediate engineering sequence
@@ -114,8 +117,8 @@ Build persistent personal intelligence that observes explicitly permitted signal
 2. Extend ETW from process lifecycle into explicitly selected thread/file/network categories with provider-specific coverage reporting.
 3. Add evidence freshness, contradiction handling and calibrated confidence to context/session interpretation.
 4. Add persistent memory consolidation with retrieval/forgetting evaluation and reviewed skill induction.
-5. Harden the policy proposal → dry-run → audit path before any mutating executor work.
-6. Implement a real executor only after sandboxing, least privilege, kill switch, rollback and postcondition verification.
+5. Add process isolation and adapter-specific postcondition verifiers before expanding the narrow Windows Settings adapter.
+6. Evaluate planner quality, task outcomes and memory integration without learning from unverified or model-generated success claims.
 7. Add tray/desktop controls after the core APIs stabilize.
 
 ## Validation policy
