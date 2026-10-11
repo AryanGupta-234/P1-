@@ -59,7 +59,7 @@ Build persistent personal intelligence that observes explicitly permitted signal
 
 **Browser and diagnostics**
 - Opt-in MV3 Chrome/Edge HTML-video observer and strict Windows native-messaging host.
-- Local event persistence and temporal browser/foreground/network correlation.
+- Local event persistence and temporal browser/foreground/network correlation.\n- Indexed time/source/type querying and privacy-safe activity sessions across all collected event categories (`aie activity`).
 - Buffer starvation, buffered-but-not-advancing playback and evidence-backed resource/network hypotheses.
 - Live deduplicated diagnostic suggestions with evidence references; suggestions are not actions.
 - User outcome feedback linked to diagnostic event IDs.
@@ -81,7 +81,7 @@ Build persistent personal intelligence that observes explicitly permitted signal
 - Target-desktop UIA and Application/System Event Log permission/behavior validation.
 - ETW subscriptions and higher-fidelity process telemetry.
 - Windows Graphics Capture (screenshots), still intentionally separate from UIA structure.
-- Unified event bus, richer activity/session context and persistent semantic/procedural memory.
+- Unified event bus, semantic task/session context and persistent semantic/procedural memory.
 - Evaluated learning from user-confirmed feedback; no automatic model retraining yet.
 - Cloud egress gateway/redaction policy and model request budgets.
 - Sandboxed OS executor, rollback, postcondition verification and actual autonomous remediation.
