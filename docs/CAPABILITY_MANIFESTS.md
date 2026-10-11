@@ -30,4 +30,4 @@ Available CLI:
 
 Parameter payloads must be flat JSON objects with at most 20 scalar entries or scalar lists, bounded to 8 KiB. Nested objects and keys that look like credentials/tokens are rejected. Do not place secrets in summary text or proposal data.
 
-The SQLite ledger is append-only through the AIE application API and lives in a separate `policy-audit.sqlite3` database. It is not cryptographically tamper-proof against direct local database modification.
+The SQLite ledger is append-only through the AIE application API and lives in a separate `policy-audit.sqlite3` database. Each event is linked to the previous event with a SHA-256 hash; run `aie policy-audit-check` to detect payload edits, row deletion or chain breaks. This is tamper-evident, not tamper-proof against an administrator who can rewrite both data and hashes.
