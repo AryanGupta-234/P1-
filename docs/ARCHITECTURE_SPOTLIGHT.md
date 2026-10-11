@@ -61,6 +61,10 @@ Build persistent personal intelligence that observes explicitly permitted signal
 7. Build capability manifests, policy broker, sandbox, audit and verification.
 8. Implement persistent memory, feedback and held-out generalization evaluation.
 
+## Latest validation evidence
+- GitHub Actions Windows CI run [#206](https://github.com/AryanGupta-234/P1-/actions/runs/38118517008) passed on commit `8ea5f937` with Python 3.11 and 3.12, Ruff, browser JavaScript syntax checks and pytest.
+- This CI validates code on hosted Windows runners. It does not validate installation/permissions against the user's actual Chrome/Edge profile or local desktop UIA tree.
+
 ## Definition of done
 Feature complete = implementation + tests + documented limits + privacy/security review + validation evidence. Never claim CI or Windows validation without an actual passing run.
 
