@@ -165,7 +165,7 @@ class PolicyProposalHandler:
                     "proposal_missing",
                     "The linked policy proposal no longer exists.",
                 )
-            if snapshot.status in {"rejected", "blocked"}:
+            if snapshot.status in {"rejected", "blocked", "revoked"}:
                 return HandlerResult.failed(
                     "proposal_not_approved",
                     "The linked policy proposal was rejected or blocked.",
