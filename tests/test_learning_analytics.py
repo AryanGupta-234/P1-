@@ -2,7 +2,6 @@ from datetime import datetime, timezone
 
 from aie.contracts import AIEEvent, EntityRef
 from aie.learning.analytics import load_feedback_summary, summarize_feedback
-from aie.learning.feedback import FeedbackRequest, record_diagnostic_feedback
 from aie.store import EventStore
 
 
