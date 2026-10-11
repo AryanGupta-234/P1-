@@ -2,76 +2,106 @@
 
 > Current project truth. Read before implementation and update with every milestone change.
 
-**Last updated:** 2026-10-11 | **Integration branch:** `dev` | **Active focus:** M0/M1 Windows perception + M1.5 diagnostics | **Platform:** Windows 10/11
+**Last updated:** 2026-10-11 | **Integration branch:** `dev` | **Active focus:** Windows perception, live diagnostics and cognitive core | **Platform:** Windows 10/11 only
 
 ## North star
 Build persistent personal intelligence that observes explicitly permitted signals, models context, reasons about goals, learns reusable skills and executes scoped actions safely. AGI remains a research objective, not a capability claim.
 
-## System map
+## Architecture
 ```text
-                    COGNITIVE CONTROL PLANE
-           Goals · Context · Reasoning · Planning · Model Router
-                              |
-      +-----------------------+-----------------------+
-      |                       |                       |
-   PERCEPTION                MEMORY                LEARNING
- Screen/UIA/Browser      Working/Episodic        Feedback/Skills
- ETW/Event Log           Semantic/Procedural     Evaluation
- Network/System          Provenance/TTL          Consolidation
-      |                       |                       |
-      +-----------------------+-----------------------+
-                              |
-                        POLICY BROKER
-            Identity · Capabilities · Risk · Budgets
-                              |
-                     CONTROLLED EXECUTION
-                              |
-                     OUTCOME VERIFICATION
-                              |
-                         AUDIT / REVIEW
-     Local-first runtime <--- explicit gateway ---> Optional cloud models
+                  COGNITIVE CONTROL PLANE
+          Goals · Context · Reasoning · Planning · Model Router
+                             |
+      +----------------------+-----------------------+
+      |                      |                       |
+   PERCEPTION               MEMORY                LEARNING
+ Screen/UIA/Browser     Working/Episodic         Feedback/Skills
+ ETW/Event Log          Semantic/Procedural      Evaluation
+ Network/System        Provenance/TTL            Consolidation
+      |                      |                       |
+      +----------------------+-----------------------+
+                             |
+                       POLICY BROKER
+             Identity · Capabilities · Risk · Budgets
+                             |
+                    CONTROLLED EXECUTION
+                             |
+                    OUTCOME VERIFICATION
+                             |
+                       AUDIT / REVIEW
+ Local-first inference <--- explicit egress gate ---> Optional cloud inference
 ```
 
 ## Hard boundaries
 1. Perception providers are read-only and emit observations, never actions.
-2. Every event carries source, timestamp, host, schema version, sensitivity and provenance.
+2. Events carry source, timestamp, host, schema version, sensitivity and provenance.
 3. Observed facts and inferred hypotheses remain distinct.
 4. Models cannot grant themselves capabilities or alter policy.
-5. All OS actions pass through a policy broker and least-privilege executor.
-6. Cloud egress is opt-in per task, minimized and auditable.
-7. User can pause observation and inspect/export/delete retained data.
+5. All OS actions must pass through a policy broker and least-privilege executor.
+6. Cloud egress is opt-in per request, minimized and auditable.
+7. Users can pause observation and inspect/export/delete retained data.
 8. Windows only. No Linux/WSL providers.
-9. Browser collection is explicit and limited to needed playback/performance signals; never collect passwords, cookies, form content or arbitrary page text.
-10. Destructive, privileged, externally visible or difficult-to-reverse actions require approval. Low-risk autonomous actions must be pre-authorized, allowlisted, budgeted and verified.
+9. Browser observation is opt-in and limited to playback/performance signals; no passwords, cookies, form values or arbitrary page text.
+10. UIA is off by default, process-allowlisted and structural-only; no control text/value/password extraction.
+11. Window titles are not collected by default.
+12. Destructive, privileged, externally visible or difficult-to-reverse actions require approval.
 
-## Current capability state
+## Integrated capabilities on dev
 
-**Foundation:** Python package/CLI, versioned event contract, SQLite store, read-only Windows host/process inventory, snapshot reconciliation, provider interface, hardware profile and model policy.
+**Windows perception**
+- Read-only host/process/application/service/scheduled-task/network-interface inventory.
+- Best-effort process lifecycle observations.
+- Foreground app transitions and throttled active-process CPU, RSS, thread and I/O samples.
+- Bounded network interface counters, TCP connection-establishment latency and DNS resolution timing.
+- Opt-in metadata-only Application/System Event Log reader, wired into the observer runtime. It skips historical backlog on startup and excludes message text, XML and Security logs.
+- Opt-in, allowlisted UI Automation structural snapshots with node/depth/time bounds.
+- Per-user pause/resume and age-based event pruning.
 
-**Perception providers:** bounded network telemetry; privacy-aware foreground-window/process sampling; opt-in allowlisted UI Automation structure; opt-in metadata-only Application/System Event Log reader. The latter two are disabled by default. The browser MV3 extension and native-messaging host report HTML video playback/performance counters only.
+**Browser and diagnostics**
+- Opt-in MV3 Chrome/Edge HTML-video observer and strict Windows native-messaging host.
+- Local event persistence and temporal browser/foreground/network correlation.
+- Buffer starvation, buffered-but-not-advancing playback and evidence-backed resource/network hypotheses.
+- Live deduplicated diagnostic suggestions with evidence references; suggestions are not actions.
+- User outcome feedback linked to diagnostic event IDs.
 
-**Intelligence:** temporal browser/foreground/network correlation, buffered-ahead/playback-progress video diagnosis, deduplicated live diagnostic suggestions, local user feedback, local Ollama model routing and explicitly enabled OpenAI-compatible HTTPS inference.
+**Cognitive core**
+- Provider-independent model request/response contracts.
+- Local Ollama client and hardware-aware selection of already-installed models; no implicit model pulls.
+- Optional OpenAI-compatible HTTPS provider requiring explicit `--provider cloud --allow-cloud-egress`.
+- Cloud requests contain only the prompt explicitly supplied to `aie ask`; observer telemetry is not automatically attached.
 
-**Governance:** global observer pause/resume, retention pruning, and a default-deny capability policy prototype. Policy decisions do not execute actions.
+**Governance**
+- Default-deny capability manifests, low-risk autonomy allowlists, approval gates, parameter validation and rate limits.
+- Global pause/resume, local retention pruning and outcome-feedback capture.
+- Policy decisions do not execute actions. No OS executor or autonomous remediation is implemented.
 
-**Still pending:** target-desktop Chrome/Edge/native-host/UIA/Event Log validation; ETW and richer system telemetry; Windows Graphics Capture; centralized event/context bus; evaluated memory consolidation; cloud egress gateway; executor, sandbox, rollback and verified autonomous remediation; desktop/tray UI.
+## Pending validation and implementation
+- Full latest Windows CI run for Event Log runtime wiring and its runtime-level persistence test.
+- Target-desktop Chrome/Edge extension/native-host installation and live playback validation.
+- Target-desktop UIA and Application/System Event Log permission/behavior validation.
+- ETW subscriptions and higher-fidelity process telemetry.
+- Windows Graphics Capture (screenshots), still intentionally separate from UIA structure.
+- Unified event bus, richer activity/session context and persistent semantic/procedural memory.
+- Evaluated learning from user-confirmed feedback; no automatic model retraining yet.
+- Cloud egress gateway/redaction policy and model request budgets.
+- Sandboxed OS executor, rollback, postcondition verification and actual autonomous remediation.
+- Windows tray/desktop assistant UI.
 
 ## Immediate engineering sequence
-1. Verify CI after foreground observer integration on Python 3.11/3.12.
-2. Add CPU, memory and I/O deltas for foreground processes.
-3. Add explicit pause/retention controls and user-visible observation status.
-4. Add Windows UI Automation metadata for selected controls with per-app opt-in.
-5. Correlate browser, foreground-app and network events into user task context.
-6. Integrate the local Ollama adapter; optional cloud only through explicit egress policy.
-7. Build capability manifests, policy broker, sandbox, audit and verification.
-8. Implement persistent memory, feedback and held-out generalization evaluation.
+1. Validate latest Event Log runtime integration on Windows CI.
+2. Validate browser/native-host, UIA and Event Log sampling on the target Windows desktop.
+3. Add ETW process telemetry with coverage and buffer-loss reporting.
+4. Implement a unified event/context query API and session model.
+5. Add persistent memory consolidation with retrieval and forgetting evaluation.
+6. Connect policy decisions to a proposal queue and append-only audit.
+7. Implement an executor only after sandboxing, least privilege, kill switch, rollback and verification.
+8. Add a tray/desktop interface after core APIs stabilize.
 
-## Latest validation evidence
-- GitHub Actions Windows CI run [#206](https://github.com/AryanGupta-234/P1-/actions/runs/38118517008) passed on commit `8ea5f937` with Python 3.11 and 3.12, Ruff, browser JavaScript syntax checks and pytest.
-- This CI validates code on hosted Windows runners. It does not validate installation/permissions against the user's actual Chrome/Edge profile or local desktop UIA tree.
+## Validation policy
+Hosted CI proves code behavior on GitHub's Windows runners; it does not prove installation or runtime behavior on the user's desktop. Mark target-desktop validation complete only after running those checks on the actual Windows machine.
 
 ## Definition of done
-Feature complete = implementation + tests + documented limits + privacy/security review + validation evidence. Never claim CI or Windows validation without an actual passing run.
+Feature complete = implementation + tests + documented limits + privacy/security review + validation evidence. Never claim a capability is live on the user's PC based solely on hosted CI.
 
 ## Keep this page accurate
-Update this file and `docs/ROADMAP.md` in every implementation PR. Add ADRs for lasting design changes and record exact validation environment and result.
+Update this file and `docs/ROADMAP.md` with every implementation increment. Add ADRs for lasting design changes and record exact validation evidence.
