@@ -2,7 +2,7 @@
 
 > Current project truth. Read before implementation and update with every milestone change.
 
-**Last updated:** 2026-10-11 | **Integration branch:** `dev` | **Active focus:** Windows perception, live diagnostics and cognitive core | **Platform:** Windows 10/11 only
+**Last updated:** 2026-10-11 | **Current feature branch:** `feat/agent-orchestration-core` | **Target integration:** `dev` | **Platform:** Windows 10/11 only
 
 ## North star
 Build persistent personal intelligence that observes explicitly permitted signals, models context, reasons about goals, learns reusable skills and executes scoped actions safely. AGI remains a research objective, not a capability claim.
@@ -46,7 +46,7 @@ Build persistent personal intelligence that observes explicitly permitted signal
 11. Window titles are not collected by default.
 12. Destructive, privileged, externally visible or difficult-to-reverse actions require approval.
 
-## Integrated capabilities on dev
+## Existing dev baseline and current feature-branch additions
 
 **Windows perception**
 - Read-only host/process/application/service/scheduled-task/network-interface inventory.
@@ -96,6 +96,7 @@ Build persistent personal intelligence that observes explicitly permitted signal
 - Each attempted execution is recorded once in the SHA-256 chained policy ledger. URI dispatch is not treated as postcondition verification; a separate verify step requires an explicit user assertion.
 - The task engine persists plan/run/step state and its event journal locally. Pause/cancel apply between handler invocations; in-flight external handlers are not force-killed and interrupted running steps fail closed for manual review.
 - Approval and execution are separate operations. The execution gate remains disabled by default; no autonomous remediation is enabled.
+- These orchestration/execution additions currently live on `feat/agent-orchestration-core`; they are not represented as merged into `dev` until the pull request is reviewed and integrated.
 
 ## Pending validation and implementation
 - Windows CI run [#581](https://github.com/AryanGupta-234/P1-/actions/runs/38123875398) passed on Python 3.11 and 3.12, including the current observer-health, ETW lifecycle/loss, task-session, dry-run governance and privacy-control tests.
