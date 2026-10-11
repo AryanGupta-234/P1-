@@ -102,3 +102,33 @@ def test_cancel_preserves_already_executed_action_receipt(tmp_path):
     assert snapshot.execution_status == "succeeded"
     assert snapshot.action_executed is True
     assert ledger.verify_integrity().valid is True
+
+def test_cancel_revokes_proposal_written_before_task_checkpoint(tmp_path):
+    from aie.orchestration.ids import proposal_id_for_task_step
+    from aie.policy.models import ActionProposal
+
+    engine, broker, ledger, _, plan = setup(tmp_path)
+    run = engine.create(plan)
+    step = plan.steps[0]
+    deterministic_id = proposal_id_for_task_step(run.run_id, step.step_id)
+    created = PolicyProposalQueue(ledger).create(
+        ActionProposal(
+            proposal_id=deterministic_id,
+            capability_id=step.capability_id,
+            summary=step.description,
+            parameters={"setting": "display"},
+            source=f"task:{run.run_id}",
+        ),
+        broker,
+    )
+    assert created.status == "pending_review"
+    # Simulate a crash immediately after the audit-ledger write: the task's
+    # persisted StepRun intentionally has no proposal_id.
+    assert engine.get(run.run_id).steps[0].proposal_id is None
+
+    cancelled = engine.cancel(run.run_id)
+
+    assert cancelled.status == "cancelled"
+    assert ledger.get(deterministic_id).status == "revoked"
+    assert ledger.verify_integrity().valid is True
+
