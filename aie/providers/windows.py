@@ -201,14 +201,17 @@ class WindowsProvider(ObserverProvider):
                     })
                 except (psutil.AccessDenied, psutil.NoSuchProcess, OSError):
                     continue
-        except (AttributeError, NotImplementedError, OSError):
+        except (AttributeError, NotImplementedError, OSError, psutil.Error):
             return []
         return sorted(results, key=lambda item: (item["name"] or "").casefold())
 
     @staticmethod
     def _network_interfaces() -> list[dict]:
         # Deliberately excludes IP addresses, MAC addresses, gateways and DNS details.
-        stats = psutil.net_if_stats()
+        try:
+            stats = psutil.net_if_stats()
+        except OSError:
+            return []
         return [
             {
                 "name": name,
