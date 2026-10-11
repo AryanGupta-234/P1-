@@ -20,6 +20,7 @@ def observe(
     network_interval: float = 15.0,
     include_foreground: bool = True,
     include_window_titles: bool = False,
+    foreground_sample_interval: float = 5.0,
 ) -> int:
     """Persist read-only system, foreground-app and bounded network observations."""
     if duration < 1:
@@ -30,11 +31,16 @@ def observe(
         raise ValueError("network_interval must be between 5 and 300 seconds")
     if include_window_titles and not include_foreground:
         raise ValueError("window titles require foreground observation to be enabled")
+    if not 1.0 <= foreground_sample_interval <= 60.0:
+        raise ValueError("foreground_sample_interval must be between 1 and 60 seconds")
 
     provider = WindowsProvider()
     network_provider = WindowsNetworkProvider() if include_network else None
     foreground_provider = (
-        WindowsForegroundProvider(include_window_titles=include_window_titles)
+        WindowsForegroundProvider(
+            include_window_titles=include_window_titles,
+            resource_sample_interval=foreground_sample_interval,
+        )
         if include_foreground
         else None
     )
