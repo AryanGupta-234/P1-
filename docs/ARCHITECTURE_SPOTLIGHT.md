@@ -53,6 +53,7 @@ Build persistent personal intelligence that observes explicitly permitted signal
 - Best-effort process lifecycle observations.
 - Foreground app transitions and throttled active-process CPU, RSS, thread and I/O samples.
 - Opt-in bounded systemwide process CPU/RSS/thread/I/O snapshots, reporting top consumers only.
+- Opt-in kernel ETW process start/stop/rundown observer with bounded queue and explicit elevated-token requirement.
 - Bounded network interface counters, TCP connection-establishment latency and DNS resolution timing.
 - Opt-in metadata-only Application/System Event Log reader, wired into the observer runtime. It skips historical backlog on startup and excludes message text, XML and Security logs.
 - Privacy-safe observer health telemetry with per-provider latency, success/error, consecutive-failure and event-loss accounting; health records exclude exception text and provider payloads.
@@ -91,7 +92,7 @@ Build persistent personal intelligence that observes explicitly permitted signal
 - Windows CI run [#448](https://github.com/AryanGupta-234/P1-/actions/runs/38122160376) passed on Python 3.11 and 3.12, including systemwide process telemetry and activity-summary privacy tests.
 - Target-desktop Chrome/Edge extension/native-host installation and live playback validation.
 - Target-desktop UIA and Application/System Event Log permission/behavior validation.
-- ETW subscriptions and higher-fidelity process telemetry.
+- Higher-fidelity ETW process telemetry beyond lifecycle events (buffer-loss accounting and optional thread/file/network categories).
 - Windows Graphics Capture (screenshots), still intentionally separate from UIA structure.
 - Unified event bus and semantic task/session interpretation.
 - Embedding retrieval, memory consolidation and evaluated learning from verified outcomes.
@@ -103,7 +104,7 @@ Build persistent personal intelligence that observes explicitly permitted signal
 ## Immediate engineering sequence
 1. Validate the unified activity, explicit memory and observer-health layers on Windows CI.
 2. Validate browser/native-host, UIA and Event Log sampling on the target Windows desktop.
-3. Add ETW process telemetry with coverage and buffer-loss reporting.
+3. Extend ETW from process lifecycle into explicitly selected thread/file/network categories, with provider-specific coverage reporting.
 4. Extend the activity timeline into a user-controlled task/session model.
 5. Add persistent memory consolidation with retrieval and forgetting evaluation.
 6. Connect policy decisions to a proposal queue and append-only audit.
