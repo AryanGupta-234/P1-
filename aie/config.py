@@ -62,3 +62,13 @@ def task_session_database_path() -> Path:
 def egress_audit_database_path() -> Path:
     """Private local audit database for remote model egress decisions."""
     return data_dir() / "egress-audit.sqlite3"
+
+
+def execution_enabled_path() -> Path:
+    """Positive marker required before any future mutating executor may run."""
+    return data_dir() / "execution.enabled"
+
+
+def execution_kill_switch_path() -> Path:
+    """Global kill-switch marker that must block all future mutation."""
+    return data_dir() / "execution.kill"
