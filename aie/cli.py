@@ -976,7 +976,9 @@ def proposal_audit(proposal_id: str = typer.Argument(...)) -> None:
     """Show the append-only review history without dumping proposal parameters."""
     from aie.policy.ledger import PolicyLedger
 
-    trail = PolicyLedger(policy_audit_database_path()).audit_trail(proposal_id)
+    ledger = PolicyLedger(policy_audit_database_path())
+    integrity = ledger.verify_integrity()
+    trail = ledger.audit_trail(proposal_id)
     if not trail:
         console.print("Proposal not found.")
         return
@@ -993,8 +995,34 @@ def proposal_audit(proposal_id: str = typer.Argument(...)) -> None:
             str(policy.get("reason", ""))[:160],
         )
     console.print(table)
-    console.print("[dim]Audit records are append-only through the AIE API. No execution records exist because the executor is not implemented.[/dim]")
+    integrity_text = (
+        f"verified ({integrity.checked_entries} entries)"
+        if integrity.valid
+        else f"FAILED at sequence {integrity.first_invalid_sequence}: {integrity.reason}"
+    )
+    console.print(f"Audit chain: {integrity_text}")
+    console.print("[dim]No execution records exist because the executor is not implemented.[/dim]")
 
+
+
+
+@app.command("policy-audit-check")
+def policy_audit_check() -> None:
+    """Verify the complete SHA-256 chain in the local policy audit database."""
+    from aie.policy.ledger import PolicyLedger
+
+    report = PolicyLedger(policy_audit_database_path()).verify_integrity()
+    if report.valid:
+        console.print(
+            f"[green]Policy audit chain verified.[/green] "
+            f"{report.checked_entries} entries checked."
+        )
+        return
+    console.print(
+        f"[red]Policy audit integrity failure.[/red] "
+        f"Sequence {report.first_invalid_sequence}: {report.reason}"
+    )
+    raise typer.Exit(1)
 
 
 if __name__ == "__main__":
