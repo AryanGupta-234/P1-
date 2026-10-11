@@ -57,8 +57,16 @@ def test_unpaused_observer_resumes_sampling(tmp_path: Path, monkeypatch):
         include_foreground=False,
     )
 
-    assert total == 0
+    from aie.store import EventStore
+
+    assert total >= 2
     assert provider.calls == 2
+    health_events = [
+        event for event in EventStore(tmp_path / "running.sqlite3").recent(10)
+        if event.event_type == "observer.provider_health_summary"
+    ]
+    assert health_events
+    assert health_events[0].data["status"] == "healthy"
 
 
 def test_opt_in_eventlog_provider_is_polled_and_persisted(tmp_path, monkeypatch):
