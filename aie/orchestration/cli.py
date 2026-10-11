@@ -17,6 +17,7 @@ from aie.config import (
     task_run_database_path,
 )
 from aie.models.ollama import OllamaClient
+from aie.models.router import LocalModelRouter
 from aie.orchestration.engine import TaskOrchestrator
 from aie.orchestration.handlers import build_default_handlers
 from aie.orchestration.store import TaskRunStore
@@ -200,9 +201,7 @@ def advance_task(
             event_store=EventStore(database_path()),
             broker=broker,
             ledger=ledger,
-            model_router=__import__(
-                "aie.models.router", fromlist=["LocalModelRouter"]
-            ).LocalModelRouter(OllamaClient()),
+            model_router=LocalModelRouter(OllamaClient()),
         )
         run = _engine().advance(run_id, handlers, max_steps=max_steps)
     except Exception as exc:  # noqa: BLE001 - do not leak provider payloads into task state.
