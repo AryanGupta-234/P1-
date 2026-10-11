@@ -78,9 +78,10 @@ Build persistent personal intelligence that observes explicitly permitted signal
 - Sensitive memories are excluded by default; the sensitivity flag is not encryption and credentials must not be stored.
 
 **Governance**
-- Default-deny capability manifests, low-risk autonomy allowlists, approval gates, parameter validation and rate limits.
+- Default-deny user-managed capability manifests, low-risk autonomy declarations, approval gates, bounded flat parameters and rate limits.
+- CLI proposal queue and separate append-only SQLite ledger for policy evaluation, user approval and rejection.
 - Global pause/resume, local retention pruning and outcome-feedback capture.
-- Policy decisions do not execute actions. No OS executor or autonomous remediation is implemented.
+- Approval records authorization for a future executor only. Policy decisions do not execute actions; no OS executor or autonomous remediation is implemented.
 
 ## Pending validation and implementation
 - Full latest Windows CI run for Event Log runtime wiring and its runtime-level persistence test.
