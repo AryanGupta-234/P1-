@@ -24,6 +24,9 @@ Screen capture must be visibly enabled, pauseable and event-driven where practic
 ## Windows Event Log observation
 Event Log collection is off by default and restricted to the classic Application/System channels. The first sample establishes a cursor and does not replay historical records. Only provider name, event ID/type/category, record number, machine and event timestamp are stored; message text, XML payloads and Security logs are excluded. Polling is bounded and uses the optional pywin32 dependency.
 
+## Activity-to-model context egress
+Activity summaries are never attached to model requests by default. The user must opt in per request with `--with-activity`. The packager uses only the safe timeline projection and excludes sensitive events, window titles, Event Log message/XML content, UIA node trees, feedback notes and raw payloads. Remote requests that include activity summaries require a separate `--confirm-activity-egress` confirmation.
+
 ## Memory-to-model context egress
 Memory is never attached to a model request by default. The user must opt in per request. Matching records are bounded and quoted as untrusted reference data. Sensitive memories are excluded by default and cannot be attached to cloud or remote Ollama requests. Remote requests that include non-sensitive memories require a separate `--confirm-memory-egress` confirmation. Observer events and screen/browser telemetry are not attached by this mechanism.
 
