@@ -170,6 +170,14 @@ def test_skill_save_requires_existing_completed_task_run_provenance(tmp_path):
     assert memory_store.get(saved.memory_id) is not None
     assert memory_store.search("desktop workflow") == []
 
+    forged = candidate.model_copy(update={"content": "A forged unverified procedure."})
+    with pytest.raises(SkillInductionError, match="does not match"):
+        save_skill_candidate(
+            forged,
+            memory_store=memory_store,
+            task_run_store=task_store,
+        )
+
     internal = candidate.to_memory_record(sensitivity="internal")
     with pytest.raises(ValueError, match="task_run_store is required"):
         memory_store.save(internal)
