@@ -89,7 +89,8 @@ Statuses: DONE / IN_PROGRESS / BLOCKED / PLANNED. Mark DONE only with code, test
 - [ ] SQLite provenance store and optional local vector index.
 - [ ] Sensitivity, TTL, correction, export and deletion.
 - [ ] Retrieval benchmark and contradiction handling.
-- [ ] Feedback: proposal, acceptance, execution, outcome and verification.
+- [x] Capture user-reported outcomes against diagnostic event IDs (`resolved`, `not_resolved`, `not_attempted`).
+- [ ] Integrate feedback into an evaluated retrieval/learning loop; do not auto-learn unverified actions.
 - [ ] Memory consolidation with regression tests.
 - [ ] Reviewed/versioned skill induction.
 
