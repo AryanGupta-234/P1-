@@ -24,6 +24,9 @@ Screen capture must be visibly enabled, pauseable and event-driven where practic
 ## Systemwide process-resource sampling
 Systemwide process sampling is opt-in, bounded by process count and cadence, and emits only a small top-consumer summary. It records PID, process name, creation time, CPU share of total logical CPU capacity, RSS, thread count and process I/O counters. It excludes command lines, executable paths, environment variables, handles and window content. Some processes may be skipped because of access restrictions or the configured scan cap; the event reports truncation.
 
+## ETW process observation
+Kernel ETW process telemetry is opt-in and requires an elevated Windows token. The initial provider records only process lifecycle metadata and uses a bounded consumer queue. Command lines, executable paths and arbitrary ETW payloads are excluded. Consumer queue overflow is surfaced as a health event; this is not the same as Windows kernel ETW buffer-loss accounting, which remains a later hardening task.
+
 ## Windows Event Log observation
 Event Log collection is off by default and restricted to the classic Application/System channels. The first sample establishes a cursor and does not replay historical records. Only provider name, event ID/type/category, record number, machine and event timestamp are stored; message text, XML payloads and Security logs are excluded. Polling is bounded and uses the optional pywin32 dependency.
 
