@@ -7,6 +7,18 @@ function persistBridgeStatus(status) {
   chrome.storage.local.set({ bridgeStatus: status });
 }
 
+function isTrustedVideoSender(sender) {
+  if (!sender || sender.id !== chrome.runtime.id) return false;
+  const location = typeof sender.origin === "string" ? sender.origin : sender.url;
+  if (typeof location !== "string") return false;
+  try {
+    const parsed = new URL(location);
+    return parsed.protocol === "https:" || parsed.protocol === "http:";
+  } catch (_) {
+    return false;
+  }
+}
+
 function getNativePort() {
   if (nativePort) return nativePort;
 
@@ -16,7 +28,9 @@ function getNativePort() {
       persistBridgeStatus("connected");
     } else {
       persistBridgeStatus(
-        message && message.error ? "rejected: " + message.error : "host returned an invalid response"
+        message && message.error
+          ? "rejected: " + message.error
+          : "host returned an invalid response"
       );
     }
   });
@@ -32,7 +46,19 @@ function getNativePort() {
 }
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message && message.kind === "AIE_GET_STATUS") {
+    chrome.storage.local.get(
+      { enabled: false, bridgeStatus: "not connected yet" },
+      (settings) => sendResponse(settings)
+    );
+    return true;
+  }
+
   if (!message || message.kind !== "AIE_VIDEO_SNAPSHOT" || !message.payload) {
+    return false;
+  }
+  if (!isTrustedVideoSender(sender)) {
+    sendResponse({ ok: false, reason: "untrusted_sender" });
     return false;
   }
 
@@ -54,15 +80,4 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
   });
   return true;
-});
-
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (message && message.kind === "AIE_GET_STATUS") {
-    chrome.storage.local.get(
-      { enabled: false, bridgeStatus: "not connected yet" },
-      (settings) => sendResponse(settings)
-    );
-    return true;
-  }
-  return false;
 });
