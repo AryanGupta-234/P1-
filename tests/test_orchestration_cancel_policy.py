@@ -85,6 +85,7 @@ def test_cancel_preserves_already_executed_action_receipt(tmp_path):
     proposal_id = waiting.steps[0].proposal_id
     PolicyProposalQueue(ledger).review(proposal_id, approve=True, broker=broker)
     ledger.reserve_execution(proposal_id)
+    ledger.reserve_execution(proposal_id)
     ledger.append_execution(proposal_id,
         status="succeeded",
         action_executed=True,
