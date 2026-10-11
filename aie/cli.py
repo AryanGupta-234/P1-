@@ -1821,9 +1821,7 @@ def capability_enable(
             capability_manifest_dir(),
             capability_id,
             enabled=True,
-            registered_capability_ids={
-                item.capability_id for item in registry._adapters.values()
-            },
+            registered_capability_ids=registry.capability_ids,
         )
     except (CapabilityPermissionError, ValueError, OSError) as exc:
         console.print(f"[red]Capability was not enabled:[/red] {exc}")
