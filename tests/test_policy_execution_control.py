@@ -61,3 +61,54 @@ def test_execution_budget_rejects_privileged_or_unbounded_values():
             pass
         else:
             raise AssertionError("expected invalid execution budget to be rejected")
+
+
+def test_enable_marker_must_be_a_regular_file(tmp_path):
+    enabled = tmp_path / "execution.enabled"
+    kill = tmp_path / "execution.kill"
+    enabled.mkdir()
+    control = ExecutionControl(enabled_path=enabled, kill_switch_path=kill)
+
+    assert control.status().enabled is False
+    assert control.status().mutation_allowed is False
+    try:
+        control.require_mutation_allowed()
+    except ExecutionBlocked as exc:
+        assert "disabled by default" in str(exc)
+    else:
+        raise AssertionError("a directory must not enable execution")
+
+
+def test_symlink_enable_marker_fails_closed_when_supported(tmp_path):
+    enabled = tmp_path / "execution.enabled"
+    kill = tmp_path / "execution.kill"
+    target = tmp_path / "unrelated-file"
+    target.write_text("not an execution marker", encoding="utf-8")
+    try:
+        enabled.symlink_to(target)
+    except (OSError, NotImplementedError):
+        import pytest
+
+        pytest.skip("symlink creation is unavailable on this Windows runner")
+    control = ExecutionControl(enabled_path=enabled, kill_switch_path=kill)
+
+    assert control.status().enabled is False
+    assert control.status().mutation_allowed is False
+
+
+def test_any_kill_switch_file_type_blocks_mutation(tmp_path):
+    enabled = tmp_path / "execution.enabled"
+    kill = tmp_path / "execution.kill"
+    control = ExecutionControl(enabled_path=enabled, kill_switch_path=kill)
+    control.set_enabled(True)
+    kill.mkdir()
+
+    assert control.status().enabled is True
+    assert control.status().kill_switch_active is True
+    assert control.status().mutation_allowed is False
+    try:
+        control.require_mutation_allowed()
+    except ExecutionBlocked as exc:
+        assert "kill switch" in str(exc)
+    else:
+        raise AssertionError("a non-file kill-switch object must block mutation")
