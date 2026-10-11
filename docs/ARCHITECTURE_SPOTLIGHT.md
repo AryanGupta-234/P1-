@@ -59,7 +59,8 @@ Build persistent personal intelligence that observes explicitly permitted signal
 
 **Browser and diagnostics**
 - Opt-in MV3 Chrome/Edge HTML-video observer and strict Windows native-messaging host.
-- Local event persistence and temporal browser/foreground/network correlation.\n- Indexed time/source/type querying and privacy-safe activity sessions across all collected event categories (`aie activity`).
+- Local event persistence and temporal browser/foreground/network correlation.
+- Indexed time/source/type querying and privacy-safe activity sessions across all collected event categories (`aie activity`).
 - Buffer starvation, buffered-but-not-advancing playback and evidence-backed resource/network hypotheses.
 - Live deduplicated diagnostic suggestions with evidence references; suggestions are not actions.
 - User outcome feedback linked to diagnostic event IDs.
@@ -69,6 +70,12 @@ Build persistent personal intelligence that observes explicitly permitted signal
 - Local Ollama client and hardware-aware selection of already-installed models; no implicit model pulls.
 - Optional OpenAI-compatible HTTPS provider requiring explicit `--provider cloud --allow-cloud-egress`.
 - Cloud requests contain only the prompt explicitly supplied to `aie ask`; observer telemetry is not automatically attached.
+
+**Context and memory**
+- Indexed event queries and `aie activity` temporal sessions across the normalized event categories.
+- Separate local SQLite memory store for explicit user-authored working/episodic/semantic/procedural/prospective records.
+- Source-event provenance validation, TTL, supersession history, deletion and deterministic local keyword/tag retrieval.
+- Sensitive memories are excluded by default; the sensitivity flag is not encryption and credentials must not be stored.
 
 **Governance**
 - Default-deny capability manifests, low-risk autonomy allowlists, approval gates, parameter validation and rate limits.
@@ -81,17 +88,18 @@ Build persistent personal intelligence that observes explicitly permitted signal
 - Target-desktop UIA and Application/System Event Log permission/behavior validation.
 - ETW subscriptions and higher-fidelity process telemetry.
 - Windows Graphics Capture (screenshots), still intentionally separate from UIA structure.
-- Unified event bus, semantic task/session context and persistent semantic/procedural memory.
+- Unified event bus and semantic task/session interpretation.
+- Embedding retrieval, memory consolidation and evaluated learning from verified outcomes.
 - Evaluated learning from user-confirmed feedback; no automatic model retraining yet.
 - Cloud egress gateway/redaction policy and model request budgets.
 - Sandboxed OS executor, rollback, postcondition verification and actual autonomous remediation.
 - Windows tray/desktop assistant UI.
 
 ## Immediate engineering sequence
-1. Validate latest Event Log runtime integration on Windows CI.
+1. Validate the unified activity and explicit memory layers on Windows CI.
 2. Validate browser/native-host, UIA and Event Log sampling on the target Windows desktop.
 3. Add ETW process telemetry with coverage and buffer-loss reporting.
-4. Implement a unified event/context query API and session model.
+4. Extend the activity timeline into a user-controlled task/session model.
 5. Add persistent memory consolidation with retrieval and forgetting evaluation.
 6. Connect policy decisions to a proposal queue and append-only audit.
 7. Implement an executor only after sandboxing, least privilege, kill switch, rollback and verification.
