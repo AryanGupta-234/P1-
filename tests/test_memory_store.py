@@ -151,3 +151,22 @@ def test_memory_search_is_kind_filterable_and_bounded(tmp_path):
     assert hits[0].memory.kind == "episodic"
     with pytest.raises(ValueError):
         store.search("Windows", limit=0)
+
+
+def test_memory_correction_removes_superseded_embedding(tmp_path):
+    store = MemoryStore(tmp_path / "correction-embeddings.sqlite3")
+    original = store.save(MemoryRecord(
+        kind="semantic",
+        content="The preferred browser is Chrome.",
+    ))
+    store.save_embedding(original.memory_id, "nomic-embed-text:latest", [1.0, 0.0])
+    corrected = store.save(MemoryRecord(
+        kind="semantic",
+        content="The preferred browser is Microsoft Edge.",
+        supersedes_id=original.memory_id,
+    ))
+
+    assert store.get(original.memory_id) is None
+    assert store.get(original.memory_id, include_superseded=True).status == "superseded"
+    assert not store.has_embedding(original.memory_id, "nomic-embed-text:latest")
+    assert store.get(corrected.memory_id) is not None
