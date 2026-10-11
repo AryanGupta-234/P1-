@@ -23,7 +23,7 @@ Statuses: DONE / IN_PROGRESS / BLOCKED / PLANNED. Mark DONE only with code, test
 - [x] Read-only inventory and process reconciliation.
 - [x] ARC Architecture Spotlight, roadmap and contribution guide.
 - [x] Hosted Windows CI on Python 3.11/3.12 with Ruff, optional Windows imports, PowerShell syntax, JS syntax and pytest.
-- [ ] Verify the newest Event Log runtime integration CI run.
+- [x] Event Log runtime integration and systemwide process telemetry validated in hosted Windows CI run #448 (Python 3.11/3.12).
 - [ ] Dependency/security scanning and reproducible release packaging.
 
 ## M1 — Windows perception
@@ -61,6 +61,7 @@ Statuses: DONE / IN_PROGRESS / BLOCKED / PLANNED. Mark DONE only with code, test
 - [x] UIA structural snapshot inspection without control text.
 - [x] Indexed event-store queries by time window, source and event type.
 - [x] Unified privacy-safe activity timeline grouping browser, application, network, process, Event Log and diagnostic metadata.
+- [x] Safe activity-summary context packager for explicit per-request model inclusion; remote inclusion requires separate confirmation.
 - [ ] Unified event bus and general temporal correlation.
 - [x] Initial temporal activity session model with explicit time-gap boundaries.
 - [ ] Semantic task/session state and evidence contradiction handling.
@@ -73,6 +74,7 @@ Statuses: DONE / IN_PROGRESS / BLOCKED / PLANNED. Mark DONE only with code, test
 - [x] RAM-aware routing to already-installed local models.
 - [x] Explicit OpenAI-compatible HTTPS adapter and per-request cloud egress opt-in.
 - [x] CLI to invoke local or explicitly enabled cloud inference.
+- [x] Explicit activity/memory context attachment controls, safe payload budgets and independent remote-egress confirmation.
 - [ ] Structured output modes, streaming and cancellation.
 - [ ] Inference concurrency, memory/token budgets and latency metrics.
 - [ ] Central cloud egress gateway, redaction and audit.
