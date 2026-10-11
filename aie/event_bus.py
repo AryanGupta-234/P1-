@@ -1,7 +1,7 @@
 """Deterministic in-process event fan-out for AIE observation pipelines."""
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable
+from collections.abc import Iterable
 from typing import Protocol
 
 from aie.contracts import AIEEvent
