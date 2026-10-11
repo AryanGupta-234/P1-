@@ -203,7 +203,7 @@ def diagnose_video_buffering(
                 "Inspect browser/GPU process load and dropped-frame trend before changing "
                 "network settings."
             ),
-            (f"System CPU: {metrics.cpu_pct:.1f}%",
+            (f"Foreground app CPU share of total logical capacity: {metrics.cpu_pct:.1f}%",
              f"Dropped frames: {metrics.dropped_frames_pct:.1f}%"),
         ))
 
