@@ -23,9 +23,19 @@ jobs:
           python-version: ${{ matrix.python-version }}
           cache: pip
       - name: Install package and test dependencies
-        run: python -m pip install -e ".[dev]"
+        run: python -m pip install -e ".[dev,windows]"
       - name: Lint
         run: python -m ruff check .
+      - name: Validate Windows-only optional imports
+        run: python -c "from aie.browser.native_host import event_from_browser_payload; from aie.providers.uia import WindowsUIATreeProvider"
+      - name: Validate PowerShell helper syntax
+        shell: pwsh
+        run: |
+          $parseErrors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile("scripts/register-native-host.ps1", [ref]$null, [ref]$parseErrors) | Out-Null
+          if ($parseErrors) { throw ($parseErrors | Out-String) }
+          [System.Management.Automation.Language.Parser]::ParseFile("scripts/unregister-native-host.ps1", [ref]$null, [ref]$parseErrors) | Out-Null
+          if ($parseErrors) { throw ($parseErrors | Out-String) }
       - name: Validate browser extension JavaScript
         run: |
           node --check browser_extension/content.js
