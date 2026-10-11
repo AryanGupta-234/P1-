@@ -45,12 +45,13 @@ def test_quiet_hours_support_overnight_windows_and_disabled_equal_times():
         quiet_start="22:00",
         quiet_end="07:00",
     )
-    assert prefs.is_quiet(datetime(2026, 10, 11, 23, 0, tzinfo=timezone.utc))
-    assert prefs.is_quiet(datetime(2026, 10, 11, 6, 59, tzinfo=timezone.utc))
-    assert not prefs.is_quiet(datetime(2026, 10, 11, 12, 0, tzinfo=timezone.utc))
+    local_tz = datetime.now().astimezone().tzinfo
+    assert prefs.is_quiet(datetime(2026, 10, 11, 23, 0, tzinfo=local_tz))
+    assert prefs.is_quiet(datetime(2026, 10, 11, 6, 59, tzinfo=local_tz))
+    assert not prefs.is_quiet(datetime(2026, 10, 11, 12, 0, tzinfo=local_tz))
 
     no_quiet = NotificationPreferences(enabled=True, quiet_start="00:00", quiet_end="00:00")
-    assert not no_quiet.is_quiet(datetime(2026, 10, 11, 23, 59, tzinfo=timezone.utc))
+    assert not no_quiet.is_quiet(datetime(2026, 10, 11, 23, 59, tzinfo=local_tz))
 
 
 def test_notification_polling_is_opt_in_and_uses_generic_text(tmp_path):
@@ -85,6 +86,18 @@ def test_notification_polling_is_opt_in_and_uses_generic_text(tmp_path):
     assert poller.poll(now=datetime(2026, 10, 11, 12, 0, tzinfo=timezone.utc)) == []
     paused["value"] = False
     assert poller.poll(now=datetime(2026, 10, 11, 12, 0, tzinfo=timezone.utc)) == []
+
+
+def test_preferences_refuse_a_preexisting_temporary_file(tmp_path):
+    store = NotificationPreferencesStore(tmp_path / "notifications.json")
+    temporary = tmp_path / "notifications.json.tmp"
+    temporary.write_text("leave this file untouched", encoding="utf-8")
+
+    import pytest
+
+    with pytest.raises(ValueError, match="temporary file already exists"):
+        store.save(NotificationPreferences(enabled=True))
+    assert temporary.read_text(encoding="utf-8") == "leave this file untouched"
 
 
 def test_quiet_hours_suppress_new_notifications_without_backlog(tmp_path):
