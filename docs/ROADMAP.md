@@ -104,9 +104,10 @@ Statuses: DONE / IN_PROGRESS / BLOCKED / PLANNED. Mark DONE only with code, test
 - [x] CLI for memory indexing and semantic recall; sensitive indexing requires an explicit flag and warning.
 - [ ] Embedding retrieval quality evaluation and benchmark.
 - [x] Review-only duplicate/near-duplicate consolidation proposals; no automatic merge/rewrite.
-- [ ] Reviewed consolidation merge workflow and contradiction resolution.
-- [ ] Evaluated learning from verified outcomes; do not learn unverified fixes.
-- [ ] Reviewed and versioned reusable skill induction.
+- [x] Explicit two-source memory merge after review, with two-parent lineage, source provenance preservation, sensitivity monotonicity, conservative confidence and earliest-expiry enforcement.
+- [ ] Embedding retrieval quality evaluation and semantic contradiction resolution.
+- [x] Deterministic procedural-skill candidates from completed runs with positive verification and action-receipt checks; explicit user confirmation before procedural-memory save.
+- [ ] Evaluated skill quality/transfer and learning from verified outcomes; no automatic model retraining or capability induction.
 - [ ] Forgetting, retention and regression evaluation.
 
 ## M5 — Controlled autonomy
@@ -142,9 +143,9 @@ Statuses: DONE / IN_PROGRESS / BLOCKED / PLANNED. Mark DONE only with code, test
 1. Keep target-desktop validation for browser/native-host, UIA, Event Log and ETW elevation as the primary validation gate.
 2. Extend ETW from process lifecycle into explicitly selected thread/file/network categories with coverage reporting.
 3. Evaluate freshness/contradiction signals and add calibrated confidence metrics without treating heuristics as probabilities.
-4. Evaluate semantic memory retrieval and review consolidation proposals before any automatic merge/learning path.
-5. Harden adapter isolation, postcondition verification and recovery before adding additional mutating capabilities.
-6. Integrate reviewed task-run summaries with memory and outcome learning only after the retrieval/forgetting evaluation gates are defined.
+4. Evaluate semantic memory retrieval, reviewed merges, retention and contradiction handling.
+5. Add process isolation and adapter-specific postcondition verifiers before expanding the narrow Windows Settings adapter.
+6. Evaluate planner quality, skill quality/transfer and verified outcome utility without learning from unverified or model-generated success claims.
 
 ## Risk register
 | Risk | Mitigation | State |
