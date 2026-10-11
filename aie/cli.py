@@ -463,7 +463,7 @@ def ask(
         help="Explicitly attach matching local memories to this request.",
     ),
     semantic_memory: bool = typer.Option(False, "--semantic-memory/--lexical-memory", help="Use local embeddings for memory retrieval."),
-    embedding_model: str = typer.Option("nomic-embed-text", help="Already-installed local embedding model."),
+    embedding_model: str = typer.Option("nomic-embed-text:latest", help="Already-installed local embedding model."),
     include_sensitive_memory: bool = typer.Option(
         False,
         help="Include sensitive memories (local inference only).",
@@ -501,38 +501,42 @@ def ask(
         console.print("[red]Sensitive memories cannot be attached to remote model requests.[/red]")
         raise typer.Exit(2)
 
-    messages = [ChatMessage(role="user", content=prompt)]
-    activity_event_count = 0
-    if with_activity:
-        from aie.context.activity_context import build_activity_prompt_context
+    try:
+        messages = [ChatMessage(role="user", content=prompt)]
+        activity_event_count = 0
+        if with_activity:
+            from aie.context.activity_context import build_activity_prompt_context
 
-        activity_context = build_activity_prompt_context(
-            EventStore(database_path()),
-            lookback_minutes=activity_lookback_minutes,
-        )
-        activity_event_count = len(activity_context.event_ids)
-        if activity_context.content:
-            messages.insert(0, ChatMessage(role="system", content=activity_context.content))
-    if with_memory:
-        from aie.memory.prompt_context import build_memory_prompt_context
-        from aie.memory.store import MemoryStore
+            activity_context = build_activity_prompt_context(
+                EventStore(database_path()),
+                lookback_minutes=activity_lookback_minutes,
+            )
+            activity_event_count = len(activity_context.event_ids)
+            if activity_context.content:
+                messages.insert(0, ChatMessage(role="system", content=activity_context.content))
+        if with_memory:
+            from aie.memory.prompt_context import build_memory_prompt_context
+            from aie.memory.store import MemoryStore
 
-        embedding_client = None
-        if semantic_memory:
-            from aie.models.ollama import OllamaClient
+            embedding_client = None
+            if semantic_memory:
+                from aie.models.ollama import OllamaClient
 
-            embedding_client = OllamaClient()
-        memory_context = build_memory_prompt_context(
-            prompt,
-            MemoryStore(memory_database_path()),
-            include_sensitive=include_sensitive_memory,
-            limit=memory_limit,
-            semantic_model=embedding_model if semantic_memory else None,
-            embedding_provider=embedding_client,
-        )
-        memory_ids = memory_context.memory_ids
-        if memory_context.content:
-            messages.insert(0, ChatMessage(role="system", content=memory_context.content))
+                embedding_client = OllamaClient()
+            memory_context = build_memory_prompt_context(
+                prompt,
+                MemoryStore(memory_database_path()),
+                include_sensitive=include_sensitive_memory,
+                limit=memory_limit,
+                semantic_model=embedding_model if semantic_memory else None,
+                embedding_provider=embedding_client,
+            )
+            memory_ids = memory_context.memory_ids
+            if memory_context.content:
+                messages.insert(0, ChatMessage(role="system", content=memory_context.content))
+    except (RuntimeError, ValueError, OSError) as exc:
+        console.print(f"[red]Context retrieval unavailable:[/red] {exc}")
+        raise typer.Exit(2) from exc
 
     try:
         request = ModelRequest(
@@ -873,7 +877,7 @@ def forget_memory(
 
 @app.command("memory-index")
 def memory_index(
-    model: str = typer.Option("nomic-embed-text", help="Already-installed local Ollama embedding model."),
+    model: str = typer.Option("nomic-embed-text:latest", help="Already-installed local Ollama embedding model."),
     batch_size: int = typer.Option(8, min=1, max=32),
     include_sensitive: bool = typer.Option(False, help="Explicitly index sensitive local memories."),
 ) -> None:
