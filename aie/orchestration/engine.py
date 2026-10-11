@@ -1,0 +1,438 @@
+"""Deterministic, resumable task orchestration; handlers are injected capabilities."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from datetime import datetime, timezone
+from typing import Literal, Protocol
+
+from aie.orchestration.models import StepRun, TaskRun
+from aie.orchestration.store import TaskRunStore
+from aie.planning.models import PlanStep, TaskPlan
+from aie.planning.validator import next_ready_steps, validate_plan
+
+HandlerStatus = Literal["completed", "awaiting_approval", "awaiting_input", "failed"]
+
+
+@dataclass(frozen=True, slots=True)
+class StepContext:
+    """Minimal state passed to a step handler; never grants an action capability."""
+
+    run_id: str
+    plan_id: str
+    goal: str
+    attempt: int
+    completed_step_ids: tuple[str, ...]
+    prior_summaries: tuple[str, ...]
+    proposal_id: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class HandlerResult:
+    status: HandlerStatus
+    summary: str
+    proposal_id: str | None = None
+    verified: bool = False
+    error_type: str | None = None
+
+    def __post_init__(self) -> None:
+        if not self.summary or len(self.summary) > 1000:
+            raise ValueError("handler summary must contain 1 to 1000 characters")
+        if self.status == "awaiting_approval" and not self.proposal_id:
+            raise ValueError("approval-waiting results require a proposal_id")
+        if self.verified and self.status != "completed":
+            raise ValueError("only completed handler results may be verified")
+        if self.status == "failed" and not self.error_type:
+            raise ValueError("failed handler results require an error_type")
+
+    @classmethod
+    def completed(cls, summary: str, *, verified: bool = False) -> "HandlerResult":
+        return cls(status="completed", summary=summary, verified=verified)
+
+    @classmethod
+    def awaiting_approval(cls, proposal_id: str, summary: str) -> "HandlerResult":
+        return cls(
+            status="awaiting_approval",
+            summary=summary,
+            proposal_id=proposal_id,
+        )
+
+    @classmethod
+    def awaiting_input(cls, summary: str) -> "HandlerResult":
+        return cls(status="awaiting_input", summary=summary)
+
+    @classmethod
+    def failed(cls, error_type: str, summary: str) -> "HandlerResult":
+        return cls(status="failed", summary=summary, error_type=error_type)
+
+
+class StepHandler(Protocol):
+    def execute(self, step: PlanStep, context: StepContext) -> HandlerResult:
+        """Execute one bounded step and return an explicit outcome."""
+        ...
+
+
+class TaskOrchestrator:
+    """Persist and advance validated plans one handler invocation at a time.
+
+    The orchestrator has no implicit tool access. Every step kind must be mapped to an
+    application-owned handler. A model response is never itself an approval or proof
+    that a postcondition is true.
+    """
+
+    def __init__(self, store: TaskRunStore) -> None:
+        self.store = store
+
+    def create(self, plan: TaskPlan) -> TaskRun:
+        validate_plan(plan)
+        from aie.orchestration.models import new_task_run
+
+        return self.store.create(new_task_run(plan))
+
+    def get(self, run_id: str) -> TaskRun:
+        run = self.store.get(run_id)
+        if run is None:
+            raise ValueError("task run was not found")
+        return run
+
+    @staticmethod
+    def _step(run: TaskRun, step_id: str) -> StepRun:
+        for item in run.steps:
+            if item.step_id == step_id:
+                return item
+        raise ValueError(f"step {step_id!r} does not exist in this task run")
+
+    @staticmethod
+    def _replace_step(run: TaskRun, replacement: StepRun) -> TaskRun:
+        steps = tuple(
+            replacement if item.step_id == replacement.step_id else item
+            for item in run.steps
+        )
+        return run.model_copy(update={"steps": steps})
+
+    def pause(self, run_id: str) -> TaskRun:
+        run = self.get(run_id)
+        if run.status in {"completed", "failed", "cancelled", "paused"}:
+            raise ValueError(f"cannot pause a task run in state {run.status!r}")
+        updated = run.model_copy(update={"status": "paused"})
+        return self.store.save(
+            updated,
+            expected_version=run.version,
+            event_type="task.paused",
+        )
+
+    def resume(self, run_id: str) -> TaskRun:
+        run = self.get(run_id)
+        if run.status != "paused":
+            raise ValueError("only paused task runs can be resumed")
+        updated = run.model_copy(update={"status": "queued"})
+        return self.store.save(
+            updated,
+            expected_version=run.version,
+            event_type="task.resumed",
+        )
+
+    def cancel(self, run_id: str, *, reason: str = "cancelled by user") -> TaskRun:
+        run = self.get(run_id)
+        if run.status in {"completed", "failed", "cancelled"}:
+            raise ValueError(f"cannot cancel a task run in state {run.status!r}")
+        now = datetime.now(timezone.utc)
+        steps = tuple(
+            item.model_copy(update={"status": "skipped", "completed_at": now})
+            if item.status in {
+                "pending", "running", "awaiting_approval", "awaiting_input"
+            }
+            else item
+            for item in run.steps
+        )
+        updated = run.model_copy(
+            update={"status": "cancelled", "steps": steps, "failure_type": None}
+        )
+        return self.store.save(
+            updated,
+            expected_version=run.version,
+            event_type="task.cancelled",
+            details={"reason": reason[:200]},
+        )
+
+    def complete_input(
+        self,
+        run_id: str,
+        step_id: str,
+        *,
+        summary: str,
+        verified: bool = False,
+    ) -> TaskRun:
+        """Record explicit user input; verification steps require a positive assertion."""
+        run = self.get(run_id)
+        if run.status != "awaiting_input":
+            raise ValueError("task run is not awaiting user input")
+        step_state = self._step(run, step_id)
+        if step_state.status != "awaiting_input":
+            raise ValueError("step is not awaiting user input")
+        plan_step = next(step for step in run.plan.steps if step.step_id == step_id)
+        now = datetime.now(timezone.utc)
+        if plan_step.kind == "verify" and not verified:
+            replacement = step_state.model_copy(
+                update={
+                    "status": "failed",
+                    "summary": summary[:1000],
+                    "verified": False,
+                    "error_type": "verification_not_confirmed",
+                    "completed_at": now,
+                }
+            )
+            updated = self._replace_step(run, replacement).model_copy(
+                update={"status": "failed", "failure_type": "verification_not_confirmed"}
+            )
+            return self.store.save(
+                updated,
+                expected_version=run.version,
+                event_type="task.step.verification_failed",
+                details={"step_id": step_id},
+            )
+
+        replacement = step_state.model_copy(
+            update={
+                "status": "completed",
+                "summary": summary[:1000],
+                "verified": bool(verified),
+                "completed_at": now,
+                "error_type": None,
+            }
+        )
+        updated = self._replace_step(run, replacement).model_copy(
+            update={"status": "queued", "failure_type": None}
+        )
+        if all(item.status == "completed" for item in updated.steps):
+            updated = updated.model_copy(update={"status": "completed"})
+        return self.store.save(
+            updated,
+            expected_version=run.version,
+            event_type="task.step.input_recorded",
+            details={"step_id": step_id, "verified": bool(verified)},
+        )
+
+    def advance(
+        self,
+        run_id: str,
+        handlers: dict[str, StepHandler],
+        *,
+        max_steps: int = 1,
+    ) -> TaskRun:
+        """Run up to max_steps synchronous handlers, persisting every transition."""
+        if not 1 <= max_steps <= 25:
+            raise ValueError("max_steps must be between 1 and 25")
+
+        processed = 0
+        run = self.get(run_id)
+        if run.status in {"paused", "completed", "failed", "cancelled"}:
+            return run
+        if run.status == "awaiting_input":
+            return run
+
+        while processed < max_steps:
+            run = self.get(run_id)
+            if run.status in {"paused", "completed", "failed", "cancelled", "awaiting_input"}:
+                return run
+
+            completed_ids = {
+                item.step_id for item in run.steps if item.status == "completed"
+            }
+            ready = next_ready_steps(run.plan, completed_step_ids=completed_ids)
+            candidates = [
+                step for step in ready
+                if self._step(run, step.step_id).status in {"pending", "awaiting_approval"}
+            ]
+            if not candidates:
+                if all(item.status == "completed" for item in run.steps):
+                    updated = run.model_copy(update={"status": "completed", "failure_type": None})
+                    return self.store.save(
+                        updated,
+                        expected_version=run.version,
+                        event_type="task.completed",
+                    )
+                waiting = any(
+                    item.status in {"awaiting_approval", "awaiting_input"}
+                    for item in run.steps
+                )
+                if waiting:
+                    return run
+                interrupted = any(item.status == "running" for item in run.steps)
+                failure = "interrupted_step_requires_review" if interrupted else "no_ready_step"
+                updated = run.model_copy(update={"status": "failed", "failure_type": failure})
+                return self.store.save(
+                    updated,
+                    expected_version=run.version,
+                    event_type="task.stopped",
+                    details={"failure_type": failure},
+                )
+
+            plan_step = candidates[0]
+            step_state = self._step(run, plan_step.step_id)
+            handler = handlers.get(plan_step.kind)
+            if handler is None:
+                replacement = step_state.model_copy(
+                    update={
+                        "status": "awaiting_input",
+                        "summary": "No handler is configured; explicit input is required.",
+                        "started_at": step_state.started_at or datetime.now(timezone.utc),
+                    }
+                )
+                updated = self._replace_step(run, replacement).model_copy(
+                    update={"status": "awaiting_input"}
+                )
+                return self.store.save(
+                    updated,
+                    expected_version=run.version,
+                    event_type="task.step.awaiting_input",
+                    details={"step_id": plan_step.step_id, "reason": "handler_missing"},
+                )
+
+            now = datetime.now(timezone.utc)
+            running_step = step_state.model_copy(
+                update={
+                    "status": "running",
+                    "attempts": step_state.attempts + 1,
+                    "started_at": now,
+                    "error_type": None,
+                }
+            )
+            running_run = self._replace_step(run, running_step).model_copy(
+                update={"status": "running", "failure_type": None}
+            )
+            run = self.store.save(
+                running_run,
+                expected_version=run.version,
+                event_type="task.step.started",
+                details={"step_id": plan_step.step_id, "attempt": running_step.attempts},
+            )
+
+            current_state = self._step(run, plan_step.step_id)
+            context = StepContext(
+                run_id=run.run_id,
+                plan_id=run.plan.plan_id,
+                goal=run.plan.goal,
+                attempt=current_state.attempts,
+                completed_step_ids=tuple(sorted(completed_ids)),
+                prior_summaries=tuple(
+                    item.summary for item in run.steps
+                    if item.status == "completed" and item.summary
+                ),
+                proposal_id=current_state.proposal_id,
+            )
+            try:
+                result = handler.execute(plan_step, context)
+                if not isinstance(result, HandlerResult):
+                    raise TypeError("step handler must return HandlerResult")
+            except Exception as exc:  # noqa: BLE001 - task state must record bounded failure metadata.
+                result = HandlerResult.failed(
+                    type(exc).__name__,
+                    "Step handler failed; inspect local diagnostics before retrying.",
+                )
+
+            finished_at = datetime.now(timezone.utc)
+            if result.status == "completed":
+                if plan_step.kind == "verify" and not result.verified:
+                    result = HandlerResult.failed(
+                        "verification_not_confirmed",
+                        "Verification handler did not provide a positive postcondition result.",
+                    )
+
+            if result.status == "completed":
+                replacement = current_state.model_copy(
+                    update={
+                        "status": "completed",
+                        "summary": result.summary,
+                        "proposal_id": result.proposal_id or current_state.proposal_id,
+                        "verified": result.verified,
+                        "error_type": None,
+                        "completed_at": finished_at,
+                    }
+                )
+                updated = self._replace_step(run, replacement).model_copy(
+                    update={"status": "running", "failure_type": None}
+                )
+                run = self.store.save(
+                    updated,
+                    expected_version=run.version,
+                    event_type="task.step.completed",
+                    details={
+                        "step_id": plan_step.step_id,
+                        "verified": result.verified,
+                    },
+                )
+                processed += 1
+                continue
+
+            if result.status == "awaiting_approval":
+                replacement = current_state.model_copy(
+                    update={
+                        "status": "awaiting_approval",
+                        "summary": result.summary,
+                        "proposal_id": result.proposal_id,
+                        "verified": False,
+                    }
+                )
+                updated = self._replace_step(run, replacement).model_copy(
+                    update={"status": "awaiting_approval"}
+                )
+                return self.store.save(
+                    updated,
+                    expected_version=run.version,
+                    event_type="task.step.awaiting_approval",
+                    details={
+                        "step_id": plan_step.step_id,
+                        "proposal_id": result.proposal_id,
+                    },
+                )
+
+            if result.status == "awaiting_input":
+                replacement = current_state.model_copy(
+                    update={
+                        "status": "awaiting_input",
+                        "summary": result.summary,
+                        "verified": False,
+                    }
+                )
+                updated = self._replace_step(run, replacement).model_copy(
+                    update={"status": "awaiting_input"}
+                )
+                return self.store.save(
+                    updated,
+                    expected_version=run.version,
+                    event_type="task.step.awaiting_input",
+                    details={"step_id": plan_step.step_id},
+                )
+
+            replacement = current_state.model_copy(
+                update={
+                    "status": "failed",
+                    "summary": result.summary,
+                    "verified": False,
+                    "error_type": result.error_type,
+                    "completed_at": finished_at,
+                }
+            )
+            updated = self._replace_step(run, replacement).model_copy(
+                update={"status": "failed", "failure_type": result.error_type}
+            )
+            return self.store.save(
+                updated,
+                expected_version=run.version,
+                event_type="task.step.failed",
+                details={
+                    "step_id": plan_step.step_id,
+                    "error_type": result.error_type,
+                },
+            )
+
+        run = self.get(run_id)
+        if all(item.status == "completed" for item in run.steps):
+            updated = run.model_copy(update={"status": "completed"})
+            return self.store.save(
+                updated,
+                expected_version=run.version,
+                event_type="task.completed",
+            )
+        return run
