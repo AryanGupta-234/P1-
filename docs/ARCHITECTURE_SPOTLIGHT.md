@@ -77,6 +77,7 @@ Build persistent personal intelligence that observes explicitly permitted signal
 
 **Context and memory**
 - Indexed event queries and `aie activity` temporal sessions across the normalized event categories.
+- Explicit user-controlled working sessions persisted locally; session metadata can be attached to model requests only on request.
 - Separate local SQLite memory store for explicit user-authored working/episodic/semantic/procedural/prospective records.
 - Source-event provenance validation, TTL, supersession history, deletion, lexical retrieval and optional local Ollama embedding/cosine retrieval.
 - Embeddings are keyed by memory ID and model; deletion/expiry removes associated vectors.
