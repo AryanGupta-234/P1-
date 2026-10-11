@@ -1765,6 +1765,93 @@ def list_capabilities() -> None:
     console.print(table)
 
 
+@app.command("capability-permissions")
+def capability_permissions() -> None:
+    """Inspect the permission state and application registration of local capabilities."""
+    from aie.policy.capabilities import CapabilityRegistry
+    from aie.policy.manifests import CapabilityManifestLoadError
+
+    try:
+        _, manifests = _load_local_policy_broker()
+        registered = CapabilityRegistry.windows_safe_defaults()
+    except (ValueError, CapabilityManifestLoadError) as exc:
+        console.print(f"[red]Capability policy unavailable:[/red] {exc}")
+        raise typer.Exit(2) from exc
+
+    if not manifests:
+        console.print("No capability manifests are configured. Unknown capabilities remain denied.")
+        return
+    table = Table(
+        "Capability", "Risk", "Enabled", "Approval", "Autonomous",
+        "Registered adapter", "Parameters",
+    )
+    for item in manifests:
+        table.add_row(
+            item.capability_id,
+            item.risk_tier,
+            str(item.enabled),
+            str(item.approval_required),
+            str(item.allow_autonomous),
+            "yes" if registered.get(item.capability_id) else "no",
+            ", ".join(sorted(item.allowed_parameters)) or "-",
+        )
+    console.print(table)
+    console.print(
+        "[dim]Enabled does not mean executable. A proposal also needs review, "
+        "a current policy allow, the positive execution marker, no kill switch "
+        "and a registered adapter.[/dim]"
+    )
+
+
+@app.command("capability-enable")
+def capability_enable(
+    capability_id: str = typer.Argument(...),
+    confirm: bool = typer.Option(False, "--confirm", help="Confirm enabling this registered capability manifest."),
+) -> None:
+    """Enable one registered capability while retaining its approval requirements."""
+    from aie.policy.capabilities import CapabilityRegistry
+    from aie.policy.permissions import CapabilityPermissionError, set_capability_enabled
+
+    if not confirm:
+        console.print("[yellow]Pass --confirm to enable this capability manifest.[/yellow]")
+        raise typer.Exit(2)
+    try:
+        registry = CapabilityRegistry.windows_safe_defaults()
+        updated = set_capability_enabled(
+            capability_manifest_dir(),
+            capability_id,
+            enabled=True,
+            registered_capability_ids={
+                item.capability_id for item in registry._adapters.values()
+            },
+        )
+    except (CapabilityPermissionError, ValueError, OSError) as exc:
+        console.print(f"[red]Capability was not enabled:[/red] {exc}")
+        raise typer.Exit(2) from exc
+    console.print(
+        f"[green]Capability manifest enabled:[/green] {updated.capability_id}\n"
+        "Approval remains required. The global execution gate is unchanged."
+    )
+
+
+@app.command("capability-disable")
+def capability_disable(capability_id: str = typer.Argument(...)) -> None:
+    """Disable a capability manifest immediately; this does not modify audit history."""
+    from aie.policy.permissions import CapabilityPermissionError, set_capability_enabled
+
+    try:
+        updated = set_capability_enabled(
+            capability_manifest_dir(),
+            capability_id,
+            enabled=False,
+            registered_capability_ids=set(),
+        )
+    except (CapabilityPermissionError, ValueError, OSError) as exc:
+        console.print(f"[red]Capability was not disabled:[/red] {exc}")
+        raise typer.Exit(2) from exc
+    console.print(f"[green]Capability manifest disabled:[/green] {updated.capability_id}")
+
+
 @app.command("propose")
 def propose_action(
     capability_id: str = typer.Argument(...),
