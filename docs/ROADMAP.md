@@ -32,7 +32,8 @@ Statuses: DONE / IN_PROGRESS / BLOCKED / PLANNED. Mark DONE only with code, test
 - [x] Read-only provider abstraction.
 - [ ] ETW process telemetry with bounded buffers.
 - [ ] Allowlisted Windows Event Log sources.
-- [ ] CPU/RAM/disk and per-process resource sampling.
+- [x] Throttled CPU, resident memory, thread-count and I/O counters for the active foreground process.
+- [ ] CPU/RAM/disk and resource sampling across all processes.
 - [x] Read-only network interface counters, gateway/external TCP reachability RTT and DNS resolution probes.
 - [x] Wire bounded network provider into observer CLI with configurable sampling interval, event-store integration and --no-network opt-out.
 - [x] Read-only service and scheduled-task inventory.
@@ -57,6 +58,7 @@ Statuses: DONE / IN_PROGRESS / BLOCKED / PLANNED. Mark DONE only with code, test
 
 ## M2 — Context intelligence
 - [x] Read-only foreground-window transition observer with titles omitted by default.
+- [x] Throttled active-foreground process CPU/memory/thread/I/O event sampling.
 - [x] Initial temporal correlator for browser-video snapshots and fresh same-host network evidence (synthetic contract; live browser bridge remains planned).
 - [ ] Unified event bus and general temporal correlation.
 - [ ] Working context: correlate foreground process transitions, browser playback and session/task state.
