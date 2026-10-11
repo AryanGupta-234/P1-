@@ -8,6 +8,7 @@ __all__ = [
     "ActivitySignal",
     "ActivityTimeline",
     "build_activity_timeline",
+    "build_activity_prompt_context",
     "build_video_observation_context",
 ]
 
@@ -15,6 +16,9 @@ __all__ = [
 def __getattr__(name: str):
     if name in {"ActivitySession", "ActivitySignal", "ActivityTimeline", "build_activity_timeline"}:
         module = import_module("aie.context.activity")
+        return getattr(module, name)
+    if name == "build_activity_prompt_context":
+        module = import_module("aie.context.activity_context")
         return getattr(module, name)
     if name == "build_video_observation_context":
         module = import_module("aie.context.video")
