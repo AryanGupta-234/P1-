@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import time
+import threading
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlparse
 from urllib.request import Request, urlopen
@@ -57,6 +58,8 @@ class OllamaClient:
                     "Remote Ollama endpoints must use HTTPS."
                 )
         self.default_timeout = default_timeout
+        # Prevent concurrent requests from overcommitting local RAM/VRAM in one process.
+        self._inference_slot = threading.BoundedSemaphore(1)
 
     def _request(self, path: str, *, payload: dict | None, timeout: float) -> dict:
         url = f"{self.base_url}{path}"
@@ -132,12 +135,19 @@ class OllamaClient:
                 "num_predict": request.max_output_tokens,
             },
         }
+        if not self._inference_slot.acquire(timeout=request.timeout_seconds):
+            raise OllamaUnavailable(
+                "Another local inference is still running; retry after it completes."
+            )
         started = time.perf_counter()
-        payload = self._request(
-            "/api/chat",
-            payload=body,
-            timeout=min(request.timeout_seconds, self.default_timeout),
-        )
+        try:
+            payload = self._request(
+                "/api/chat",
+                payload=body,
+                timeout=min(request.timeout_seconds, self.default_timeout),
+            )
+        finally:
+            self._inference_slot.release()
         elapsed = max(0.0, time.perf_counter() - started)
 
         message = payload.get("message")
