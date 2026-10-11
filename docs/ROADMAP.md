@@ -33,7 +33,8 @@ Statuses: DONE / IN_PROGRESS / BLOCKED / PLANNED. Mark DONE only with code, test
 - [ ] ETW process telemetry with bounded buffers.
 - [ ] Allowlisted Windows Event Log sources.
 - [ ] CPU/RAM/disk and per-process resource sampling.
-- [ ] Network interface, gateway, DNS and connectivity observations.
+- [x] Read-only network interface counters, gateway/external TCP RTT and DNS resolution probe module (not yet scheduled by the runtime).
+- [ ] Wire network provider into observer CLI with bounded sampling interval, target policy and event-store integration.
 - [ ] Service and scheduled-task inventory.
 - [ ] Installed application/executable metadata inventory.
 - [ ] Pause/resume, retention, export/delete and observer health.
