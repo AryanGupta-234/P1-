@@ -55,12 +55,13 @@ See [HARDWARE_PROFILE.md](HARDWARE_PROFILE.md) for the sanitized host baseline.
 - Read-only Windows service inventory.
 - Network interface state inventory without IP/MAC collection.
 - Scheduled-task names/status through read-only `schtasks /query`.
-- Batch SQLite writes and JSONL export.
+- Periodic CPU, memory and system-volume resource observations; batch SQLite writes and JSONL export.
+- Read-only ETW provider catalog discovery through `logman query providers` (catalog only; no trace session is started).
 - Hardware runtime probe and local loopback-only Ollama model discovery/model selection.
 - Windows CI workflow plus synthetic tests (CI execution still needs confirmation).
 
 ## Not implemented yet
-- ETW subscriptions / higher-fidelity kernel-originated event ingestion.
+- ETW real-time subscriptions / higher-fidelity kernel-originated event ingestion (only provider catalog discovery exists).
 - Windows Event Log allowlist and real-time subscriptions.
 - Continuous service/network/task/application change events.
 - Executable path/signature discovery and application adapter registry.
@@ -81,7 +82,7 @@ See [HARDWARE_PROFILE.md](HARDWARE_PROFILE.md) for the sanitized host baseline.
 
 ## Next actions — priority order
 1. Run Windows CI and resolve every failure.
-2. Add live CPU/memory resource events and service/network deltas.
+2. Add service/network state deltas and retention controls.
 3. Prototype opt-in ETW process telemetry with bounded buffers and explicit session lifecycle.
 4. Add allowlisted Windows Event Log providers.
 5. Add app compatibility discovery and UIA read-only tree inspection.
