@@ -85,11 +85,22 @@ Build persistent personal intelligence that observes explicitly permitted signal
 - Global pause/resume, local retention pruning and outcome-feedback capture.
 - Approval records authorization for a future executor only. Policy decisions do not execute actions; no OS executor or autonomous remediation is implemented.
 
+## Feature branch in review
+
+**ETW process capture prototype** (feat/etw-process-observer-v3):
+- Read-only aie etw-catalog provider discovery; catalog lookup does not create, enable, or stop a session.
+- Manual one-shot aie etw-process --duration N capture; not wired into the continuous observer loop.
+- Unique AIE-owned session name, process keyword only, 8 MiB circular ETL, 16 KiB buffers (2–8), bounded capture duration and output parsing.
+- Process start/stop allowlist only; strips executable paths and excludes command lines, image/thread/file/network events and payload text.
+- Stops only the exact AIE-created session. If stop cannot be verified, retain trace workspace and display the precise recovery command.
+- Coverage event reports event/buffer-loss values only when the decoded trace summary supplies them; otherwise the values remain unknown.
+- Synthetic parser/session tests are present; Windows CI passed on Python 3.11/3.12 on the preceding validated revision. CI must be rerun on this refreshed dev base; target-device schema/permission/overhead checks remain pending.
+
 ## Pending validation and implementation
 - Full latest Windows CI run for Event Log runtime wiring and its runtime-level persistence test.
 - Target-desktop Chrome/Edge extension/native-host installation and live playback validation.
 - Target-desktop UIA and Application/System Event Log permission/behavior validation.
-- ETW subscriptions and higher-fidelity process telemetry.
+- Validate ETW process capture on the target Windows build, including process event schema/version, permission requirements, session cleanup, delivery latency, event/buffer loss and CPU/RAM overhead.
 - Windows Graphics Capture (screenshots), still intentionally separate from UIA structure.
 - Unified event bus and semantic task/session interpretation.
 - Embedding retrieval, memory consolidation and evaluated learning from verified outcomes.
@@ -101,7 +112,7 @@ Build persistent personal intelligence that observes explicitly permitted signal
 ## Immediate engineering sequence
 1. Validate the unified activity and explicit memory layers on Windows CI.
 2. Validate browser/native-host, UIA and Event Log sampling on the target Windows desktop.
-3. Add ETW process telemetry with coverage and buffer-loss reporting.
+3. Validate the manual, bounded ETW process capture on the target Windows desktop; quantify overhead and coverage before automating it.
 4. Extend the activity timeline into a user-controlled task/session model.
 5. Add persistent memory consolidation with retrieval and forgetting evaluation.
 6. Connect policy decisions to a proposal queue and append-only audit.
