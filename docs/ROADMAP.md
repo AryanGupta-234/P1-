@@ -33,7 +33,7 @@ Statuses: DONE / IN_PROGRESS / BLOCKED / PLANNED. Mark DONE only with code, test
 - [ ] ETW process telemetry with bounded buffers.
 - [ ] Allowlisted Windows Event Log sources.
 - [ ] CPU/RAM/disk and per-process resource sampling.
-- [x] Read-only network interface counters, gateway/external TCP RTT and DNS resolution probe module (not yet scheduled by the runtime).
+- [x] Read-only network interface counters, gateway/external TCP reachability RTT and DNS resolution probes.
 - [x] Wire bounded network provider into observer CLI with configurable sampling interval, event-store integration and --no-network opt-out.
 - [ ] Service and scheduled-task inventory.
 - [ ] Installed application/executable metadata inventory.
@@ -48,7 +48,7 @@ Statuses: DONE / IN_PROGRESS / BLOCKED / PLANNED. Mark DONE only with code, test
 - [ ] Root-cause trace corpus and false-positive/negative evaluation.
 - [ ] Opt-in Edge/Chrome playback/performance extension.
 - [x] Windows network sampler: interface counters, gateway/external TCP reachability RTT and DNS timing.
-- [ ] Add explicit per-target policy and sustained throughput measurement (opt-in only).
+- [ ] Add configurable per-target policy and sustained throughput measurement (opt-in only).
 - [ ] Browser + OS telemetry correlation.
 - [ ] Confidence calibration and actionable diagnostic proposals.
 
@@ -102,7 +102,7 @@ Statuses: DONE / IN_PROGRESS / BLOCKED / PLANNED. Mark DONE only with code, test
 - [ ] Desktop UI after core telemetry and policy APIs stabilize.
 
 ## Immediate dev sprint
-1. CI triggers on dev and runs lint + tests on 3.11/3.12.
+1. Run and verify the CI matrix on dev.
 2. Add trace fixtures for buffering causes and unknown evidence.
 3. Add service/process resource samples and pause/retention controls.
 4. Design opt-in browser extension with minimal permissions.
