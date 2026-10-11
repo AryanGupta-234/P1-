@@ -283,6 +283,10 @@ def build_video_observation_context(
         estimated_required_mbps=_number(data, "estimated_required_mbps", minimum=0),
         cpu_pct=browser_cpu,
         dropped_frames_pct=_number(data, "dropped_frames_pct", minimum=0, maximum=100),
+        buffered_ahead_seconds=_number(data, "buffered_ahead_seconds", minimum=0, maximum=3600),
+        playback_progress_delta_seconds=_number(
+            data, "playback_progress_delta_seconds", minimum=0, maximum=300
+        ),
     )
 
     network_evidence: list[NetworkEvidence] = []
