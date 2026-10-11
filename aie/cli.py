@@ -1126,6 +1126,78 @@ def learning_report(
 
 
 
+@app.command("memory-evaluate")
+def memory_evaluate(
+    dataset: Path = typer.Argument(..., exists=True, dir_okay=False),
+    k: int = typer.Option(5, min=1, max=20),
+    semantic_model: str | None = typer.Option(
+        None,
+        "--semantic-model",
+        help="Use an already-installed local Ollama embedding model instead of lexical retrieval.",
+    ),
+    include_sensitive: bool = typer.Option(
+        False,
+        "--include-sensitive",
+        help="Explicitly include sensitive memories in this local evaluation.",
+    ),
+) -> None:
+    """Measure local memory retrieval using a user-authored query/relevance dataset."""
+    from aie.memory.evaluation import (
+        MemoryEvaluationError,
+        evaluate_memory_retrieval,
+        load_memory_evaluation_dataset,
+    )
+    from aie.memory.store import MemoryStore
+
+    try:
+        benchmark = load_memory_evaluation_dataset(dataset)
+        embedding_provider = OllamaClient() if semantic_model else None
+        report = evaluate_memory_retrieval(
+            benchmark,
+            MemoryStore(memory_database_path()),
+            k=k,
+            include_sensitive=include_sensitive,
+            embedding_provider=embedding_provider,
+            embedding_model=semantic_model,
+        )
+    except (MemoryEvaluationError, OSError, ValueError, RuntimeError) as exc:
+        console.print(f"[red]Memory evaluation failed:[/red] {type(exc).__name__}: {exc}")
+        raise typer.Exit(2) from exc
+
+    console.print(
+        f"[bold]Memory retrieval evaluation[/bold] · Dataset: {report.dataset_id}\n"
+        f"Retriever: {report.retrieval}"
+        + (f" · Embedding model: {report.embedding_model}" if report.embedding_model else " · No embedding model")
+        + f" · k={report.k} · Cases={len(report.cases)}"
+    )
+    summary = Table("Metric", "Score")
+    summary.add_row("Mean recall@k", f"{report.mean_recall_at_k:.1%}")
+    summary.add_row("Mean precision@k", f"{report.mean_precision_at_k:.1%}")
+    summary.add_row("Mean reciprocal rank", f"{report.mean_reciprocal_rank:.3f}")
+    summary.add_row("Hit rate@k", f"{report.hit_rate_at_k:.1%}")
+    console.print(summary)
+
+    details = Table("Case", "Relevant", "Returned", "Recall@k", "Precision@k", "RR", "First rank")
+    for item in report.cases:
+        details.add_row(
+            item.case_id,
+            str(item.relevant_count),
+            str(item.returned_count),
+            f"{item.recall_at_k:.1%}",
+            f"{item.precision_at_k:.1%}",
+            f"{item.reciprocal_rank:.3f}",
+            str(item.first_relevant_rank or "-"),
+        )
+    console.print(details)
+    console.print(
+        f"[dim]Evaluated at {report.evaluated_at_utc}. "
+        "No memories, embeddings, prompts or model weights were modified. "
+        "Sensitive memories were "
+        + ("included by explicit opt-in." if include_sensitive else "excluded.")
+        + "[/dim]"
+    )
+
+
 @app.command("remember")
 def remember(
     content: str | None = typer.Argument(None, help="User-authored memory text; omit to enter it interactively."),
