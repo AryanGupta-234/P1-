@@ -5,6 +5,8 @@ It intentionally has no action-execution API and exposes no update/delete operat
 """
 from __future__ import annotations
 
+import hashlib
+import hmac
 import json
 import sqlite3
 from dataclasses import dataclass
@@ -16,6 +18,31 @@ from uuid import uuid4
 from aie.policy.models import ActionProposal, PolicyDecision
 
 ProposalStatus = Literal["pending_review", "approved", "rejected", "blocked"]
+_GENESIS_HASH = "0" * 64
+
+
+@dataclass(frozen=True, slots=True)
+class AuditIntegrityReport:
+    valid: bool
+    checked_entries: int
+    first_invalid_sequence: int | None = None
+    reason: str | None = None
+
+
+def _audit_entry_hash(
+    previous_hash: str,
+    audit_id: str,
+    proposal_id: str,
+    event_type: str,
+    timestamp: str,
+    payload: str,
+) -> str:
+    canonical = json.dumps(
+        [previous_hash, audit_id, proposal_id, event_type, timestamp, payload],
+        ensure_ascii=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return hashlib.sha256(canonical).hexdigest()
 
 
 @dataclass(frozen=True, slots=True)
@@ -46,7 +73,9 @@ class PolicyLedger:
                     proposal_id TEXT NOT NULL,
                     event_type TEXT NOT NULL,
                     timestamp TEXT NOT NULL,
-                    payload TEXT NOT NULL
+                    payload TEXT NOT NULL,
+                    previous_hash TEXT NOT NULL,
+                    entry_hash TEXT NOT NULL
                 )"""
             )
             db.execute(
@@ -55,12 +84,81 @@ class PolicyLedger:
             db.execute(
                 "CREATE INDEX IF NOT EXISTS idx_policy_audit_timestamp ON audit_events(timestamp)"
             )
+            columns = {
+                row[1] for row in db.execute("PRAGMA table_info(audit_events)").fetchall()
+            }
+            if "previous_hash" not in columns or "entry_hash" not in columns:
+                db.execute("BEGIN IMMEDIATE")
+                try:
+                    if "previous_hash" not in columns:
+                        db.execute(
+                            "ALTER TABLE audit_events ADD COLUMN previous_hash TEXT NOT NULL DEFAULT ''"
+                        )
+                    if "entry_hash" not in columns:
+                        db.execute(
+                            "ALTER TABLE audit_events ADD COLUMN entry_hash TEXT NOT NULL DEFAULT ''"
+                        )
+                    previous = _GENESIS_HASH
+                    rows = db.execute(
+                        """SELECT sequence, audit_id, proposal_id, event_type, timestamp, payload
+                        FROM audit_events ORDER BY sequence ASC"""
+                    ).fetchall()
+                    for row in rows:
+                        entry_hash = _audit_entry_hash(previous, *row[1:])
+                        db.execute(
+                            "UPDATE audit_events SET previous_hash = ?, entry_hash = ? WHERE sequence = ?",
+                            (previous, entry_hash, row[0]),
+                        )
+                        previous = entry_hash
+                    db.execute("COMMIT")
+                except Exception:
+                    db.execute("ROLLBACK")
+                    raise
 
     def _connect(self) -> sqlite3.Connection:
         db = sqlite3.connect(self.path, timeout=10, isolation_level=None)
         db.execute("PRAGMA journal_mode=WAL")
         db.execute("PRAGMA busy_timeout=10000")
         return db
+
+    @staticmethod
+    def _append_row(
+        db: sqlite3.Connection,
+        *,
+        proposal_id: str,
+        event_type: str,
+        timestamp: datetime,
+        payload: dict[str, Any],
+    ) -> None:
+        previous_row = db.execute(
+            "SELECT entry_hash FROM audit_events ORDER BY sequence DESC LIMIT 1"
+        ).fetchone()
+        previous_hash = previous_row[0] if previous_row else _GENESIS_HASH
+        audit_id = str(uuid4())
+        timestamp_text = timestamp.astimezone(timezone.utc).isoformat()
+        payload_text = json.dumps(payload, separators=(",", ":"), ensure_ascii=True)
+        entry_hash = _audit_entry_hash(
+            previous_hash,
+            audit_id,
+            proposal_id,
+            event_type,
+            timestamp_text,
+            payload_text,
+        )
+        db.execute(
+            """INSERT INTO audit_events
+            (audit_id, proposal_id, event_type, timestamp, payload, previous_hash, entry_hash)
+            VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            (
+                audit_id,
+                proposal_id,
+                event_type,
+                timestamp_text,
+                payload_text,
+                previous_hash,
+                entry_hash,
+            ),
+        )
 
     @staticmethod
     def _decision_payload(decision: PolicyDecision) -> dict[str, Any]:
@@ -80,6 +178,8 @@ class PolicyLedger:
         *,
         initial_status: ProposalStatus,
     ) -> ProposalSnapshot:
+        if initial_status not in {"pending_review", "blocked"}:
+            raise ValueError("initial proposal status must be pending_review or blocked")
         if decision.proposal_id != proposal.proposal_id:
             raise ValueError("policy decision does not match the proposal ID")
         now = datetime.now(timezone.utc)
@@ -100,17 +200,12 @@ class PolicyLedger:
                 ).fetchone()
                 if existing is not None:
                     raise ValueError("proposal ID already exists in the audit ledger")
-                db.execute(
-                    """INSERT INTO audit_events
-                    (audit_id, proposal_id, event_type, timestamp, payload)
-                    VALUES (?, ?, ?, ?, ?)""",
-                    (
-                        str(uuid4()),
-                        proposal.proposal_id,
-                        "policy.proposal.created",
-                        now.isoformat(),
-                        json.dumps(payload, separators=(",", ":"), ensure_ascii=True),
-                    ),
+                self._append_row(
+                    db,
+                    proposal_id=proposal.proposal_id,
+                    event_type="policy.proposal.created",
+                    timestamp=now,
+                    payload=payload,
                 )
                 db.execute("COMMIT")
             except Exception:
@@ -158,17 +253,12 @@ class PolicyLedger:
                     raise ValueError("proposal is no longer awaiting review")
                 if decision is not None and decision.proposal_id != proposal_id:
                     raise ValueError("policy decision does not match the proposal ID")
-                db.execute(
-                    """INSERT INTO audit_events
-                    (audit_id, proposal_id, event_type, timestamp, payload)
-                    VALUES (?, ?, ?, ?, ?)""",
-                    (
-                        str(uuid4()),
-                        proposal_id,
-                        "policy.proposal.reviewed",
-                        now.isoformat(),
-                        json.dumps(payload, separators=(",", ":"), ensure_ascii=True),
-                    ),
+                self._append_row(
+                    db,
+                    proposal_id=proposal_id,
+                    event_type="policy.proposal.reviewed",
+                    timestamp=now,
+                    payload=payload,
                 )
                 db.execute("COMMIT")
             except Exception:
@@ -227,11 +317,48 @@ class PolicyLedger:
                 result.append(snapshot)
         return result
 
+    def verify_integrity(self) -> AuditIntegrityReport:
+        """Verify the global SHA-256 chain; any payload edit/deletion breaks a link."""
+        with self._connect() as db:
+            rows = db.execute(
+                """SELECT sequence, audit_id, proposal_id, event_type, timestamp, payload,
+                    previous_hash, entry_hash
+                FROM audit_events ORDER BY sequence ASC"""
+            ).fetchall()
+
+        previous = _GENESIS_HASH
+        for row in rows:
+            sequence, audit_id, proposal_id, event_type, timestamp, payload, stored_previous, stored_hash = row
+            if not hmac.compare_digest(stored_previous, previous):
+                return AuditIntegrityReport(
+                    valid=False,
+                    checked_entries=len(rows),
+                    first_invalid_sequence=sequence,
+                    reason="previous-hash link does not match",
+                )
+            expected = _audit_entry_hash(
+                previous,
+                audit_id,
+                proposal_id,
+                event_type,
+                timestamp,
+                payload,
+            )
+            if not hmac.compare_digest(stored_hash, expected):
+                return AuditIntegrityReport(
+                    valid=False,
+                    checked_entries=len(rows),
+                    first_invalid_sequence=sequence,
+                    reason="entry hash does not match the stored payload",
+                )
+            previous = stored_hash
+        return AuditIntegrityReport(valid=True, checked_entries=len(rows))
+
     def audit_trail(self, proposal_id: str) -> list[dict[str, Any]]:
         """Read the immutable event sequence for one proposal."""
         with self._connect() as db:
             rows = db.execute(
-                """SELECT sequence, audit_id, event_type, timestamp, payload
+                """SELECT sequence, audit_id, event_type, timestamp, payload, previous_hash, entry_hash
                 FROM audit_events WHERE proposal_id = ? ORDER BY sequence ASC""",
                 (proposal_id,),
             ).fetchall()
@@ -242,6 +369,8 @@ class PolicyLedger:
                 "event_type": row[2],
                 "timestamp": row[3],
                 "payload": json.loads(row[4]),
+                "previous_hash": row[5],
+                "entry_hash": row[6],
             }
             for row in rows
         ]
