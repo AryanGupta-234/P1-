@@ -7,6 +7,7 @@ from pathlib import Path
 from aie.providers.foreground import WindowsForegroundProvider
 from aie.providers.network import WindowsNetworkProvider
 from aie.providers.windows import WindowsProvider
+from aie.config import observer_is_paused
 from aie.store import EventStore
 
 
@@ -55,6 +56,12 @@ def observe(
     first_sample = True
     try:
         while time.monotonic() < deadline:
+            if observer_is_paused():
+                remaining = deadline - time.monotonic()
+                if remaining > 0:
+                    time.sleep(min(interval, remaining))
+                continue
+
             events = list(provider.collect_snapshot(include_host=first_sample))
             first_sample = False
 
