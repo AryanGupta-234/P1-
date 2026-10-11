@@ -211,11 +211,15 @@ def build_default_handlers(
     ledger: PolicyLedger,
     model_router,
     proposal_parameters: dict[str, dict[str, object]] | None = None,
+    memory_context_builder=None,
 ) -> dict[str, object]:
     """Build app-owned handlers; callers decide whether a local model is available."""
     return {
         "observe": EventObservationHandler(event_store),
-        "reason": ModelReasoningHandler(model_router),
+        "reason": ModelReasoningHandler(
+            model_router,
+            memory_context_builder=memory_context_builder,
+        ),
         "propose_action": PolicyProposalHandler(
             broker,
             ledger,
