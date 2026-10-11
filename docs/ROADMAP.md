@@ -68,8 +68,9 @@ Statuses: DONE / IN_PROGRESS / BLOCKED / PLANNED. Mark DONE only with code, test
 - [ ] Unified event bus and general temporal correlation.
 - [x] Initial temporal activity session model with explicit time-gap boundaries.
 - [x] Explicit user-controlled task/session state with opt-in model-context packaging and CLI lifecycle controls.
-- [ ] Semantic task/session state and evidence contradiction handling.
-- [ ] Evidence freshness, contradiction handling and calibrated confidence.
+- [x] Freshness-weighted evidence assessment plus narrow near-simultaneous contradiction detection for allowlisted state fields.
+- [ ] Semantic task/session state and evidence contradiction handling beyond the explicit detector.
+- [ ] Calibrated confidence and evidence-quality evaluation.
 - [ ] User-approved profile and personalization controls.
 
 ## M3 — Cognitive core
@@ -94,8 +95,9 @@ Statuses: DONE / IN_PROGRESS / BLOCKED / PLANNED. Mark DONE only with code, test
 - [x] Optional local Ollama embedding index and cosine-similarity memory retrieval; no automatic model pulls.
 - [x] Optional local Ollama embedding index with cosine retrieval, model-specific vector storage and deletion/expiry cleanup.
 - [x] CLI for memory indexing and semantic recall; sensitive indexing requires an explicit flag and warning.
-- [ ] Embedding retrieval quality evaluation, export, contradiction resolution and consolidation.
-- [ ] Retrieval benchmark, contradiction handling and consolidation.
+- [ ] Embedding retrieval quality evaluation and benchmark.
+- [x] Review-only duplicate/near-duplicate consolidation proposals; no automatic merge/rewrite.
+- [ ] Reviewed consolidation merge workflow and contradiction resolution.
 - [ ] Evaluated learning from verified outcomes; do not learn unverified fixes.
 - [ ] Reviewed and versioned reusable skill induction.
 - [ ] Forgetting, retention and regression evaluation.
@@ -130,9 +132,9 @@ Statuses: DONE / IN_PROGRESS / BLOCKED / PLANNED. Mark DONE only with code, test
 ## Immediate dev sprint
 1. Keep target-desktop validation for browser/native-host, UIA, Event Log and ETW elevation as the primary validation gate.
 2. Extend ETW from process lifecycle into explicitly selected thread/file/network categories with coverage reporting.
-3. Add evidence freshness, contradiction handling and calibrated confidence to the context layer.
-4. Add memory consolidation with evaluated retrieval/forgetting and reviewed skill induction.
-5. Update this tracker and Architecture Spotlight with each implementation increment.
+3. Evaluate freshness/contradiction signals and add calibrated confidence metrics without treating heuristics as probabilities.
+4. Evaluate semantic memory retrieval and review consolidation proposals before any automatic merge/learning path.
+5. Continue the policy sandbox/audit path before any mutating executor work.
 
 ## Risk register
 | Risk | Mitigation | State |
