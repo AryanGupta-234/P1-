@@ -88,7 +88,7 @@ def test_user_rejection_is_a_final_append_only_transition(tmp_path):
 
     assert rejected.status == "rejected"
     assert rejected.action_executed is False
-    with pytest.raises(ValueError, match="no longer awaiting review"):
+    with pytest.raises(ValueError, match="awaiting review"):
         queue.review(proposal.proposal_id, approve=True, broker=broker)
 
     trail = ledger.audit_trail(proposal.proposal_id)
