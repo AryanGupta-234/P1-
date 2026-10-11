@@ -193,7 +193,8 @@ class EventStore:
         with self._connect() as db:
             cursor = db.execute("DELETE FROM events")
             return int(cursor.rowcount)
-\n    def count(self) -> int:
+
+    def count(self) -> int:
         with self._connect() as db:
             return int(db.execute("SELECT COUNT(*) FROM events").fetchone()[0])
 
