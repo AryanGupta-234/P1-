@@ -13,7 +13,7 @@ from rich.console import Console
 from rich.table import Table
 
 from aie import __version__
-from aie.config import database_path, observer_is_paused, set_observer_paused
+from aie.config import database_path, memory_database_path, observer_is_paused, set_observer_paused
 from aie.hardware import runtime_profile
 from aie.model_policy import choose_local_model, discover_local_models
 from aie.store import EventStore
@@ -580,6 +580,189 @@ def learning_report(
         )
     console.print(table)
     console.print("[dim]Resolution rates are descriptive user feedback, not causal proof or model-training metrics.[/dim]")
+
+
+
+@app.command("remember")
+def remember(
+    content: str = typer.Argument(..., min_length=1, help="User-authored memory text."),
+    kind: Literal["working", "episodic", "semantic", "procedural", "prospective"] = typer.Option("episodic"),
+    tags: str = typer.Option("", help="Comma-separated local tags."),
+    ttl_days: int | None = typer.Option(None, min=1, max=3650, help="Optional expiry in days."),
+    sensitive: bool = typer.Option(False, help="Mark the memory sensitive; hidden from recall by default."),
+    source_event_id: list[str] = typer.Option([], help="Optional event IDs used as provenance."),
+) -> None:
+    """Explicitly save a user-authored memory to the local memory database."""
+    from aie.memory.models import MemoryRecord
+    from aie.memory.store import MemoryStore
+
+    now = datetime.now(timezone.utc)
+    memory = MemoryRecord(
+        kind=kind,
+        content=content,
+        tags=[tag.strip() for tag in tags.split(",") if tag.strip()],
+        sensitivity="sensitive" if sensitive else "internal",
+        source_event_ids=source_event_id,
+        created_at=now,
+        expires_at=now + timedelta(days=ttl_days) if ttl_days else None,
+    )
+    try:
+        saved = MemoryStore(memory_database_path()).save(
+            memory,
+            event_store=EventStore(database_path()) if source_event_id else None,
+        )
+    except ValueError as exc:
+        console.print(f"[red]Memory not saved:[/red] {exc}")
+        raise typer.Exit(2) from exc
+    console.print(f"[green]Memory saved locally.[/green] ID: {saved.memory_id}")
+    console.print(f"Kind: {saved.kind} · Sensitivity: {saved.sensitivity}")
+
+
+@app.command("recall")
+def recall(
+    query: str = typer.Argument(..., min_length=1, help="Local keyword query."),
+    kind: Literal["working", "episodic", "semantic", "procedural", "prospective"] | None = typer.Option(None),
+    include_sensitive: bool = typer.Option(False, help="Explicitly include sensitive memories."),
+    limit: int = typer.Option(10, min=1, max=100),
+) -> None:
+    """Retrieve local memories using transparent keyword/tag overlap scoring."""
+    from aie.memory.store import MemoryStore
+
+    hits = MemoryStore(memory_database_path()).search(
+        query,
+        kind=kind,
+        include_sensitive=include_sensitive,
+        limit=limit,
+    )
+    if not hits:
+        console.print("No matching local memories.")
+        return
+    table = Table("Kind", "Score", "Tags", "Memory ID", "Content")
+    for hit in hits:
+        table.add_row(
+            hit.memory.kind,
+            f"{hit.score:.2f}",
+            ", ".join(hit.memory.tags),
+            hit.memory.memory_id,
+            hit.memory.content[:180],
+        )
+    console.print(table)
+
+
+@app.command("memories")
+def memories(
+    include_sensitive: bool = typer.Option(False),
+    include_superseded: bool = typer.Option(False),
+    limit: int = typer.Option(100, min=1, max=1000),
+) -> None:
+    """List local memories without exposing sensitive entries by default."""
+    from aie.memory.store import MemoryStore
+
+    items = MemoryStore(memory_database_path()).list_memories(
+        include_sensitive=include_sensitive,
+        include_superseded=include_superseded,
+        limit=limit,
+    )
+    table = Table("Kind", "Status", "Sensitivity", "Expires", "Memory ID", "Content")
+    for item in items:
+        table.add_row(
+            item.memory.kind,
+            item.status,
+            item.memory.sensitivity,
+            item.memory.expires_at.isoformat() if item.memory.expires_at else "never",
+            item.memory.memory_id,
+            item.memory.content[:120],
+        )
+    console.print(table)
+    console.print(f"Visible memories: {len(items)}")
+
+
+@app.command("correct-memory")
+def correct_memory(
+    memory_id: str = typer.Argument(..., help="Active memory ID to supersede."),
+    content: str = typer.Argument(..., min_length=1, help="Corrected memory text."),
+) -> None:
+    """Create a corrected memory while retaining the old version as superseded."""
+    from aie.memory.models import MemoryRecord
+    from aie.memory.store import MemoryStore
+
+    store = MemoryStore(memory_database_path())
+    previous = store.get(memory_id)
+    if previous is None:
+        console.print("[red]Active memory not found.[/red]")
+        raise typer.Exit(2)
+    expiry = previous.memory.expires_at
+    if expiry is not None and expiry <= datetime.now(timezone.utc):
+        expiry = None
+    corrected = MemoryRecord(
+        kind=previous.memory.kind,
+        content=content,
+        tags=previous.memory.tags,
+        sensitivity=previous.memory.sensitivity,
+        confidence=previous.memory.confidence,
+        source_event_ids=previous.memory.source_event_ids,
+        supersedes_id=memory_id,
+        expires_at=expiry,
+    )
+    try:
+        new_record = store.save(
+            corrected,
+            event_store=EventStore(database_path()) if corrected.source_event_ids else None,
+        )
+    except ValueError as exc:
+        console.print(f"[red]Correction failed:[/red] {exc}")
+        raise typer.Exit(2) from exc
+    console.print(f"[green]Corrected memory saved.[/green] New ID: {new_record.memory_id}")
+
+
+@app.command("forget")
+def forget_memory(
+    memory_id: str = typer.Argument(...),
+    confirm: bool = typer.Option(False, "--confirm", help="Permanently delete this memory."),
+) -> None:
+    """Preview or permanently delete one local memory."""
+    from aie.memory.store import MemoryStore
+
+    store = MemoryStore(memory_database_path())
+    item = store.get(memory_id, include_superseded=True)
+    if item is None:
+        console.print("Memory not found.")
+        return
+    if not confirm:
+        console.print(
+            f"Memory {memory_id} exists ({item.status}, {item.memory.sensitivity}). "
+            "Nothing was deleted. Re-run with --confirm."
+        )
+        return
+    store.delete(memory_id)
+    console.print(f"[green]Deleted memory {memory_id}.[/green]")
+
+
+@app.command("memory-prune")
+def memory_prune(
+    confirm: bool = typer.Option(False, "--confirm"),
+) -> None:
+    """Preview or delete expired local memory records."""
+    from aie.memory.store import MemoryStore
+
+    store = MemoryStore(memory_database_path())
+    now = datetime.now(timezone.utc)
+    expired = [
+        item for item in store.list_memories(
+            include_sensitive=True,
+            include_superseded=True,
+            include_expired=True,
+            limit=1000,
+            now=now + timedelta(seconds=1),
+        )
+        if item.memory.expires_at is not None and item.memory.expires_at <= now
+    ]
+    if not confirm:
+        console.print(f"{len(expired)} expired memory record(s); nothing deleted.")
+        return
+    deleted = store.prune_expired(now=now)
+    console.print(f"[green]Pruned {deleted} expired memory record(s).[/green]")
+
 
 
 if __name__ == "__main__":
