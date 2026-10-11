@@ -10,6 +10,10 @@ __all__ = [
     "build_activity_timeline",
     "build_activity_prompt_context",
     "build_video_observation_context",
+    "EvidenceAssessment",
+    "EvidenceContradiction",
+    "assess_evidence",
+    "find_explicit_contradictions",
 ]
 
 
@@ -19,6 +23,9 @@ def __getattr__(name: str):
         return getattr(module, name)
     if name == "build_activity_prompt_context":
         module = import_module("aie.context.activity_context")
+        return getattr(module, name)
+    if name in {"EvidenceAssessment", "EvidenceContradiction", "assess_evidence", "find_explicit_contradictions"}:
+        module = import_module("aie.context.evidence")
         return getattr(module, name)
     if name == "build_video_observation_context":
         module = import_module("aie.context.video")
