@@ -264,3 +264,78 @@ def test_capture_requires_kernel_process_provider_registration(tmp_path):
 
     assert calls == [["logman.exe", "query", "providers"]]
     assert list(tmp_path.iterdir()) == []
+
+
+
+def test_uncertain_session_start_timeout_stops_only_the_generated_session(tmp_path):
+    calls = []
+    session_names = []
+
+    def runner(command, **kwargs):
+        calls.append(command)
+        if command[:3] == ["logman.exe", "query", "providers"]:
+            return subprocess.CompletedProcess(
+                command, 0,
+                f"Microsoft-Windows-Kernel-Process {{{KERNEL_PROCESS_GUID}}}",
+                "",
+            )
+        if command[:3] == ["logman.exe", "create", "trace"]:
+            session_names.append(command[3])
+            raise subprocess.TimeoutExpired(command, timeout=20)
+        if command[:2] == ["logman.exe", "stop"]:
+            return subprocess.CompletedProcess(command, 0, "", "")
+        raise AssertionError("trace decoding must not run after an uncertain start")
+
+    provider = WindowsETWProcessProvider(
+        runner=runner,
+        is_windows=True,
+        temp_root=tmp_path,
+        machine_id="host-test",
+    )
+    with pytest.raises(ETWProcessCaptureError, match="command_timeout"):
+        provider.collect()
+
+    assert len(session_names) == 1
+    assert calls[-1] == ["logman.exe", "stop", session_names[0], "-ets"]
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_workspace_cleanup_failure_is_reported_and_trace_is_preserved(tmp_path, monkeypatch):
+    from aie.providers import etw_process
+
+    def runner(command, **kwargs):
+        if command[:3] == ["logman.exe", "query", "providers"]:
+            return subprocess.CompletedProcess(
+                command, 0,
+                f"Microsoft-Windows-Kernel-Process {{{KERNEL_PROCESS_GUID}}}",
+                "",
+            )
+        if command[:3] == ["logman.exe", "create", "trace"]:
+            Path(command[command.index("-o") + 1]).write_bytes(b"etl")
+            return subprocess.CompletedProcess(command, 0, "", "")
+        if command[:2] == ["logman.exe", "stop"]:
+            return subprocess.CompletedProcess(command, 0, "", "")
+        if command[0] == "tracerpt.exe":
+            Path(command[command.index("-o") + 1]).write_text(SAMPLE_XML, encoding="utf-8")
+            Path(command[command.index("-summary") + 1]).write_text("", encoding="utf-8")
+            return subprocess.CompletedProcess(command, 0, "", "")
+        raise AssertionError("Unexpected command")
+
+    def fail_cleanup(path):
+        raise PermissionError("private cleanup detail")
+
+    monkeypatch.setattr(etw_process.shutil, "rmtree", fail_cleanup)
+    provider = WindowsETWProcessProvider(
+        runner=runner,
+        sleep=lambda _: None,
+        is_windows=True,
+        temp_root=tmp_path,
+        machine_id="host-test",
+    )
+
+    with pytest.raises(ETWProcessCaptureError, match="workspace_cleanup_failed") as raised:
+        provider.collect()
+
+    assert raised.value.workspace is not None
+    assert Path(raised.value.workspace).is_dir()
+    assert "private cleanup detail" not in str(raised.value)
