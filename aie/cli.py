@@ -1391,6 +1391,84 @@ def memory_merge(
     console.print(f"Lineage: {', '.join(store.lineage(saved.memory_id))}")
 
 
+@app.command("skill-candidate")
+def skill_candidate(run_id: str = typer.Argument(...)) -> None:
+    """Preview a procedural-skill candidate from a completed, explicitly verified run."""
+    from aie.learning.skills import SkillInductionError, build_skill_candidate
+    from aie.orchestration.store import TaskRunStore
+    from aie.policy.ledger import PolicyLedger
+
+    try:
+        run = TaskRunStore(task_run_database_path()).get(run_id)
+        if run is None:
+            raise SkillInductionError("task run was not found")
+        candidate = build_skill_candidate(
+            run,
+            policy_ledger=PolicyLedger(policy_audit_database_path()),
+        )
+    except (SkillInductionError, ValueError) as exc:
+        console.print(f"[red]No skill candidate:[/red] {exc}")
+        raise typer.Exit(2) from exc
+
+    console.print(
+        f"[bold]Procedural skill candidate[/bold]\n"
+        f"Task run: {candidate.task_run_id}\n"
+        f"Plan: {candidate.plan_id}\n"
+        f"Verified steps: {', '.join(candidate.verified_step_ids)}\n"
+        f"Execution receipts: {len(candidate.proposal_ids)}"
+    )
+    console.print(candidate.content)
+    console.print(
+        "[dim]Preview only. Saving requires a separate explicit confirmation. "
+        "No model training occurs.[/dim]"
+    )
+
+
+@app.command("skill-save")
+def skill_save(
+    run_id: str = typer.Argument(...),
+    confirm: bool = typer.Option(False, "--confirm", help="Save the reviewed skill as procedural memory."),
+    internal: bool = typer.Option(
+        False, "--internal", help="Mark the saved skill internal instead of sensitive."
+    ),
+) -> None:
+    """Save a skill candidate only after explicit user review and confirmation."""
+    from aie.learning.skills import SkillInductionError, build_skill_candidate, save_skill_candidate
+    from aie.memory.store import MemoryStore
+    from aie.orchestration.store import TaskRunStore
+    from aie.policy.ledger import PolicyLedger
+
+    if not confirm:
+        console.print("[yellow]Preview with aie skill-candidate, then pass --confirm to save.[/yellow]")
+        raise typer.Exit(2)
+    try:
+        task_store = TaskRunStore(task_run_database_path())
+        run = task_store.get(run_id)
+        if run is None:
+            raise SkillInductionError("task run was not found")
+        candidate = build_skill_candidate(
+            run,
+            policy_ledger=PolicyLedger(policy_audit_database_path()),
+        )
+        memory = save_skill_candidate(
+            candidate,
+            memory_store=MemoryStore(memory_database_path()),
+            task_run_store=task_store,
+            sensitivity="internal" if internal else "sensitive",
+        )
+    except (SkillInductionError, ValueError, OSError) as exc:
+        console.print(f"[red]Skill not saved:[/red] {type(exc).__name__}: {exc}")
+        raise typer.Exit(2) from exc
+    console.print(
+        f"[green]Reviewed procedural skill saved.[/green] Memory ID: {memory.memory_id}"
+    )
+    console.print(
+        f"Task run provenance: {', '.join(memory.source_task_run_ids)} · "
+        f"Sensitivity: {memory.sensitivity}"
+    )
+    console.print("[dim]This stores a local procedure record; it does not retrain or modify any model.[/dim]")
+
+
 @app.command("memory-prune")
 def memory_prune(
     confirm: bool = typer.Option(False, "--confirm"),
