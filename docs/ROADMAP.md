@@ -92,6 +92,10 @@ Statuses: DONE / IN_PROGRESS / BLOCKED / PLANNED. Mark DONE only with code, test
 - [ ] Reviewed/versioned skill induction.
 
 ## M5 — Controlled autonomy
+- [x] Default-deny capability manifest and policy decision contracts.
+- [x] Low-risk-only pre-authorized autonomy, parameter allowlists and rate limits.
+- [x] Explicit approval decisions for medium/high risk; critical-risk actions always blocked.
+- [ ] Policy broker integration with a reviewed action proposal queue and audit store.
 - [ ] Capability manifests and least-privilege identities.
 - [ ] Proposal → policy → approval → sandbox → verification.
 - [ ] Allowlists, rate limits, timeouts and resource budgets.
