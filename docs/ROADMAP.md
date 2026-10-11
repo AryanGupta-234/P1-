@@ -87,7 +87,8 @@ Statuses: DONE / IN_PROGRESS / BLOCKED / PLANNED. Mark DONE only with code, test
 - [x] Source-event provenance validation, sensitivity labels, TTL, correction/supersession and explicit deletion.
 - [x] Interactive hidden input for sensitive memory entry; explicitly document that sensitivity labels are not encryption.
 - [x] Local keyword/tag retrieval with sensitive memories excluded by default.
-- [ ] Embedding retrieval, export, contradiction resolution and consolidation.
+- [x] Optional local Ollama embedding index and cosine-similarity memory retrieval; no automatic model pulls.
+- [ ] Embedding retrieval evaluation, export, contradiction resolution and consolidation.
 - [ ] Retrieval benchmark, contradiction handling and consolidation.
 - [ ] Evaluated learning from verified outcomes; do not learn unverified fixes.
 - [ ] Reviewed and versioned reusable skill induction.
