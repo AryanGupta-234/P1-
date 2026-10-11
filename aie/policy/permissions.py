@@ -43,9 +43,8 @@ def set_capability_enabled(
         if path.stat().st_size > 64 * 1024:
             raise CapabilityPermissionError(f"{path.name}: manifest exceeds 64 KiB")
         try:
-            manifest = CapabilityManifest.model_validate_json(
-                path.read_text(encoding="utf-8")
-            )
+            original_bytes = path.read_bytes()
+            manifest = CapabilityManifest.model_validate_json(original_bytes)
         except (OSError, UnicodeError, ValueError) as exc:
             raise CapabilityPermissionError(
                 f"{path.name}: invalid manifest ({type(exc).__name__})"
@@ -89,8 +88,9 @@ def set_capability_enabled(
             "manifest temporary file already exists; inspect and remove it manually"
         ) from exc
     finally:
-        try:
-            temporary.unlink()
-        except FileNotFoundError:
-            pass
+        if temporary_created:
+            try:
+                temporary.unlink()
+            except FileNotFoundError:
+                pass
     return updated
