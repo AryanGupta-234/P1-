@@ -224,9 +224,12 @@ aie task start task-plan.json
 aie task advance <RUN_ID> --max-steps 3
 aie task show <RUN_ID>
 aie task events <RUN_ID>
+aie task retry <RUN_ID> <STEP_ID> --confirm
+aie task recover <RUN_ID> --confirm --after-seconds 300
+aie task cancel <RUN_ID> --confirm
 ```
 
-Plan drafting does not pull models, attach observations automatically or select a remote provider. Optional context must be supplied explicitly with `--context-file`. The local reasoning handler receives only the plan and bounded summaries from completed steps. If local inference is unavailable, the run pauses for explicit user input. Verification steps cannot complete without `aie task complete <RUN_ID> <STEP_ID> --summary "..." --verified`. Use `aie task pause`, `resume` and `cancel` for lifecycle controls. Cancellation and pause apply between handler invocations; an in-flight external handler is not force-killed.
+Plan drafting does not pull models, attach observations automatically or select a remote provider. Optional context must be supplied explicitly with `--context-file`. The local reasoning handler receives only the plan and bounded summaries from completed steps. If local inference is unavailable, the run pauses for explicit user input. Verification steps cannot complete without `aie task complete <RUN_ID> <STEP_ID> --summary "..." --verified`. Use `aie task pause`, `resume` and `cancel --confirm` for lifecycle controls. Cancellation revokes pending or approved-but-unexecuted proposals in the policy ledger; already-attempted actions remain in the audit history. Pause/cancel apply between handler invocations; an in-flight external handler is not force-killed. A stale interrupted step can be moved to manual review with `aie task recover --confirm`; this never replays the handler. A waiting observe/reason/inform step may be retried with `aie task retry --confirm` after correcting configuration. Action and verify steps cannot use that retry path.
 
 Action steps queue policy proposals. Review them with `aie approve-proposal <PROPOSAL_ID>`; approval alone never executes anything. A separate `aie execute-proposal` command is required and the execution gate is disabled by default.
 
