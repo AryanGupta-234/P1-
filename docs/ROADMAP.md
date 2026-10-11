@@ -23,6 +23,7 @@ Statuses: DONE / IN_PROGRESS / BLOCKED / PLANNED. Mark DONE only with code, test
 - [x] Read-only inventory and process reconciliation.
 - [x] ARC Architecture Spotlight, roadmap and contribution guide.
 - [x] Hosted Windows CI on Python 3.11/3.12 with Ruff, optional Windows imports, PowerShell syntax, JS syntax and pytest.
+- [x] Hosted Windows CI also compiles the .NET 8 WPF dashboard; this verifies the build, not interactive behavior on the target desktop.
 - [x] Event Log runtime integration, ETW lifecycle/loss accounting, systemwide process telemetry and privacy controls validated in hosted Windows CI run #581 (Python 3.11/3.12).
 - [ ] Dependency/security scanning and reproducible release packaging.
 
@@ -83,7 +84,8 @@ Statuses: DONE / IN_PROGRESS / BLOCKED / PLANNED. Mark DONE only with code, test
 - [x] CLI to invoke local or explicitly enabled cloud inference.
 - [x] Explicit activity/memory/session context attachment controls, safe payload budgets and independent remote-egress confirmation.
 - [x] Central remote egress gateway for cloud/remote-Ollama requests with high-confidence credential redaction and metadata-only local audit.
-- [ ] Structured output modes, streaming and cancellation.
+- [x] Provider-level structured JSON generation for local Ollama and explicitly authorized OpenAI-compatible inference; plans are still validated locally against strict schema and capability allowlists.
+- [ ] Streaming responses, inference cancellation, and structured tool-result streaming.
 - [ ] Inference concurrency, memory/token budgets and latency metrics.
 - [x] Central remote-model egress gateway, high-confidence credential redaction and metadata-only audit.
 - [x] Bounded declarative task-plan contract with strict fields, typed steps, explicit dependencies, cycle rejection, deterministic topological ordering and readiness queries; no step execution. Validated by Windows CI run [#590](https://github.com/AryanGupta-234/P1-/actions/runs/38131262921) on Python 3.11 and 3.12.
