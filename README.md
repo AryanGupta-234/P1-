@@ -33,6 +33,10 @@ aie observe --duration 30
 aie observe --duration 60 --network-interval 30
 # Disable network probes when needed:
 aie observe --duration 30 --no-network
+# Disable foreground application transitions:
+aie observe --duration 30 --no-foreground
+# Window titles are sensitive; collect only after explicit opt-in:
+aie observe --duration 30 --include-window-titles
 python -m pytest
 python -m ruff check .
 ```
@@ -50,6 +54,9 @@ Open PRs against `dev`, not `main`.
 
 ## Browser playback observer
 The opt-in Chrome/Edge extension prototype is in `browser_extension/`. Load it unpacked, then register its Windows native host using `scripts/register-native-host.ps1`. See [Video Intelligence setup](docs/VIDEO_INTELLIGENCE.md). Monitoring defaults to off.
+
+## Foreground application observation
+The observer emits foreground-window transition events using the Windows user32 API. Process name and window class are collected by default; window titles are omitted. Explicitly passing `--include-window-titles` collects them as sensitive data.
 
 ## Current limitations
 Process lifecycle observation uses best-effort user-mode snapshots and may miss transient processes. Video diagnostics analyze supplied metrics only; live browser telemetry, screen perception, model gateway, persistent learning and autonomous remediation are not implemented.
