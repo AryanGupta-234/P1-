@@ -16,6 +16,7 @@ windows-ui = ["pywinauto>=0.6.9,<0.7"]
 
 [project.scripts]
 aie = "aie.cli:app"
+aie-browser-host = "aie.browser.native_host:main"
 
 [tool.setuptools.packages.find]
 include = ["aie*"]
