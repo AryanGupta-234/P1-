@@ -112,16 +112,7 @@ public partial class MainWindow : Window
                     || line.Contains("awaiting_", StringComparison.OrdinalIgnoreCase));
             TaskCountValue.Text = taskLines.ToString();
 
-            var dataDirectory = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "AIE");
-            var killPath = Path.Combine(dataDirectory, "execution.kill");
-            var enabledPath = Path.Combine(dataDirectory, "execution.enabled");
-            ExecutionValue.Text = File.Exists(killPath)
-                ? "KILLED"
-                : File.Exists(enabledPath)
-                    ? "Enabled"
-                    : "Disabled";
+            ExecutionValue.Text = "Policy gated";
 
             FooterStatus.Text = "Local status refreshed. The dashboard did not start observation.";
         }
