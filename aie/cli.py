@@ -16,6 +16,7 @@ from aie import __version__
 from aie.config import (
     capability_manifest_dir,
     database_path,
+    egress_audit_database_path,
     memory_database_path,
     observer_is_paused,
     policy_audit_database_path,
@@ -732,20 +733,53 @@ def ask(
             temperature=temperature,
             max_output_tokens=max_output_tokens,
         )
+        prepared_request = request
+        egress_redactions = 0
+        if remote_selected:
+            from aie.egress import (
+                RemoteEgressAuditStore,
+                RemoteEgressContext,
+                RemoteEgressGateway,
+            )
+
+            gateway = RemoteEgressGateway(
+                RemoteEgressAuditStore(egress_audit_database_path())
+            )
+            decision = gateway.prepare(
+                request,
+                RemoteEgressContext(
+                    channel="cloud" if provider == "cloud" else "remote_ollama",
+                    allow_egress=(
+                        allow_cloud_egress
+                        if provider == "cloud"
+                        else allow_remote_ollama
+                    ),
+                    activity_attached=with_activity,
+                    memory_attached=with_memory,
+                    session_attached=with_session,
+                    confirm_activity=confirm_activity_egress,
+                    confirm_memory=confirm_memory_egress,
+                    confirm_session=confirm_session_egress,
+                    sensitive_memory=include_sensitive_memory,
+                ),
+            )
+            prepared_request = decision.request
+            egress_redactions = decision.redactions
+
         if provider == "cloud":
             from aie.models.openai_compatible import OpenAICompatibleClient
 
             cloud_client = OpenAICompatibleClient(
                 allow_cloud_egress=allow_cloud_egress,
             )
-            response = cloud_client.chat(request)
+            response = cloud_client.chat(prepared_request)
         else:
             if allow_cloud_egress:
                 raise ValueError(
                     "--allow-cloud-egress is only meaningful with --provider cloud."
                 )
             client = OllamaClient(allow_remote=allow_remote_ollama)
-            response = LocalModelRouter(client).generate(request)
+            response = LocalModelRouter(client).generate(prepared_request)
     except (RuntimeError, ValueError) as exc:
         console.print(f"[red]Model request unavailable:[/red] {exc}")
         raise typer.Exit(2) from exc
@@ -766,12 +800,17 @@ def ask(
         if with_session and session_id
         else ""
     )
+    egress_note = (
+        f" · Remote redactions: {egress_redactions}"
+        if remote_selected
+        else ""
+    )
     console.print(
         f"\n[dim]Model: {response.model} · "
         f"Elapsed: {response.elapsed_seconds:.2f}s · "
         f"Prompt tokens: {response.prompt_tokens or 'unknown'} · "
         f"Output tokens: {response.completion_tokens or 'unknown'}"
-        f"{memory_note}{activity_note}{session_note}[/dim]"
+        f"{memory_note}{activity_note}{session_note}{egress_note}[/dim]"
     )
 
 @app.command("session-start")
