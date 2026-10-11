@@ -84,6 +84,23 @@ class WindowsEventLogProvider:
         self._last_record: dict[str, int] = {}
         self._error_channels: set[str] = set()
 
+    def _append_recovery_event(self, events: list[AIEEvent], channel: str) -> None:
+        """Emit recovery only after the channel can be queried again."""
+        if channel not in self._error_channels:
+            return
+        events.append(AIEEvent(
+            timestamp=datetime.now(timezone.utc),
+            host_id=host_id(),
+            source=self.name,
+            event_type="windows.eventlog.provider_recovered",
+            entity=EntityRef(type="windows_eventlog_channel", name=channel),
+            data={"channel": channel, "recovered": True},
+            sensitivity="internal",
+            confidence=1.0,
+            evidence_kind="observed",
+        ))
+        self._error_channels.discard(channel)
+
     def collect_snapshot(self) -> list[AIEEvent]:
         events: list[AIEEvent] = []
         for channel in self.channels:
@@ -93,6 +110,7 @@ class WindowsEventLogProvider:
                 oldest = self.api.oldest_record(handle)
                 count = self.api.record_count(handle)
                 if count <= 0:
+                    self._append_recovery_event(events, channel)
                     continue
                 newest = oldest + count - 1
                 previous = self._last_record.get(channel)
@@ -100,11 +118,51 @@ class WindowsEventLogProvider:
                 # Establish a baseline on startup; do not replay historical logs.
                 if previous is None:
                     self._last_record[channel] = newest
-                    self._error_channels.discard(channel)
+                    self._append_recovery_event(events, channel)
                     continue
 
-                # A cleared or wrapped log starts a new record-number sequence.
-                if newest < previous or previous < oldest - 1:
+                # Separate unknown resets from exact retention rollover gaps.
+                if newest < previous:
+                    events.append(AIEEvent(
+                        timestamp=datetime.now(timezone.utc),
+                        host_id=host_id(),
+                        source=self.name,
+                        event_type="windows.eventlog.sequence_reset",
+                        entity=EntityRef(
+                            type="windows_eventlog_channel",
+                            name=channel,
+                        ),
+                        data={
+                            "channel": channel,
+                            "loss_count_known": False,
+                            "reason_code": "record_sequence_reset",
+                        },
+                        sensitivity="internal",
+                        confidence=1.0,
+                        evidence_kind="observed",
+                    ))
+                    previous = oldest - 1
+                elif previous < oldest - 1:
+                    dropped_records = oldest - previous - 1
+                    events.append(AIEEvent(
+                        timestamp=datetime.now(timezone.utc),
+                        host_id=host_id(),
+                        source=self.name,
+                        event_type="windows.eventlog.records_lost",
+                        entity=EntityRef(
+                            type="windows_eventlog_channel",
+                            name=channel,
+                        ),
+                        data={
+                            "channel": channel,
+                            "dropped_records": dropped_records,
+                            "loss_count_known": True,
+                            "reason_code": "retention_rollover",
+                        },
+                        sensitivity="internal",
+                        confidence=1.0,
+                        evidence_kind="observed",
+                    ))
                     previous = oldest - 1
 
                 start_record = max(oldest, previous + 1)
@@ -119,7 +177,7 @@ class WindowsEventLogProvider:
                     self.max_records_per_channel,
                 )
                 if not records:
-                    self._error_channels.discard(channel)
+                    self._append_recovery_event(events, channel)
                     continue
 
                 for record in records:
@@ -168,26 +226,26 @@ class WindowsEventLogProvider:
                         self._last_record.get(channel, 0),
                         record_number,
                     )
-                self._error_channels.discard(channel)
+                self._append_recovery_event(events, channel)
             except Exception as exc:
-                # Access denied, cleared logs or unavailable channels are non-fatal.
-                if channel not in self._error_channels:
-                    events.append(AIEEvent(
-                        timestamp=datetime.now(timezone.utc),
-                        host_id=host_id(),
-                        source=self.name,
-                        event_type="windows.eventlog.provider_error",
-                        entity=EntityRef(type="windows_eventlog_channel", name=channel),
-                        data={
-                            "channel": channel,
-                            "error_type": type(exc).__name__,
-                            "message_collected": False,
-                        },
-                        sensitivity="internal",
-                        confidence=1.0,
-                        evidence_kind="observed",
-                    ))
-                    self._error_channels.add(channel)
+                # Repeat compact error signals while unavailable so an unrelated
+                # readable channel cannot make the provider look healthy.
+                events.append(AIEEvent(
+                    timestamp=datetime.now(timezone.utc),
+                    host_id=host_id(),
+                    source=self.name,
+                    event_type="windows.eventlog.provider_error",
+                    entity=EntityRef(type="windows_eventlog_channel", name=channel),
+                    data={
+                        "channel": channel,
+                        "error_type": type(exc).__name__,
+                        "message_collected": False,
+                    },
+                    sensitivity="internal",
+                    confidence=1.0,
+                    evidence_kind="observed",
+                ))
+                self._error_channels.add(channel)
                 continue
             finally:
                 if handle is not None:
