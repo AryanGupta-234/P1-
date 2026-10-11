@@ -26,5 +26,10 @@ jobs:
         run: python -m pip install -e ".[dev]"
       - name: Lint
         run: python -m ruff check .
+      - name: Validate browser extension JavaScript
+        run: |
+          node --check browser_extension/content.js
+          node --check browser_extension/service_worker.js
+          node --check browser_extension/popup.js
       - name: Run tests
         run: python -m pytest
