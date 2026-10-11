@@ -66,17 +66,26 @@ class NotificationPreferencesStore:
         if temporary.is_symlink():
             raise ValueError("notification temporary path cannot be a symlink")
         payload = preferences.model_dump_json(indent=2)
+        temporary_created = False
         try:
-            with temporary.open("w", encoding="utf-8", newline="\n") as stream:
+            with temporary.open("x", encoding="utf-8", newline="\n") as stream:
+                temporary_created = True
                 stream.write(payload)
                 stream.flush()
                 os.fsync(stream.fileno())
+            if self.path.is_symlink():
+                raise ValueError("notification preference path changed to a symlink")
             os.replace(temporary, self.path)
+        except FileExistsError as exc:
+            raise ValueError(
+                "notification temporary file already exists; inspect and remove it manually"
+            ) from exc
         finally:
-            try:
-                temporary.unlink()
-            except FileNotFoundError:
-                pass
+            if temporary_created:
+                try:
+                    temporary.unlink()
+                except FileNotFoundError:
+                    pass
 
 
 @dataclass(frozen=True, slots=True)
