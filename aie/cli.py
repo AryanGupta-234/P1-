@@ -1148,6 +1148,7 @@ def memory_evaluate(
         load_memory_evaluation_dataset,
     )
     from aie.memory.store import MemoryStore
+    from aie.models.ollama import OllamaClient
 
     try:
         benchmark = load_memory_evaluation_dataset(dataset)
