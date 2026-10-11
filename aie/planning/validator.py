@@ -70,13 +70,23 @@ def next_ready_steps(
     This function reports readiness only; it does not start a step or invoke a tool.
     """
     known_ids = {step.step_id for step in plan.steps}
-    unknown = set(completed_step_ids) - known_ids
+    completed = set(completed_step_ids)
+    unknown = completed - known_ids
     if unknown:
         raise ValueError("unknown completed step IDs: " + ", ".join(sorted(unknown)))
 
-    ordered = validate_plan(plan).ordered_step_ids
     by_id = {step.step_id: step for step in plan.steps}
-    completed = set(completed_step_ids)
+    invalid_progress = sorted(
+        step_id
+        for step_id in completed
+        if not set(by_id[step_id].depends_on).issubset(completed)
+    )
+    if invalid_progress:
+        raise ValueError(
+            "completed steps have incomplete dependencies: " + ", ".join(invalid_progress)
+        )
+
+    ordered = validate_plan(plan).ordered_step_ids
     ready: list[PlanStep] = []
 
     for step_id in ordered:
