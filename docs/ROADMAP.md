@@ -141,7 +141,8 @@ Statuses: DONE / IN_PROGRESS / BLOCKED / PLANNED. Mark DONE only with code, test
 - [x] Read-only retention inventory for evidence, memories, task runs and policy proposals, alongside explicit event/memory pruning commands.
 - [x] CLI diagnostics/action history and local memory review through events, proposals, memories, recall, conflict review, merge and verified-skill review.
 - [ ] Native desktop history and memory-review interface with pagination and user-controlled filters.
-- [ ] Desktop UI after core telemetry and policy APIs stabilize.
+- [ ] Full desktop dashboard and memory/action history UI after core telemetry and policy APIs stabilize.
+- [x] One-command local agent entry point combining local planning, validation, durable run creation and bounded advancement; policy/input gates stop progression.
 
 ## Immediate dev sprint
 1. Validate the native tray, balloon notification behavior, browser/native-host, UIA, Event Log and elevated ETW on the actual target desktop; hosted CI cannot validate interactive desktop behavior.
