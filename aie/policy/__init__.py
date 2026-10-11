@@ -1,5 +1,6 @@
 """Default-deny action policy, proposal review and audit."""
 from aie.policy.broker import CapabilityPolicyBroker
+from aie.policy.executor import DryRunExecutor, ExecutionResult
 from aie.policy.ledger import PolicyLedger, PolicyProposalQueue, ProposalSnapshot
 from aie.policy.manifests import CapabilityManifestLoadError, load_capability_manifests
 from aie.policy.models import (
@@ -13,6 +14,8 @@ __all__ = [
     "ActionProposal",
     "CapabilityManifest",
     "CapabilityPolicyBroker",
+    "DryRunExecutor",
+    "ExecutionResult",
     "CapabilityManifestLoadError",
     "PolicyDecision",
     "PolicyLedger",
