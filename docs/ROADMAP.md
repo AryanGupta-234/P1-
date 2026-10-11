@@ -23,7 +23,7 @@ Statuses: DONE / IN_PROGRESS / BLOCKED / PLANNED. Mark DONE only with code, test
 - [x] Read-only inventory and process reconciliation.
 - [x] Architecture spotlight and roadmap.
 - [ ] Full tests on Windows 10/11.
-- [ ] CI matrix on Python 3.11/3.12 and lint.
+- [ ] CI matrix on Python 3.11/3.12 and lint (initial runs exposed lint errors; revalidation pending).
 - [ ] Dependency/security checks and contributor setup.
 
 ## M1 — Windows perception
@@ -102,7 +102,7 @@ Statuses: DONE / IN_PROGRESS / BLOCKED / PLANNED. Mark DONE only with code, test
 - [ ] Desktop UI after core telemetry and policy APIs stabilize.
 
 ## Immediate dev sprint
-1. Run and verify the CI matrix on dev.
+1. Resolve remaining lint findings and verify the Windows CI matrix on dev.
 2. Add trace fixtures for buffering causes and unknown evidence.
 3. Add service/process resource samples and pause/retention controls.
 4. Design opt-in browser extension with minimal permissions.
