@@ -149,6 +149,8 @@ def observe(
     process_resources: bool = typer.Option(False, "--process-resources/--no-process-resources", help="Opt in to bounded systemwide process resource snapshots."),
     process_resource_interval: float = typer.Option(10.0, min=2.0, max=300.0),
     process_resource_max_processes: int = typer.Option(256, min=1, max=512),
+    etw: bool = typer.Option(False, "--etw/--no-etw", help="Opt in to kernel ETW process lifecycle telemetry (elevated token required)."),
+    etw_max_events_per_poll: int = typer.Option(100, min=1, max=1000),
 ) -> None:
     """Observe selected Windows metadata (read-only)."""
     from aie.runtime import observe as run_observer
@@ -161,6 +163,15 @@ def observe(
     if ui_tree and not allowed_ui_apps:
         console.print("[red]UI Automation requires --ui-tree-apps with an explicit app allowlist.[/red]")
         raise typer.Exit(2)
+    if etw:
+        import importlib.util
+
+        if importlib.util.find_spec("pyetwkit") is None:
+            console.print(
+                "[red]Install ETW support with: python -m pip install -e .[windows][/red]"
+            )
+            raise typer.Exit(2)
+
     selected_event_logs = tuple(
         item.strip() for item in event_log_channels.split(",") if item.strip()
     )
@@ -203,6 +214,8 @@ def observe(
             include_process_resources=process_resources,
             process_resource_interval=process_resource_interval,
             process_resource_max_processes=process_resource_max_processes,
+            include_etw=etw,
+            etw_max_events_per_poll=etw_max_events_per_poll,
         )
     except (OSError, RuntimeError, ValueError) as exc:
         console.print(f"[red]Observer unavailable:[/red] {exc}")
