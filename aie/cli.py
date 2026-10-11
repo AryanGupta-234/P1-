@@ -488,6 +488,15 @@ def ask(
     temperature: float = typer.Option(0.2, min=0.0, max=2.0),
     max_output_tokens: int = typer.Option(512, min=32, max=4096),
     memory_limit: int = typer.Option(5, min=1, max=10),
+    with_session: bool = typer.Option(
+        False,
+        "--with-session/--no-session",
+        help="Attach the explicit current working-session metadata.",
+    ),
+    confirm_session_egress: bool = typer.Option(
+        False,
+        help="Confirm sending the explicit session label to a remote model endpoint.",
+    ),
 ) -> None:
     """Send a prompt to local Ollama or an explicitly authorized HTTPS cloud model."""
     from aie.models.base import ChatMessage, ModelRequest
@@ -510,6 +519,12 @@ def ask(
             "[red]Attaching memory to a remote model needs --confirm-memory-egress.[/red]"
         )
         raise typer.Exit(2)
+    if with_session and remote_selected and not confirm_session_egress:
+        console.print(
+            "[red]Attaching session context to a remote model needs "
+            "--confirm-session-egress.[/red]"
+        )
+        raise typer.Exit(2)
     if with_memory and remote_selected and include_sensitive_memory:
         console.print("[red]Sensitive memories cannot be attached to remote model requests.[/red]")
         raise typer.Exit(2)
@@ -517,6 +532,7 @@ def ask(
     try:
         messages = [ChatMessage(role="user", content=prompt)]
         activity_event_count = 0
+        session_id = None
         if with_activity:
             from aie.context.activity_context import build_activity_prompt_context
 
@@ -527,6 +543,19 @@ def ask(
             activity_event_count = len(activity_context.event_ids)
             if activity_context.content:
                 messages.insert(0, ChatMessage(role="system", content=activity_context.content))
+        if with_session:
+            from aie.context.task_session.context import build_task_session_prompt_context
+            from aie.context.task_session.store import TaskSessionStore
+
+            session_context = build_task_session_prompt_context(
+                TaskSessionStore(task_session_database_path())
+            )
+            session_id = session_context.session_id
+            if session_context.content:
+                messages.insert(
+                    0,
+                    ChatMessage(role="system", content=session_context.content),
+                )
         if with_memory:
             from aie.memory.prompt_context import build_memory_prompt_context
             from aie.memory.store import MemoryStore
@@ -587,6 +616,11 @@ def ask(
         if with_activity
         else ""
     )
+    session_note = (
+        f" · Session: {session_id} (explicit opt-in)"
+        if with_session and session_id
+        else ""
+    )
     console.print(
         f"\n[dim]Model: {response.model} · "
         f"Elapsed: {response.elapsed_seconds:.2f}s · "
@@ -594,6 +628,71 @@ def ask(
         f"Output tokens: {response.completion_tokens or 'unknown'}"
         f"{memory_note}{activity_note}[/dim]"
     )
+
+@app.command("session-start")
+def session_start(label: str = typer.Argument(...)) -> None:
+    """Start a user-controlled working session; no intent is inferred."""
+    from aie.context.task_session.store import TaskSessionStore
+
+    try:
+        session = TaskSessionStore(task_session_database_path()).start(label)
+    except ValueError as exc:
+        console.print(f"[red]Session not started:[/red] {exc}")
+        raise typer.Exit(2) from exc
+    console.print(
+        f"[green]Session started.[/green] {session.label} · {session.session_id}"
+    )
+
+
+@app.command("session-status")
+def session_status() -> None:
+    """Show the explicit current working session."""
+    from aie.context.task_session.store import TaskSessionStore
+
+    session = TaskSessionStore(task_session_database_path()).current()
+    if session is None:
+        console.print("No active task session.")
+        return
+    console.print(
+        f"[bold]{session.label}[/bold]\n"
+        f"Session ID: {session.session_id}\n"
+        f"Started: {session.started_at.isoformat()}"
+    )
+
+
+@app.command("session-end")
+def session_end() -> None:
+    """End the explicit current working session."""
+    from aie.context.task_session.store import TaskSessionStore
+
+    session = TaskSessionStore(task_session_database_path()).end()
+    if session is None:
+        console.print("No active task session.")
+        return
+    console.print(
+        f"[green]Session ended.[/green] {session.label} · {session.session_id}"
+    )
+
+
+@app.command("sessions")
+def sessions(limit: int = typer.Option(25, min=1, max=100)) -> None:
+    """List explicit task sessions."""
+    from aie.context.task_session.store import TaskSessionStore
+
+    items = TaskSessionStore(task_session_database_path()).list(limit=limit)
+    if not items:
+        console.print("No task sessions recorded.")
+        return
+    table = Table("Status", "Label", "Started", "Ended", "Session ID")
+    for item in items:
+        table.add_row(
+            item.status,
+            item.label,
+            item.started_at.astimezone().strftime("%Y-%m-%d %H:%M:%S"),
+            item.ended_at.astimezone().strftime("%Y-%m-%d %H:%M:%S") if item.ended_at else "-",
+            item.session_id,
+        )
+    console.print(table)
 
 
 @app.command("feedback")
