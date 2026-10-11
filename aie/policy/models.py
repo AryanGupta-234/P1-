@@ -1,10 +1,10 @@
 """Validated action proposals, capability manifests and policy decisions."""
 from __future__ import annotations
 
-from typing import Any, Literal
+from typing import Any, Literal, Self
 from uuid import uuid4
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 RiskTier = Literal["low", "medium", "high", "critical"]
 
@@ -24,12 +24,14 @@ class CapabilityManifest(BaseModel):
     max_invocations_per_minute: int = Field(default=3, ge=1, le=60)
     max_execution_seconds: float = Field(default=10.0, gt=0.0, le=300.0)
 
-    def __init__(self, **data: Any) -> None:
-        super().__init__(**data)
+    @model_validator(mode="after")
+    def validate_autonomy_rules(self) -> Self:
         if self.allow_autonomous and self.risk_tier != "low":
             raise ValueError("Only low-risk capabilities may be pre-authorized for autonomy.")
         if self.allow_autonomous and self.approval_required:
             raise ValueError("Autonomous capabilities cannot also require per-action approval.")
+        return self
+
 
 
 class ActionProposal(BaseModel):
