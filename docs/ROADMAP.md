@@ -46,10 +46,13 @@ Statuses: DONE / IN_PROGRESS / BLOCKED / PLANNED. Mark DONE only with code, test
 - [x] Insufficient-evidence behavior and unknown-value handling.
 - [x] Synthetic unit tests.
 - [ ] Root-cause trace corpus and false-positive/negative evaluation.
-- [ ] Opt-in Edge/Chrome playback/performance extension.
+- [x] Opt-in MV3 Edge/Chrome playback observer prototype with an off-by-default control.
+- [x] Strict Windows native-messaging host that validates and persists browser video events.
+- [ ] Validate extension installation and native-host registration on a target Windows desktop.
 - [x] Windows network sampler: interface counters, gateway/external TCP connection latency and DNS timing.
 - [ ] Add configurable per-target policy and sustained throughput measurement (opt-in only).
-- [ ] Browser + OS telemetry correlation.
+- [x] Correlate synthetic browser playback snapshots with fresh same-host network evidence.
+- [ ] Validate end-to-end browser → native host → event store → context pipeline on a target desktop.
 - [ ] Confidence calibration and actionable diagnostic proposals.
 
 ## M2 — Context intelligence
