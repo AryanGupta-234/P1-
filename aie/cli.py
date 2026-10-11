@@ -5,6 +5,7 @@ import json
 import os
 import platform
 from datetime import datetime, timedelta, timezone
+from typing import Literal
 from pathlib import Path
 
 import typer
@@ -299,6 +300,45 @@ def prune(
         return
     deleted = store.delete_before(cutoff)
     console.print(f"Deleted {deleted} event(s) older than {older_than_days} days.")
+
+
+@app.command()
+def ask(
+    prompt: str = typer.Argument(..., min_length=1, help="Prompt to send to the local model."),
+    task: Literal["routine", "complex"] = typer.Option("routine", help="Choose the reasoning tier."),
+    allow_remote_ollama: bool = typer.Option(
+        False,
+        "--allow-remote-ollama",
+        help="Explicitly permit AIE_OLLAMA_URL to point to a remote HTTPS Ollama host.",
+    ),
+    temperature: float = typer.Option(0.2, min=0.0, max=2.0),
+    max_output_tokens: int = typer.Option(512, min=32, max=4096),
+) -> None:
+    """Send a prompt to an already-installed local Ollama model (never pulls models)."""
+    from aie.models.base import ChatMessage, ModelRequest
+    from aie.models.ollama import OllamaClient
+    from aie.models.router import LocalModelRouter, ModelRoutingError
+
+    try:
+        request = ModelRequest(
+            task=task,
+            messages=[ChatMessage(role="user", content=prompt)],
+            temperature=temperature,
+            max_output_tokens=max_output_tokens,
+        )
+        client = OllamaClient(allow_remote=allow_remote_ollama)
+        response = LocalModelRouter(client).generate(request)
+    except (ModelRoutingError, ValueError) as exc:
+        console.print(f"[red]Model request unavailable:[/red] {exc}")
+        raise typer.Exit(2) from exc
+
+    console.print(response.content)
+    console.print(
+        f"\n[dim]Model: {response.model} · "
+        f"Elapsed: {response.elapsed_seconds:.2f}s · "
+        f"Prompt tokens: {response.prompt_tokens or 'unknown'} · "
+        f"Output tokens: {response.completion_tokens or 'unknown'}[/dim]"
+    )
 
 
 if __name__ == "__main__":
