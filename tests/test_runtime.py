@@ -221,3 +221,67 @@ def test_opt_in_system_process_resource_provider_is_polled_and_persisted(tmp_pat
     assert calls == [True]
     assert added >= 1
     assert stored.get("process-resource-001") is not None
+
+
+
+def test_opt_in_etw_provider_is_polled_and_closed(tmp_path, monkeypatch):
+    from datetime import datetime, timezone
+
+    from aie.contracts import AIEEvent, EntityRef
+    from aie.store import EventStore
+
+    provider = FakeWindowsProvider()
+    calls = []
+
+    class FakeEtwProvider:
+        name = "windows.etw.process"
+
+        def __init__(self, *, max_events_per_poll):
+            assert max_events_per_poll == 7
+            self.closed = False
+            self.paused = 0
+            self.resumed = 0
+
+        def collect_snapshot(self):
+            calls.append("collect")
+            return [AIEEvent(
+                event_id="etw-001",
+                timestamp=datetime.now(timezone.utc),
+                host_id="host-a",
+                source="windows.etw.process",
+                event_type="process.etw_start",
+                entity=EntityRef(type="process", name="demo.exe", stable_id="4321"),
+                data={"pid": 4321, "process_name": "demo.exe", "lifecycle": "start"},
+            )]
+
+        def pause(self):
+            self.paused += 1
+
+        def resume(self):
+            self.resumed += 1
+
+        def close(self):
+            self.closed = True
+
+    install_fake_clock(monkeypatch)
+    monkeypatch.setattr(runtime, "WindowsProvider", lambda: provider)
+    monkeypatch.setattr(runtime, "WindowsETWProcessProvider", FakeEtwProvider)
+    monkeypatch.setattr(runtime, "observer_is_paused", lambda: False)
+
+    db_path = tmp_path / "observer-etw.sqlite3"
+    added = runtime.observe(
+        duration=1,
+        interval=0.5,
+        db_path=db_path,
+        include_network=False,
+        include_foreground=False,
+        include_event_logs=False,
+        include_process_resources=False,
+        include_etw=True,
+        etw_max_events_per_poll=7,
+        include_video_diagnostics=False,
+    )
+
+    assert calls
+    assert added >= 1
+    assert EventStore(db_path).get("etw-001") is not None
