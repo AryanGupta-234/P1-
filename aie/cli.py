@@ -14,6 +14,7 @@ from rich.table import Table
 
 from aie import __version__
 from aie.config import (
+    agent_run_database_path,
     capability_manifest_dir,
     database_path,
     egress_audit_database_path,
@@ -877,6 +878,228 @@ def sessions(limit: int = typer.Option(25, min=1, max=100)) -> None:
             item.session_id,
         )
     console.print(table)
+
+
+def _read_plan_file(path: Path):
+    from aie.planning.models import TaskPlan
+    from aie.planning.validator import validate_plan
+
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    plan = TaskPlan.model_validate(payload)
+    validation = validate_plan(plan)
+    return plan, validation
+
+
+def _render_agent_run(run) -> None:
+    console.print(
+        f"Run: [bold]{run.run_id}[/bold] · Status: [bold]{run.status}[/bold] · "
+        f"Goal: {run.plan.goal}"
+    )
+    table = Table("Step", "Kind", "Status", "Attempts", "Proposal", "Summary")
+    steps = {step.step_id: step for step in run.steps}
+    for step in run.plan.steps:
+        state = steps[step.step_id]
+        table.add_row(
+            step.step_id,
+            step.kind,
+            state.status,
+            str(state.attempts),
+            state.proposal_id or "-",
+            (state.summary or state.error or "-")[:100],
+        )
+    console.print(table)
+
+
+@app.command("plan-generate")
+def plan_generate(
+    goal: str = typer.Argument(..., help="Natural-language task goal."),
+    output: Path | None = typer.Option(None, "--output", "-o", help="Optional JSON plan destination."),
+) -> None:
+    """Generate a bounded declarative plan using installed local Ollama models only."""
+    from aie.models.ollama import OllamaClient
+    from aie.models.router import LocalModelRouter
+    from aie.planning.generator import PlanGenerationError, generate_task_plan
+    from aie.policy.manifests import CapabilityManifestLoadError
+
+    try:
+        _, manifests = _load_local_policy_broker()
+        capabilities = [item.capability_id for item in manifests if item.enabled]
+        plan = generate_task_plan(
+            goal,
+            LocalModelRouter(OllamaClient()),
+            available_capabilities=capabilities,
+        )
+        encoded = plan.model_dump_json(indent=2)
+        if output is None:
+            console.print_json(encoded)
+        else:
+            output.parent.mkdir(parents=True, exist_ok=True)
+            output.write_text(encoded + "\n", encoding="utf-8")
+            console.print(f"[green]Plan saved:[/green] {output}")
+        console.print(
+            f"[dim]Validated {len(plan.steps)} step(s); no step was executed.[/dim]"
+        )
+    except (OSError, ValueError, RuntimeError, CapabilityManifestLoadError) as exc:
+        console.print(f"[red]Plan generation failed:[/red] {exc}")
+        raise typer.Exit(2) from exc
+
+
+@app.command("plan-validate")
+def plan_validate(path: Path = typer.Argument(..., exists=True, dir_okay=False)) -> None:
+    """Validate a plan file and print its deterministic dependency order."""
+    try:
+        plan, validation = _read_plan_file(path)
+    except (OSError, ValueError) as exc:
+        console.print(f"[red]Plan rejected:[/red] {exc}")
+        raise typer.Exit(2) from exc
+    console.print(f"[green]Plan valid.[/green] {plan.plan_id} · {len(plan.steps)} step(s)")
+    console.print("Order: " + " -> ".join(validation.ordered_step_ids))
+
+
+@app.command("plan-start")
+def plan_start(path: Path = typer.Argument(..., exists=True, dir_okay=False)) -> None:
+    """Persist a validated plan as a resumable local task run."""
+    from aie.orchestration.store import TaskRunStore
+
+    try:
+        plan, _ = _read_plan_file(path)
+        run = TaskRunStore(agent_run_database_path()).create(plan)
+    except (OSError, ValueError) as exc:
+        console.print(f"[red]Task run was not created:[/red] {exc}")
+        raise typer.Exit(2) from exc
+    console.print(f"[green]Task run created:[/green] {run.run_id} · {run.status}")
+    console.print("Use: aie plan-advance " + run.run_id)
+
+
+@app.command("plan-runs")
+def plan_runs(limit: int = typer.Option(25, min=1, max=200)) -> None:
+    """List recent persistent task runs."""
+    from aie.orchestration.store import TaskRunStore
+
+    runs = TaskRunStore(agent_run_database_path()).list(limit=limit)
+    if not runs:
+        console.print("No task runs have been created.")
+        return
+    table = Table("Run ID", "Status", "Steps", "Updated", "Goal")
+    for run in runs:
+        table.add_row(
+            run.run_id,
+            run.status,
+            f"{sum(item.status == 'completed' for item in run.steps)}/{len(run.steps)}",
+            run.updated_at.astimezone().strftime("%Y-%m-%d %H:%M:%S"),
+            run.plan.goal[:80],
+        )
+    console.print(table)
+
+
+@app.command("plan-status")
+def plan_status(run_id: str = typer.Argument(...)) -> None:
+    """Inspect persisted task and step states."""
+    from aie.orchestration.store import TaskRunStore
+
+    run = TaskRunStore(agent_run_database_path()).get(run_id)
+    if run is None:
+        console.print("[red]Task run not found.[/red]")
+        raise typer.Exit(2)
+    _render_agent_run(run)
+
+
+@app.command("plan-advance")
+def plan_advance(
+    run_id: str = typer.Argument(...),
+    max_steps: int = typer.Option(25, min=1, max=25),
+) -> None:
+    """Advance safe observation/reasoning/inform steps; action steps stop for review."""
+    from aie.models.ollama import OllamaClient
+    from aie.models.router import LocalModelRouter
+    from aie.orchestration.engine import (
+        EventObservationHandler,
+        InformHandler,
+        LocalReasoningHandler,
+        TaskOrchestrator,
+    )
+    from aie.orchestration.store import TaskRunStore
+    from aie.policy.ledger import PolicyLedger, PolicyProposalQueue
+    from aie.policy.manifests import CapabilityManifestLoadError
+
+    try:
+        broker, _ = _load_local_policy_broker()
+        ledger = PolicyLedger(policy_audit_database_path())
+        store = TaskRunStore(agent_run_database_path())
+        runner = TaskOrchestrator(
+            store,
+            handlers={
+                "observe": EventObservationHandler(EventStore(database_path())),
+                "reason": LocalReasoningHandler(LocalModelRouter(OllamaClient())),
+                "inform": InformHandler(),
+            },
+            proposal_queue=PolicyProposalQueue(ledger),
+            broker=broker,
+        )
+        run = runner.advance(run_id, max_steps=max_steps)
+    except (OSError, ValueError, RuntimeError, CapabilityManifestLoadError) as exc:
+        console.print(f"[red]Task run could not advance:[/red] {exc}")
+        raise typer.Exit(2) from exc
+    _render_agent_run(run)
+    if run.status == "blocked":
+        console.print(
+            "[yellow]The run is blocked at an authorized action. Approval is not execution; "
+            "no system change was made.[/yellow]"
+        )
+    elif run.status == "waiting_approval":
+        console.print(
+            "[yellow]Action proposal is waiting for review. Use aie proposals and "
+            "aie approve-proposal or aie reject-proposal.[/yellow]"
+        )
+
+
+@app.command("plan-refresh-action")
+def plan_refresh_action(
+    run_id: str = typer.Argument(...),
+    step_id: str = typer.Argument(...),
+) -> None:
+    """Copy a reviewed policy decision into the run; approved actions remain unexecuted."""
+    from aie.orchestration.engine import TaskOrchestrator
+    from aie.orchestration.store import TaskRunStore
+    from aie.policy.ledger import PolicyLedger
+
+    try:
+        store = TaskRunStore(agent_run_database_path())
+        run = TaskOrchestrator(store).refresh_action_review(
+            run_id,
+            step_id,
+            PolicyLedger(policy_audit_database_path()),
+        )
+    except ValueError as exc:
+        console.print(f"[red]Action review refresh failed:[/red] {exc}")
+        raise typer.Exit(2) from exc
+    _render_agent_run(run)
+
+
+@app.command("plan-cancel")
+def plan_cancel(run_id: str = typer.Argument(...)) -> None:
+    """Cancel a task run or request cancellation at the next safe boundary."""
+    from aie.orchestration.store import TaskRunStore
+
+    try:
+        run = TaskRunStore(agent_run_database_path()).request_cancel(run_id)
+    except ValueError as exc:
+        console.print(f"[red]Cancellation failed:[/red] {exc}")
+        raise typer.Exit(2) from exc
+    console.print(f"Task run {run.run_id}: {run.status}")
+
+
+@app.command("plan-recover")
+def plan_recover() -> None:
+    """Fail closed on task steps left running after a process restart; never replay them."""
+    from aie.orchestration.store import TaskRunStore
+
+    count = TaskRunStore(agent_run_database_path()).recover_interrupted()
+    console.print(
+        f"[green]Recovery check complete.[/green] {count} interrupted step(s) marked failed; "
+        "no automatic replay was attempted."
+    )
+
 
 @app.command("dry-run-proposal")
 def dry_run_proposal(proposal_id: str = typer.Argument(...)) -> None:
