@@ -27,6 +27,8 @@ class VideoMetrics:
     packet_loss_pct: float | None = None
     cpu_pct: float | None = None
     dropped_frames_pct: float | None = None
+    buffered_ahead_seconds: float | None = None
+    playback_progress_delta_seconds: float | None = None
 
     def __post_init__(self) -> None:
         if self.stall_count < 0:
@@ -40,6 +42,8 @@ class VideoMetrics:
             "packet_loss_pct": (0, 100),
             "cpu_pct": (0, 100),
             "dropped_frames_pct": (0, 100),
+            "buffered_ahead_seconds": (0, 3600),
+            "playback_progress_delta_seconds": (0, 300),
         }
         for name, (minimum, maximum) in bounds.items():
             value = getattr(self, name)
@@ -58,6 +62,9 @@ class VideoThresholds:
     cpu_pct: float = 90.0
     dropped_frames_pct: float = 5.0
     throughput_headroom: float = 1.15
+    low_buffer_seconds: float = 0.75
+    healthy_buffer_seconds: float = 5.0
+    stalled_progress_seconds: float = 0.1
 
 
 @dataclass(frozen=True, slots=True)
@@ -130,6 +137,51 @@ def diagnose_video_buffering(
             ),
             (f"Measured throughput: {metrics.throughput_mbps:.2f} Mbps",
              f"Estimated requirement: {metrics.estimated_required_mbps:.2f} Mbps"),
+        ))
+
+    if (
+        metrics.buffered_ahead_seconds is not None
+        and metrics.buffered_ahead_seconds <= thresholds.low_buffer_seconds
+    ):
+        evidence = [
+            f"Buffered media ahead: {metrics.buffered_ahead_seconds:.2f} seconds"
+        ]
+        if metrics.playback_progress_delta_seconds is not None:
+            evidence.append(
+                "Playback progress delta: "
+                f"{metrics.playback_progress_delta_seconds:.2f} seconds"
+            )
+        findings.append(DiagnosticFinding(
+            "stream_buffer_starvation",
+            "medium",
+            0.72,
+            (
+                "The player has little buffered media available. Compare sustained "
+                "download throughput, DNS/connectivity and the streaming service; "
+                "this signal alone does not prove a network fault."
+            ),
+            tuple(evidence),
+        ))
+
+    if (
+        metrics.buffered_ahead_seconds is not None
+        and metrics.buffered_ahead_seconds >= thresholds.healthy_buffer_seconds
+        and metrics.playback_progress_delta_seconds is not None
+        and metrics.playback_progress_delta_seconds <= thresholds.stalled_progress_seconds
+    ):
+        findings.append(DiagnosticFinding(
+            "playback_pipeline_not_advancing_with_buffer",
+            "medium",
+            0.68,
+            (
+                "Buffered media is available but playback position is not advancing. "
+                "Inspect the browser player, decoder/render path and dropped-frame trend "
+                "before changing network settings."
+            ),
+            (
+                f"Buffered media ahead: {metrics.buffered_ahead_seconds:.2f} seconds",
+                f"Playback progress delta: {metrics.playback_progress_delta_seconds:.2f} seconds",
+            ),
         ))
 
     if metrics.rtt_ms is not None and metrics.rtt_ms >= thresholds.high_rtt_ms:
