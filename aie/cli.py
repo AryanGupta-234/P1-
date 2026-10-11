@@ -129,6 +129,69 @@ def notifications_quiet_hours(
     console.print(f"[green]Quiet hours saved:[/green] {quiet} local time")
 
 
+@app.command("retention-status")
+def retention_status(
+    event_retention_days: int = typer.Option(30, "--event-retention-days", min=1, max=3650),
+    sample_limit: int = typer.Option(1000, "--sample-limit", min=1, max=1000),
+) -> None:
+    """Inspect event, memory, task and policy retention counts without deleting data."""
+    from aie.config import task_run_database_path
+    from aie.memory.store import MemoryStore
+    from aie.orchestration.store import TaskRunStore
+    from aie.policy.ledger import PolicyLedger
+    from aie.retention import collect_retention_snapshot
+
+    try:
+        report = collect_retention_snapshot(
+            event_store=EventStore(database_path()),
+            memory_store=MemoryStore(memory_database_path()),
+            task_run_store=TaskRunStore(task_run_database_path()),
+            policy_ledger=PolicyLedger(policy_audit_database_path()),
+            event_retention_days=event_retention_days,
+            sample_limit=sample_limit,
+        )
+    except (ValueError, OSError, RuntimeError) as exc:
+        console.print(f"[red]Retention inventory unavailable:[/red] {type(exc).__name__}: {exc}")
+        raise typer.Exit(2) from exc
+
+    evidence = Table("Store", "Total / sample", "Eligible for expiry/deletion")
+    evidence.add_row(
+        "Events",
+        str(report.event_count),
+        f"{report.event_prune_candidates} older than {report.event_retention_days} days",
+    )
+    evidence.add_row(
+        "Memories",
+        f"{report.active_memory_count} active / {report.memory_count} total",
+        f"{report.expired_memory_count} expired",
+    )
+    console.print(evidence)
+
+    task_table = Table("Task run state", "Sampled count")
+    for state, count in sorted(report.task_run_status_counts.items()):
+        task_table.add_row(state, str(count))
+    console.print(task_table)
+
+    proposal_table = Table("Proposal state", "Sampled count")
+    for state, count in sorted(report.proposal_status_counts.items()):
+        proposal_table.add_row(state, str(count))
+    console.print(proposal_table)
+
+    if report.task_sample_truncated or report.proposal_sample_truncated:
+        console.print(
+            f"[yellow]Task/policy summaries are bounded samples (max {sample_limit}); "
+            "counts may be truncated.[/yellow]"
+        )
+    console.print(
+        f"[dim]Read-only inventory at {report.evaluated_at_utc}. "
+        "No event, memory, task run or policy record was modified.[/dim]"
+    )
+    console.print(
+        "[dim]For event expiry use aie prune --older-than-days N --confirm; "
+        "for memory expiry use aie memory-prune --confirm.[/dim]"
+    )
+
+
 @app.command("health")
 def observer_health() -> None:
     """Show the latest privacy-safe observer health snapshot."""
