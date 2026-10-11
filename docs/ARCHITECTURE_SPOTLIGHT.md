@@ -56,7 +56,7 @@ Build persistent personal intelligence that observes explicitly permitted signal
 **Not implemented:** ETW live subscriptions, Windows Event Log provider, continuous service/task/app state-change monitoring, per-process resource sampling, validation of native-host registration on the target desktop, Windows Graphics Capture, UIA control actions/app-specific adapters, full context graph, actual model invocation, persistent memory layers, policy broker, sandboxed executor, autonomous remediation or assistant dashboard.
 
 ## Active feature work
-- [PR #4 — Read-only Windows UIA inspector](https://github.com/AryanGupta-234/P1-/pull/4) — draft; Windows CI and review pending.
+- [PR #4 — Read-only Windows UIA inspector](https://github.com/AryanGupta-234/P1-/pull/4) — draft; Windows CI green on Python 3.11/3.12, target-desktop smoke test pending.
 
 ## Immediate engineering sequence
 1. Verify Windows CI and the full Python 3.11/3.12 matrix, including PR #4.
