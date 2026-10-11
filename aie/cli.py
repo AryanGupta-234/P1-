@@ -736,7 +736,7 @@ def remember(
 
 @app.command("recall")
 def recall(
-    query: str = typer.Argument(..., help="Local keyword query."),
+    query: str = typer.Argument(..., help="Local keyword or semantic query."),
     kind: Literal["working", "episodic", "semantic", "procedural", "prospective"] | None = typer.Option(None),
     include_sensitive: bool = typer.Option(False, help="Explicitly include sensitive memories."),
     limit: int = typer.Option(10, min=1, max=100),
@@ -773,16 +773,16 @@ def recall(
     if not hits:
         console.print("No matching local memories.")
         return
-    table = Table("Kind", "Score", "Tags", "Content")
-    for hit in hits:
-        console.print(f"Memory ID: {hit.memory.memory_id}")
-        table.add_row(
-            hit.memory.kind,
-            f"{hit.score:.2f}",
-            ", ".join(hit.memory.tags),
-            hit.memory.content[:180],
+
+    for index, hit in enumerate(hits, start=1):
+        console.print(
+            f"[bold]Result {index}[/bold] · {hit.memory.kind} · "
+            f"Score {hit.score:.3f} · Tags: {', '.join(hit.memory.tags) or 'none'}"
         )
-    console.print(table)
+        console.print(f"Memory ID: {hit.memory.memory_id}")
+        console.print(hit.memory.content)
+        if index < len(hits):
+            console.print()
 
 
 @app.command("memories")
