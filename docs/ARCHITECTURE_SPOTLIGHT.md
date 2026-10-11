@@ -78,11 +78,12 @@ Build persistent personal intelligence that observes explicitly permitted signal
 
 **Context and memory**
 - Indexed event queries and `aie activity` temporal sessions across the normalized event categories.
+- Freshness-weighted evidence assessment and a narrow explicit contradiction detector are available as context-layer primitives; heuristic weights are not calibrated probabilities.
 - Explicit user-controlled working sessions persisted locally; session metadata can be attached to model requests only on request.
 - Separate local SQLite memory store for explicit user-authored working/episodic/semantic/procedural/prospective records.
 - Source-event provenance validation, TTL, supersession history, deletion, lexical retrieval and optional local Ollama embedding/cosine retrieval.
 - Embeddings are keyed by memory ID and model; deletion/expiry removes associated vectors.
-- Sensitive memories are excluded from listing, retrieval and embedding by default; explicit indexing is available with a warning. Memory text and vectors are local SQLite data, not encrypted at the application layer; credentials must not be stored.
+- Sensitive memories are excluded from listing, retrieval and embedding by default; explicit indexing is available with a warning. Review-only consolidation proposals are generated from bounded lexical/tag similarity and never merge or rewrite records. Memory text and vectors are local SQLite data, not encrypted at the application layer; credentials must not be stored.
 
 **Governance**
 - Default-deny user-managed capability manifests, low-risk autonomy declarations, approval gates, bounded flat parameters and rate limits.
@@ -98,7 +99,7 @@ Build persistent personal intelligence that observes explicitly permitted signal
 - Higher-fidelity ETW telemetry beyond process lifecycle events (optional thread/file/network categories and provider-specific coverage reporting).
 - Windows Graphics Capture (screenshots), still intentionally separate from UIA structure.
 - Unified event bus and semantic task/session interpretation.
-- Embedding retrieval, memory consolidation and evaluated learning from verified outcomes.
+- Embedding retrieval quality evaluation, reviewed consolidation/contradiction handling and evaluated learning from verified outcomes.
 - Evaluated learning from user-confirmed feedback; no automatic model retraining yet.
 - Cloud egress gateway/redaction policy and model request budgets.
 - Sandboxed OS executor, rollback, postcondition verification and actual autonomous remediation.
