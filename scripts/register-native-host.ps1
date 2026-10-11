@@ -27,7 +27,9 @@ $manifest = [ordered]@{
     allowed_origins = @("chrome-extension://$ExtensionId/")
 }
 
-$manifest | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $manifestPath -Encoding ASCII
+$manifestJson = $manifest | ConvertTo-Json -Depth 5
+$utf8WithoutBom = [System.Text.UTF8Encoding]::new($false)
+[System.IO.File]::WriteAllText($manifestPath, $manifestJson, $utf8WithoutBom)
 
 $registryRoot = if ($Browser -eq 'Chrome') {
     'HKCU:\Software\Google\Chrome\NativeMessagingHosts'
