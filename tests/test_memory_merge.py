@@ -31,17 +31,17 @@ def test_reviewed_merge_supersedes_both_sources_and_preserves_lineage(tmp_path):
         confidence=0.8,
     )
 
-    result = store.merge((first.memory.memory_id, second.memory.memory_id), merged)
+    result = store.merge((first.memory_id, second.memory_id), merged)
 
-    assert result.memory_id != first.memory.memory_id
-    assert result.memory_id != second.memory.memory_id
-    assert store.get(first.memory.memory_id) is None
-    assert store.get(second.memory.memory_id) is None
-    assert store.get(first.memory.memory_id, include_superseded=True).status == "superseded"
-    assert store.get(second.memory.memory_id, include_superseded=True).status == "superseded"
+    assert result.memory_id != first.memory_id
+    assert result.memory_id != second.memory_id
+    assert store.get(first.memory_id) is None
+    assert store.get(second.memory_id) is None
+    assert store.get(first.memory_id, include_superseded=True).status == "superseded"
+    assert store.get(second.memory_id, include_superseded=True).status == "superseded"
     assert set(store.lineage(result.memory_id)) == {
-        first.memory.memory_id,
-        second.memory.memory_id,
+        first.memory_id,
+        second.memory_id,
     }
     assert store.count(include_superseded=False) == 1
     assert store.count(include_superseded=True) == 3
@@ -58,13 +58,13 @@ def test_merge_cannot_reduce_sensitivity_or_inflate_confidence(tmp_path):
 
     with pytest.raises(ValueError, match="cannot reduce source sensitivity"):
         store.merge(
-            (first.memory.memory_id, second.memory.memory_id),
+            (first.memory_id, second.memory_id),
             MemoryRecord(kind="semantic", content="Combined fact.", sensitivity="internal", confidence=0.7),
         )
 
     with pytest.raises(ValueError, match="cannot exceed"):
         store.merge(
-            (first.memory.memory_id, second.memory.memory_id),
+            (first.memory_id, second.memory_id),
             MemoryRecord(kind="semantic", content="Combined fact.", sensitivity="sensitive", confidence=0.8),
         )
 
@@ -95,7 +95,7 @@ def test_merge_preserves_earliest_expiry_and_rejects_kind_mismatch(tmp_path):
 
     with pytest.raises(ValueError, match="cannot outlive"):
         store.merge(
-            (first.memory.memory_id, second.memory.memory_id),
+            (first.memory_id, second.memory_id),
             MemoryRecord(
                 kind="episodic",
                 content="Combined event summary.",
@@ -108,7 +108,7 @@ def test_merge_preserves_earliest_expiry_and_rejects_kind_mismatch(tmp_path):
     wrong_kind = MemoryRecord(kind="semantic", content="Wrong kind.")
     with pytest.raises(ValueError, match="preserve the source memory kind"):
         store.merge(
-            (first.memory.memory_id, second.memory.memory_id),
+            (first.memory_id, second.memory_id),
             wrong_kind,
             now=now,
         )
@@ -148,7 +148,7 @@ def test_merge_requires_retaining_provenance_ids(tmp_path):
 
     with pytest.raises(ValueError, match="retain all source event provenance"):
         store.merge(
-            (first.memory.memory_id, second.memory.memory_id),
+            (first.memory_id, second.memory_id),
             MemoryRecord(
                 kind="semantic",
                 content="Merged facts.",
@@ -159,7 +159,7 @@ def test_merge_requires_retaining_provenance_ids(tmp_path):
 
     with pytest.raises(ValueError, match="event_store is required"):
         store.merge(
-            (first.memory.memory_id, second.memory.memory_id),
+            (first.memory_id, second.memory_id),
             MemoryRecord(
                 kind="semantic",
                 content="Merged facts.",
@@ -168,7 +168,7 @@ def test_merge_requires_retaining_provenance_ids(tmp_path):
         )
 
     result = store.merge(
-        (first.memory.memory_id, second.memory.memory_id),
+        (first.memory_id, second.memory_id),
         MemoryRecord(
             kind="semantic",
             content="Merged facts.",
