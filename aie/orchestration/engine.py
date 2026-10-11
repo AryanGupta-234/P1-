@@ -171,6 +171,10 @@ class TaskOrchestrator:
         if step_state.status != "awaiting_input":
             raise ValueError("step is not awaiting user input")
         plan_step = next(step for step in run.plan.steps if step.step_id == step_id)
+        if plan_step.kind == "propose_action":
+            raise ValueError(
+                "action steps can only complete from a policy-ledger execution receipt"
+            )
         now = datetime.now(timezone.utc)
         if plan_step.kind == "verify" and not verified:
             replacement = step_state.model_copy(
@@ -228,12 +232,22 @@ class TaskOrchestrator:
         run = self.get(run_id)
         if run.status in {"paused", "completed", "failed", "cancelled"}:
             return run
-        if run.status == "awaiting_input":
+        if run.status == "awaiting_input" and not any(
+            item.status == "awaiting_input"
+            and next(step for step in run.plan.steps if step.step_id == item.step_id).kind == "propose_action"
+            for item in run.steps
+        ):
             return run
 
         while processed < max_steps:
             run = self.get(run_id)
-            if run.status in {"paused", "completed", "failed", "cancelled", "awaiting_input"}:
+            if run.status in {"paused", "completed", "failed", "cancelled"}:
+                return run
+            if run.status == "awaiting_input" and not any(
+                item.status == "awaiting_input"
+                and next(step for step in run.plan.steps if step.step_id == item.step_id).kind == "propose_action"
+                for item in run.steps
+            ):
                 return run
 
             completed_ids = {
@@ -242,7 +256,12 @@ class TaskOrchestrator:
             ready = next_ready_steps(run.plan, completed_step_ids=completed_ids)
             candidates = [
                 step for step in ready
-                if self._step(run, step.step_id).status in {"pending", "awaiting_approval"}
+                if self._step(run, step.step_id).status in {
+                    "pending", "awaiting_approval"
+                } or (
+                    self._step(run, step.step_id).status == "awaiting_input"
+                    and step.kind == "propose_action"
+                )
             ]
             if not candidates:
                 if all(item.status == "completed" for item in run.steps):
