@@ -585,7 +585,7 @@ def learning_report(
 
 @app.command("remember")
 def remember(
-    content: str = typer.Argument(..., min_length=1, help="User-authored memory text."),
+    content: str | None = typer.Argument(None, help="User-authored memory text; omit to enter it interactively."),
     kind: Literal["working", "episodic", "semantic", "procedural", "prospective"] = typer.Option("episodic"),
     tags: str = typer.Option("", help="Comma-separated local tags."),
     ttl_days: int | None = typer.Option(None, min=1, max=3650, help="Optional expiry in days."),
@@ -596,6 +596,8 @@ def remember(
     from aie.memory.models import MemoryRecord
     from aie.memory.store import MemoryStore
 
+    if content is None:
+        content = typer.prompt("Memory content", hide_input=sensitive)
     now = datetime.now(timezone.utc)
     memory = MemoryRecord(
         kind=kind,
@@ -747,18 +749,9 @@ def memory_prune(
 
     store = MemoryStore(memory_database_path())
     now = datetime.now(timezone.utc)
-    expired = [
-        item for item in store.list_memories(
-            include_sensitive=True,
-            include_superseded=True,
-            include_expired=True,
-            limit=1000,
-            now=now + timedelta(seconds=1),
-        )
-        if item.memory.expires_at is not None and item.memory.expires_at <= now
-    ]
+    expired_count = store.count_expired(now=now)
     if not confirm:
-        console.print(f"{len(expired)} expired memory record(s); nothing deleted.")
+        console.print(f"{expired_count} expired memory record(s); nothing deleted.")
         return
     deleted = store.prune_expired(now=now)
     console.print(f"[green]Pruned {deleted} expired memory record(s).[/green]")
