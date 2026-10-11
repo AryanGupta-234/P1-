@@ -15,12 +15,16 @@ WM_LBUTTONDBLCLK = 0x0203
 WM_USER = 0x0400
 WM_TRAY_CALLBACK = WM_USER + 41
 WM_CLOSE = 0x0010
+WM_TIMER = 0x0113
+TRAY_TIMER_ID = 1
 
 NIM_ADD = 0x00000000
 NIM_DELETE = 0x00000002
 NIF_MESSAGE = 0x00000001
 NIF_ICON = 0x00000002
 NIF_TIP = 0x00000004
+NIF_INFO = 0x00000010
+NIIF_INFO = 0x00000001
 
 MF_STRING = 0x00000000
 MF_SEPARATOR = 0x00000800
@@ -153,10 +157,16 @@ class TrayActions:
 class WindowsObserverTray:
     """A hidden Win32 window with a notification-area icon and pause controls."""
 
-    def __init__(self, actions: TrayActions) -> None:
+    def __init__(
+        self,
+        actions: TrayActions,
+        *,
+        notification_source: Callable[[], list[object]] | None = None,
+    ) -> None:
         if os.name != "nt":
             raise RuntimeError("the P1- notification-area controller is Windows-only")
         self.actions = actions
+        self.notification_source = notification_source
         self.user32 = ctypes.WinDLL("user32", use_last_error=True)
         self.shell32 = ctypes.WinDLL("shell32", use_last_error=True)
         self.kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
@@ -209,6 +219,11 @@ class WindowsObserverTray:
             wintypes.HWND, wintypes.LPCWSTR, wintypes.LPCWSTR, wintypes.UINT
         ]
         self.user32.DestroyWindow.argtypes = [wintypes.HWND]
+        self.user32.SetTimer.argtypes = [
+            wintypes.HWND, ctypes.c_size_t, wintypes.UINT, wintypes.LPVOID
+        ]
+        self.user32.SetTimer.restype = ctypes.c_size_t
+        self.user32.KillTimer.argtypes = [wintypes.HWND, ctypes.c_size_t]
         self.shell32.Shell_NotifyIconW.argtypes = [
             wintypes.DWORD, ctypes.POINTER(_NotifyIconData)
         ]
@@ -254,6 +269,41 @@ class WindowsObserverTray:
         )
         self._icon_data.szTip = "P1- Observer Controls"
         self._notify(NIM_ADD)
+        if self.notification_source is not None:
+            timer = self.user32.SetTimer(self._hwnd, TRAY_TIMER_ID, 5000, None)
+            if not timer:
+                self._notify(NIM_DELETE)
+                raise ctypes.WinError(ctypes.get_last_error())
+
+    def _show_notification(self, notification: object) -> None:
+        title = str(getattr(notification, "title", "P1- notification"))[:63]
+        message = str(getattr(notification, "message", ""))[:255]
+        if not message:
+            return
+        base_flags = NIF_MESSAGE | NIF_ICON | NIF_TIP
+        self._icon_data.uFlags = base_flags | NIF_INFO
+        self._icon_data.szInfoTitle = title
+        self._icon_data.szInfo = message
+        self._icon_data.dwInfoFlags = NIIF_INFO
+        self._icon_data.uTimeout = 8000
+        try:
+            self._notify(NIM_MODIFY)
+        finally:
+            self._icon_data.uFlags = base_flags
+            self._icon_data.szInfoTitle = ""
+            self._icon_data.szInfo = ""
+            self._icon_data.dwInfoFlags = 0
+            self._icon_data.uTimeout = 0
+
+    def _poll_notifications(self) -> None:
+        if self.notification_source is None:
+            return
+        try:
+            for notification in self.notification_source():
+                self._show_notification(notification)
+        except Exception:
+            # Notification failure must not affect the observer or tray message loop.
+            return
 
     def _show_status(self) -> None:
         status = self.actions.status().render()
@@ -324,10 +374,15 @@ class WindowsObserverTray:
                 if lparam == WM_LBUTTONDBLCLK:
                     self._show_status()
                     return 0
+            if message == WM_TIMER and wparam == TRAY_TIMER_ID:
+                self._poll_notifications()
+                return 0
             if message == WM_CLOSE:
                 self.user32.DestroyWindow(hwnd)
                 return 0
             if message == WM_DESTROY:
+                if self.notification_source is not None:
+                    self.user32.KillTimer(hwnd, TRAY_TIMER_ID)
                 try:
                     self._notify(NIM_DELETE)
                 finally:
@@ -357,14 +412,26 @@ def run_windows_tray() -> int:
     """Start the notification-area controller using P1-'s existing local stores."""
     from aie.config import (
         database_path,
+        notification_preferences_path,
         observer_is_paused,
         set_observer_paused,
     )
     from aie.store import EventStore
 
+    from aie.desktop.notifications import (
+        DiagnosticNotificationPoller,
+        NotificationPreferencesStore,
+    )
+
+    event_store = EventStore(database_path())
     actions = TrayActions(
         is_paused=observer_is_paused,
         set_paused=set_observer_paused,
-        event_count=lambda: EventStore(database_path()).count(),
+        event_count=event_store.count,
     )
-    return WindowsObserverTray(actions).run()
+    poller = DiagnosticNotificationPoller(
+        event_store=event_store,
+        preferences=NotificationPreferencesStore(notification_preferences_path()),
+        is_paused=observer_is_paused,
+    )
+    return WindowsObserverTray(actions, notification_source=poller.poll).run()
