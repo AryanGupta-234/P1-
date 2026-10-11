@@ -47,20 +47,19 @@ Build persistent personal intelligence that observes explicitly permitted signal
 ## Current capability state
 **Foundation present:** Python package/CLI, versioned event contract, SQLite store, read-only Windows inventory, best-effort process reconciliation, provider interface, hardware/model selection utilities.
 
-**Integrated on dev:** deterministic video-buffering triage and synthetic tests; bounded read-only network sampling for interface counters, gateway/external TCP reachability and DNS timing. The network provider is now wired into the observer CLI with a default 15-second cadence (configurable from 5–300 seconds) and a --no-network opt-out. The current implementation samples interface counters, TCP reachability to a private gateway and two public endpoints, and DNS resolution timing; it does not measure sustained stream throughput. These are telemetry building blocks, not a live browser monitor, and no fixes are executed.
+**Integrated on dev:** deterministic video-buffering triage and synthetic tests; bounded read-only network sampling for interface counters, gateway/external TCP reachability and DNS timing. The network provider is now wired into the observer CLI with a default 15-second cadence (configurable from 5–300 seconds) and a --no-network opt-out. DNS probes use a single-flight guard so a stuck resolver cannot accumulate worker threads. The current implementation samples interface counters, TCP reachability to a private gateway and two public endpoints, and DNS resolution timing; it does not measure sustained stream throughput. These are telemetry building blocks, not a live browser monitor, and no fixes are executed.
 
 **Not implemented:** ETW subscriptions, Event Log provider, per-process resource sampling, browser bridge, screen capture/UIA, context graph, model gateway, persistent memory layers, policy broker, sandboxed executor, autonomous remediation or assistant dashboard.
 
 ## Immediate engineering sequence
-1. Windows CI and full tests on Python 3.11/3.12.
+1. Verify Windows CI and the full test matrix on Python 3.11/3.12.
 2. Add service/process resource samples and pause/retention controls.
-3. Add service/process resource samples and pause/retention controls.
-4. Build opt-in Edge/Chrome playback telemetry bridge.
-5. Correlate browser and OS metrics into timestamped evidence.
-6. Implement context/state model and uncertainty-aware diagnosis.
-7. Integrate local Ollama adapter; optional cloud only through explicit egress policy.
-8. Build capability manifests, policy broker, sandbox, audit and verification.
-8. Memory/feedback and held-out generalization evaluation.
+3. Build the opt-in Edge/Chrome playback telemetry bridge.
+4. Correlate browser and OS metrics into timestamped evidence.
+5. Implement the context/state model and uncertainty-aware diagnosis.
+6. Integrate the local Ollama adapter; optional cloud only through explicit egress policy.
+7. Build capability manifests, policy broker, sandbox, audit and verification.
+8. Implement persistent memory, feedback and held-out generalization evaluation.
 
 ## Definition of done
 Feature complete = implementation + tests + documented limits + privacy/security review + validation evidence. Never claim CI or Windows validation without an actual passing run.
