@@ -134,13 +134,13 @@ Statuses: DONE / IN_PROGRESS / BLOCKED / PLANNED. Mark DONE only with code, test
 
 ## M7 — Personal assistant experience
 - [x] User-started Windows tray process with pause/resume and a minimal local status dialog.
-- [ ] Native notifications with user-configurable quiet/pause controls.
+- [x] Generic local diagnostic notifications with explicit opt-in, quiet hours, pause suppression and no event details in the balloon. Full notification categories and user-configurable delivery rules remain open.
 - [ ] Permission and retention settings.
 - [ ] Diagnostics/action history and memory review.
 - [ ] Desktop UI after core telemetry and policy APIs stabilize.
 
 ## Immediate dev sprint
-1. Keep target-desktop validation for browser/native-host, UIA, Event Log and ETW elevation as the primary validation gate.
+1. Validate the native tray, balloon notification behavior, browser/native-host, UIA, Event Log and elevated ETW on the actual target desktop; hosted CI cannot validate interactive desktop behavior.
 2. Extend ETW from process lifecycle into explicitly selected thread/file/network categories with coverage reporting.
 3. Evaluate freshness/contradiction signals and add calibrated confidence metrics without treating heuristics as probabilities.
 4. Evaluate semantic memory retrieval, reviewed merges, retention and contradiction handling.
