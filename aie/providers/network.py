@@ -20,6 +20,9 @@ from aie.contracts import AIEEvent, EntityRef
 from aie.providers.windows import host_id
 
 
+_DNS_PROBE_LOCK = threading.Lock()
+
+
 @dataclass(frozen=True, slots=True)
 class ProbeTarget:
     """An explicitly selected endpoint for a bounded TCP reachability sample."""
@@ -42,6 +45,8 @@ def _tcp_rtt_ms(host: str, port: int, timeout: float) -> float | None:
 
 def _dns_timing_ms(host: str, timeout: float) -> float | None:
     """Measure resolver latency with a bounded wait on the caller's thread."""
+    if not _DNS_PROBE_LOCK.acquire(blocking=False):
+        return None
     result: list[float | None] = [None]
     completed = threading.Event()
 
@@ -54,9 +59,14 @@ def _dns_timing_ms(host: str, timeout: float) -> float | None:
             result[0] = None
         finally:
             completed.set()
+            _DNS_PROBE_LOCK.release()
 
     worker = threading.Thread(target=resolve, daemon=True, name="aie-dns-probe")
-    worker.start()
+    try:
+        worker.start()
+    except RuntimeError:
+        _DNS_PROBE_LOCK.release()
+        return None
     completed.wait(max(0.1, min(timeout, 5.0)))
     return result[0] if completed.is_set() else None
 
