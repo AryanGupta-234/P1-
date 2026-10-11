@@ -342,11 +342,13 @@ def prune(
 def ask(
     prompt: str = typer.Argument(..., min_length=1, help="Prompt to send to the local model."),
     task: Literal["routine", "complex"] = typer.Option("routine", help="Choose the reasoning tier."),
+    provider: Literal["local", "cloud"] = typer.Option("local", help="Select local Ollama or explicitly enabled cloud inference."),
     allow_remote_ollama: bool = typer.Option(
         False,
         "--allow-remote-ollama",
         help="Explicitly permit AIE_OLLAMA_URL to point to a remote HTTPS Ollama host.",
     ),
+    allow_cloud_egress: bool = typer.Option(False, "--allow-cloud-egress", help="Explicitly authorize sending this prompt to the configured HTTPS cloud provider."),
     temperature: float = typer.Option(0.2, min=0.0, max=2.0),
     max_output_tokens: int = typer.Option(512, min=32, max=4096),
 ) -> None:
@@ -362,8 +364,23 @@ def ask(
             temperature=temperature,
             max_output_tokens=max_output_tokens,
         )
-        client = OllamaClient(allow_remote=allow_remote_ollama)
-        response = LocalModelRouter(client).generate(request)
+        if provider == "cloud":
+            from aie.models.openai_compatible import (
+                CloudModelError,
+                OpenAICompatibleClient,
+            )
+
+            cloud_client = OpenAICompatibleClient(
+                allow_cloud_egress=allow_cloud_egress,
+            )
+            response = cloud_client.chat(request)
+        else:
+            if allow_cloud_egress:
+                raise ValueError(
+                    "--allow-cloud-egress is only meaningful with --provider cloud."
+                )
+            client = OllamaClient(allow_remote=allow_remote_ollama)
+            response = LocalModelRouter(client).generate(request)
     except (ModelRoutingError, OllamaError, ValueError) as exc:
         console.print(f"[red]Model request unavailable:[/red] {exc}")
         raise typer.Exit(2) from exc
