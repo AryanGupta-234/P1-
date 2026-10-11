@@ -34,7 +34,7 @@ Statuses: DONE / IN_PROGRESS / BLOCKED / PLANNED. Mark DONE only with code, test
 - [ ] Allowlisted Windows Event Log sources.
 - [ ] CPU/RAM/disk and per-process resource sampling.
 - [x] Read-only network interface counters, gateway/external TCP RTT and DNS resolution probe module (not yet scheduled by the runtime).
-- [ ] Wire network provider into observer CLI with bounded sampling interval, target policy and event-store integration.
+- [x] Wire bounded network provider into observer CLI with configurable sampling interval, event-store integration and --no-network opt-out.
 - [ ] Service and scheduled-task inventory.
 - [ ] Installed application/executable metadata inventory.
 - [ ] Pause/resume, retention, export/delete and observer health.
@@ -47,7 +47,8 @@ Statuses: DONE / IN_PROGRESS / BLOCKED / PLANNED. Mark DONE only with code, test
 - [x] Synthetic unit tests.
 - [ ] Root-cause trace corpus and false-positive/negative evaluation.
 - [ ] Opt-in Edge/Chrome playback/performance extension.
-- [ ] Windows network sampler: gateway RTT vs external RTT, DNS timing, bounded throughput checks.
+- [x] Windows network sampler: interface counters, gateway/external TCP reachability RTT and DNS timing.
+- [ ] Add explicit per-target policy and sustained throughput measurement (opt-in only).
 - [ ] Browser + OS telemetry correlation.
 - [ ] Confidence calibration and actionable diagnostic proposals.
 
@@ -103,7 +104,7 @@ Statuses: DONE / IN_PROGRESS / BLOCKED / PLANNED. Mark DONE only with code, test
 ## Immediate dev sprint
 1. CI triggers on dev and runs lint + tests on 3.11/3.12.
 2. Add trace fixtures for buffering causes and unknown evidence.
-3. Implement bounded read-only network sampling.
+3. Add service/process resource samples and pause/retention controls.
 4. Design opt-in browser extension with minimal permissions.
 5. Update this tracker and Architecture Spotlight in every PR.
 
