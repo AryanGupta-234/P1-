@@ -22,7 +22,7 @@ Statuses: DONE / IN_PROGRESS / BLOCKED / PLANNED. Mark DONE only with code, test
 - [x] Python package, CLI and SQLite event store.
 - [x] Read-only inventory and process reconciliation.
 - [x] Architecture spotlight and roadmap.
-- [ ] Full tests on Windows 10/11.
+- [x] Hosted Windows CI validates full tests on Python 3.11 and 3.12; target desktop validation remains a separate task.
 - [x] Windows CI matrix on Python 3.11/3.12 with Ruff lint, browser JavaScript syntax checks and pytest.
 - [ ] Dependency/security checks and contributor setup.
 
@@ -32,6 +32,7 @@ Statuses: DONE / IN_PROGRESS / BLOCKED / PLANNED. Mark DONE only with code, test
 - [x] Read-only provider abstraction.
 - [ ] ETW process telemetry with bounded buffers.
 - [x] Opt-in metadata-only Application/System Event Log provider; messages/XML omitted.
+- [x] Wire allowlisted channels into observer runtime with bounded polling and record batch size.
 - [ ] Expand to selected providers/event IDs with explicit privacy review.
 - [x] Throttled CPU, resident memory, thread-count and I/O counters for the active foreground process.
 - [ ] CPU/RAM/disk and resource sampling across all processes.
@@ -54,7 +55,7 @@ Statuses: DONE / IN_PROGRESS / BLOCKED / PLANNED. Mark DONE only with code, test
 - [ ] Root-cause trace corpus and false-positive/negative evaluation.
 - [x] Opt-in MV3 Edge/Chrome playback observer prototype with an off-by-default control.
 - [x] Strict Windows native-messaging host that validates and persists browser video events.
-- [ ] Validate extension installation, native-host registration and selected-app UIA sampling on a target Windows desktop.
+- [ ] Validate extension installation, native-host registration, selected-app UIA sampling and Event Log permissions on a target Windows desktop.
 - [x] Windows network sampler: interface counters, gateway/external TCP connection latency and DNS timing.
 - [ ] Add configurable per-target policy and sustained throughput measurement (opt-in only).
 - [x] Correlate browser playback snapshots with fresh same-host network and foreground-process evidence.
