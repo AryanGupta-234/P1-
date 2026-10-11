@@ -6,6 +6,7 @@ carry shell commands, executable paths, arbitrary tool arguments, or approval de
 """
 from __future__ import annotations
 
+import re
 from datetime import datetime, timezone
 from typing import Literal, Self
 from uuid import uuid4
@@ -44,7 +45,7 @@ class PlanStep(BaseModel):
         if len(self.depends_on) != len(set(self.depends_on)):
             raise ValueError("depends_on cannot contain duplicate step IDs")
         for dependency in self.depends_on:
-            if not _STEP_ID_PATTERN.fullmatch(dependency):
+            if re.fullmatch(_STEP_ID_PATTERN, dependency) is None:
                 raise ValueError(f"invalid dependency step ID: {dependency!r}")
         return self
 
