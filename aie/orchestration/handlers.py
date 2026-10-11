@@ -146,12 +146,12 @@ class PolicyProposalHandler:
                     "proposal_not_approved",
                     "The linked policy proposal was rejected or blocked.",
                 )
-            if snapshot.execution_status is not None and not snapshot.action_executed:
+            if snapshot.execution_status == "failed":
                 return HandlerResult.failed(
                     "execution_failed",
                     "The approved action has a failed execution receipt; it will not be retried automatically.",
                 )
-            if snapshot.action_executed:
+            if snapshot.action_executed and snapshot.execution_status == "succeeded":
                 return HandlerResult.completed(
                     "The linked proposal has an execution receipt. Continue to explicit "
                     "postcondition verification.",
