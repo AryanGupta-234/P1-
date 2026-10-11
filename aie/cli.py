@@ -357,5 +357,40 @@ def ask(
     )
 
 
+@app.command("feedback")
+def feedback(
+    diagnostic_event_id: str = typer.Argument(..., help="Diagnostic event ID shown by aie events."),
+    outcome: Literal["resolved", "not_resolved", "not_attempted"] = typer.Option(
+        ...,
+        help="What happened after you tried the recommendation.",
+    ),
+    note: str | None = typer.Option(
+        None,
+        max_length=1000,
+        help="Optional feedback note; stored locally as sensitive data.",
+    ),
+) -> None:
+    """Record whether a diagnostic recommendation helped."""
+    from aie.learning.feedback import FeedbackRequest, record_diagnostic_feedback
+
+    try:
+        event = record_diagnostic_feedback(
+            EventStore(database_path()),
+            FeedbackRequest(
+                diagnostic_event_id=diagnostic_event_id,
+                outcome=outcome,
+                note=note,
+            ),
+        )
+    except ValueError as exc:
+        console.print(f"[red]Feedback not recorded:[/red] {exc}")
+        raise typer.Exit(2) from exc
+
+    console.print(
+        f"[green]Feedback saved locally.[/green] "
+        f"Outcome: {event.data['outcome']} · Linked finding: {event.data['target_event_id']}"
+    )
+
+
 if __name__ == "__main__":
     app()
