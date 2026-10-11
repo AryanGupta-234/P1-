@@ -37,6 +37,8 @@ aie observe --duration 30 --no-network
 aie observe --duration 30 --no-foreground
 # Window titles are sensitive; collect only after explicit opt-in:
 aie observe --duration 30 --include-window-titles
+# Adjust active-process metric cadence (seconds):
+aie observe --duration 60 --foreground-sample-interval 10
 python -m pytest
 python -m ruff check .
 ```
@@ -59,4 +61,4 @@ The opt-in Chrome/Edge extension prototype is in `browser_extension/`. Load it u
 The observer emits foreground-window transition events using the Windows user32 API. Process name and window class are collected by default; window titles are omitted. Explicitly passing `--include-window-titles` collects them as sensitive data.
 
 ## Current limitations
-Process lifecycle observation uses best-effort user-mode snapshots and may miss transient processes. Video diagnostics analyze supplied metrics only; live browser telemetry, screen perception, model gateway, persistent learning and autonomous remediation are not implemented.
+Process lifecycle observation uses best-effort user-mode snapshots and may miss transient processes. Foreground process resource sampling is limited to the active application; it is not a systemwide per-process profiler. Video diagnostics analyze supplied metrics only; live browser telemetry, screen perception, model gateway, persistent learning and autonomous remediation are not implemented.
