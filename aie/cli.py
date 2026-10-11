@@ -1515,7 +1515,14 @@ def _render_proposal(snapshot) -> None:
         f"Approval required: {snapshot.approval_required}"
     )
     console.print(snapshot.reason)
-    console.print("[dim]Execution: not implemented; no action was performed.[/dim]")
+    if snapshot.execution_status is None:
+        console.print("[dim]Execution: not attempted.[/dim]")
+    else:
+        console.print(
+            f"[dim]Execution: {snapshot.execution_status} · "
+            f"Executed: {snapshot.action_executed} · "
+            f"Verified: {snapshot.execution_verified}[/dim]"
+        )
 
 
 @app.command("capabilities")
@@ -1651,16 +1658,27 @@ def proposal_audit(proposal_id: str = typer.Argument(...)) -> None:
     if not trail:
         console.print("Proposal not found.")
         return
-    table = Table("Sequence", "Event", "Timestamp", "Status", "Policy allowed", "Reason")
+    table = Table(
+        "Sequence", "Event", "Timestamp", "Status", "Policy allowed",
+        "Execution", "Reason"
+    )
     for event in trail:
         payload = event["payload"]
         policy = payload.get("policy", {})
+        execution = payload.get("execution", {})
+        execution_text = (
+            f"{execution.get('status')} / exec={execution.get('executed')} / "
+            f"verify={execution.get('verified')}"
+            if isinstance(execution, dict) and execution
+            else "-"
+        )
         table.add_row(
             str(event["sequence"]),
             event["event_type"],
             event["timestamp"],
             str(payload.get("status", "created")),
             str(policy.get("allowed", False)),
+            execution_text,
             str(policy.get("reason", ""))[:160],
         )
     console.print(table)
@@ -1670,7 +1688,10 @@ def proposal_audit(proposal_id: str = typer.Argument(...)) -> None:
         else f"FAILED at sequence {integrity.first_invalid_sequence}: {integrity.reason}"
     )
     console.print(f"Audit chain: {integrity_text}")
-    console.print("[dim]No execution records exist because the executor is not implemented.[/dim]")
+    console.print(
+        "[dim]The ledger includes review decisions and any execution receipts. "
+        "A successful dispatch receipt is not postcondition verification.[/dim]"
+    )
 
 
 
