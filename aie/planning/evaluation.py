@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Literal
-
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from aie.planning.generator import PlanGenerationError, generate_plan
