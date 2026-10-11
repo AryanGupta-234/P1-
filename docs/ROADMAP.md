@@ -1,88 +1,112 @@
 # AIE Roadmap and Task Tracker
 
-Status vocabulary: DONE / IN_PROGRESS / BLOCKED / PLANNED. Do not mark DONE without code/tests or documented research evidence.
+Status vocabulary: DONE / IN_PROGRESS / BLOCKED / PLANNED. A task is DONE only when code exists and its tests or documented validation support the claim.
 
 **Last updated:** 2026-10-11
 
-| ID | Milestone | Status | Exit criteria |
+| ID | Milestone | Status | Current evidence / exit criteria |
 |---|---|---|---|
-| M0 | Architecture and foundation | IN_PROGRESS | Contracts, package, CLI, tests, docs, Windows CI |
-| M1 | Windows environment observer | IN_PROGRESS | Inventory, process reconciliation, durable local event store |
+| M0 | Architecture and foundation | IN_PROGRESS | Contracts, package, CLI, docs and Windows CI workflow; CI must execute successfully |
+| M1 | Windows environment observer | IN_PROGRESS | Host/process baseline, app/service/network/task inventory, SQLite |
 | M2 | Context intelligence | PLANNED | Temporal correlation, state model, evidence-linked hypotheses |
-| M3 | Cognitive core | PLANNED | Model-independent reasoning/planning and router |
-| M4 | Persistent intelligence | PLANNED | Provenance-aware memory, consolidation, retrieval evaluation |
-| M5 | Controlled autonomy | PLANNED | Capability broker, policy, sandbox, audit, recovery |
+| M3 | Cognitive core | IN_PROGRESS | Local model discovery and routing policy exist; actual model adapters/planning remain |
+| M4 | Persistent intelligence | PLANNED | Provenance-aware memory, consolidation and retrieval evaluation |
+| M5 | Controlled autonomy | PLANNED | UIA/app adapters, capability broker, policy, sandbox, audit and recovery |
 | M6 | Generalization research | PLANNED | Held-out transfer and novel-task benchmarks |
 
 ## M0 — Foundation
-- [x] Windows-only scope and architecture boundaries.
-- [x] Normalized event contract, package, CLI and local SQLite persistence.
-- [x] Architecture spotlight, roadmap and security documentation.
-- [ ] Run tests on Windows 10/11 and record results.
-- [ ] Add Windows CI.
+- [x] Define Windows-only scope and architecture boundaries.
+- [x] Define normalized Pydantic event contract.
+- [x] Add installable Python package and CLI.
+- [x] Add local SQLite event store with batched transactional writes.
+- [x] Add architecture spotlight, hardware profile, automation strategy and security docs.
+- [x] Add Windows GitHub Actions workflow.
+- [ ] Confirm Windows CI has passed.
+- [ ] Add coverage and type-checking gates.
 
 ## M1 — Windows Environment Observer
-- [x] Read-only host/process inventory.
-- [x] Best-effort process-state reconciliation with deduplication.
+- [x] Read-only host and process inventory.
+- [x] Process baseline/delta reconciliation, PID-reuse detection and deduplication semantics.
 - [x] Local SQLite persistence and optional JSONL export.
-- [x] Provider abstraction for ETW/Event Log.
-- [ ] ETW process telemetry provider.
-- [ ] Allowlisted Windows Event Log sources.
-- [ ] Service inventory and opt-in service state monitoring.
-- [ ] Network interface/connectivity change provider.
-- [ ] Scheduled-task inventory.
-- [ ] Executable/application inventory with signer/installation metadata.
-- [ ] Measure CPU, memory, latency and event loss.
-- [ ] Pause/resume and retention controls.
+- [x] Installed application metadata via uninstall registry keys.
+- [x] Windows service inventory (name, display name, status, start type).
+- [x] Network interface status inventory without IP/MAC addresses.
+- [x] Scheduled task name/status inventory using read-only query.
+- [ ] Emit periodic CPU/memory/disk resource samples with retention controls.
+- [ ] Monitor service state changes.
+- [ ] Monitor network interface/connectivity changes.
+- [ ] Monitor scheduled-task and application inventory changes.
+- [ ] ETW process/thread/image telemetry provider with bounded buffers and explicit session lifecycle.
+- [ ] Allowlisted Windows Event Log subscriptions.
+- [ ] Executable path discovery and Authenticode publisher/signature inventory.
+- [ ] Pause/resume, event retention, export and deletion controls.
+- [ ] Measure CPU, memory, event latency, event loss and collector failures on the target laptop.
 
 ## M2 — Context Intelligence
-- [ ] Temporal correlation and host state snapshots.
-- [ ] Separate observed facts from inferred hypotheses.
-- [ ] Evidence-backed relevance scoring and calibrated confidence.
-- [ ] Privacy-safe session/project context.
+- [ ] Temporal event correlation and environmental state snapshots.
+- [ ] Store observations separately from inferred hypotheses.
+- [ ] Evidence-backed relevance scoring and confidence calibration.
+- [ ] Privacy-safe project/session context.
 - [ ] Synthetic evaluation corpus and false-positive/negative metrics.
+- [ ] Predictive state-change evaluation.
 
-## M3 — Cognitive Core
-- [ ] Provider-independent model adapter.
-- [ ] Local Ollama adapter with timeouts and structured output.
-- [ ] Optional cloud adapter behind data-egress policy.
-- [ ] Context packaging and token/cost budgets.
-- [ ] Planning state machine and deterministic fallback.
-- [ ] Reasoning evaluation; models cannot change policy/permissions.
+## M3 — Cognitive Core and local model routing
+- [x] Discover installed models through local loopback Ollama `/api/tags`.
+- [x] Select routine Qwen 2.5 3B, complex Qwen 2.5 7B with 7.5 GiB free-memory gate, and Nomic embeddings.
+- [x] Never automatically pull models; reject non-loopback Ollama endpoints.
+- [ ] Add Ollama chat adapter with structured output, timeouts and cancellation.
+- [ ] Add Ollama embedding adapter and Nomic dimension validation.
+- [ ] Add task complexity classification and model selection evaluation.
+- [ ] Add optional cloud adapter behind an explicit per-task data-egress policy.
+- [ ] Add context budgets, latency/cost metrics and deterministic fallback.
+- [ ] Add goal/planning state machine; models cannot change security policy.
 
 ## M4 — Persistent Intelligence
-- [ ] Working, episodic, semantic, procedural and prospective schemas.
+- [ ] Working, episodic, semantic, procedural and prospective memory schemas.
 - [ ] Provenance, confidence, sensitivity, TTL and verification state.
-- [ ] Retrieval benchmark and contradiction handling.
+- [ ] Retrieval benchmark, contradiction handling and memory decay.
 - [ ] User review, correction, export and deletion controls.
-- [ ] Consolidation with regression tests.
+- [ ] Experience consolidation with regression tests.
 
-## M5 — Controlled Autonomy
-- [ ] Tool capability manifests and least-privilege identities.
-- [ ] Proposal → policy → approval → sandbox → verification.
-- [ ] Command allowlists, resource budgets and timeouts.
-- [ ] Rollback/recovery interfaces and audit.
-- [ ] Prompt-injection/tool-misuse adversarial tests.
-- [ ] Approval gates for destructive, privileged, financial and external actions.
+## M5 — Windows application automation and controlled autonomy
+- [ ] Windows UI Automation (UIA) client and bounded tree inspector.
+- [ ] App compatibility registry: API / COM / UIA_FULL / UIA_PARTIAL / CLI_ONLY / MANUAL_ONLY.
+- [ ] Adapter SDK for per-application APIs, COM, CLI and UIA.
+- [ ] Window/process identity verification before every UI action.
+- [ ] Capability manifests and least-privilege action identities.
+- [ ] Proposal → policy → approval → sandbox → verification workflow.
+- [ ] Timeouts, rate limits, resource budgets, rollback and audit.
+- [ ] Approval gates for delete/send/purchase/submit/install/security/privileged actions.
+- [ ] Prompt-injection and tool-misuse adversarial tests.
 
 ## M6 — Generalization Research
-- [ ] Held-out task families and baselines.
+- [ ] Held-out task families and baseline systems.
 - [ ] Transfer to unseen task variations.
-- [ ] Causal/temporal reasoning evaluation separate from retrieval.
+- [ ] Causal/temporal reasoning evaluated separately from retrieval.
 - [ ] Calibration, robustness, forgetting and recovery metrics.
-- [ ] Reproducible experiments; benchmark progress is not proof of AGI.
+- [ ] Reproducible experiment logs; benchmark progress is not proof of AGI.
 
-## Current sprint
-1. Validate M0/M1 on Windows 10/11.
-2. Add GitHub Actions Windows CI.
-3. Prototype ETW and document constraints.
-4. Add allowlisted Event Log reader.
-5. Add service, network and application inventory incrementally.
+## Current sprint — target hardware: Windows 11 x64, 16 GB RAM
+1. Confirm Windows CI; run `python -m pytest` and `ruff check .` locally.
+2. Add CPU/memory samples and process event tests.
+3. Add ETW process lifecycle spike; retain snapshot reconciliation as fallback.
+4. Add Event Log allowlist and service/network change detection.
+5. Build UIA read-only inspector before any app-control actions.
+6. Implement actual local Ollama chat/embedding adapters with resource/cancellation guards.
+
+## Hardware/model constraints
+- Routine: `qwen2.5:3b-instruct`.
+- Complex: `qwen2.5:7b-instruct` only with >=7.5 GiB currently available RAM; otherwise fall back to 3B.
+- Embeddings: `nomic-embed-text:latest`.
+- Start with one inference at a time; do not assume the model's disk size equals runtime RAM.
+- Keep VBS, HVCI, kernel stack protection and App Control enabled.
+- No Linux/WSL target and no untrusted/unsigned kernel driver.
 
 ## Risk register
 | Risk | Mitigation | State |
 |---|---|---|
-| User-mode APIs lack complete kernel visibility | ETW/Event Log first; signed driver only if justified | OPEN |
-| Transient process events are missed | ETW plus snapshot reconciliation | OPEN |
-| Telemetry privacy exposure | Local-first, filtering, retention, pause controls | OPEN |
-| Model hallucination becomes action | Observer read-only; policy broker mandatory | CONTROLLED |
+| User-mode APIs do not capture every transient event | ETW plus periodic reconciliation | OPEN |
+| 7B inference can starve a 16 GB desktop | Live memory gate, single inference, 3B fallback | CONTROLLED |
+| Telemetry may expose private identifiers | Field allowlists, no IP/MAC/command line by default | CONTROLLED |
+| Custom driver conflicts with enforced code integrity | ETW first; signed driver only after separate review | AVOIDED FOR NOW |
+| Model hallucination becomes an action | Observer remains read-only; future policy broker is mandatory | CONTROLLED |
