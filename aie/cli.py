@@ -494,6 +494,34 @@ def inspect_screen(
             str(node.get("enabled", "unknown")),
         )
     console.print(table)
+@app.command("learning-report")
+def learning_report(
+    limit: int = typer.Option(1000, min=1, max=1000),
+) -> None:
+    """Summarize user-reported diagnostic outcomes; does not retrain models."""
+    from aie.learning.analytics import load_feedback_summary
+
+    summaries = load_feedback_summary(EventStore(database_path()), limit=limit)
+    if not summaries:
+        console.print(
+            "No user feedback recorded yet. Use aie feedback <EVENT_ID> "
+            "--outcome resolved|not_resolved|not_attempted."
+        )
+        return
+
+    table = Table("Diagnostic cause", "Resolved", "Not resolved", "Not attempted", "Observed resolution")
+    for item in summaries:
+        rate = "n/a" if item.resolution_rate is None else f"{item.resolution_rate:.0%}"
+        table.add_row(
+            item.cause,
+            str(item.resolved),
+            str(item.not_resolved),
+            str(item.not_attempted),
+            rate,
+        )
+    console.print(table)
+    console.print("[dim]Resolution rates are descriptive user feedback, not causal proof or model-training metrics.[/dim]")
+
 
 if __name__ == "__main__":
     app()
