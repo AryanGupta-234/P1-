@@ -159,11 +159,12 @@ class WindowsEventLogProvider:
                         evidence_kind="observed",
                     ))
                     previous = oldest - 1
+                    self._last_record[channel] = previous
 
                 start_record = max(oldest, previous + 1)
                 if start_record > newest:
                     self._last_record[channel] = newest
-                    self._error_channels.discard(channel)
+                    self._append_recovery_event(events, channel)
                     continue
 
                 records = self.api.read_from(
