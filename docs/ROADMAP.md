@@ -39,7 +39,8 @@ Statuses: DONE / IN_PROGRESS / BLOCKED / PLANNED. Mark DONE only with code, test
 - [x] Opt-in bounded systemwide process CPU/RSS/thread/I/O snapshots; top consumers only, no command lines or executable paths.
 - [ ] Disk/network per-process deltas and provider-level event-loss accounting.
 - [x] Privacy-safe observer health telemetry with provider latency/error counters and event-loss hooks.
-- [ ] Export/delete-all controls and observer health view.
+- [x] `aie health` view for provider errors, latency and event-loss counters.
+- [ ] Export/delete-all controls and richer observer health UI.
 - [ ] Validate ETW elevation, Event Log/UIA permissions and data collection on the target Windows desktop.
 
 ## M1.5 — Video intelligence
