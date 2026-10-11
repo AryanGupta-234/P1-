@@ -86,7 +86,8 @@ Build persistent personal intelligence that observes explicitly permitted signal
 - Separate local SQLite memory store for explicit user-authored working/episodic/semantic/procedural/prospective records.
 - Source-event provenance validation, TTL, supersession history, deletion, lexical retrieval and optional local Ollama embedding/cosine retrieval.
 - Embeddings are keyed by memory ID and model; deletion/expiry removes associated vectors.
-- Sensitive memories are excluded from listing, retrieval and embedding by default; explicit indexing is available with a warning. Review-only consolidation proposals are generated from bounded lexical/tag similarity and never merge or rewrite records. Memory text and vectors are local SQLite data, not encrypted at the application layer; credentials must not be stored.
+- Sensitive memories are excluded from listing, retrieval and embedding by default; explicit indexing is available with a warning. Review-only consolidation proposals are generated from bounded lexical/tag similarity. A separate confirmed two-source merge creates a new record, retains both lineage links and every source-event/source-task-run reference, cannot lower sensitivity, raise confidence or extend expiry, and leaves source versions superseded.
+- Completed task runs with a positive explicit verification step can produce deterministic procedural-skill candidates. Action-bearing candidates require successful audited execution receipts and a verification step dependent on each action. The user must preview and separately confirm a save; procedural-skill records are sensitive by default and do not train a model. Memory text and vectors are local SQLite data, not encrypted at the application layer; credentials must not be stored.
 
 **Governance**
 - Default-deny user-managed capability manifests, low-risk autonomy declarations, approval gates, bounded flat parameters and rate limits.
@@ -105,8 +106,8 @@ Build persistent personal intelligence that observes explicitly permitted signal
 - Higher-fidelity ETW telemetry beyond process lifecycle events (optional thread/file/network categories and provider-specific coverage reporting).
 - Windows Graphics Capture (screenshots), still intentionally separate from UIA structure.
 - Unified event bus and semantic task/session interpretation.
-- Embedding retrieval quality evaluation, reviewed consolidation/contradiction handling and evaluated learning from verified outcomes.
-- Evaluated learning from user-confirmed feedback; no automatic model retraining yet.
+- Embedding retrieval quality evaluation, semantic contradiction resolution and forgetting/regression evaluation.
+- Evaluation of procedural-skill quality and transfer; skill induction currently creates reviewed local records only and never retrains a model.
 - Cloud egress gateway/redaction policy and model request budgets.
 - OS-process sandboxing, rollback and automatic recovery for interrupted handlers.
 - Postcondition verification beyond explicit human checks; the fixed Settings URI adapter reports dispatch, not verified application state.
