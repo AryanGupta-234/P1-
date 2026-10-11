@@ -38,7 +38,9 @@ Statuses: DONE / IN_PROGRESS / BLOCKED / PLANNED. Mark DONE only with code, test
 - [ ] ETW process telemetry and event-loss metrics.
 - [x] Opt-in bounded systemwide process CPU/RSS/thread/I/O snapshots; top consumers only, no command lines or executable paths.
 - [ ] Disk/network per-process deltas and event-loss accounting.
-- [ ] Export/delete-all controls and observer health view.
+- [ ] Export/delete-all controls.
+- [x] Observer provider health transitions, sanitized error classes, end-of-run summaries and local `aie health` view (feature PR; desktop validation pending).
+- [x] UIA timeout/recovery signals and Event Log provider recovery, exact retention gap counts and unknown-loss sequence-reset incidents (feature PR; desktop validation pending).
 - [ ] Validate Event Log/UIA permissions and data collection on the target Windows desktop.
 
 ## M1.5 — Video intelligence
@@ -120,9 +122,9 @@ Statuses: DONE / IN_PROGRESS / BLOCKED / PLANNED. Mark DONE only with code, test
 
 ## Immediate dev sprint
 1. Verify the combined activity, memory and Event Log runtime tests on the current Windows CI matrix.
-2. Add observer health telemetry for permission errors, sensor timeouts and event loss.
+2. Review provider-health telemetry feature PR and validate on the target Windows desktop.
 3. Validate browser/native-host, UIA and Event Log behavior on the target Windows desktop.
-4. Implement ETW process telemetry with explicit coverage boundaries.
+4. Validate the bounded ETW process-capture feature PR, including session cleanup, event-loss reporting and overhead.
 5. Update this tracker and Architecture Spotlight with each implementation increment.
 
 ## Risk register
@@ -130,7 +132,7 @@ Statuses: DONE / IN_PROGRESS / BLOCKED / PLANNED. Mark DONE only with code, test
 |---|---|---|
 | Snapshot polling misses short-lived processes | ETW plus reconciliation and coverage reporting | OPEN |
 | Browser telemetry exposes private page data | Explicit opt-in; playback-only fields; strict native host | CONTROLLED |
-| Event Log access denied or logs roll over | Allowlisted classic channels, record cursors, bounded error events | OPEN |
+| Event Log access denied or logs roll over | Allowlisted classic channels, record cursors, bounded error/recovery events and exact known gaps | CONTROLLED |
 | Model hallucination causes harmful actions | Default-deny policy; no executor yet; approval/audit required | CONTROLLED |
 | Noisy metrics cause false diagnosis | Repeated samples, multiple signals and evaluation | OPEN |
 | Memory retains sensitive data | Local-first, sensitivity labels, TTL and user deletion | CONTROLLED |
