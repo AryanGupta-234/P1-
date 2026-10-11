@@ -67,6 +67,7 @@ Build persistent personal intelligence that observes explicitly permitted signal
 
 **Cognitive core**
 - Provider-independent model request/response contracts.
+- Explicit per-request context packaging from user memories and safe activity timelines; no automatic context injection.
 - Local Ollama client and hardware-aware selection of already-installed models; no implicit model pulls.
 - Optional OpenAI-compatible HTTPS provider requiring explicit `--provider cloud --allow-cloud-egress`.
 - Cloud requests contain only the prompt explicitly supplied to `aie ask` unless the user additionally enables `--with-memory` and `--confirm-memory-egress`; observer telemetry is never automatically attached. Sensitive memory is blocked from remote model requests.
