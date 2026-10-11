@@ -129,3 +129,57 @@ def test_router_reports_when_no_eligible_model_is_installed(monkeypatch):
         LocalModelRouter(EmptyProvider()).generate(
             ModelRequest(messages=[ChatMessage(role="user", content="test")])
         )
+
+
+def test_local_ollama_embeddings_use_api_embed_and_validate_vectors(monkeypatch):
+    calls = []
+
+    def fake_urlopen(request, timeout):
+        calls.append((request.full_url, json.loads(request.data) if request.data else None))
+        if request.full_url.endswith("/api/tags"):
+            return FakeResponse(json.dumps({
+                "models": [{"name": "nomic-embed-text:latest"}]
+            }).encode())
+        if request.full_url.endswith("/api/embed"):
+            return FakeResponse(json.dumps({
+                "model": "nomic-embed-text:latest",
+                "embeddings": [[0.1, 0.2, 0.3], [0.4, 0.5, 0.6]],
+            }).encode())
+        raise AssertionError(request.full_url)
+
+    monkeypatch.setattr("aie.models.ollama.urlopen", fake_urlopen)
+    client = OllamaClient()
+    vectors = client.embed(
+        ["first memory", "second memory"],
+        model="nomic-embed-text:latest",
+    )
+
+    assert vectors == [[0.1, 0.2, 0.3], [0.4, 0.5, 0.6]]
+    assert calls[1][0] == "http://127.0.0.1:11434/api/embed"
+    assert calls[1][1]["truncate"] is False
+    assert calls[1][1]["input"] == ["first memory", "second memory"]
+
+
+def test_local_ollama_embeddings_refuse_missing_model_without_pull(monkeypatch):
+    calls = []
+
+    def fake_urlopen(request, timeout):
+        calls.append(request.full_url)
+        return FakeResponse(b'{"models": []}')
+
+    monkeypatch.setattr("aie.models.ollama.urlopen", fake_urlopen)
+    with pytest.raises(OllamaUnavailable, match="never downloads"):
+        OllamaClient().embed(["query"], model="missing-embed-model")
+
+    assert calls == ["http://127.0.0.1:11434/api/tags"]
+
+
+def test_local_ollama_embeddings_reject_non_finite_vectors(monkeypatch):
+    def fake_urlopen(request, timeout):
+        if request.full_url.endswith("/api/tags"):
+            return FakeResponse(b'{"models":[{"name":"embed:latest"}]}')
+        return FakeResponse(b'{"embeddings":[[NaN, 0.0]]}')
+
+    monkeypatch.setattr("aie.models.ollama.urlopen", fake_urlopen)
+    with pytest.raises(OllamaUnavailable, match="non-finite"):
+        OllamaClient().embed(["query"], model="embed:latest")
