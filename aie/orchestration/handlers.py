@@ -174,7 +174,13 @@ class PolicyProposalHandler:
             )
 
         parameters = self.proposal_parameters.get(step.capability_id, {})
-        if step.capability_id == "windows.settings.open" and set(parameters) != {"setting"}:
+        if step.capability_id == "windows.settings.open" and (
+            set(parameters) != {"setting"}
+            or parameters.get("setting") not in {
+                "display", "sound", "bluetooth", "network",
+                "windows_update", "apps", "privacy",
+            }
+        ):
             return HandlerResult.awaiting_input(
                 "This capability requires an explicit Settings page choice. "
                 "Advance again with --setting display|sound|bluetooth|network|"
