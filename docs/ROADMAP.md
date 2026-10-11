@@ -72,9 +72,11 @@ Statuses: DONE / IN_PROGRESS / BLOCKED / PLANNED. Mark DONE only with code, test
 - [ ] Relevance scoring and false-positive evaluation.
 
 ## M3 — Cognitive core
-- [ ] Provider-independent model interface.
-- [ ] Local Ollama adapter with timeouts, structured outputs and cancellation.
-- [ ] Hardware-aware model selection, concurrency and memory budgets.
+- [x] Provider-independent model request/response contracts.
+- [x] Local Ollama chat adapter with timeouts, strict loopback default and structured errors.
+- [x] Hardware-aware routing to already-installed 3B/7B models; no implicit downloads.
+- [ ] Structured-output modes, streaming and request cancellation.
+- [ ] Inference concurrency guard and explicit memory/token budgets.
 - [ ] Optional cloud adapter behind explicit task-level egress policy.
 - [ ] Context packaging, token/cost budgets and prompt-injection boundaries.
 - [ ] Planner/state machine with deterministic fallback.
