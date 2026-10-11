@@ -23,6 +23,7 @@ from aie.config import (
     observer_is_paused,
     policy_audit_database_path,
     set_observer_paused,
+    task_run_database_path,
     task_session_database_path,
 )
 from aie.hardware import runtime_profile
@@ -32,6 +33,21 @@ from aie.orchestration.cli import plan_app as _plan_app, task_app as _task_app
 
 app = typer.Typer(no_args_is_help=True, help="AIE Windows-first environment observer.")
 console = Console()
+
+@app.command("tray")
+def run_observer_tray() -> None:
+    """Open the native Windows notification-area controls for observer pause/resume."""
+    from aie.desktop.tray import run_windows_tray
+
+    try:
+        run_windows_tray()
+    except RuntimeError as exc:
+        console.print(f"[red]Tray unavailable:[/red] {exc}")
+        raise typer.Exit(2) from exc
+    except OSError as exc:
+        console.print(f"[red]Tray startup failed:[/red] {type(exc).__name__}")
+        raise typer.Exit(2) from exc
+
 
 @app.command("health")
 def observer_health() -> None:
