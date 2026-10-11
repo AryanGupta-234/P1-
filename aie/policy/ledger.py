@@ -490,6 +490,93 @@ class PolicyLedger:
                 raise
         return self.get(proposal_id)  # type: ignore[return-value]
 
+    def append_postcondition_verification(
+        self,
+        proposal_id: str,
+        *,
+        confirmed: bool,
+        verifier: str,
+        evidence_code: str,
+        summary: str,
+    ) -> ProposalSnapshot:
+        """Append one explicit postcondition result; never infer success from dispatch.
+
+        A verification is accepted only after a successful, executed receipt. Both
+        positive and negative outcomes are terminal records so a later command cannot
+        silently overwrite an earlier verification decision.
+        """
+        if not isinstance(confirmed, bool):
+            raise ValueError("confirmed must be a boolean")
+        verifier = " ".join(verifier.split())
+        evidence_code = " ".join(evidence_code.split())
+        summary = " ".join(summary.split())
+        if not verifier or len(verifier) > 80:
+            raise ValueError("verifier must contain 1 to 80 characters")
+        if not evidence_code or len(evidence_code) > 80:
+            raise ValueError("evidence_code must contain 1 to 80 characters")
+        if not summary or len(summary) > 300:
+            raise ValueError("verification summary must contain 1 to 300 characters")
+
+        now = datetime.now(timezone.utc)
+        with self._connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            try:
+                rows = db.execute(
+                    """SELECT event_type, payload FROM audit_events
+                    WHERE proposal_id = ? ORDER BY sequence ASC""",
+                    (proposal_id,),
+                ).fetchall()
+                if not rows:
+                    raise ValueError("proposal was not found")
+                if any(
+                    event_type == "policy.proposal.postcondition_verified"
+                    for event_type, _ in rows
+                ):
+                    raise ValueError("postcondition verification is already recorded")
+                latest = json.loads(rows[-1][1])
+                execution = next(
+                    (
+                        json.loads(payload).get("execution")
+                        for _, payload in reversed(rows)
+                        if isinstance(json.loads(payload).get("execution"), dict)
+                    ),
+                    None,
+                )
+                if latest.get("status") != "approved":
+                    raise ValueError("only approved proposals can be verified")
+                if not isinstance(execution, dict):
+                    raise ValueError("an execution receipt is required before verification")
+                if execution.get("status") != "succeeded" or execution.get("executed") is not True:
+                    raise ValueError("only successfully dispatched actions can be verified")
+                updated_execution = dict(execution)
+                updated_execution["verified"] = confirmed
+                payload = {
+                    "schema_version": 1,
+                    "status": "approved",
+                    "reviewer": latest.get("reviewer"),
+                    "policy": latest.get("policy") or {},
+                    "action_executed": True,
+                    "execution": updated_execution,
+                    "verification": {
+                        "outcome": "confirmed" if confirmed else "not_confirmed",
+                        "verifier": verifier,
+                        "evidence_code": evidence_code,
+                        "summary": summary,
+                    },
+                }
+                self._append_row(
+                    db,
+                    proposal_id=proposal_id,
+                    event_type="policy.proposal.postcondition_verified",
+                    timestamp=now,
+                    payload=payload,
+                )
+                db.execute("COMMIT")
+            except Exception:
+                db.execute("ROLLBACK")
+                raise
+        return self.get(proposal_id)  # type: ignore[return-value]
+
     def verify_integrity(self) -> AuditIntegrityReport:
         """Verify the global SHA-256 chain and its stored head checkpoint."""
         with self._connect() as db:
