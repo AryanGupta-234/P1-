@@ -55,9 +55,9 @@ class StepOutcome:
             raise ValueError("success must be a boolean")
         if not isinstance(self.summary, str) or not 1 <= len(self.summary.strip()) <= 500:
             raise ValueError("summary must contain 1-500 non-whitespace characters")
-        if len(self.evidence_ids) > 20:
-            raise ValueError("at most 20 evidence IDs may be attached to a step outcome")
-        if len(set(self.evidence_ids)) != len(self.evidence_ids):
-            raise ValueError("evidence IDs must be unique")
+        if not isinstance(self.evidence_ids, tuple) or len(self.evidence_ids) > 20:
+            raise ValueError("evidence_ids must be a tuple containing at most 20 IDs")
         if any(not isinstance(item, str) or not 1 <= len(item) <= 120 for item in self.evidence_ids):
             raise ValueError("each evidence ID must contain 1-120 characters")
+        if len(set(self.evidence_ids)) != len(self.evidence_ids):
+            raise ValueError("evidence IDs must be unique")
