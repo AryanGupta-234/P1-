@@ -74,7 +74,7 @@ Build persistent personal intelligence that observes explicitly permitted signal
 - Explicit per-request context packaging from user memories and safe activity timelines; no automatic context injection.
 - Local Ollama client and hardware-aware selection of already-installed models; no implicit model pulls.
 - Optional OpenAI-compatible HTTPS provider requiring explicit `--provider cloud --allow-cloud-egress`.
-- Cloud requests contain only the prompt explicitly supplied to `aie ask` unless the user separately enables `--with-memory` or `--with-activity` and confirms the relevant remote-egress flag. Observer telemetry is never automatically attached. Sensitive memories are blocked from remote model requests.
+- Cloud/remote-Ollama requests pass through a centralized local egress gateway. Only explicitly selected context is attached; activity, memory and session context require separate confirmation, sensitive memory is blocked, high-confidence credential patterns are redacted, payload size is bounded, and a metadata-only local audit record is written. Observer telemetry is never automatically attached.
 
 **Context and memory**
 - Indexed event queries and `aie activity` temporal sessions across the normalized event categories.
