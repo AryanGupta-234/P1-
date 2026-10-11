@@ -935,10 +935,10 @@ def list_proposals(
     if not snapshots:
         console.print("No proposals match that status.")
         return
-    table = Table("Proposal ID", "Capability", "Status", "Risk", "Summary", "Updated")
+    table = Table("Capability", "Status", "Risk", "Summary", "Updated")
     for item in snapshots:
+        console.print(f"Proposal ID: {item.proposal.proposal_id}")
         table.add_row(
-            item.proposal.proposal_id,
             item.proposal.capability_id,
             item.status,
             item.risk_tier or "unknown",
