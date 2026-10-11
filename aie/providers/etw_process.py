@@ -65,7 +65,7 @@ def _safe_int(properties: dict[str, Any], *names: str) -> int | None:
 def _safe_image_name(value: Any) -> str:
     if not isinstance(value, str):
         return "unknown"
-    basename = value.replace("/", "\").rsplit("\", 1)[-1].strip()
+    basename = value.replace("/", "\\").rsplit("\\", 1)[-1].strip()
     return basename if _PROCESS_NAME.fullmatch(basename) else "unknown"
 
 
