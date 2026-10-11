@@ -403,6 +403,8 @@ class MemoryStore:
             raise ValueError("a memory cannot be merged with itself")
         if merged_memory.supersedes_id is not None:
             raise ValueError("merge records use explicit two-parent lineage, not supersedes_id")
+        if merged_memory.memory_id in source_memory_ids:
+            raise ValueError("merged memory must have a new memory ID")
 
         current = self._aware_utc(now or datetime.now(timezone.utc), "now")
         if merged_memory.created_at.tzinfo is None:
