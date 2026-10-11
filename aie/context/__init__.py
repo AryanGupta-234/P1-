@@ -14,6 +14,11 @@ __all__ = [
     "EvidenceContradiction",
     "assess_evidence",
     "find_explicit_contradictions",
+    "TaskSession",
+    "TaskSessionStore",
+    "new_task_session",
+    "TaskSessionPromptContext",
+    "build_task_session_prompt_context",
 ]
 
 
@@ -26,6 +31,12 @@ def __getattr__(name: str):
         return getattr(module, name)
     if name in {"EvidenceAssessment", "EvidenceContradiction", "assess_evidence", "find_explicit_contradictions"}:
         module = import_module("aie.context.evidence")
+        return getattr(module, name)
+    if name in {"TaskSession", "TaskSessionStore", "new_task_session"}:
+        module = import_module("aie.context.task_session")
+        return getattr(module, name)
+    if name in {"TaskSessionPromptContext", "build_task_session_prompt_context"}:
+        module = import_module("aie.context.task_session.context")
         return getattr(module, name)
     if name == "build_video_observation_context":
         module = import_module("aie.context.video")
