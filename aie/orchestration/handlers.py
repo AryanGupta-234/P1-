@@ -122,10 +122,16 @@ class PolicyProposalHandler:
         self,
         broker: CapabilityPolicyBroker,
         ledger: PolicyLedger,
+        *,
+        proposal_parameters: dict[str, dict[str, object]] | None = None,
     ) -> None:
         self.broker = broker
         self.ledger = ledger
         self.queue = PolicyProposalQueue(ledger)
+        self.proposal_parameters = {
+            capability_id: dict(parameters)
+            for capability_id, parameters in (proposal_parameters or {}).items()
+        }
 
     def execute(self, step: PlanStep, context: StepContext) -> HandlerResult:
         if step.capability_id is None:
@@ -167,10 +173,17 @@ class PolicyProposalHandler:
                 "Waiting for explicit review of the linked policy proposal.",
             )
 
+        parameters = self.proposal_parameters.get(step.capability_id, {})
+        if step.capability_id == "windows.settings.open" and set(parameters) != {"setting"}:
+            return HandlerResult.awaiting_input(
+                "This capability requires an explicit Settings page choice. "
+                "Advance again with --setting display|sound|bluetooth|network|"
+                "windows_update|apps|privacy. The model cannot choose this parameter."
+            )
         proposal = ActionProposal(
             capability_id=step.capability_id,
             summary=step.description,
-            parameters={},
+            parameters=parameters,
             source=f"task:{context.run_id}",
         )
         snapshot = self.queue.create(proposal, self.broker)
@@ -191,12 +204,17 @@ def build_default_handlers(
     broker: CapabilityPolicyBroker,
     ledger: PolicyLedger,
     model_router,
+    proposal_parameters: dict[str, dict[str, object]] | None = None,
 ) -> dict[str, object]:
     """Build app-owned handlers; callers decide whether a local model is available."""
     return {
         "observe": EventObservationHandler(event_store),
         "reason": ModelReasoningHandler(model_router),
-        "propose_action": PolicyProposalHandler(broker, ledger),
+        "propose_action": PolicyProposalHandler(
+            broker,
+            ledger,
+            proposal_parameters=proposal_parameters,
+        ),
         "verify": ManualVerificationHandler(),
         "inform": InformHandler(),
     }
