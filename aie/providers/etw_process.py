@@ -354,6 +354,7 @@ class WindowsETWProcessProvider:
                     workspace=str(workspace),
                 )
 
+            capture_elapsed = max(0.0, self._monotonic() - started_at)
             if not etl_path.is_file():
                 raise ETWProcessCaptureError("etl_file_missing", session_name=session_name)
             etl_size = etl_path.stat().st_size
@@ -388,11 +389,10 @@ class WindowsETWProcessProvider:
                 if summary_path.is_file() else ""
             )
             events_lost, buffers_lost = parse_tracerpt_loss_summary(summary)
-            elapsed = max(0.0, self._monotonic() - started_at)
             return ETWProcessCapture(
                 session_name=session_name,
                 events=events,
-                duration_seconds=elapsed,
+                duration_seconds=capture_elapsed,
                 etl_size_bytes=etl_size,
                 events_lost=events_lost,
                 buffers_lost=buffers_lost,
