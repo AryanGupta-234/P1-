@@ -47,6 +47,31 @@ class WindowsProvider(ObserverProvider):
                 sensitivity="internal",
             )
 
+        memory = psutil.virtual_memory()
+        system_drive = os.environ.get("SystemDrive", "C:") + os.sep
+        try:
+            disk = psutil.disk_usage(system_drive)
+            disk_payload = {
+                "total_bytes": disk.total,
+                "used_bytes": disk.used,
+                "free_bytes": disk.free,
+                "percent_used": disk.percent,
+            }
+        except OSError:
+            disk_payload = None
+        yield AIEEvent(
+            host_id=host_id(), source=self.name, event_type="host.resources",
+            entity=EntityRef(type="host", name=platform.node()),
+            data={
+                "cpu_percent": psutil.cpu_percent(interval=None),
+                "memory_total_bytes": memory.total,
+                "memory_available_bytes": memory.available,
+                "memory_percent_used": memory.percent,
+                "disk_system_volume": disk_payload,
+            },
+            sensitivity="internal",
+        )
+
         current: dict[int, tuple[str, float | None]] = {}
         for proc in psutil.process_iter(attrs=["pid", "name", "create_time"]):
             try:
