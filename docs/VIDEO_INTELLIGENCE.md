@@ -14,7 +14,7 @@ Use an explicit opt-in Edge/Chrome extension and collect only:
 - Browser-provided dropped/decoded frame counters where supported.
 - Coarse site origin only when user permits it.
 
-Never collect page text, credentials, cookies, form fields, browsing history or arbitrary DOM content. Provide site-level and global pause controls. Prefer structured local IPC/native messaging to a local service.
+Never collect page text, credentials, cookies, form fields, browsing history or arbitrary DOM content. The separate foreground-window observer also omits window titles by default because they can contain private document names, chat titles or email subjects. Provide site-level and global pause controls. Prefer structured local IPC/native messaging to a local service.
 
 ## Future network signals
 - Interface/link status and Wi-Fi signal via supported Windows APIs.
