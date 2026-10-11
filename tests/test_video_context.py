@@ -167,7 +167,7 @@ def test_correlates_foreground_process_resources_without_copying_window_title():
     assert context.active_application.memory_rss_bytes == 512 * 1024 * 1024
     assert context.active_application.thread_count == 42
     assert context.active_application.window_title_collected is True
-    assert "window_title" not in context.active_application.__dict__
+    assert not hasattr(context.active_application, "window_title")
     assert "foreground-edge" in context.evidence_event_ids
     assert "edge-resource" in context.evidence_event_ids
     assert "unrelated-resource" not in context.evidence_event_ids
