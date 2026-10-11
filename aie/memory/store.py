@@ -88,11 +88,13 @@ class MemoryStore:
             if missing:
                 raise ValueError(f"source event not found: {missing[0]}")
 
-        now = datetime.now(timezone.utc)
+        created_at = self._aware_utc(memory.created_at, "created_at")
+        # Source timestamps can be ahead of the local wall clock.
+        updated_at = max(datetime.now(timezone.utc), created_at)
         normalized = memory.model_copy(
             update={
-                "created_at": self._aware_utc(memory.created_at, "created_at"),
-                "updated_at": now,
+                "created_at": created_at,
+                "updated_at": updated_at,
                 "expires_at": (
                     self._aware_utc(memory.expires_at, "expires_at")
                     if memory.expires_at is not None
