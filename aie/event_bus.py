@@ -39,19 +39,19 @@ class EventBus:
     def sink_names(self) -> tuple[str, ...]:
         return tuple(name for name, _ in self._sinks)
 
-    def publish(self, events: Iterable[AIEEvent]) -> int:
+    def publish(self, events: Iterable[AIEEvent]) -> dict[str, int]:
         batch = tuple(events)
         if len(batch) > self.max_batch_size:
             raise ValueError(
                 f"event batch exceeds the {self.max_batch_size} event limit"
             )
         if not batch or not self._sinks:
-            return 0
+            return {}
 
-        handled = 0
-        for _, sink in self._sinks:
+        results: dict[str, int] = {}
+        for name, sink in self._sinks:
             result = sink(batch)
             if not isinstance(result, int) or isinstance(result, bool) or result < 0:
                 raise TypeError("event sink must return a non-negative integer")
-            handled += result
-        return handled
+            results[name] = result
+        return results
