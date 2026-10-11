@@ -381,7 +381,7 @@ def ask(
                 )
             client = OllamaClient(allow_remote=allow_remote_ollama)
             response = LocalModelRouter(client).generate(request)
-    except (ModelRoutingError, OllamaError, ValueError) as exc:
+    except (RuntimeError, ValueError) as exc:
         console.print(f"[red]Model request unavailable:[/red] {exc}")
         raise typer.Exit(2) from exc
 
