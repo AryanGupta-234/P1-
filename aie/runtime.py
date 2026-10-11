@@ -5,16 +5,16 @@ import time
 from collections.abc import Callable
 from pathlib import Path
 
+from aie.config import observer_is_paused
 from aie.contracts import AIEEvent
 from aie.diagnostics.monitor import VideoDiagnosticMonitor
-
-from aie.providers.foreground import WindowsForegroundProvider
+from aie.observer_health import ObserverHealthTracker
 from aie.providers.eventlog import WindowsEventLogProvider
+from aie.providers.foreground import WindowsForegroundProvider
 from aie.providers.network import WindowsNetworkProvider
 from aie.providers.process_resources import WindowsProcessResourceProvider
-from aie.providers.windows import WindowsProvider
 from aie.providers.uia import WindowsUIATreeProvider
-from aie.config import observer_is_paused
+from aie.providers.windows import WindowsProvider, host_id
 from aie.store import EventStore
 
 
@@ -43,8 +43,9 @@ def observe(
     include_process_resources: bool = False,
     process_resource_interval: float = 10.0,
     process_resource_max_processes: int = 256,
+    health_interval: float = 30.0,
 ) -> int:
-    """Persist read-only system, foreground-app and bounded network observations."""
+    """Persist read-only observations and privacy-safe observer health telemetry."""
     if duration < 1:
         raise ValueError("duration must be at least 1 second")
     if not 0.5 <= interval <= 60:
@@ -67,6 +68,8 @@ def observe(
         raise ValueError("process_resource_interval must be between 2 and 300 seconds")
     if include_process_resources and not 1 <= process_resource_max_processes <= 512:
         raise ValueError("process_resource_max_processes must be between 1 and 512")
+    if not 5.0 <= health_interval <= 300.0:
+        raise ValueError("health_interval must be between 5 and 300 seconds")
 
     provider = WindowsProvider()
     network_provider = WindowsNetworkProvider() if include_network else None
@@ -112,11 +115,35 @@ def observe(
         if include_video_diagnostics
         else None
     )
+    health = ObserverHealthTracker(clock=time.monotonic)
     deadline = time.monotonic() + duration
     next_network = 0.0
     next_event_log = 0.0
     next_process_resources = 0.0
+    next_health = 0.0
     total = 0
+
+    def collect(
+        provider_name: str,
+        collector: Callable[[], list[AIEEvent] | tuple[AIEEvent, ...] | object],
+    ) -> list[AIEEvent]:
+        started = time.monotonic()
+        try:
+            collected = list(collector())
+        except Exception as exc:  # noqa: BLE001 - observation must degrade instead of stopping the runtime.
+            health.record_sample(
+                provider_name,
+                elapsed_seconds=max(0.0, time.monotonic() - started),
+                emitted_events=0,
+                error_type=type(exc).__name__,
+            )
+            return []
+        health.record_sample(
+            provider_name,
+            elapsed_seconds=max(0.0, time.monotonic() - started),
+            emitted_events=len(collected),
+        )
+        return collected
 
     if jsonl_path:
         jsonl_path.parent.mkdir(parents=True, exist_ok=True)
@@ -130,23 +157,41 @@ def observe(
                     time.sleep(min(interval, remaining))
                 continue
 
-            events = list(provider.collect_snapshot(include_host=first_sample))
+            events = collect(
+                provider.name,
+                lambda: provider.collect_snapshot(include_host=first_sample),
+            )
             first_sample = False
 
             if foreground_provider is not None:
-                events.extend(foreground_provider.collect_snapshot())
+                events.extend(collect(
+                    foreground_provider.name,
+                    foreground_provider.collect_snapshot,
+                ))
             if uia_provider is not None:
-                events.extend(uia_provider.collect_snapshot())
+                events.extend(collect(
+                    uia_provider.name,
+                    uia_provider.collect_snapshot,
+                ))
 
             now = time.monotonic()
             if network_provider is not None and now >= next_network:
-                events.extend(network_provider.collect_snapshot())
+                events.extend(collect(
+                    network_provider.name,
+                    network_provider.collect_snapshot,
+                ))
                 next_network = now + network_interval
             if event_log_provider is not None and now >= next_event_log:
-                events.extend(event_log_provider.collect_snapshot())
+                events.extend(collect(
+                    event_log_provider.name,
+                    event_log_provider.collect_snapshot,
+                ))
                 next_event_log = now + event_log_interval
             if process_resource_provider is not None and now >= next_process_resources:
-                events.extend(process_resource_provider.collect_snapshot())
+                events.extend(collect(
+                    process_resource_provider.name,
+                    process_resource_provider.collect_snapshot,
+                ))
                 next_process_resources = now + process_resource_interval
 
             total += store.append_many(events)
@@ -155,11 +200,16 @@ def observe(
                 if diagnostic_monitor is not None
                 else []
             )
-            if diagnostic_events:
-                total += store.append_many(diagnostic_events)
+
+            health_events: list[AIEEvent] = []
+            if now >= next_health:
+                health_events.append(health.to_event(host_id()))
+                next_health = now + health_interval
+
+            total += store.append_many([*diagnostic_events, *health_events])
 
             if output:
-                for event in [*events, *diagnostic_events]:
+                for event in [*events, *diagnostic_events, *health_events]:
                     output.write(event.model_dump_json() + "\n")
                 output.flush()
 
