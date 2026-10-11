@@ -61,7 +61,13 @@ git push -u origin feat/<short-scope>
 ```
 Open PRs against `dev`, not `main`.
 
-## Persistent local memory (explicit capture)\nUse `aie remember --kind semantic --tags windows,workflow` to enter a memory interactively (hidden input with `--sensitive`), or pass text as an argument. `aie recall "query"` uses local keyword/tag overlap (not embeddings); sensitive records are excluded by default. `aie memories` lists records, `aie correct-memory <ID> "corrected text"` supersedes a record while retaining history, and `aie forget <ID> --confirm` deletes it. Optional `--ttl-days` sets expiry; `aie memory-prune --confirm` removes expired records. Memory is stored in local SQLite; the sensitivity flag is not encryption. Do not store credentials or tokens. Nothing is silently extracted from observations or model output.\n\n## Unified activity timeline\n`aie activity --hours 4` queries the local event store by time window and groups browser, foreground-app, network, process, Event Log and diagnostic signals into temporal sessions. It displays a safe projection of metadata only; it never dumps raw event payloads, window titles, UIA content or feedback notes. Grouping is time-based and does not infer user intent.\n\n## Diagnostic feedback
+## Persistent local memory (explicit capture)
+Use `aie remember --kind semantic --tags windows,workflow` to enter a memory interactively (hidden input with `--sensitive`), or pass text as an argument. `aie recall "query"` uses local keyword/tag overlap (not embeddings); sensitive records are excluded by default. `aie memories` lists records, `aie correct-memory <ID> "corrected text"` supersedes a record while retaining history, and `aie forget <ID> --confirm` deletes it. Optional `--ttl-days` sets expiry; `aie memory-prune --confirm` removes expired records. Memory is stored in local SQLite; the sensitivity flag is not encryption. Do not store credentials or tokens. Nothing is silently extracted from observations or model output.
+
+## Unified activity timeline
+`aie activity --hours 4` queries the local event store by time window and groups browser, foreground-app, network, process, Event Log and diagnostic signals into temporal sessions. It displays a safe projection of metadata only; it never dumps raw event payloads, window titles, UIA content or feedback notes. Grouping is time-based and does not infer user intent.
+
+## Diagnostic feedback
 Use `aie events` to find a `diagnostic.video_finding` event ID, then record the outcome with `aie feedback <EVENT_ID> --outcome resolved`, `not_resolved`, or `not_attempted`. Run `aie learning-report` to see sample counts and observed resolution rates by cause. An optional `--note` is stored locally as sensitive data. This captures user feedback; it does not retrain a model or imply that AIE executed the recommendation.
 
 ## Windows Event Log metadata (optional)
