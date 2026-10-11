@@ -85,11 +85,19 @@ Build persistent personal intelligence that observes explicitly permitted signal
 - Global pause/resume, local retention pruning and outcome-feedback capture.
 - Approval records authorization for a future executor only. Policy decisions do not execute actions; no OS executor or autonomous remediation is implemented.
 
+## Feature branch in review: observer provider health
+- Shared provider-health tracker wraps user-mode, foreground, UIA, network and Event Log collection; it emits state transitions and run-end summaries.
+- Failures are sanitized to exception class names only; exception messages and stack traces are never persisted.
+- Provider availability is distinct from observation coverage. Event Log retention gaps are counted; sequence-reset loss remains unknown and does not mark the provider offline.
+- Empty polls do not clear degraded state. UIA and Event Log providers emit explicit recovery signals only after a successful read.
+- Local aie health view displays provider status, collection/failure counts, duration, exact lost records and unknown-loss incidents.
+- Synthetic tests cover transitions, privacy, persistence, UIA timeout/recovery, Event Log rollover/reset, and cursor recovery. Target-desktop validation remains pending.
+
 ## Pending validation and implementation
 - Windows CI run [#448](https://github.com/AryanGupta-234/P1-/actions/runs/38122160376) passed on Python 3.11 and 3.12, including systemwide process telemetry and activity-summary privacy tests.
 - Target-desktop Chrome/Edge extension/native-host installation and live playback validation.
 - Target-desktop UIA and Application/System Event Log permission/behavior validation.
-- ETW subscriptions and higher-fidelity process telemetry.
+- Bounded ETW process-capture PR and target-device checks for provider schema, permissions, session cleanup, event/buffer loss, latency and observer overhead.
 - Windows Graphics Capture (screenshots), still intentionally separate from UIA structure.
 - Unified event bus and semantic task/session interpretation.
 - Embedding retrieval, memory consolidation and evaluated learning from verified outcomes.
@@ -101,8 +109,8 @@ Build persistent personal intelligence that observes explicitly permitted signal
 ## Immediate engineering sequence
 1. Validate the unified activity and explicit memory layers on Windows CI.
 2. Validate browser/native-host, UIA and Event Log sampling on the target Windows desktop.
-3. Add ETW process telemetry with coverage and buffer-loss reporting.
-4. Extend the activity timeline into a user-controlled task/session model.
+3. Validate the bounded ETW process-capture implementation on the target Windows desktop; quantify overhead and coverage before continuous integration.
+4. Integrate provider-health telemetry after Windows CI and target-desktop validation.
 5. Add persistent memory consolidation with retrieval and forgetting evaluation.
 6. Connect policy decisions to a proposal queue and append-only audit.
 7. Implement an executor only after sandboxing, least privilege, kill switch, rollback and verification.
