@@ -44,7 +44,8 @@ Statuses: DONE / IN_PROGRESS / BLOCKED / PLANNED. Mark DONE only with code, test
 
 ## M1.5 — Video diagnostics
 - [x] Deterministic telemetry contract and triage function.
-- [x] Hypotheses for throughput, packet loss, latency and local rendering pressure.
+- [x] Hypotheses for measured throughput/packet loss/latency (when available) and local rendering pressure.
+- [x] Buffer-ahead starvation and buffered-but-not-advancing playback hypotheses.
 - [x] Insufficient-evidence behavior and unknown-value handling.
 - [x] Synthetic unit tests.
 - [ ] Root-cause trace corpus and false-positive/negative evaluation.
@@ -53,9 +54,10 @@ Statuses: DONE / IN_PROGRESS / BLOCKED / PLANNED. Mark DONE only with code, test
 - [ ] Validate extension installation and native-host registration on a target Windows desktop.
 - [x] Windows network sampler: interface counters, gateway/external TCP connection latency and DNS timing.
 - [ ] Add configurable per-target policy and sustained throughput measurement (opt-in only).
-- [x] Correlate synthetic browser playback snapshots with fresh same-host network evidence.
+- [x] Correlate browser playback snapshots with fresh same-host network and foreground-process evidence.
 - [ ] Validate end-to-end browser → native host → event store → context CLI pipeline on a target desktop.
 - [ ] Confidence calibration and actionable diagnostic proposals.
+- [ ] Validate live browser → native host → SQLite → context → diagnosis on the target Windows desktop.
 
 ## M2 — Context intelligence
 - [x] Read-only foreground-window transition observer with titles omitted by default.
