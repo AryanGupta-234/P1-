@@ -280,7 +280,7 @@ class PolicyProposalQueue:
         if current is None:
             raise ValueError("proposal was not found")
         if current.status != "pending_review":
-            raise ValueError("proposal is not awaiting review")
+            raise ValueError("proposal is no longer awaiting review")
 
         if not approve:
             return self.ledger.append_review(
