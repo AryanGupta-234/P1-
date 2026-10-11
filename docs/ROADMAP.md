@@ -103,6 +103,7 @@ Statuses: DONE / IN_PROGRESS / BLOCKED / PLANNED. Mark DONE only with code, test
 - [x] Explicit approval decisions for medium/high risk; critical-risk actions blocked.
 - [x] Policy broker integration with a reviewed proposal queue and separate append-only SQLite audit ledger (approval never executes).
 - [x] Typed non-mutating dry-run executor validates proposal/policy alignment without OS mutation.
+- [x] CLI dry-run path for reviewed proposals; it reports `executed=False`.
 - [ ] Least-privilege real executor and restricted tool manifests.
 - [ ] Sandbox, command/time/resource budgets and global execution kill switch.
 - [ ] Rollback/recovery and postcondition verification.
