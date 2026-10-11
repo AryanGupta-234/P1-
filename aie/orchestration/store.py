@@ -8,7 +8,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from aie.orchestration.models import AgentRun, RunStatus, StepStatus, TaskStepRecord
-from aie.planning.models import TaskPlan
+from aie.planning.models import PlanStep, TaskPlan
 from aie.planning.validator import next_ready_steps, validate_plan
 
 
@@ -174,7 +174,7 @@ class TaskRunStore:
             ).fetchall()
         return [item for row in rows if (item := self.get(row["run_id"])) is not None]
 
-    def claim_next_ready(self, run_id: str) -> tuple[str, object] | None:
+    def claim_next_ready(self, run_id: str) -> tuple[str, PlanStep] | None:
         """Atomically claim one dependency-ready step; never claims action authority."""
         with self._connect() as db:
             db.execute("BEGIN IMMEDIATE")
