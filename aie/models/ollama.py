@@ -30,6 +30,8 @@ def _is_loopback_host(host: str | None) -> bool:
 class OllamaClient:
     """Talk to Ollama without pulling models or silently sending data remotely."""
 
+    MAX_RESPONSE_BYTES = 8 * 1024 * 1024
+
     def __init__(
         self,
         *,
@@ -68,13 +70,16 @@ class OllamaClient:
         request = Request(url, data=body, headers=headers, method=method)
         try:
             with urlopen(request, timeout=timeout) as response:
-                parsed = json.loads(response.read().decode("utf-8"))
+                raw = response.read(self.MAX_RESPONSE_BYTES + 1)
+            if len(raw) > self.MAX_RESPONSE_BYTES:
+                raise OllamaUnavailable("Ollama response exceeds the 8 MiB safety limit")
+            parsed = json.loads(raw.decode("utf-8"))
         except HTTPError as exc:
             detail = exc.read(1024).decode("utf-8", errors="replace")
             raise OllamaUnavailable(
                 f"Ollama returned HTTP {exc.code}: {detail}"
             ) from exc
-        except (OSError, URLError, TimeoutError, json.JSONDecodeError) as exc:
+        except (OSError, URLError, TimeoutError, UnicodeError, json.JSONDecodeError) as exc:
             raise OllamaUnavailable(f"Ollama request failed: {type(exc).__name__}") from exc
         if not isinstance(parsed, dict):
             raise OllamaUnavailable("Ollama response must be a JSON object")
