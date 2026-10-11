@@ -294,6 +294,40 @@ def _change_task_state(run_id: str, operation: Literal["pause", "resume", "cance
     console.print(f"Run {run.run_id} · State: {run.status}")
 
 
+@task_app.command("recover")
+def recover_task(
+    run_id: str = typer.Argument(...),
+    confirm: bool = typer.Option(
+        False, "--confirm", help="Confirm that the prior handler process is no longer active."
+    ),
+    after_seconds: int = typer.Option(
+        300, "--after-seconds", min=1, max=86400,
+        help="Minimum age of a still-running step before it can be recovered.",
+    ),
+) -> None:
+    """Move a stale interrupted handler to explicit human review without replaying it."""
+    if not confirm:
+        console.print(
+            "[yellow]Inspect the process first. Pass --confirm only after confirming "
+            "the previous handler is no longer active.[/yellow]"
+        )
+        raise typer.Exit(2)
+    try:
+        run = _engine().recover_interrupted(
+            run_id,
+            minimum_age_seconds=after_seconds,
+        )
+    except ValueError as exc:
+        console.print(f"[red]Recovery rejected:[/red] {exc}")
+        raise typer.Exit(2) from exc
+    console.print(
+        f"[green]Run recovered for review.[/green] {run.run_id} · {run.status}"
+    )
+    for step in run.steps:
+        if step.status == "awaiting_input":
+            console.print(f"  {step.step_id}: inspect side effects and record an explicit result")
+
+
 @task_app.command("pause")
 def pause_task(run_id: str = typer.Argument(...)) -> None:
     """Pause a task between handler invocations."""
