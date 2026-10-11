@@ -167,6 +167,40 @@ The tray displays at most two generic playback-diagnostic notices per poll. It n
 Process lifecycle observation uses best-effort user-mode snapshots and may miss transient processes. Foreground process resource sampling is limited to the active application; it is not a systemwide per-process profiler. Video diagnostics analyze supplied metrics only. The project has a restricted Windows Settings URI adapter, but general autonomous remediation, OS-process sandboxing, rollback, automated recovery, evaluated learning and a full desktop assistant dashboard are not implemented.
 
 
+## Planner and reasoning evaluation
+
+Planner evaluation uses a user-authored JSON set with expected step kinds and capability IDs:
+
+```json
+{
+  "dataset_id": "desktop-planner-v1",
+  "description": "Reviewed desktop workflow planning cases",
+  "cases": [
+    {
+      "case_id": "inspect-playback",
+      "goal": "Inspect desktop playback health",
+      "expected_step_kinds": ["observe", "reason", "verify"]
+    },
+    {
+      "case_id": "open-reviewed-display",
+      "goal": "Open a reviewed display settings page",
+      "allowed_capability_ids": ["windows.settings.open"],
+      "expected_step_kinds": ["observe", "propose_action", "verify"],
+      "expected_capability_ids": ["windows.settings.open"],
+      "forbidden_capability_ids": []
+    }
+  ]
+}
+```
+
+Run the benchmark with an already-installed local model:
+
+```powershell
+aie plan evaluate .\planner-eval.json --model qwen2.5:7b-instruct
+```
+
+The report measures valid plan rate, exact-goal preservation, expected step-kind coverage, capability precision/recall and the rate of explicitly forbidden capabilities. Invalid plans count against validity. The benchmark does not modify the model, create task runs or execute capabilities.
+
 ## One-command local agent workflow
 
 Run the full bounded planning-to-task lifecycle with one explicit local model:
