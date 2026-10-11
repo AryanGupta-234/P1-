@@ -30,6 +30,10 @@ class LocalModelRouter:
                 f"{decision.reason} Available memory: {decision.available_memory_gib:.2f} GiB."
             )
         try:
-            return self.provider.chat(request, model=decision.selected_model)
+            return self.provider.chat(
+                request,
+                model=decision.selected_model,
+                installed_models=installed,
+            )
         except OllamaError as exc:
             raise ModelRoutingError(str(exc)) from exc
