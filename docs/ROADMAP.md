@@ -125,8 +125,10 @@ Statuses: DONE / IN_PROGRESS / BLOCKED / PLANNED. Mark DONE only with code, test
 - [x] Fail-closed execution gate, kill switch and bounded execution-budget contract consumed by a registered adapter executor.
 - [x] Restricted in-process adapter registry with a single fixed Windows Settings URI opener; no shell, arbitrary process, filesystem-write or network adapter. This is not process sandboxing.
 - [x] Durable execution reservations and immutable execution receipts appended to the SHA-256 policy audit ledger; duplicate reservations/receipts are rejected and successful URI dispatch remains unverified until a separate postcondition check.
+- [x] Append-only, one-time postcondition verification records; only a successful dispatch can be verified, and both confirmed and not-confirmed outcomes are retained without overwriting history.
 - [ ] OS-process sandbox enforcement and isolated adapter execution; current built-in adapter is a narrow in-process URI dispatcher, not a sandbox.
-- [ ] Rollback, automatic recovery after an execution reservation, and non-interactive postcondition verification.
+- [ ] Rollback and automatic recovery after an execution reservation.
+- [ ] Adapter-specific non-interactive postcondition verifiers; current verification is an explicit human-recorded outcome, not independent OS-state inspection.
 - [ ] Prompt-injection and tool-misuse red-team tests.
 - [ ] Enable any autonomous remediation only after end-to-end verification.
 
