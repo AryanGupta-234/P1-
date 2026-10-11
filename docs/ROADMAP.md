@@ -83,7 +83,7 @@ Statuses: DONE / IN_PROGRESS / BLOCKED / PLANNED. Mark DONE only with code, test
 - [x] Central remote egress gateway for cloud/remote-Ollama requests with high-confidence credential redaction and metadata-only local audit.
 - [ ] Structured output modes, streaming and cancellation.
 - [ ] Inference concurrency, memory/token budgets and latency metrics.
-- [ ] Central cloud egress gateway, redaction and audit.
+- [x] Central remote-model egress gateway, high-confidence credential redaction and metadata-only audit.
 - [ ] Planner/state machine with deterministic fallback.
 - [ ] Reasoning and tool-selection evaluation harness.
 
@@ -110,8 +110,9 @@ Statuses: DONE / IN_PROGRESS / BLOCKED / PLANNED. Mark DONE only with code, test
 - [x] Policy broker integration with a reviewed proposal queue and separate append-only SQLite audit ledger (approval never executes).
 - [x] Typed non-mutating dry-run executor validates proposal/policy alignment without OS mutation.
 - [x] CLI dry-run path for reviewed proposals; it reports `executed=False`.
+- [x] Fail-closed execution gate and bounded execution-budget contract; no real executor consumes it yet.
 - [ ] Least-privilege real executor and restricted tool manifests.
-- [ ] Sandbox, command/time/resource budgets and global execution kill switch.
+- [ ] Sandbox enforcement, command/tool resource controls and postcondition-aware runtime.
 - [ ] Rollback/recovery and postcondition verification.
 - [ ] Prompt-injection and tool-misuse red-team tests.
 - [ ] Enable any autonomous remediation only after end-to-end verification.
