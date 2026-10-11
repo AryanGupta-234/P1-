@@ -44,6 +44,7 @@ aie observe --duration 60 --foreground-sample-interval 10
 aie context
 # Prompt an installed local Ollama model:
 aie ask "Explain the latest AIE event context" --task routine
+aie health
 python -m pytest
 python -m ruff check .
 ```
@@ -67,6 +68,8 @@ Install optional Windows dependencies with `python -m pip install -e ".[dev,wind
 
 ## Observer controls
 Use `aie pause` to pause all running observer loops for the current Windows user, `aie resume` to resume them, and `aie status` to inspect pause state and local event count. Pausing does not erase retained events. `aie prune --older-than-days 30` previews old records; add `--confirm` to delete only the expired local events.
+
+Use `aie health` to inspect the latest provider status, collection counts, failures, measured collection duration and known Event Log record loss. Health telemetry stores error class names only; exception messages and stack traces are not persisted. A provider remains degraded until a subsequent successful observation or explicit recovery signal is seen.
 
 ## Browser playback observer
 The opt-in Chrome/Edge extension prototype is in `browser_extension/`. Load it unpacked, then register its Windows native host using `scripts/register-native-host.ps1`. See [Video Intelligence setup](docs/VIDEO_INTELLIGENCE.md). Monitoring defaults to off.
