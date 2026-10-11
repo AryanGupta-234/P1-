@@ -116,8 +116,6 @@ def test_unallowlisted_setting_is_not_dispatched_and_is_audited(tmp_path, monkey
     control.set_enabled(True)
     registry = CapabilityRegistry.windows_safe_defaults()
     adapter = registry.get(manifest.capability_id)
-    from aie.policy.capabilities import AdapterResult
-
     class InvalidAdapter:
         capability_id = manifest.capability_id
 
