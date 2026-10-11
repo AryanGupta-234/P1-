@@ -1,3 +1,5 @@
+import pytest
+
 from aie.memory.conflicts import generate_conflict_proposals
 from aie.memory.models import MemoryRecord
 from aie.memory.store import MemoryStore
@@ -69,7 +71,7 @@ def test_sensitive_memories_are_excluded_unless_explicitly_requested(tmp_path):
 
 def test_conflict_review_respects_bounds(tmp_path):
     store = MemoryStore(tmp_path / "conflicts-bounds.sqlite3")
-    with __import__("pytest").raises(ValueError, match="max_memories"):
+    with pytest.raises(ValueError, match="max_memories"):
         generate_conflict_proposals(store, max_memories=0)
-    with __import__("pytest").raises(ValueError, match="minimum_shared_tokens"):
+    with pytest.raises(ValueError, match="minimum_shared_tokens"):
         generate_conflict_proposals(store, minimum_shared_tokens=0)
