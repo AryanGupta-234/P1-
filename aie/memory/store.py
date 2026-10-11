@@ -88,6 +88,7 @@ class MemoryStore:
         memory: MemoryRecord,
         *,
         event_store: EventStore | None = None,
+        task_run_store=None,
     ) -> MemoryRecord:
         """Insert a memory and atomically supersede a prior version if requested."""
         if memory.source_event_ids:
@@ -99,6 +100,14 @@ class MemoryStore:
             ]
             if missing:
                 raise ValueError(f"source event not found: {missing[0]}")
+
+        if memory.source_task_run_ids:
+            if task_run_store is None or not callable(getattr(task_run_store, "get", None)):
+                raise ValueError("task_run_store is required when memory task-run provenance IDs are supplied")
+            for run_id in memory.source_task_run_ids:
+                source_run = task_run_store.get(run_id)
+                if source_run is None or source_run.status != "completed":
+                    raise ValueError("source task run must exist and be completed")
 
         now = datetime.now(timezone.utc)
         normalized = memory.model_copy(
@@ -374,6 +383,7 @@ class MemoryStore:
         merged_memory: MemoryRecord,
         *,
         event_store: EventStore | None = None,
+        task_run_store=None,
         now: datetime | None = None,
     ) -> MemoryRecord:
         """Atomically supersede two active memories and preserve their lineage.
@@ -444,8 +454,13 @@ class MemoryStore:
 
                 for source in sources:
                     required_event_ids.update(source.source_event_ids)
+                required_run_ids = {
+                    run_id for source in sources for run_id in source.source_task_run_ids
+                }
                 if not required_event_ids.issubset(set(merged_memory.source_event_ids)):
                     raise ValueError("merged memory must retain all source event provenance")
+                if not required_run_ids.issubset(set(merged_memory.source_task_run_ids)):
+                    raise ValueError("merged memory must retain all source task-run provenance")
 
                 expiries = [
                     item.expires_at.astimezone(timezone.utc)
@@ -467,6 +482,13 @@ class MemoryStore:
                     ]
                     if missing:
                         raise ValueError(f"source event not found: {missing[0]}")
+                if required_run_ids:
+                    if task_run_store is None or not callable(getattr(task_run_store, "get", None)):
+                        raise ValueError("task_run_store is required to verify merged task-run provenance")
+                    for run_id in sorted(required_run_ids):
+                        source_run = task_run_store.get(run_id)
+                        if source_run is None or source_run.status != "completed":
+                            raise ValueError("merged source task runs must exist and be completed")
 
                 normalized = merged_memory.model_copy(
                     update={
