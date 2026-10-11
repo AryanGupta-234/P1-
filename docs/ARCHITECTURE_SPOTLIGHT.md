@@ -75,7 +75,7 @@ Build persistent personal intelligence that observes explicitly permitted signal
 - Local Ollama client and hardware-aware selection of already-installed models; no implicit model pulls.
 - Optional OpenAI-compatible HTTPS provider requiring explicit `--provider cloud --allow-cloud-egress`.
 - Cloud/remote-Ollama requests pass through a centralized local egress gateway. Only explicitly selected context is attached; activity, memory and session context require separate confirmation, sensitive memory is blocked, high-confidence credential patterns are redacted, payload size is bounded, and a metadata-only local audit record is written. Observer telemetry is never automatically attached.
-- Bounded declarative plans use typed steps, explicit success criteria and dependencies; a deterministic topological validator exposes readiness without starting work. Action steps can reference a capability ID but cannot embed arbitrary commands or tool arguments.
+- Bounded declarative plans use typed steps, explicit success criteria and dependencies; a deterministic topological validator exposes readiness without starting work. Action steps can reference a capability ID but cannot embed arbitrary commands or tool arguments. The implementation and full test suite passed Windows CI run [#590](https://github.com/AryanGupta-234/P1-/actions/runs/38131262921) on Python 3.11 and 3.12.
 
 **Context and memory**
 - A bounded synchronous unified event bus fans normalized observations to the durable SQLite store and optional JSONL sink before downstream diagnostics/correlation.
