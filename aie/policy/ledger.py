@@ -365,6 +365,8 @@ class PolicyLedger:
             raise ValueError("invalid execution status")
         if verified and not action_executed:
             raise ValueError("an unexecuted action cannot be verified")
+        if status == "succeeded" and not action_executed:
+            raise ValueError("a successful execution receipt must confirm dispatch")
         if len(code) > 80 or not code:
             raise ValueError("execution code must contain 1 to 80 characters")
         if len(summary) > 300:
