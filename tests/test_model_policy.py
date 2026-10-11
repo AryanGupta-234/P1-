@@ -35,3 +35,12 @@ def test_missing_models_never_triggers_implicit_download():
     result = choose_local_model("routine", set(), available_memory_gib=12.0)
     assert result.selected_model is None
     assert not result.available
+
+
+def test_remote_ollama_endpoint_is_rejected(monkeypatch):
+    import pytest
+    from aie.model_policy import ollama_base_url
+
+    monkeypatch.setenv("AIE_OLLAMA_URL", "http://192.168.1.20:11434")
+    with pytest.raises(ValueError, match="loopback"):
+        ollama_base_url()
