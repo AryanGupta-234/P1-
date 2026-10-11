@@ -115,6 +115,21 @@ class PolicyLedger:
                     db.execute("ROLLBACK")
                     raise
 
+            db.execute(
+                """CREATE TABLE IF NOT EXISTS audit_meta (
+                    key TEXT PRIMARY KEY,
+                    value TEXT NOT NULL
+                )"""
+            )
+            current_head = db.execute(
+                "SELECT entry_hash FROM audit_events ORDER BY sequence DESC LIMIT 1"
+            ).fetchone()
+            initial_head = current_head[0] if current_head else _GENESIS_HASH
+            db.execute(
+                "INSERT OR IGNORE INTO audit_meta(key, value) VALUES ('head_hash', ?)",
+                (initial_head,),
+            )
+
     def _connect(self) -> sqlite3.Connection:
         db = sqlite3.connect(self.path, timeout=10, isolation_level=None)
         db.execute("PRAGMA journal_mode=WAL")
@@ -158,6 +173,11 @@ class PolicyLedger:
                 previous_hash,
                 entry_hash,
             ),
+        )
+        db.execute(
+            """INSERT INTO audit_meta(key, value) VALUES ('head_hash', ?)
+            ON CONFLICT(key) DO UPDATE SET value = excluded.value""",
+            (entry_hash,),
         )
 
     @staticmethod
@@ -327,6 +347,12 @@ class PolicyLedger:
             ).fetchall()
 
         previous = _GENESIS_HASH
+        with self._connect() as db:
+            stored_head_row = db.execute(
+                "SELECT value FROM audit_meta WHERE key = 'head_hash'"
+            ).fetchone()
+        stored_head = stored_head_row[0] if stored_head_row else _GENESIS_HASH
+
         for row in rows:
             sequence, audit_id, proposal_id, event_type, timestamp, payload, stored_previous, stored_hash = row
             if not hmac.compare_digest(stored_previous, previous):
@@ -352,6 +378,13 @@ class PolicyLedger:
                     reason="entry hash does not match the stored payload",
                 )
             previous = stored_hash
+        if not hmac.compare_digest(previous, stored_head):
+            return AuditIntegrityReport(
+                valid=False,
+                checked_entries=len(rows),
+                first_invalid_sequence=rows[-1][0] if rows else 0,
+                reason="stored head checkpoint does not match the ledger tail",
+            )
         return AuditIntegrityReport(valid=True, checked_entries=len(rows))
 
     def audit_trail(self, proposal_id: str) -> list[dict[str, Any]]:
