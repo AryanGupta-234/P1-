@@ -101,7 +101,7 @@ def observe(
 
             if output:
                 for event in [*events, *diagnostic_events]:
-                    output.write(event.model_dump_json() + "\\n")
+                    output.write(event.model_dump_json() + "\n")
                 output.flush()
 
             if on_diagnostic is not None:
