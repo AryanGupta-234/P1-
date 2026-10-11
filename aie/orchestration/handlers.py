@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections import Counter
-from uuid import NAMESPACE_URL, uuid5
+from aie.orchestration.ids import proposal_id_for_task_step
 
 from aie.models.base import ChatMessage, ModelRequest
 from aie.orchestration.engine import HandlerResult, StepContext
@@ -204,12 +204,7 @@ class PolicyProposalHandler:
                 "Advance again with --setting display|sound|bluetooth|network|"
                 "windows_update|apps|privacy. The model cannot choose this parameter."
             )
-        proposal_id = str(
-            uuid5(
-                NAMESPACE_URL,
-                f"aie-task-proposal:{context.run_id}:{step.step_id}",
-            )
-        )
+        proposal_id = proposal_id_for_task_step(context.run_id, step.step_id)
         proposal = ActionProposal(
             proposal_id=proposal_id,
             capability_id=step.capability_id,
