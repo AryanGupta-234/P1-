@@ -35,7 +35,7 @@ def set_capability_enabled(
         raise CapabilityPermissionError("capability directory cannot be a symlink")
     directory.mkdir(parents=True, exist_ok=True)
 
-    matches: list[tuple[Path, CapabilityManifest]] = []
+    matches: list[tuple[Path, CapabilityManifest, bytes]] = []
     seen: set[str] = set()
     for path in sorted(directory.glob("*.json")):
         if path.is_symlink() or not path.is_file():
@@ -55,13 +55,13 @@ def set_capability_enabled(
             )
         seen.add(manifest.capability_id)
         if manifest.capability_id == capability_id:
-            matches.append((path, manifest))
+            matches.append((path, manifest, original_bytes))
 
     if len(matches) != 1:
         raise CapabilityPermissionError(
             "exactly one matching capability manifest must exist"
         )
-    path, manifest = matches[0]
+    path, manifest, original_bytes = matches[0]
     if enabled:
         if capability_id not in registered_capability_ids:
             raise CapabilityPermissionError(
