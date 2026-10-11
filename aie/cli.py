@@ -412,5 +412,52 @@ def feedback(
     )
 
 
+
+@app.command("screen")
+def inspect_screen(
+    max_age_seconds: float = typer.Option(30.0, min=1.0, max=300.0),
+    limit: int = typer.Option(50, min=1, max=200),
+) -> None:
+    """Inspect the latest allowlisted UI Automation structure (never control text)."""
+    store = EventStore(database_path())
+    now = datetime.now(timezone.utc)
+    snapshot = next(
+        (
+            event for event in store.recent(1000)
+            if event.event_type == "window.uia_tree_snapshot"
+            and event.timestamp.tzinfo is not None
+            and 0 <= (now - event.timestamp).total_seconds() <= max_age_seconds
+        ),
+        None,
+    )
+    if snapshot is None:
+        console.print(
+            "No fresh UI Automation snapshot. UIA is off by default; run "
+            "aie observe --ui-tree --ui-tree-apps <app.exe> for an allowlisted app."
+        )
+        return
+
+    console.print(
+        f"Structural snapshot: {snapshot.data.get('process_name', snapshot.entity.name)} · "
+        f"{snapshot.data.get('node_count', 0)} controls · text collected: no"
+    )
+    table = Table("Index", "Parent", "Type", "Class", "Automation ID", "Bounds", "Enabled")
+    nodes = snapshot.data.get("nodes", [])
+    for node in nodes[:limit]:
+        if not isinstance(node, dict):
+            continue
+        bounds = node.get("rectangle", [])
+        bounds_text = ", ".join(str(value) for value in bounds) if isinstance(bounds, list) else "unknown"
+        table.add_row(
+            str(node.get("index", "?")),
+            str(node.get("parent_index", "-")),
+            str(node.get("control_type", "unknown")),
+            str(node.get("class_name", "unknown")),
+            str(node.get("automation_id", "")),
+            bounds_text,
+            str(node.get("enabled", "unknown")),
+        )
+    console.print(table)
+
 if __name__ == "__main__":
     app()
