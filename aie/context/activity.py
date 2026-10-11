@@ -116,6 +116,43 @@ def _signal_title(event: AIEEvent) -> tuple[str, str | None]:
         prefix = f"{app}: " if app else ""
         return f"UI structure sampled ({count_text} controls) — {prefix.rstrip()}", app
 
+    if event_type == "process.system_resource_snapshot":
+        processes = data.get("processes")
+        summaries: list[str] = []
+        if isinstance(processes, list):
+            for process in processes[:3]:
+                if not isinstance(process, dict):
+                    continue
+                name = _safe_process_name(process.get("process_name"))
+                if name is None:
+                    continue
+                cpu = _safe_number(
+                    process,
+                    "cpu_pct_total_capacity",
+                    maximum=100,
+                )
+                memory = process.get("memory_rss_bytes")
+                details = []
+                if cpu is not None:
+                    details.append(f"CPU {cpu:.1f}%")
+                if (
+                    isinstance(memory, int)
+                    and not isinstance(memory, bool)
+                    and 0 <= memory <= 2**53
+                ):
+                    details.append(f"memory {memory / (1024 * 1024):.0f} MiB")
+                summaries.append(
+                    name + (f" ({', '.join(details)})" if details else "")
+                )
+        sampled = data.get("sampled_processes")
+        sampled_text = (
+            str(sampled)
+            if isinstance(sampled, int) and not isinstance(sampled, bool) and 0 <= sampled <= 512
+            else "unknown"
+        )
+        suffix = "; top: " + ", ".join(summaries) if summaries else ""
+        return f"System process snapshot ({sampled_text} sampled){suffix}", None
+
     if event_type == "process.foreground_resource_sample":
         app = _safe_process_name(data.get("process_name"))
         cpu = _safe_number(data, "cpu_pct", maximum=100)
