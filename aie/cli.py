@@ -11,7 +11,7 @@ from rich.console import Console
 from rich.table import Table
 
 from aie import __version__
-from aie.config import database_path
+from aie.config import database_path, observer_is_paused, set_observer_paused
 from aie.hardware import runtime_profile
 from aie.model_policy import choose_local_model, discover_local_models
 from aie.store import EventStore
@@ -231,6 +231,36 @@ def show_context(
         f"Evidence records: {len(context.evidence_event_ids)} · "
         f"Context age: {(context.generated_at - context.observed_at).total_seconds():.1f}s"
     )
+
+
+@app.command()
+def pause() -> None:
+    """Pause all running AIE observer instances for this Windows user."""
+    set_observer_paused(True)
+    console.print("[yellow]AIE observation paused.[/yellow] Stored events were not deleted.")
+
+
+@app.command()
+def resume() -> None:
+    """Resume AIE observer instances after a global pause."""
+    set_observer_paused(False)
+    console.print("[green]AIE observation resumed.[/green]")
+
+
+@app.command()
+def status() -> None:
+    """Show observer control state and local event-store size."""
+    paused = observer_is_paused()
+    store = EventStore(database_path())
+    table = Table("Component", "State")
+    table.add_row("Observer", "[yellow]PAUSED[/yellow]" if paused else "[green]RUNNABLE[/green]")
+    table.add_row("Stored events", str(store.count()))
+    latest = store.recent(1)
+    table.add_row(
+        "Latest observation",
+        latest[0].timestamp.isoformat() if latest else "No events stored",
+    )
+    console.print(table)
 
 
 if __name__ == "__main__":
