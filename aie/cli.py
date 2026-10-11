@@ -316,7 +316,7 @@ def ask(
 ) -> None:
     """Send a prompt to an already-installed local Ollama model (never pulls models)."""
     from aie.models.base import ChatMessage, ModelRequest
-    from aie.models.ollama import OllamaClient
+    from aie.models.ollama import OllamaClient, OllamaError
     from aie.models.router import LocalModelRouter, ModelRoutingError
 
     try:
@@ -328,7 +328,7 @@ def ask(
         )
         client = OllamaClient(allow_remote=allow_remote_ollama)
         response = LocalModelRouter(client).generate(request)
-    except (ModelRoutingError, ValueError) as exc:
+    except (ModelRoutingError, OllamaError, ValueError) as exc:
         console.print(f"[red]Model request unavailable:[/red] {exc}")
         raise typer.Exit(2) from exc
 
