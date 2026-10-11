@@ -15,11 +15,15 @@ def test_action_step_waits_for_approval_and_execution_receipt(tmp_path):
         enabled=True,
         approval_required=True,
         allow_autonomous=False,
-        allowed_parameters=frozenset(),
+        allowed_parameters=frozenset({"setting"}),
     )
     broker = CapabilityPolicyBroker([manifest])
     ledger = PolicyLedger(tmp_path / "policy.sqlite3")
-    handler = PolicyProposalHandler(broker, ledger)
+    handler = PolicyProposalHandler(
+        broker,
+        ledger,
+        proposal_parameters={"windows.settings.open": {"setting": "display"}},
+    )
     engine = TaskOrchestrator(TaskRunStore(tmp_path / "runs.sqlite3"))
     plan = TaskPlan(
         goal="Request a policy-reviewed action",
