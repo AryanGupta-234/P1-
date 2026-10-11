@@ -94,7 +94,7 @@ The observer emits foreground-window transition events using the Windows user32 
 ## Live diagnostic suggestions
 While `aie observe` is running, fresh browser video events are correlated with foreground-app and network telemetry. New diagnostic hypotheses are persisted and printed once per incident/cooldown, with evidence and a recommended next step. The observer does not apply fixes automatically.
 
-## Proposal review and policy audit (no executor yet)\nCapability manifests are loaded only from `%LOCALAPPDATA%\\AIE\\capabilities\\*.json`; the directory is user-managed and empty by default. `aie capabilities` lists them. `aie propose <CAPABILITY_ID> <SUMMARY> --parameters '{"name":"value"}'` records a bounded proposal, `aie proposals` lists review states, and `aie approve-proposal <ID>` / `aie reject-proposal <ID>` record your explicit decision. `aie proposal-audit <ID>` shows the append-only review trail. Proposal parameters are bounded flat scalar values; credential-like parameter names are rejected. Approval is policy authorization only—there is no action executor and nothing is executed.\n\n## Proposal review and policy audit (no executor yet)
+## Proposal review and policy audit
 Capability manifests are loaded only from `%LOCALAPPDATA%\AIE\capabilities\*.json`; the directory is user-managed and empty by default. See [Capability Manifest Guide](docs/CAPABILITY_MANIFESTS.md). `aie capabilities` lists manifests. `aie propose <CAPABILITY_ID> <SUMMARY> --parameters '{"name":"value"}'` records a bounded proposal, `aie proposals` lists review states, and `aie approve-proposal <ID>` / `aie reject-proposal <ID>` record your explicit decision. `aie proposal-audit <ID>` shows the audit trail and checks its hash chain and stored head checkpoint; `aie policy-audit-check` verifies the complete ledger. Approval only records policy authorization—nothing is executed.
 
 ## Action policy foundation
@@ -104,15 +104,18 @@ The `aie.policy` module evaluates action proposals against explicit capability m
 Use `aie session-start "Build the ETW observer"`, `aie session-status`, `aie session-end`, and `aie sessions`. Sessions are explicit user labels; AIE does not infer or auto-create task intent. `aie ask --with-session` can attach the current session metadata, and remote models require `--confirm-session-egress`.
 
 ## Local model runtime
-`aie ask` does not attach memories or activity by default. Add `--with-activity` to attach a bounded recent activity summary. Remote/cloud inclusion requires `--confirm-activity-egress`; the activity package contains safe event summaries only, never window titles, Event Log message text, UIA control contents or feedback notes.\n\n`aie ask` does not attach memories by default. Add `--with-memory` to retrieve matching non-sensitive local records for that request. `--include-sensitive-memory` is available only for local inference. Attaching memory to a cloud or remote Ollama endpoint also requires `--confirm-memory-egress`; sensitive records are never attached to remote requests. The memory block is bounded JSON reference data marked untrusted, not instructions.
+`aie ask` does not attach memories or activity by default. Add `--with-activity` to attach a bounded recent activity summary. Remote/cloud inclusion requires `--confirm-activity-egress`; the activity package contains safe event summaries only, never window titles, Event Log message text, UIA control contents or feedback notes.
+
+`aie ask` does not attach memories by default. Add `--with-memory` to retrieve matching non-sensitive local records for that request. `--include-sensitive-memory` is available only for local inference. Attaching memory to a cloud or remote Ollama endpoint also requires `--confirm-memory-egress`; sensitive records are never attached to remote requests. The memory block is bounded JSON reference data marked untrusted, not instructions.
+
+
+
+Plan generation requests provider-enforced JSON mode (response_format=json): local Ollama uses its JSON response constraint and explicitly enabled OpenAI-compatible endpoints request a JSON object. The plan is still validated locally against the strict schema and capability allowlist; provider JSON mode is not treated as a safety boundary by itself. Streaming and cancellation remain unimplemented.
 
 A provider-neutral request/response contract and Ollama adapter are available under `aie/models/`. The router selects only installed local models using available RAM; it never pulls a model. `aie ask` is local-only by default. A remote Ollama endpoint requires an explicit `--allow-remote-ollama` flag and HTTPS.
 
 ## Latest CI validation
 The current integrated Windows build passed [GitHub Actions run #448](https://github.com/AryanGupta-234/P1-/actions/runs/38122160376) on Python 3.11 and 3.12. It includes lint, Windows-only optional imports, PowerShell parsing, browser JavaScript checks and the complete pytest suite, including Event Log runtime wiring, systemwide process telemetry, context packaging and audit integrity.
-
-## CI validation
-Windows CI passed on the current development baseline for Python 3.11 and 3.12, including Ruff, extension JavaScript syntax checks and pytest. See [run #206](https://github.com/AryanGupta-234/P1-/actions/runs/38118517008). This does not replace testing the browser extension/native host and UI Automation against your own Windows desktop.
 
 ## Local retention and permission review
 
@@ -149,7 +152,8 @@ The WPF dashboard is a user-started desktop client over the installed `aie` CLI.
 ```powershell
 pip install -e ".[windows]"
 dotnet build .\desktop\P1Dashboard\P1Dashboard.csproj --configuration Release
-.\desktop\P1Dashboard\bin\Release\net8.0-windows\P1Dashboard.exe
+.\desktop\P1Dashboard\bin\Release
+et8.0-windows\P1Dashboard.exe
 ```
 
 The dashboard reads local status, health, retention and task history; launches the bounded local `aie agent run` workflow; pauses/resumes an existing observer; and exposes emergency execution disable/kill controls. It does not start observation on launch, supply capability IDs, approve proposals or enable execution. The CLI must already be installed and available as `aie` on PATH.
