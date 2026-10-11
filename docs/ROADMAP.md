@@ -32,7 +32,8 @@ Status vocabulary: DONE / IN_PROGRESS / BLOCKED / PLANNED. A task is DONE only w
 - [x] Windows service inventory (name, display name, status, start type).
 - [x] Network interface status inventory without IP/MAC addresses.
 - [x] Scheduled task name/status inventory using read-only query.
-- [ ] Emit periodic CPU/memory/disk resource samples with retention controls.
+- [x] Emit periodic CPU/memory/system-volume usage observations.
+- [x] Add read-only ETW provider catalog discovery (no session control).
 - [ ] Monitor service state changes.
 - [ ] Monitor network interface/connectivity changes.
 - [ ] Monitor scheduled-task and application inventory changes.
@@ -88,9 +89,9 @@ Status vocabulary: DONE / IN_PROGRESS / BLOCKED / PLANNED. A task is DONE only w
 
 ## Current sprint — target hardware: Windows 11 x64, 16 GB RAM
 1. Confirm Windows CI; run `python -m pytest` and `ruff check .` locally.
-2. Add CPU/memory samples and process event tests.
-3. Add ETW process lifecycle spike; retain snapshot reconciliation as fallback.
-4. Add Event Log allowlist and service/network change detection.
+2. Add service/network state deltas and event retention controls.
+3. Implement ETW process lifecycle telemetry; retain snapshot reconciliation as fallback.
+4. Add Event Log allowlist and process/driver-image correlation.
 5. Build UIA read-only inspector before any app-control actions.
 6. Implement actual local Ollama chat/embedding adapters with resource/cancellation guards.
 
