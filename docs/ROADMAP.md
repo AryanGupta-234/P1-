@@ -7,7 +7,7 @@ Statuses: DONE / IN_PROGRESS / BLOCKED / PLANNED. Mark DONE only with code, test
 | ID | Workstream | Status | Exit criteria |
 |---|---|---|---|
 | M0 | Foundation and development workflow | IN_PROGRESS | Stable package/contracts, Windows CI, reproducible setup |
-| M1 | Windows environment perception | IN_PROGRESS | Inventory, process/event observation, retention and telemetry |
+| M1 | Windows environment perception | IN_PROGRESS | Inventory, process/event observation, retention and health telemetry |
 | M1.5 | Video intelligence | IN_PROGRESS | Live playback telemetry, correlated diagnosis and evaluation |
 | M2 | Context intelligence | IN_PROGRESS | Temporal evidence correlation, working context and session model |
 | M3 | Cognitive core | IN_PROGRESS | Local/cloud model adapters, routing, planning and evaluation |
@@ -35,9 +35,10 @@ Statuses: DONE / IN_PROGRESS / BLOCKED / PLANNED. Mark DONE only with code, test
 - [x] Event Log provider wired into observer runtime with bounded polling and per-pass record cap.
 - [x] Opt-in allowlisted UI Automation structural tree sampler with node/depth/time bounds.
 - [x] Global per-user observer pause/resume, status and age-based retention pruning.
-- [ ] ETW process telemetry and event-loss metrics.
+- [ ] ETW process telemetry and provider-level event-loss reporting.
 - [x] Opt-in bounded systemwide process CPU/RSS/thread/I/O snapshots; top consumers only, no command lines or executable paths.
-- [ ] Disk/network per-process deltas and event-loss accounting.
+- [ ] Disk/network per-process deltas and provider-level event-loss accounting.
+- [x] Privacy-safe observer health telemetry with provider latency/error counters and event-loss hooks.
 - [ ] Export/delete-all controls and observer health view.
 - [ ] Validate Event Log/UIA permissions and data collection on the target Windows desktop.
 
@@ -122,7 +123,7 @@ Statuses: DONE / IN_PROGRESS / BLOCKED / PLANNED. Mark DONE only with code, test
 - [ ] Desktop UI after core telemetry and policy APIs stabilize.
 
 ## Immediate dev sprint
-1. Verify the combined activity, memory and Event Log runtime tests on the current Windows CI matrix.
+1. Verify the combined activity, memory, Event Log and observer-health runtime tests on the current Windows CI matrix.
 2. Add observer health telemetry for permission errors, sensor timeouts and event loss.
 3. Validate browser/native-host, UIA and Event Log behavior on the target Windows desktop.
 4. Implement ETW process telemetry with explicit coverage boundaries.
