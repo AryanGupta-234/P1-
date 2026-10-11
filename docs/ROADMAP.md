@@ -65,7 +65,8 @@ Statuses: DONE / IN_PROGRESS / BLOCKED / PLANNED. Mark DONE only with code, test
 - [x] Indexed event-store queries by time window, source and event type.
 - [x] Unified privacy-safe activity timeline grouping browser, application, network, process, Event Log and diagnostic metadata.
 - [x] Safe activity-summary context packager for explicit per-request model inclusion; remote inclusion requires separate confirmation.
-- [ ] Unified event bus and general temporal correlation.
+- [x] Unified bounded synchronous event bus wired to durable SQLite and optional JSONL sinks.
+- [ ] General temporal correlation and evidence graph.
 - [x] Initial temporal activity session model with explicit time-gap boundaries.
 - [x] Explicit user-controlled task/session state with opt-in model-context packaging and CLI lifecycle controls.
 - [x] Freshness-weighted evidence assessment plus narrow near-simultaneous contradiction detection for allowlisted state fields.
