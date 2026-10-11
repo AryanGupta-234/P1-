@@ -137,8 +137,10 @@ Statuses: DONE / IN_PROGRESS / BLOCKED / PLANNED. Mark DONE only with code, test
 ## M7 — Personal assistant experience
 - [x] User-started Windows tray process with pause/resume and a minimal local status dialog.
 - [x] Generic local diagnostic notifications with explicit opt-in, quiet hours, pause suppression and no event details in the balloon. Full notification categories and user-configurable delivery rules remain open.
-- [ ] Permission and retention settings.
-- [ ] Diagnostics/action history and memory review.
+- [x] Capability permission inspection and enable/disable controls for registered adapters; enabling cannot remove required review or enable autonomy.
+- [x] Read-only retention inventory for evidence, memories, task runs and policy proposals, alongside explicit event/memory pruning commands.
+- [x] CLI diagnostics/action history and local memory review through events, proposals, memories, recall, conflict review, merge and verified-skill review.
+- [ ] Native desktop history and memory-review interface with pagination and user-controlled filters.
 - [ ] Desktop UI after core telemetry and policy APIs stabilize.
 
 ## Immediate dev sprint
