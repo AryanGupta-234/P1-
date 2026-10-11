@@ -132,9 +132,26 @@ def observe(
         help="Opt in to collecting sensitive foreground window titles.",
     ),
     foreground_sample_interval: float = typer.Option(5.0, min=1.0, max=60.0),
+    ui_tree: bool = typer.Option(False, "--ui-tree/--no-ui-tree", help="Opt in to structural UI Automation metadata."),
+    ui_tree_apps: str | None = typer.Option(None, help="Comma-separated process allowlist, e.g. msedge.exe,notepad.exe."),
+    ui_tree_sample_interval: float = typer.Option(10.0, min=2.0, max=300.0),
 ) -> None:
     """Observe selected Windows metadata (read-only)."""
     from aie.runtime import observe as run_observer
+
+    allowed_ui_apps = {
+        item.strip().casefold()
+        for item in (ui_tree_apps or "").split(",")
+        if item.strip()
+    }
+    if ui_tree and not allowed_ui_apps:
+        console.print("[red]UI Automation requires --ui-tree-apps with an explicit app allowlist.[/red]")
+        raise typer.Exit(2)
+    if ui_tree:
+        import importlib.util
+        if importlib.util.find_spec("pywinauto") is None:
+            console.print("[red]Install UI Automation support with: python -m pip install -e .[windows][/red]")
+            raise typer.Exit(2)
 
     try:
         added = run_observer(
@@ -148,6 +165,9 @@ def observe(
             include_window_titles=include_window_titles,
             foreground_sample_interval=foreground_sample_interval,
             on_diagnostic=_print_video_diagnostic,
+            include_ui_tree=ui_tree,
+            ui_tree_app_names=allowed_ui_apps,
+            ui_tree_sample_interval=ui_tree_sample_interval,
         )
     except OSError as exc:
         console.print(f"[red]Observer unavailable:[/red] {exc}")
