@@ -1,16 +1,4 @@
-"""Deterministic diagnostics and live evidence monitors."""
-from aie.diagnostics.monitor import VideoDiagnosticMonitor
-from aie.diagnostics.video_buffering import (
-    DiagnosticFinding,
-    DiagnosticReport,
-    VideoMetrics,
-    diagnose_video_buffering,
-)
+"""Deterministic diagnostic modules for AIE.
 
-__all__ = [
-    "DiagnosticFinding",
-    "DiagnosticReport",
-    "VideoDiagnosticMonitor",
-    "VideoMetrics",
-    "diagnose_video_buffering",
-]
+Import concrete modules explicitly to avoid circular package initialization.
+"""
