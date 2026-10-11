@@ -87,7 +87,10 @@ Statuses: DONE / IN_PROGRESS / BLOCKED / PLANNED. Mark DONE only with code, test
 - [ ] Inference concurrency, memory/token budgets and latency metrics.
 - [x] Central remote-model egress gateway, high-confidence credential redaction and metadata-only audit.
 - [x] Bounded declarative task-plan contract with strict fields, typed steps, explicit dependencies, cycle rejection, deterministic topological ordering and readiness queries; no step execution. Validated by Windows CI run [#590](https://github.com/AryanGupta-234/P1-/actions/runs/38131262921) on Python 3.11 and 3.12.
-- [ ] Model-backed plan generation, persisted state transitions, cancellation/recovery and tool-selection evaluation.
+- [x] Optional local-Ollama plan drafting with strict schema, exact-goal preservation, capability allowlist validation and deterministic graph validation.
+- [x] SQLite task-run persistence with compare-and-swap versions, append-only lifecycle events, bounded step advancement, pause/resume/cancel and manual verification gates.
+- [x] Local-only model reasoning handler using bounded completed-step summaries; unavailable local inference falls back to explicit user input.
+- [ ] Recovery of interrupted in-flight handlers; they fail closed and require operator review rather than automatic replay.
 - [ ] Reasoning and tool-selection evaluation harness.
 
 ## M4 — Persistent memory and learning
@@ -113,9 +116,10 @@ Statuses: DONE / IN_PROGRESS / BLOCKED / PLANNED. Mark DONE only with code, test
 - [x] Policy broker integration with a reviewed proposal queue and separate append-only SQLite audit ledger (approval never executes).
 - [x] Typed non-mutating dry-run executor validates proposal/policy alignment without OS mutation.
 - [x] CLI dry-run path for reviewed proposals; it reports `executed=False`.
-- [x] Fail-closed execution gate and bounded execution-budget contract; no real executor consumes it yet.
-- [ ] Least-privilege real executor and restricted tool manifests.
-- [ ] Sandbox enforcement, command/tool resource controls and postcondition-aware runtime.
+- [x] Fail-closed execution gate, kill switch and bounded execution-budget contract consumed by a registered adapter executor.
+- [x] Restricted in-process adapter registry with a single fixed Windows Settings URI opener; no shell, arbitrary process, filesystem-write or network adapter.
+- [x] Approved-proposal execution receipts appended to the SHA-256 policy audit ledger; successful URI dispatch remains unverified until a separate postcondition check.
+- [ ] OS-process sandbox enforcement and isolated adapter execution; current built-in adapter is a narrow in-process URI dispatcher, not a sandbox.
 - [ ] Rollback/recovery and postcondition verification.
 - [ ] Prompt-injection and tool-misuse red-team tests.
 - [ ] Enable any autonomous remediation only after end-to-end verification.
@@ -139,8 +143,8 @@ Statuses: DONE / IN_PROGRESS / BLOCKED / PLANNED. Mark DONE only with code, test
 2. Extend ETW from process lifecycle into explicitly selected thread/file/network categories with coverage reporting.
 3. Evaluate freshness/contradiction signals and add calibrated confidence metrics without treating heuristics as probabilities.
 4. Evaluate semantic memory retrieval and review consolidation proposals before any automatic merge/learning path.
-5. Continue the policy sandbox/audit path before any mutating executor work.
-6. Extend the declarative plan contract into a persisted, cancellable state machine only after step outcomes and policy hand-offs have explicit provenance.
+5. Harden adapter isolation, postcondition verification and recovery before adding additional mutating capabilities.
+6. Integrate reviewed task-run summaries with memory and outcome learning only after the retrieval/forgetting evaluation gates are defined.
 
 ## Risk register
 | Risk | Mitigation | State |
