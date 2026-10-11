@@ -149,5 +149,89 @@ def events(limit: int = typer.Option(20, min=1, max=1000)) -> None:
     console.print(f"Total stored: {store.count()}")
 
 
+@app.command("context")
+def show_context(
+    max_age_seconds: float = typer.Option(30.0, min=1.0, max=300.0),
+) -> None:
+    """Show the latest correlated video, foreground-app and network context."""
+    from aie.context.video import build_video_observation_context
+
+    store = EventStore(database_path())
+    context = build_video_observation_context(
+        store.recent(300),
+        max_age_seconds=max_age_seconds,
+    )
+    if context is None:
+        console.print(
+            "No fresh browser video snapshot is available. "
+            "Enable the AIE Playback Observer while a video is playing, "
+            "then run this command again."
+        )
+        return
+
+    table = Table("Signal", "Value")
+    table.add_row("Playback", context.playback_state)
+    table.add_row("Stall count", str(context.metrics.stall_count))
+    table.add_row(
+        "Observation window",
+        f"{context.metrics.observation_window_seconds:.1f} seconds",
+    )
+    table.add_row(
+        "Buffered ahead",
+        "unknown" if context.buffered_ahead_seconds is None
+        else f"{context.buffered_ahead_seconds:.2f} seconds",
+    )
+    table.add_row(
+        "Playback progress delta",
+        "unknown" if context.playback_progress_delta_seconds is None
+        else f"{context.playback_progress_delta_seconds:.2f} seconds",
+    )
+
+    if context.active_application is not None:
+        app_context = context.active_application
+        table.add_row(
+            "Foreground app",
+            f"{app_context.process_name} (PID {app_context.pid})",
+        )
+        table.add_row(
+            "App CPU",
+            "warming up / unavailable" if app_context.cpu_pct is None
+            else f"{app_context.cpu_pct:.1f}%",
+        )
+        table.add_row(
+            "App memory",
+            "unavailable" if app_context.memory_rss_bytes is None
+            else f"{app_context.memory_rss_bytes / (1024 ** 2):.1f} MiB",
+        )
+        table.add_row(
+            "App threads",
+            "unavailable" if app_context.thread_count is None
+            else str(app_context.thread_count),
+        )
+        table.add_row("Window title collected", "yes (sensitive)" if app_context.window_title_collected else "no")
+
+    for evidence in context.network_evidence:
+        if evidence.kind == "dns_probe":
+            value = (
+                "unresolved / unavailable"
+                if evidence.resolution_ms is None
+                else f"{evidence.resolution_ms:.1f} ms"
+            )
+            table.add_row(f"DNS: {evidence.target}", value)
+        else:
+            value = (
+                "connection failed / unavailable"
+                if evidence.connect_latency_ms is None
+                else f"{evidence.connect_latency_ms:.1f} ms TCP connect"
+            )
+            table.add_row(f"Network: {evidence.target}", value)
+
+    console.print(table)
+    console.print(
+        f"Evidence records: {len(context.evidence_event_ids)} · "
+        f"Context age: {(context.generated_at - context.observed_at).total_seconds():.1f}s"
+    )
+
+
 if __name__ == "__main__":
     app()
