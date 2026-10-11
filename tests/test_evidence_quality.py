@@ -47,8 +47,8 @@ def test_contradiction_detection_requires_same_fact_and_near_simultaneous_states
     contradictions = find_explicit_contradictions([first, second, late])
 
     assert len(contradictions) == 1
-    assert contradictions[0].event_ids == ("late", "first") or contradictions[0].event_ids == ("first", "second")
-    assert contradictions[0].values == ("stalled", "playing") or contradictions[0].values == ("playing", "stalled")
+    assert set(contradictions[0].event_ids) == {"first", "second"}
+    assert set(contradictions[0].values) == {"playing", "stalled"}
 
 
 def test_non_state_payloads_and_different_fact_keys_do_not_conflict():
