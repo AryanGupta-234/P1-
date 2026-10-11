@@ -741,7 +741,7 @@ def recall(
     include_sensitive: bool = typer.Option(False, help="Explicitly include sensitive memories."),
     limit: int = typer.Option(10, min=1, max=100),
     semantic: bool = typer.Option(False, "--semantic/--lexical"),
-    embedding_model: str = typer.Option("nomic-embed-text"),
+    embedding_model: str = typer.Option("nomic-embed-text:latest"),
 ) -> None:
     """Retrieve memories using lexical overlap or local Ollama embeddings."""
     from aie.memory.store import MemoryStore
@@ -885,6 +885,9 @@ def memory_index(
     from aie.memory.semantic import index_memory_embeddings
     from aie.memory.store import MemoryStore
     from aie.models.ollama import OllamaClient
+
+    if include_sensitive:
+        console.print("[yellow]Sensitive memory indexing enabled. Embeddings are local but not encrypted; ensure the device account is protected.[/yellow]")
 
     try:
         report = index_memory_embeddings(
