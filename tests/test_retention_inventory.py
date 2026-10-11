@@ -80,7 +80,7 @@ def test_retention_snapshot_counts_candidates_without_deleting(tmp_path):
     assert report.event_count == 2
     assert report.event_prune_candidates == 1
     assert report.memory_count == 2
-    assert report.active_memory_count == 2
+    assert report.active_memory_count == 1
     assert report.expired_memory_count == 1
     assert report.task_run_status_counts == {"queued": 1}
     assert report.proposal_count_sampled == 0
