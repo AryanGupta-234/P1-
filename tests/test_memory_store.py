@@ -45,6 +45,7 @@ def test_expired_memories_are_hidden_and_can_be_pruned(tmp_path):
         kind="working",
         content="Temporary task context.",
         created_at=now - timedelta(hours=1),
+        updated_at=now - timedelta(hours=1),
         expires_at=now + timedelta(minutes=5),
     ))
     assert store.list_memories(now=now)
