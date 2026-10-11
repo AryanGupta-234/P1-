@@ -95,6 +95,8 @@ Capability manifests are loaded only from `%LOCALAPPDATA%\AIE\capabilities\*.jso
 The `aie.policy` module currently evaluates action proposals against explicit capability manifests. Unknown/disabled capabilities are denied, parameters are allowlisted, medium/high-risk proposals require approval, and critical-risk actions are blocked. This is an authorization prototype only; AIE does not yet execute operating-system actions.
 
 ## Local model runtime
+`aie ask` does not attach memories by default. Add `--with-memory` to retrieve matching non-sensitive local records for that request. `--include-sensitive-memory` is available only for local inference. Attaching memory to a cloud or remote Ollama endpoint also requires `--confirm-memory-egress`; sensitive records are never attached to remote requests. The memory block is bounded JSON reference data marked untrusted, not instructions.
+
 A provider-neutral request/response contract and Ollama adapter are available under `aie/models/`. The router selects only installed local models using available RAM; it never pulls a model. `aie ask` is local-only by default. A remote Ollama endpoint requires an explicit `--allow-remote-ollama` flag and HTTPS.
 
 ## CI validation
