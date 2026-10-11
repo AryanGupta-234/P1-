@@ -2,7 +2,7 @@
 
 Statuses: DONE / IN_PROGRESS / BLOCKED / PLANNED. Mark DONE only with code, tests and validation evidence.
 
-**Last updated:** 2026-10-11 | **Target integration:** `dev` | **Current feature branch:** `feat/agent-orchestration-core`
+**Last updated:** 2026-10-11 | **Target integration:** `dev` | **Current feature branch:** `feat/agent-orchestration-core` | **Current PR:** [#16](https://github.com/AryanGupta-234/P1-/pull/16) draft; CI rerun pending
 
 | ID | Workstream | Status | Exit criteria |
 |---|---|---|---|
@@ -90,8 +90,8 @@ Statuses: DONE / IN_PROGRESS / BLOCKED / PLANNED. Mark DONE only with code, test
 - [x] Optional local-Ollama plan drafting with strict schema, exact-goal preservation, capability allowlist validation and deterministic graph validation.
 - [x] SQLite task-run persistence with compare-and-swap versions, append-only lifecycle events, bounded step advancement, pause/resume/cancel and manual verification gates.
 - [x] Local-only model reasoning handler using bounded completed-step summaries; unavailable local inference falls back to explicit user input.
-- [ ] Recovery of interrupted in-flight handlers; they fail closed and require operator review rather than automatic replay.
-- [x] User-authored local planner benchmark: validity, exact-goal preservation, required step-kind coverage, capability precision/recall and forbidden-capability rate.
+- [x] Fail-closed recovery of interrupted in-flight handlers to manual review; automatic replay remains intentionally disabled and pending.
+- [x] Planner benchmark harness and deterministic metrics for user-authored cases; held-out task families, corpus quality and performance evaluation remain pending.
 - [ ] Held-out task families, tool-selection utility, latency/cost calibration and human-rated reasoning quality.
 
 ## M4 — Persistent memory and learning
@@ -107,7 +107,7 @@ Statuses: DONE / IN_PROGRESS / BLOCKED / PLANNED. Mark DONE only with code, test
 - [x] Review-only duplicate/near-duplicate consolidation proposals; no automatic merge/rewrite.
 - [x] Explicit two-source memory merge after review, with two-parent lineage, source provenance preservation, sensitivity monotonicity, conservative confidence and earliest-expiry enforcement.
 - [ ] Embedding retrieval quality evaluation and semantic contradiction resolution.
-- [x] Deterministic procedural-skill candidates from completed runs with positive verification and action-receipt checks; explicit user confirmation before procedural-memory save.
+- [x] Experimental deterministic skill-candidate generation from completed runs with positive verification and action-receipt checks; explicit user confirmation before save. Quality, transfer and end-to-end hosted CI validation remain pending.
 - [ ] Evaluated skill quality/transfer and learning from verified outcomes; no automatic model retraining or capability induction.
 - [ ] Forgetting, retention and regression evaluation.
 
@@ -119,10 +119,10 @@ Statuses: DONE / IN_PROGRESS / BLOCKED / PLANNED. Mark DONE only with code, test
 - [x] Typed non-mutating dry-run executor validates proposal/policy alignment without OS mutation.
 - [x] CLI dry-run path for reviewed proposals; it reports `executed=False`.
 - [x] Fail-closed execution gate, kill switch and bounded execution-budget contract consumed by a registered adapter executor.
-- [x] Restricted in-process adapter registry with a single fixed Windows Settings URI opener; no shell, arbitrary process, filesystem-write or network adapter.
-- [x] Approved-proposal execution receipts appended to the SHA-256 policy audit ledger; successful URI dispatch remains unverified until a separate postcondition check.
+- [x] Restricted in-process adapter registry with a single fixed Windows Settings URI opener; no shell, arbitrary process, filesystem-write or network adapter. This is not process sandboxing.
+- [x] Durable execution reservations and immutable execution receipts appended to the SHA-256 policy audit ledger; duplicate reservations/receipts are rejected and successful URI dispatch remains unverified until a separate postcondition check.
 - [ ] OS-process sandbox enforcement and isolated adapter execution; current built-in adapter is a narrow in-process URI dispatcher, not a sandbox.
-- [ ] Rollback/recovery and postcondition verification.
+- [ ] Rollback, automatic recovery after an execution reservation, and non-interactive postcondition verification.
 - [ ] Prompt-injection and tool-misuse red-team tests.
 - [ ] Enable any autonomous remediation only after end-to-end verification.
 
@@ -137,8 +137,8 @@ Statuses: DONE / IN_PROGRESS / BLOCKED / PLANNED. Mark DONE only with code, test
 - [ ] Reproducible experiment manifests; no benchmark presented as proof of AGI.
 
 ## M7 — Personal assistant experience
-- [x] User-started Windows tray process with pause/resume and a minimal local status dialog.
-- [x] Generic local diagnostic notifications with explicit opt-in, quiet hours, pause suppression and no event details in the balloon. Full notification categories and user-configurable delivery rules remain open.
+- [x] User-started Windows tray prototype with pause/resume and minimal local status dialog; target-desktop usability/runtime validation remains pending.
+- [x] Generic local notification prototype with explicit opt-in, quiet hours, pause suppression and no event details in the balloon. Target-desktop behavior and full notification categories remain pending.
 - [x] Capability permission inspection and enable/disable controls for registered adapters; enabling cannot remove required review or enable autonomy.
 - [x] Read-only retention inventory for evidence, memories, task runs and policy proposals, alongside explicit event/memory pruning commands.
 - [x] CLI diagnostics/action history and local memory review through events, proposals, memories, recall, conflict review, merge and verified-skill review.
