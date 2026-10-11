@@ -29,6 +29,8 @@ def build_memory_prompt_context(
     limit: int = 5,
     max_characters: int = 4000,
     per_record_characters: int = 1000,
+    semantic_model: str | None = None,
+    embedding_provider=None,
 ) -> MemoryPromptContext:
     """Build a small JSON-quoted memory block from local lexical retrieval."""
     if not 1 <= limit <= 10:
@@ -38,11 +40,24 @@ def build_memory_prompt_context(
     if not 100 <= per_record_characters <= 2000:
         raise ValueError("per_record_characters must be between 100 and 2000")
 
-    hits = store.search(
-        query,
-        include_sensitive=include_sensitive,
-        limit=limit,
-    )
+    if semantic_model is not None:
+        if embedding_provider is None:
+            raise ValueError("embedding_provider is required for semantic memory retrieval")
+        query_vectors = embedding_provider.embed([query], model=semantic_model)
+        if len(query_vectors) != 1:
+            raise ValueError("embedding provider must return exactly one query vector")
+        hits = store.search_semantic(
+            query_vectors[0],
+            model=semantic_model,
+            include_sensitive=include_sensitive,
+            limit=limit,
+        )
+    else:
+        hits = store.search(
+            query,
+            include_sensitive=include_sensitive,
+            limit=limit,
+        )
     records: list[dict[str, object]] = []
     ids: list[str] = []
     for hit in hits:
