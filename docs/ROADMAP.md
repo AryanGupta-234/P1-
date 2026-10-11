@@ -79,7 +79,8 @@ Statuses: DONE / IN_PROGRESS / BLOCKED / PLANNED. Mark DONE only with code, test
 - [x] RAM-aware routing to already-installed local models.
 - [x] Explicit OpenAI-compatible HTTPS adapter and per-request cloud egress opt-in.
 - [x] CLI to invoke local or explicitly enabled cloud inference.
-- [x] Explicit activity/memory context attachment controls, safe payload budgets and independent remote-egress confirmation.
+- [x] Explicit activity/memory/session context attachment controls, safe payload budgets and independent remote-egress confirmation.
+- [x] Central remote egress gateway for cloud/remote-Ollama requests with high-confidence credential redaction and metadata-only local audit.
 - [ ] Structured output modes, streaming and cancellation.
 - [ ] Inference concurrency, memory/token budgets and latency metrics.
 - [ ] Central cloud egress gateway, redaction and audit.
