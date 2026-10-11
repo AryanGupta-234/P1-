@@ -8,26 +8,15 @@ from dataclasses import dataclass
 from aie.memory.models import MemoryKind
 from aie.memory.store import MemoryStore, StoredMemory
 
-_TOKEN = re.compile(r"[a-z0-9][a-z0-9_.-]{1,39}")
+_TOKEN = re.compile(r"[a-z0-9](?:[a-z0-9_.-]{0,38}[a-z0-9])?")
 
 _OPPOSITES = (
-    ("always", "never"),
-    ("enable", "disable"),
-    ("enabled", "disabled"),
-    ("allow", "deny"),
-    ("allowed", "blocked"),
-    ("include", "exclude"),
-    ("keep", "remove"),
-    ("retain", "delete"),
-    ("connect", "disconnect"),
-    ("accept", "reject"),
-    ("increase", "decrease"),
-    ("raise", "lower"),
-    ("before", "after"),
-    ("on", "off"),
-    ("true", "false"),
-    ("use", "avoid"),
-    ("prefer", "avoid"),
+    ("always", "never"), ("enable", "disable"), ("enabled", "disabled"),
+    ("allow", "deny"), ("allowed", "blocked"), ("include", "exclude"),
+    ("keep", "remove"), ("retain", "delete"), ("connect", "disconnect"),
+    ("accept", "reject"), ("increase", "decrease"), ("raise", "lower"),
+    ("before", "after"), ("on", "off"), ("true", "false"),
+    ("use", "avoid"), ("prefer", "avoid"),
 )
 
 
@@ -54,12 +43,7 @@ def generate_conflict_proposals(
     max_proposals: int = 100,
     minimum_shared_tokens: int = 1,
 ) -> tuple[MemoryConflictProposal, ...]:
-    """Flag explicit opposite lexical markers in records sharing substantive context.
-
-    This is not natural-language contradiction resolution. Negation, modality,
-    temporality, subject scope and factual entailment are not inferred. The queue
-    intentionally favors false negatives over treating ambiguous phrasing as conflict.
-    """
+    """Flag lexical polarity conflicts for review; this is not contradiction proof."""
     if not 1 <= max_memories <= 1000:
         raise ValueError("max_memories must be between 1 and 1000")
     if not 1 <= max_proposals <= 500:
@@ -68,11 +52,8 @@ def generate_conflict_proposals(
         raise ValueError("minimum_shared_tokens must be between 1 and 10")
 
     memories = store.list_memories(
-        kind=kind,
-        include_sensitive=include_sensitive,
-        include_superseded=False,
-        include_expired=False,
-        limit=max_memories,
+        kind=kind, include_sensitive=include_sensitive,
+        include_superseded=False, include_expired=False, limit=max_memories,
     )
     features = {item.memory.memory_id: _tokens(item) for item in memories}
     proposals: list[MemoryConflictProposal] = []
@@ -82,27 +63,23 @@ def generate_conflict_proposals(
             if left.memory.kind != right.memory.kind:
                 continue
             right_tokens = features[right.memory.memory_id]
-            found: list[tuple[str, str]] = []
-            for first, second in _OPPOSITES:
-                if (first in left_tokens and second in right_tokens) or (
-                    second in left_tokens and first in right_tokens
-                ):
-                    found.append((first, second))
+            found = [
+                pair for pair in _OPPOSITES
+                if (pair[0] in left_tokens and pair[1] in right_tokens)
+                or (pair[1] in left_tokens and pair[0] in right_tokens)
+            ]
             if not found:
                 continue
-
             markers = {term for pair in found for term in pair}
             common = tuple(sorted((left_tokens & right_tokens) - markers))
             if len(common) < minimum_shared_tokens:
                 continue
-            pair = sorted((left.memory.memory_id, right.memory.memory_id))
-            for first, second in found:
+            pair_ids = tuple(sorted((left.memory.memory_id, right.memory.memory_id)))
+            for opposing in found:
                 proposals.append(
                     MemoryConflictProposal(
-                        memory_ids=(pair[0], pair[1]),
-                        kind=left.memory.kind,
-                        shared_context_tokens=common[:20],
-                        opposing_terms=(first, second),
+                        memory_ids=pair_ids, kind=left.memory.kind,
+                        shared_context_tokens=common[:20], opposing_terms=opposing,
                         reason=(
                             "Possible lexical polarity conflict only; inspect both "
                             "records and their dates before deciding."
@@ -111,11 +88,7 @@ def generate_conflict_proposals(
                 )
 
     proposals.sort(
-        key=lambda item: (
-            len(item.shared_context_tokens),
-            item.opposing_terms,
-            item.memory_ids,
-        ),
+        key=lambda item: (len(item.shared_context_tokens), item.opposing_terms, item.memory_ids),
         reverse=True,
     )
     unique: list[MemoryConflictProposal] = []
