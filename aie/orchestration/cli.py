@@ -469,6 +469,22 @@ def complete_task_step(
 def _change_task_state(run_id: str, operation: Literal["pause", "resume", "cancel"]) -> None:
     engine = _engine()
     try:
+        if operation == "cancel":
+            from aie.policy.ledger import PolicyLedger
+
+            run_before_cancel = engine.get(run_id)
+            ledger = PolicyLedger(policy_audit_database_path())
+            for state in run_before_cancel.steps:
+                if not state.proposal_id:
+                    continue
+                proposal = ledger.get(state.proposal_id)
+                if proposal is None or proposal.execution_status is not None:
+                    continue
+                if proposal.status in {"pending_review", "approved"}:
+                    ledger.append_revocation(
+                        state.proposal_id,
+                        reason=f"task run {run_id} was cancelled",
+                    )
         run = getattr(engine, operation)(run_id)
     except ValueError as exc:
         console.print(f"[red]Task transition rejected:[/red] {exc}")
