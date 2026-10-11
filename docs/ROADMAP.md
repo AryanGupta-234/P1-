@@ -91,7 +91,8 @@ Statuses: DONE / IN_PROGRESS / BLOCKED / PLANNED. Mark DONE only with code, test
 - [x] SQLite task-run persistence with compare-and-swap versions, append-only lifecycle events, bounded step advancement, pause/resume/cancel and manual verification gates.
 - [x] Local-only model reasoning handler using bounded completed-step summaries; unavailable local inference falls back to explicit user input.
 - [ ] Recovery of interrupted in-flight handlers; they fail closed and require operator review rather than automatic replay.
-- [ ] Reasoning and tool-selection evaluation harness.
+- [x] User-authored local planner benchmark: validity, exact-goal preservation, required step-kind coverage, capability precision/recall and forbidden-capability rate.
+- [ ] Held-out task families, tool-selection utility, latency/cost calibration and human-rated reasoning quality.
 
 ## M4 — Persistent memory and learning
 - [x] Capture user-reported diagnostic outcomes: resolved, not resolved, not attempted.
@@ -128,7 +129,8 @@ Statuses: DONE / IN_PROGRESS / BLOCKED / PLANNED. Mark DONE only with code, test
 ## M6 — Generalization research
 - [x] User-authored retrieval benchmark with Recall@k, Precision@k, MRR and Hit Rate for lexical or local semantic search; sensitive records require explicit inclusion.
 - [x] Conservative lexical polarity-conflict proposals for manual review; no automatic rewrite or resolution.
-- [ ] Held-out task families and deterministic baselines.
+- [x] Planner contract benchmark reports deterministic schema/allowlist metrics over a user-authored dataset.
+- [ ] Held-out task families and deterministic baselines with curated ground truth.
 - [ ] Transfer to unseen task variations and evaluate procedural-skill quality.
 - [ ] Causal/temporal reasoning measured separately from retrieval.
 - [ ] Calibration, robustness, forgetting and recovery metrics.
