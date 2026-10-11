@@ -76,6 +76,7 @@ Build persistent personal intelligence that observes explicitly permitted signal
 - Optional OpenAI-compatible HTTPS provider requiring explicit `--provider cloud --allow-cloud-egress`.
 - Cloud/remote-Ollama requests pass through a centralized local egress gateway. Only explicitly selected context is attached; activity, memory and session context require separate confirmation, sensitive memory is blocked, high-confidence credential patterns are redacted, payload size is bounded, and a metadata-only local audit record is written. Observer telemetry is never automatically attached.
 - Bounded declarative plans use typed steps, explicit success criteria and dependencies; model-backed drafting is optional, local-Ollama by default, exact-goal preserving, schema-validated and restricted to caller-allowlisted capability IDs.
+- `aie agent run` provides a single-command local path from the user's goal through plan validation, durable run creation and bounded step advancement. It stops at approval/input/verification gates and does not execute proposals.
 - Persisted task orchestration uses SQLite compare-and-swap versions and append-only lifecycle events. The engine advances dependency-ready steps through injected handlers, pauses for approval/input, and requires an explicit positive assertion for verify steps. Local model reasoning receives only the plan and bounded completed-step summaries; no tools are exposed to the model.
 
 **Context and memory**
