@@ -1,10 +1,11 @@
-"""Fail-closed execution controls for the future mutating executor.
+"""Fail-closed execution controls for registered policy-mediated adapters.
 
-These controls are intentionally independent of the current dry-run executor. Creating
-or removing the enable/kill-switch markers performs no OS action by itself.
+Creating or removing the enable/kill-switch markers performs no OS action by itself.
 """
 from __future__ import annotations
 
+import os
+import stat
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -43,8 +44,47 @@ class ExecutionGateStatus:
         return self.enabled and not self.kill_switch_active
 
 
+def _is_regular_marker(path: Path) -> bool:
+    """Accept only a regular file; symlinks and other file types fail closed."""
+    try:
+        return stat.S_ISREG(path.lstat().st_mode)
+    except OSError:
+        return False
+
+
+def _marker_present(path: Path) -> bool:
+    """Count symlinks (including broken links) and non-file objects as present."""
+    try:
+        path.lstat()
+    except FileNotFoundError:
+        return False
+    except OSError:
+        # An unreadable kill-switch path must be treated as active.
+        return True
+    return True
+
+
+def _create_marker_exclusively(path: Path) -> None:
+    """Create a zero-byte marker without following an existing symlink."""
+    flags = os.O_CREAT | os.O_EXCL | os.O_WRONLY
+    if hasattr(os, "O_BINARY"):
+        flags |= os.O_BINARY
+    try:
+        descriptor = os.open(path, flags, 0o600)
+    except FileExistsError:
+        if not _is_regular_marker(path):
+            raise ExecutionBlocked("execution marker exists but is not a regular file")
+        return
+    except OSError as exc:
+        raise ExecutionBlocked(
+            f"unable to create execution marker ({type(exc).__name__})"
+        ) from exc
+    else:
+        os.close(descriptor)
+
+
 class ExecutionControl:
-    """Fail-closed global control surface for a future real executor."""
+    """Fail-closed global control surface for explicitly enabled adapters."""
 
     def __init__(
         self,
@@ -57,8 +97,8 @@ class ExecutionControl:
 
     def status(self) -> ExecutionGateStatus:
         return ExecutionGateStatus(
-            enabled=self.enabled_path.exists(),
-            kill_switch_active=self.kill_switch_path.exists(),
+            enabled=_is_regular_marker(self.enabled_path),
+            kill_switch_active=_marker_present(self.kill_switch_path),
         )
 
     def require_mutation_allowed(self) -> None:
@@ -75,7 +115,7 @@ class ExecutionControl:
     def set_enabled(self, enabled: bool) -> None:
         if enabled:
             self.enabled_path.parent.mkdir(parents=True, exist_ok=True)
-            self.enabled_path.touch(exist_ok=True)
+            _create_marker_exclusively(self.enabled_path)
             return
         try:
             self.enabled_path.unlink()
@@ -85,7 +125,7 @@ class ExecutionControl:
     def set_kill_switch(self, active: bool) -> None:
         if active:
             self.kill_switch_path.parent.mkdir(parents=True, exist_ok=True)
-            self.kill_switch_path.touch(exist_ok=True)
+            _create_marker_exclusively(self.kill_switch_path)
             return
         try:
             self.kill_switch_path.unlink()
