@@ -14,6 +14,28 @@ Make AIE capable of interacting with a broad range of Windows applications throu
 
 Microsoft UI Automation exposes application elements, properties, control patterns and events to client applications. Provider quality varies by app and custom controls, so AIE must detect unsupported controls and fall back safely rather than guess. See [Microsoft UI Automation overview](https://learn.microsoft.com/en-us/windows/win32/winauto/uiauto-uiautomationoverview) and [UI Automation client overview](https://learn.microsoft.com/en-us/windows/win32/winauto/uiauto-clientsoverview).
 
+## Current implementation: read-only UIA inspector
+
+The `feat/windows-uia-inspector` branch adds an initial read-only UIA discovery layer:
+
+- `aie/automation/uia_inspector.py`: optional pywinauto UIA backend.
+- `uia-windows`: list visible top-level windows by HWND/PID/control metadata, without collecting window titles.
+- `uia-inspect --handle 0x...`: inspect a selected window's bounded tree.
+- Traversal limits: depth 0–8 and 1–1000 nodes (CLI defaults: depth 3, 150 nodes).
+- Output includes control type, class, Automation ID, framework, enabled/visible metadata, and bounded traversal errors.
+- The inspector does not read control names, titles, text, rich text, values, document content or credentials.
+- It does not invoke UIA control patterns, click controls, send keystrokes, or mutate applications.
+
+Install the optional dependency:
+
+```powershell
+python -m pip install -e ".[windows-ui]"
+aie uia-windows
+aie uia-inspect --handle 0x000A1234 --max-depth 3 --max-nodes 150
+```
+
+Use a real HWND from `uia-windows`; the sample handle above is illustrative. Inspect only windows you are authorized to examine. UIA providers expose different amounts of metadata, and controls may be virtualized, custom-drawn or inaccessible. A partial tree is not proof that an application is fully automatable.
+
 ## Planned AIE interfaces
 
 - `ApplicationRegistry`: known app identity, install source and supported adapter IDs.

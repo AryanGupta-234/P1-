@@ -49,12 +49,19 @@ Build persistent personal intelligence that observes explicitly permitted signal
 
 **Integrated on dev:** deterministic video-buffering triage; bounded read-only network sampling; temporal event correlation; and an opt-in MV3 Chrome/Edge playback observer prototype with a strict Windows native-messaging host. Monitoring defaults to off and collects HTML video playback/performance counters only. The network provider is now wired into the observer CLI with a default 15-second cadence (configurable from 5–300 seconds) and a --no-network opt-out. DNS probes use a single-flight guard so a stuck resolver cannot accumulate worker threads. The network provider samples interface counters, TCP connection-establishment latency to a private gateway and two public endpoints, and DNS resolution timing; this is not packet RTT and it does not measure sustained stream throughput. The correlator preserves connect latency as distinct evidence and leaves packet loss/throughput unknown when they were not measured. These are telemetry building blocks, not a live browser monitor, and no fixes are executed.
 
-**Not implemented:** ETW subscriptions, Event Log provider, per-process resource sampling, validation of native-host registration on the target desktop, Windows Graphics Capture/UIA observer, full context graph, model gateway, persistent memory layers, policy broker, sandboxed executor, autonomous remediation or assistant dashboard.
+**Windows inventory coverage on dev:** read-only application uninstall metadata, Windows service metadata, scheduled-task names/status, and system CPU/memory/system-volume snapshots are in the user-mode inventory/observer. These are snapshots, not continuous change feeds or per-process profiling.
+
+**Feature branch in review (PR #4):** optional pywinauto UIA window listing and bounded tree inspection. It reports HWND/PID/control type/class/Automation ID metadata, excludes text/title/value properties, and invokes no control actions. Synthetic traversal/privacy tests are included. This is read-only discovery—not app automation.
+
+**Not implemented:** ETW live subscriptions, Windows Event Log provider, continuous service/task/app state-change monitoring, per-process resource sampling, validation of native-host registration on the target desktop, Windows Graphics Capture, UIA control actions/app-specific adapters, full context graph, actual model invocation, persistent memory layers, policy broker, sandboxed executor, autonomous remediation or assistant dashboard.
+
+## Active feature work
+- [PR #4 — Read-only Windows UIA inspector](https://github.com/AryanGupta-234/P1-/pull/4) — draft; Windows CI and review pending.
 
 ## Immediate engineering sequence
-1. Verify Windows CI and the full test matrix on Python 3.11/3.12.
+1. Verify Windows CI and the full Python 3.11/3.12 matrix, including PR #4.
 2. Add service/process resource samples and pause/retention controls.
-3. Build the opt-in Edge/Chrome playback telemetry bridge.
+3. Validate the browser native-host registration and browser → native host → event store path on a target Windows desktop.
 4. Correlate browser and OS metrics into timestamped evidence.
 5. Implement the context/state model and uncertainty-aware diagnosis.
 6. Integrate the local Ollama adapter; optional cloud only through explicit egress policy.

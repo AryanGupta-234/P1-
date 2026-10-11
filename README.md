@@ -35,6 +35,11 @@ aie observe --duration 60 --network-interval 30
 aie observe --duration 30 --no-network
 python -m pytest
 python -m ruff check .
+
+# Optional read-only UI Automation discovery:
+python -m pip install -e ".[windows-ui]"
+aie uia-windows
+aie uia-inspect --handle 0x000A1234 --max-depth 3 --max-nodes 150
 ```
 Foundation works without models or internet. Local events are stored under `%LOCALAPPDATA%\AIE`.
 
@@ -47,9 +52,6 @@ git switch -c feat/<short-scope>
 git push -u origin feat/<short-scope>
 ```
 Open PRs against `dev`, not `main`.
-
-## Browser playback observer
-The opt-in Chrome/Edge extension prototype is in `browser_extension/`. Load it unpacked, then register its Windows native host using `scripts/register-native-host.ps1`. See [Video Intelligence setup](docs/VIDEO_INTELLIGENCE.md). Monitoring defaults to off.
 
 ## Current limitations
 Process lifecycle observation uses best-effort user-mode snapshots and may miss transient processes. Video diagnostics analyze supplied metrics only; live browser telemetry, screen perception, model gateway, persistent learning and autonomous remediation are not implemented.

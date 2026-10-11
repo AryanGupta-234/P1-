@@ -32,11 +32,14 @@ Statuses: DONE / IN_PROGRESS / BLOCKED / PLANNED. Mark DONE only with code, test
 - [x] Read-only provider abstraction.
 - [ ] ETW process telemetry with bounded buffers.
 - [ ] Allowlisted Windows Event Log sources.
-- [ ] CPU/RAM/disk and per-process resource sampling.
+- [x] System CPU/RAM/system-volume resource snapshots.
+- [ ] Per-process resource sampling.
 - [x] Read-only network interface counters, gateway/external TCP reachability RTT and DNS resolution probes.
 - [x] Wire bounded network provider into observer CLI with configurable sampling interval, event-store integration and --no-network opt-out.
-- [ ] Service and scheduled-task inventory.
-- [ ] Installed application/executable metadata inventory.
+- [x] Read-only Windows service inventory.
+- [x] Scheduled-task name/status inventory.
+- [x] Installed application metadata from uninstall registry keys.
+- [ ] Executable path and Authenticode signature inventory.
 - [ ] Pause/resume, retention, export/delete and observer health.
 - [ ] Sampling overhead and event-loss measurements.
 
@@ -66,7 +69,8 @@ Statuses: DONE / IN_PROGRESS / BLOCKED / PLANNED. Mark DONE only with code, test
 ## M3 — Cognitive core
 - [ ] Provider-independent model interface.
 - [ ] Local Ollama adapter with timeouts, structured outputs and cancellation.
-- [ ] Hardware-aware model selection, concurrency and memory budgets.
+- [x] Local Ollama model discovery and hardware-aware model selection with an available-memory gate.
+- [ ] Inference concurrency, context and runtime memory budgets.
 - [ ] Optional cloud adapter behind explicit task-level egress policy.
 - [ ] Context packaging, token/cost budgets and prompt-injection boundaries.
 - [ ] Planner/state machine with deterministic fallback.
@@ -82,6 +86,10 @@ Statuses: DONE / IN_PROGRESS / BLOCKED / PLANNED. Mark DONE only with code, test
 - [ ] Reviewed/versioned skill induction.
 
 ## M5 — Controlled autonomy
+- [x] Read-only UIA window metadata listing and bounded tree inspector (PR #4; metadata-only, no actions).
+- [x] Synthetic tests for traversal bounds, provider errors and text-property exclusion.
+- [ ] Confirm optional pywinauto installation/import in Windows CI on Python 3.11/3.12.
+- [ ] Validate UIA support/limitations against selected desktop applications.
 - [ ] Capability manifests and least-privilege identities.
 - [ ] Proposal → policy → approval → sandbox → verification.
 - [ ] Allowlists, rate limits, timeouts and resource budgets.
@@ -106,11 +114,12 @@ Statuses: DONE / IN_PROGRESS / BLOCKED / PLANNED. Mark DONE only with code, test
 - [ ] Desktop UI after core telemetry and policy APIs stabilize.
 
 ## Immediate dev sprint
-1. Resolve remaining lint findings and verify the Windows CI matrix on dev.
-2. Add trace fixtures for buffering causes and unknown evidence.
-3. Add service/process resource samples and pause/retention controls.
-4. Design opt-in browser extension with minimal permissions.
-5. Update this tracker and Architecture Spotlight in every PR.
+1. Confirm the latest Windows CI runs on dev and PR #4 are green.
+2. Review PR #4 and merge the UIA discovery layer after validation.
+3. Add trace fixtures for buffering causes and unknown evidence.
+4. Add pause/retention and per-process resource controls.
+5. Verify native-host registration and end-to-end browser telemetry on the target laptop.
+6. Update this tracker and Architecture Spotlight in every PR.
 
 ## Risk register
 | Risk | Mitigation | State |

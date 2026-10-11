@@ -73,6 +73,70 @@ def models() -> None:
         console.print("  No local Ollama response. Start Ollama; AIE will not pull models.")
 
 
+@app.command("uia-windows")
+def uia_windows(
+    max_windows: int = typer.Option(100, min=1, max=500),
+    output: Path | None = typer.Option(None, "--output", "-o"),
+) -> None:
+    """List visible top-level windows using UIA metadata only (no titles or content)."""
+    from aie.automation.uia_inspector import UIAUnavailable, list_top_level_windows
+
+    try:
+        windows = list_top_level_windows(max_windows=max_windows)
+    except UIAUnavailable as exc:
+        console.print(f"[red]UI Automation unavailable:[/red] {exc}")
+        raise typer.Exit(2) from exc
+
+    rendered = json.dumps(windows, indent=2)
+    if output:
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(rendered, encoding="utf-8")
+        console.print(f"UIA window metadata saved to {output}")
+        return
+
+    table = Table("HWND", "PID", "Control", "Class", "Automation ID")
+    for window in windows:
+        handle = window["handle"]
+        table.add_row(
+            f"0x{handle:X}" if handle is not None else "N/A",
+            str(window["process_id"] or "N/A"),
+            window["control_type"] or "N/A",
+            window["class_name"] or "N/A",
+            window["automation_id"] or "",
+        )
+    console.print(table)
+    console.print(f"Visible windows inspected: {len(windows)}")
+
+
+@app.command("uia-inspect")
+def uia_inspect(
+    handle: str = typer.Option(..., "--handle", help="Target HWND in decimal or 0x-prefixed hex."),
+    max_depth: int = typer.Option(3, min=0, max=8),
+    max_nodes: int = typer.Option(150, min=1, max=1000),
+    output: Path | None = typer.Option(None, "--output", "-o"),
+) -> None:
+    """Inspect a selected window's bounded UIA metadata tree; does not perform actions."""
+    from aie.automation.uia_inspector import UIAUnavailable, inspect_window
+
+    try:
+        hwnd = int(handle, 0)
+    except ValueError as exc:
+        raise typer.BadParameter("handle must be decimal or 0x-prefixed hexadecimal") from exc
+    try:
+        result = inspect_window(hwnd, max_depth=max_depth, max_nodes=max_nodes)
+    except (UIAUnavailable, ValueError) as exc:
+        console.print(f"[red]UIA inspection unavailable:[/red] {exc}")
+        raise typer.Exit(2) from exc
+
+    rendered = json.dumps(result, indent=2)
+    if output:
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(rendered, encoding="utf-8")
+        console.print(f"UIA metadata tree saved to {output}")
+    else:
+        console.print_json(rendered)
+
+
 @app.command()
 def inventory(output: Path | None = typer.Option(None, "--output", "-o")) -> None:
     """Generate a read-only host, process, app, service, network and task inventory."""
