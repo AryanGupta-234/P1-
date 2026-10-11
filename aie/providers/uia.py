@@ -147,10 +147,6 @@ class WindowsUIATreeProvider:
     def _sanitize_nodes(raw_nodes: list[dict[str, Any]], max_nodes: int) -> list[dict[str, Any]]:
         """Allow only structural fields; discard any accidental text/value payload."""
         sanitized: list[dict[str, Any]] = []
-        allowed_types = {"index": int, "parent_index": (int, type(None)),
-                         "depth": int, "control_type": str, "class_name": str,
-                         "automation_id": str, "rectangle": list, "visible": bool,
-                         "enabled": bool, "focusable": (bool, type(None))}
         for raw in raw_nodes[:max_nodes]:
             if not isinstance(raw, dict):
                 continue
