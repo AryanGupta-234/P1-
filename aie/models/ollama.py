@@ -99,11 +99,16 @@ class OllamaClient:
         request: ModelRequest,
         *,
         model: str,
+        installed_models: list[str] | set[str] | None = None,
     ) -> ModelResponse:
         """Run a non-streaming chat request against an installed model only."""
         if not model or not isinstance(model, str):
             raise ValueError("model must be a non-empty installed model name")
-        installed = self.list_models(timeout=min(5.0, request.timeout_seconds))
+        installed = (
+            set(installed_models)
+            if installed_models is not None
+            else set(self.list_models(timeout=min(5.0, request.timeout_seconds)))
+        )
         if model not in installed:
             raise OllamaUnavailable(
                 f"Model '{model}' is not installed. AIE never downloads models automatically."
