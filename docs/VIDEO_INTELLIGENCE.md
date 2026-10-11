@@ -32,3 +32,23 @@ Changing stream quality could become a low-risk, pre-authorized action if the si
 
 ## Evaluation
 Add synthetic traces for congestion, Wi-Fi loss, decode pressure, remote-service failure and insufficient evidence. Measure precision/recall and false-positive rates before unattended recommendations.
+
+
+## Browser extension prototype
+
+The MV3 extension is in `browser_extension/`. It monitors HTML video elements only after the user enables it in the extension popup. It forwards playback state, a rolling stall count, buffered-ahead duration, playback-progress delta and available dropped-frame deltas. It does not send page URLs/origins, titles, text, media source URLs, screenshots, audio, cookies, credentials, form values or browsing history.
+
+The extension requires HTTP/HTTPS site access to work across different video websites. That broad site permission is shown by Chrome/Edge; monitoring itself defaults to off and can be toggled off at any time. No telemetry is sent to a cloud endpoint.
+
+### Install for local development (Chrome or Edge)
+1. Install AIE into the Windows virtual environment: `python -m pip install -e .`.
+2. Open `chrome://extensions` or `edge://extensions`, enable Developer mode, and choose **Load unpacked**.
+3. Select the repository's `browser_extension` directory and copy its extension ID.
+4. In PowerShell, run `scripts/register-native-host.ps1 -ExtensionId <ID> -Browser Chrome` (or `-Browser Edge`).
+5. Restart the browser, open the extension popup, and explicitly enable monitoring.
+6. Run `aie events` to inspect locally stored playback events.
+
+The registration helper writes a per-user native-messaging manifest under `%LOCALAPPDATA%\AIE` and registers it under HKCU. Use `scripts/unregister-native-host.ps1` to remove the selected browser registration. The native host accepts only the documented metric fields and rejects unexpected fields.
+
+### Limitations
+This first observer sees HTML video elements, not proprietary playback internals. Some streaming sites may use protected or embedded players where counters are unavailable. It does not measure sustained throughput or packet loss; those remain unknown until a separate telemetry source measures them.
