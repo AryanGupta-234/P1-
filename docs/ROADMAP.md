@@ -87,7 +87,11 @@ Statuses: DONE / IN_PROGRESS / BLOCKED / PLANNED. Mark DONE only with code, test
 - [ ] Inference concurrency, memory/token budgets and latency metrics.
 - [x] Central remote-model egress gateway, high-confidence credential redaction and metadata-only audit.
 - [x] Bounded declarative task-plan contract with strict fields, typed steps, explicit dependencies, cycle rejection, deterministic topological ordering and readiness queries; no step execution. Validated by Windows CI run [#590](https://github.com/AryanGupta-234/P1-/actions/runs/38131262921) on Python 3.11 and 3.12.
-- [ ] Model-backed plan generation, persisted state transitions, cancellation/recovery and tool-selection evaluation.
+- [x] Local model-backed JSON plan generation using the installed-model router; generated plans are strictly schema-validated and dependency-checked.
+- [x] SQLite-backed task-run and step state with transactional claims, bounded outcomes, lifecycle events, cancellation and fail-closed interrupted-step recovery.
+- [x] Step orchestration through registered handlers; built-in local observation, local reasoning and inform handlers; unsupported verification handlers fail closed.
+- [x] Action-plan steps create policy-ledger proposals and pause for review; approval is recorded as authorized-but-unexecuted until a real capability executor exists.
+- [ ] Tool-selection quality evaluation, evidence-grounded verification and persisted retry/recovery review.
 - [ ] Reasoning and tool-selection evaluation harness.
 
 ## M4 — Persistent memory and learning
@@ -114,7 +118,7 @@ Statuses: DONE / IN_PROGRESS / BLOCKED / PLANNED. Mark DONE only with code, test
 - [x] Typed non-mutating dry-run executor validates proposal/policy alignment without OS mutation.
 - [x] CLI dry-run path for reviewed proposals; it reports `executed=False`.
 - [x] Fail-closed execution gate and bounded execution-budget contract; no real executor consumes it yet.
-- [ ] Least-privilege real executor and restricted tool manifests.
+- [ ] Least-privilege real executor and restricted tool manifests; current orchestration intentionally stops at reviewed authorization.
 - [ ] Sandbox enforcement, command/tool resource controls and postcondition-aware runtime.
 - [ ] Rollback/recovery and postcondition verification.
 - [ ] Prompt-injection and tool-misuse red-team tests.
@@ -140,7 +144,7 @@ Statuses: DONE / IN_PROGRESS / BLOCKED / PLANNED. Mark DONE only with code, test
 3. Evaluate freshness/contradiction signals and add calibrated confidence metrics without treating heuristics as probabilities.
 4. Evaluate semantic memory retrieval and review consolidation proposals before any automatic merge/learning path.
 5. Continue the policy sandbox/audit path before any mutating executor work.
-6. Extend the declarative plan contract into a persisted, cancellable state machine only after step outcomes and policy hand-offs have explicit provenance.
+6. Build a real executor only for individually reviewed, typed Windows capabilities, with OS-enforced resource limits and postcondition checks; never treat approval as execution.
 
 ## Risk register
 | Risk | Mitigation | State |
