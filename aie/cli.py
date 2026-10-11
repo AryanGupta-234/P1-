@@ -773,13 +773,13 @@ def recall(
     if not hits:
         console.print("No matching local memories.")
         return
-    table = Table("Kind", "Score", "Tags", "Memory ID", "Content")
+    table = Table("Kind", "Score", "Tags", "Content")
     for hit in hits:
+        console.print(f"Memory ID: {hit.memory.memory_id}")
         table.add_row(
             hit.memory.kind,
             f"{hit.score:.2f}",
             ", ".join(hit.memory.tags),
-            hit.memory.memory_id,
             hit.memory.content[:180],
         )
     console.print(table)
