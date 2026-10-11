@@ -17,7 +17,7 @@ from uuid import uuid4
 
 from aie.policy.models import ActionProposal, PolicyDecision
 
-ProposalStatus = Literal["pending_review", "approved", "rejected", "blocked"]
+ProposalStatus = Literal["pending_review", "approved", "rejected", "blocked", "revoked"]
 _GENESIS_HASH = "0" * 64
 
 
@@ -279,6 +279,62 @@ class PolicyLedger:
                     db,
                     proposal_id=proposal_id,
                     event_type="policy.proposal.reviewed",
+                    timestamp=now,
+                    payload=payload,
+                )
+                db.execute("COMMIT")
+            except Exception:
+                db.execute("ROLLBACK")
+                raise
+        return self.get(proposal_id)  # type: ignore[return-value]
+
+    def append_revocation(
+        self,
+        proposal_id: str,
+        *,
+        reason: str,
+        reviewer: str = "local_user",
+    ) -> ProposalSnapshot:
+        """Revoke a pending or approved-but-unexecuted proposal without editing history."""
+        cleaned_reason = " ".join(reason.split())
+        if not cleaned_reason or len(cleaned_reason) > 300:
+            raise ValueError("revocation reason must contain 1 to 300 characters")
+        now = datetime.now(timezone.utc)
+        with self._connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            try:
+                rows = db.execute(
+                    """SELECT payload FROM audit_events
+                    WHERE proposal_id = ? ORDER BY sequence ASC""",
+                    (proposal_id,),
+                ).fetchall()
+                if not rows:
+                    raise ValueError("proposal was not found")
+                latest = json.loads(rows[-1][0])
+                if latest.get("status") not in {"pending_review", "approved"}:
+                    raise ValueError("only pending or approved proposals can be revoked")
+                if latest.get("execution") is not None or latest.get("action_executed") is True:
+                    raise ValueError("an execution attempt cannot be revoked")
+                policy = latest.get("policy") or {}
+                payload = {
+                    "schema_version": 1,
+                    "status": "revoked",
+                    "reviewer": reviewer,
+                    "revocation_reason": cleaned_reason,
+                    "policy": {
+                        "allowed": False,
+                        "approval_required": False,
+                        "reason": "Revoked by the local user: " + cleaned_reason,
+                        "risk_tier": policy.get("risk_tier"),
+                        "max_execution_seconds": policy.get("max_execution_seconds"),
+                        "action_executed": False,
+                    },
+                    "action_executed": False,
+                }
+                self._append_row(
+                    db,
+                    proposal_id=proposal_id,
+                    event_type="policy.proposal.revoked",
                     timestamp=now,
                     payload=payload,
                 )
