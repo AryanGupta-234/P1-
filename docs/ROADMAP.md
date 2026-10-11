@@ -40,7 +40,7 @@ Statuses: DONE / IN_PROGRESS / BLOCKED / PLANNED. Mark DONE only with code, test
 - [ ] Disk/network per-process deltas and provider-level event-loss accounting.
 - [x] Privacy-safe observer health telemetry with provider latency/error counters and event-loss hooks.
 - [ ] Export/delete-all controls and observer health view.
-- [ ] Validate Event Log/UIA permissions and data collection on the target Windows desktop.
+- [ ] Validate ETW elevation, Event Log/UIA permissions and data collection on the target Windows desktop.
 
 ## M1.5 — Video intelligence
 - [x] Opt-in Chrome/Edge MV3 HTML-video observer, disabled by default.
@@ -126,7 +126,7 @@ Statuses: DONE / IN_PROGRESS / BLOCKED / PLANNED. Mark DONE only with code, test
 1. Verify the combined activity, memory, Event Log and observer-health runtime tests on the current Windows CI matrix.
 2. Add observer health telemetry for permission errors, sensor timeouts and event loss.
 3. Validate browser/native-host, UIA and Event Log behavior on the target Windows desktop.
-4. Implement ETW process telemetry with explicit coverage boundaries.
+4. Extend ETW categories with explicit coverage boundaries and measured event-loss behavior.
 5. Update this tracker and Architecture Spotlight with each implementation increment.
 
 ## Risk register
