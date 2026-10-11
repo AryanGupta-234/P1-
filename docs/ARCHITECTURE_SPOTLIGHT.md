@@ -77,7 +77,7 @@ Build persistent personal intelligence that observes explicitly permitted signal
 - Cloud/remote-Ollama requests pass through a centralized local egress gateway. Only explicitly selected context is attached; activity, memory and session context require separate confirmation, sensitive memory is blocked, high-confidence credential patterns are redacted, payload size is bounded, and a metadata-only local audit record is written. Observer telemetry is never automatically attached.
 
 **Context and memory**
-- Indexed event queries and `aie activity` temporal sessions across the normalized event categories.
+- A bounded synchronous unified event bus fans normalized observations to the durable SQLite store and optional JSONL sink before downstream diagnostics/correlation.
 - Freshness-weighted evidence assessment and a narrow explicit contradiction detector are available as context-layer primitives; heuristic weights are not calibrated probabilities.
 - Explicit user-controlled working sessions persisted locally; session metadata can be attached to model requests only on request.
 - Separate local SQLite memory store for explicit user-authored working/episodic/semantic/procedural/prospective records.
