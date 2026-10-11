@@ -47,6 +47,7 @@ Statuses: DONE / IN_PROGRESS / BLOCKED / PLANNED. Mark DONE only with code, test
 - [x] Deterministic telemetry contract and triage function.
 - [x] Hypotheses for measured throughput/packet loss/latency (when available) and local rendering pressure.
 - [x] Buffer-ahead starvation and buffered-but-not-advancing playback hypotheses.
+- [x] Live observer monitor emits deduplicated diagnostic findings with evidence IDs and recommendations.
 - [x] Insufficient-evidence behavior and unknown-value handling.
 - [x] Synthetic unit tests.
 - [ ] Root-cause trace corpus and false-positive/negative evaluation.
@@ -57,6 +58,7 @@ Statuses: DONE / IN_PROGRESS / BLOCKED / PLANNED. Mark DONE only with code, test
 - [ ] Add configurable per-target policy and sustained throughput measurement (opt-in only).
 - [x] Correlate browser playback snapshots with fresh same-host network and foreground-process evidence.
 - [ ] Validate end-to-end browser → native host → event store → context CLI pipeline on a target desktop.
+- [x] Diagnostic proposal events are persisted and surfaced in the running observer loop (recommendation only).
 - [ ] Confidence calibration and actionable diagnostic proposals.
 - [ ] Validate live browser → native host → SQLite → context → diagnosis on the target Windows desktop.
 
