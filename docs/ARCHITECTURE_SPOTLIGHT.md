@@ -59,7 +59,7 @@ Build persistent personal intelligence that observes explicitly permitted signal
 5. Correlate browser and OS metrics into timestamped evidence.
 6. Implement context/state model and uncertainty-aware diagnosis.
 7. Integrate local Ollama adapter; optional cloud only through explicit egress policy.
-7. Capability manifests, policy broker, sandbox, audit and verification.
+8. Build capability manifests, policy broker, sandbox, audit and verification.
 8. Memory/feedback and held-out generalization evaluation.
 
 ## Definition of done
