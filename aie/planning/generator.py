@@ -23,9 +23,12 @@ def generate_task_plan(
     cleaned_goal = " ".join(goal.split())
     if not 1 <= len(cleaned_goal) <= 500:
         raise ValueError("goal must contain 1-500 non-whitespace characters")
-    capabilities = sorted(set(available_capabilities))
-    if len(capabilities) > 100 or any(not isinstance(item, str) or not item for item in capabilities):
+    raw_capabilities = list(available_capabilities)
+    if len(raw_capabilities) > 100 or any(
+        not isinstance(item, str) or not item for item in raw_capabilities
+    ):
         raise ValueError("available_capabilities must contain at most 100 non-empty IDs")
+    capabilities = sorted(set(raw_capabilities))
 
     system = (
         "Create a small declarative task plan for a Windows personal assistant. "
