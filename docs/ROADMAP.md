@@ -39,7 +39,8 @@ Statuses: DONE / IN_PROGRESS / BLOCKED / PLANNED. Mark DONE only with code, test
 - [x] Read-only service and scheduled-task inventory.
 - [x] Read-only installed application metadata inventory.
 - [x] Global per-user pause/resume for observation loops, plus status command.
-- [ ] Retention, export/delete and observer health.
+- [x] Confirmation-gated local event retention pruning by age.
+- [ ] Export/delete-all and observer health.
 - [ ] Sampling overhead and event-loss measurements.
 
 ## M1.5 — Video diagnostics
