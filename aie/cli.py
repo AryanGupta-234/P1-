@@ -428,7 +428,7 @@ def prune(
 
 @app.command()
 def ask(
-    prompt: str = typer.Argument(..., min_length=1, help="Prompt to send to the model."),
+    prompt: str = typer.Argument(..., help="Prompt to send to the model."),
     task: Literal["routine", "complex"] = typer.Option("routine", help="Choose the reasoning tier."),
     provider: Literal["local", "cloud"] = typer.Option("local", help="Select local Ollama or explicitly enabled cloud inference."),
     allow_remote_ollama: bool = typer.Option(
@@ -682,7 +682,7 @@ def remember(
 
 @app.command("recall")
 def recall(
-    query: str = typer.Argument(..., min_length=1, help="Local keyword query."),
+    query: str = typer.Argument(..., help="Local keyword query."),
     kind: Literal["working", "episodic", "semantic", "procedural", "prospective"] | None = typer.Option(None),
     include_sensitive: bool = typer.Option(False, help="Explicitly include sensitive memories."),
     limit: int = typer.Option(10, min=1, max=100),
@@ -742,7 +742,7 @@ def memories(
 @app.command("correct-memory")
 def correct_memory(
     memory_id: str = typer.Argument(..., help="Active memory ID to supersede."),
-    content: str = typer.Argument(..., min_length=1, help="Corrected memory text."),
+    content: str = typer.Argument(..., help="Corrected memory text."),
 ) -> None:
     """Create a corrected memory while retaining the old version as superseded."""
     from aie.memory.models import MemoryRecord
@@ -880,7 +880,7 @@ def list_capabilities() -> None:
 @app.command("propose")
 def propose_action(
     capability_id: str = typer.Argument(...),
-    summary: str = typer.Argument(..., min_length=1, help="Short human-readable action summary."),
+    summary: str = typer.Argument(..., help="Short human-readable action summary."),
     parameters_json: str = typer.Option("{}", "--parameters", help="Flat JSON object of allowlisted parameters."),
 ) -> None:
     """Queue an action proposal for policy evaluation and explicit user review."""
