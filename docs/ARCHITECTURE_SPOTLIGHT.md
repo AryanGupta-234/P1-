@@ -47,14 +47,14 @@ Build persistent personal intelligence that observes explicitly permitted signal
 ## Current capability state
 **Foundation present:** Python package/CLI, versioned event contract, SQLite store, read-only Windows inventory, best-effort process reconciliation, provider interface, hardware/model selection utilities.
 
-**Integrated on dev:** deterministic video-buffering triage and synthetic tests; bounded read-only network sampling for interface counters, gateway/external TCP reachability and DNS timing. The network provider is not yet wired into the runtime CLI. These are telemetry building blocks, not a live browser monitor, and no fixes are executed.
+**Integrated on dev:** deterministic video-buffering triage and synthetic tests; bounded read-only network sampling for interface counters, gateway/external TCP reachability and DNS timing. The network provider is now wired into the observer CLI with a default 15-second cadence (configurable from 5–300 seconds) and a --no-network opt-out. These are telemetry building blocks, not a live browser monitor, and no fixes are executed.
 
-**Not implemented:** ETW subscriptions, Event Log provider, scheduled network sampler/runtime integration, browser bridge, screen capture/UIA, context graph, model gateway, persistent memory layers, policy broker, sandboxed executor, autonomous remediation or assistant dashboard.
+**Not implemented:** ETW subscriptions, Event Log provider, per-process resource sampling, browser bridge, screen capture/UIA, context graph, model gateway, persistent memory layers, policy broker, sandboxed executor, autonomous remediation or assistant dashboard.
 
 ## Immediate engineering sequence
 1. Windows CI and full tests on Python 3.11/3.12.
-2. Wire bounded network provider into observer CLI with explicit probe policy and interval.
-3. Add service/process resource samples and pause/retention controls.
+2. Add service/process resource samples and pause/retention controls.
+3. Opt-in Edge/Chrome playback telemetry bridge.
 4. Opt-in Edge/Chrome playback telemetry bridge.
 5. Correlate browser and OS metrics into timestamped evidence.
 6. Context/state model and uncertainty-aware diagnosis.
