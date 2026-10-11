@@ -24,6 +24,8 @@ class AdapterResult:
     def __post_init__(self) -> None:
         if self.verified and not self.executed:
             raise ValueError("an unexecuted adapter result cannot be verified")
+        if self.status == "succeeded" and not self.executed:
+            raise ValueError("a successful adapter result must confirm dispatch")
         if not self.code or len(self.code) > 80:
             raise ValueError("adapter result code must contain 1 to 80 characters")
         if not self.summary or len(self.summary) > 300:
@@ -222,13 +224,16 @@ class PolicyControlledExecutor:
             result = adapter.execute(proposal, budget=budget)
             if not isinstance(result, AdapterResult):
                 raise TypeError("capability adapter must return AdapterResult")
-        except Exception as exc:  # noqa: BLE001 - record bounded failure without exception payloads.
+        except Exception as exc:  # noqa: BLE001 - unknown side-effect state must block automatic retry.
             result = AdapterResult(
                 status="failed",
-                executed=False,
+                executed=True,
                 verified=False,
                 code=f"adapter_{type(exc).__name__[:60]}",
-                summary="Capability adapter failed; inspect local diagnostics.",
+                summary=(
+                    "Adapter raised during an execution attempt; side-effect state is "
+                    "unknown and automatic retry is blocked."
+                ),
             )
         elapsed = max(0.0, self.clock() - started)
         # Adapters are trusted application code and must enforce their own deadline.
