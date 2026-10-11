@@ -229,23 +229,25 @@ class WindowsEventLogProvider:
                 self._append_recovery_event(events, channel)
             except Exception as exc:
                 # Access denied, cleared logs or unavailable channels are non-fatal.
-                if channel not in self._error_channels:
-                    events.append(AIEEvent(
-                        timestamp=datetime.now(timezone.utc),
-                        host_id=host_id(),
-                        source=self.name,
-                        event_type="windows.eventlog.provider_error",
-                        entity=EntityRef(type="windows_eventlog_channel", name=channel),
-                        data={
-                            "channel": channel,
-                            "error_type": type(exc).__name__,
-                            "message_collected": False,
-                        },
-                        sensitivity="internal",
-                        confidence=1.0,
-                        evidence_kind="observed",
-                    ))
-                    self._error_channels.add(channel)
+                # Re-emit a compact error signal each poll while the channel stays
+                # unavailable, so aggregate health cannot mistake another channel's
+                # successful records for recovery.
+                events.append(AIEEvent(
+                    timestamp=datetime.now(timezone.utc),
+                    host_id=host_id(),
+                    source=self.name,
+                    event_type="windows.eventlog.provider_error",
+                    entity=EntityRef(type="windows_eventlog_channel", name=channel),
+                    data={
+                        "channel": channel,
+                        "error_type": type(exc).__name__,
+                        "message_collected": False,
+                    },
+                    sensitivity="internal",
+                    confidence=1.0,
+                    evidence_kind="observed",
+                ))
+                self._error_channels.add(channel)
                 continue
             finally:
                 if handle is not None:
