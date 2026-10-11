@@ -7,7 +7,8 @@ Status vocabulary: DONE / IN_PROGRESS / BLOCKED / PLANNED. Do not mark DONE with
 | ID | Milestone | Status | Exit criteria |
 |---|---|---|---|
 | M0 | Architecture and foundation | IN_PROGRESS | Contracts, package, CLI, tests, docs, Windows CI |
-| M1 | Windows environment observer | IN_PROGRESS | Inventory, process reconciliation, durable local event store |
+| M1 | Windows environment observer | IN_PROGRESS | Inventory, process reconciliation, durable local event store, richer telemetry |
+| M1.5 | First diagnostic capability | IN_PROGRESS | Video-buffering triage, evidence-backed hypotheses, synthetic evaluation |
 | M2 | Context intelligence | PLANNED | Temporal correlation, state model, evidence-linked hypotheses |
 | M3 | Cognitive core | PLANNED | Model-independent reasoning/planning and router |
 | M4 | Persistent intelligence | PLANNED | Provenance-aware memory, consolidation, retrieval evaluation |
@@ -34,6 +35,20 @@ Status vocabulary: DONE / IN_PROGRESS / BLOCKED / PLANNED. Do not mark DONE with
 - [ ] Executable/application inventory with signer/installation metadata.
 - [ ] Measure CPU, memory, latency and event loss.
 - [ ] Pause/resume and retention controls.
+- [ ] Opt-in browser playback-state/performance telemetry bridge.
+- [ ] Hybrid screen observation with explicit pause and capture boundaries.
+
+## M1.5 — First Diagnostic Capability
+- [x] Deterministic video-buffering triage function.
+- [x] Separate throughput, packet-loss, latency and local rendering hypotheses.
+- [x] Require repeated stalls and a minimum observation window.
+- [x] Preserve unknown metrics as unknown; include evidence and caveats.
+- [x] Synthetic tests for core branches.
+- [ ] Add representative synthetic traces and false-positive/negative evaluation.
+- [ ] Add Windows network sampling with gateway/external separation.
+- [ ] Correlate browser media counters with OS telemetry.
+- [ ] Calibrate confidence against measured outcomes.
+- [ ] Produce remediation proposals without executing them.
 
 ## M2 — Context Intelligence
 - [ ] Temporal correlation and host state snapshots.
@@ -64,6 +79,7 @@ Status vocabulary: DONE / IN_PROGRESS / BLOCKED / PLANNED. Do not mark DONE with
 - [ ] Rollback/recovery interfaces and audit.
 - [ ] Prompt-injection/tool-misuse adversarial tests.
 - [ ] Approval gates for destructive, privileged, financial and external actions.
+- [ ] Autonomy tiers and user-configurable permissions.
 
 ## M6 — Generalization Research
 - [ ] Held-out task families and baselines.
@@ -73,11 +89,11 @@ Status vocabulary: DONE / IN_PROGRESS / BLOCKED / PLANNED. Do not mark DONE with
 - [ ] Reproducible experiments; benchmark progress is not proof of AGI.
 
 ## Current sprint
-1. Validate M0/M1 on Windows 10/11.
-2. Add GitHub Actions Windows CI.
-3. Prototype ETW and document constraints.
-4. Add allowlisted Event Log reader.
-5. Add service, network and application inventory incrementally.
+1. Add GitHub Actions Windows CI and run the full test suite.
+2. Review diagnostic module on Windows and add trace fixtures.
+3. Prototype an opt-in Edge/Chrome playback telemetry bridge.
+4. Add bounded network sampling and evidence correlation.
+5. Keep remediation proposal-only until the policy broker and audit path exist.
 
 ## Risk register
 | Risk | Mitigation | State |
@@ -86,3 +102,5 @@ Status vocabulary: DONE / IN_PROGRESS / BLOCKED / PLANNED. Do not mark DONE with
 | Transient process events are missed | ETW plus snapshot reconciliation | OPEN |
 | Telemetry privacy exposure | Local-first, filtering, retention, pause controls | OPEN |
 | Model hallucination becomes action | Observer read-only; policy broker mandatory | CONTROLLED |
+| Misdiagnosed stream stalls | Multi-signal evidence, uncertainty, trace evaluation | OPEN |
+| Unwanted browser observation | Explicit extension permission and playback-only collection | OPEN |
