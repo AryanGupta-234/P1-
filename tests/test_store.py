@@ -1,3 +1,7 @@
+from datetime import datetime, timedelta, timezone
+
+import pytest
+
 from aie.contracts import AIEEvent, EntityRef
 from aie.store import EventStore
 
@@ -58,12 +62,6 @@ def test_retention_rejects_naive_cutoff(tmp_path):
         store.delete_before(datetime(2026, 1, 1))
 
 
-from datetime import datetime, timedelta, timezone
-
-import pytest
-
-from aie.contracts import AIEEvent, EntityRef
-from aie.store import EventStore
 
 
 def query_event(event_id, seconds_ago, event_type, source):
