@@ -147,3 +147,20 @@ def test_old_ledger_schema_is_migrated_and_backfilled(tmp_path):
     assert report.valid is True
     assert report.checked_entries == 1
     assert len(ledger.audit_trail("legacy-proposal")[0]["entry_hash"]) == 64
+
+
+def test_policy_audit_detects_tail_truncation_with_head_checkpoint(tmp_path):
+    path = tmp_path / "truncated.sqlite3"
+    ledger, proposal_id = make_created_ledger(path)
+    assert ledger.verify_integrity().valid is True
+
+    with sqlite3.connect(path) as db:
+        db.execute(
+            "DELETE FROM audit_events WHERE proposal_id = ?",
+            (proposal_id,),
+        )
+
+    report = ledger.verify_integrity()
+    assert report.valid is False
+    assert report.checked_entries == 0
+    assert "head checkpoint" in report.reason
