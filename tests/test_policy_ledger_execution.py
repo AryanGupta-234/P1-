@@ -26,6 +26,7 @@ def test_execution_receipt_is_single_attempt_and_part_of_hash_chain(tmp_path):
     assert created.status == "pending_review"
 
     with pytest.raises(ValueError, match="only approved proposals"):
+        ledger.reserve_execution(proposal.proposal_id)
         ledger.append_execution(
             proposal.proposal_id,
             status="succeeded",
@@ -52,6 +53,7 @@ def test_execution_receipt_is_single_attempt_and_part_of_hash_chain(tmp_path):
     assert ledger.verify_integrity().valid is True
 
     with pytest.raises(ValueError, match="already has an execution receipt"):
+        ledger.reserve_execution(proposal.proposal_id)
         ledger.append_execution(
             proposal.proposal_id,
             status="failed",
