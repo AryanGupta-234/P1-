@@ -39,6 +39,10 @@ jobs:
           $parseErrors = $null
           [System.Management.Automation.Language.Parser]::ParseFile("scripts/unregister-native-host.ps1", [ref]$tokens, [ref]$parseErrors) | Out-Null
           if ($parseErrors) { throw ($parseErrors | Out-String) }
+          $tokens = $null
+          $parseErrors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile("scripts/validate-target-desktop.ps1", [ref]$tokens, [ref]$parseErrors) | Out-Null
+          if ($parseErrors) { throw ($parseErrors | Out-String) }
       - name: Validate browser extension JavaScript
         run: |
           node --check browser_extension/content.js
