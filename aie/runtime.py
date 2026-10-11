@@ -7,12 +7,13 @@ from pathlib import Path
 
 from aie.contracts import AIEEvent
 from aie.diagnostics.monitor import VideoDiagnosticMonitor
+from aie.health import ObserverHealthTracker
 
 from aie.providers.foreground import WindowsForegroundProvider
 from aie.providers.eventlog import WindowsEventLogProvider
 from aie.providers.network import WindowsNetworkProvider
 from aie.providers.process_resources import WindowsProcessResourceProvider
-from aie.providers.windows import WindowsProvider
+from aie.providers.windows import WindowsProvider, host_id
 from aie.providers.uia import WindowsUIATreeProvider
 from aie.config import observer_is_paused
 from aie.store import EventStore
@@ -103,6 +104,7 @@ def observe(
         else None
     )
     store = EventStore(db_path)
+    health_tracker = ObserverHealthTracker(host_id=host_id())
     diagnostic_monitor = (
         VideoDiagnosticMonitor(
             store,
@@ -130,20 +132,39 @@ def observe(
                     time.sleep(min(interval, remaining))
                 continue
 
-            events = list(provider.collect_snapshot(include_host=first_sample))
+            events = health_tracker.collect(
+                "windows.user_mode",
+                lambda: provider.collect_snapshot(include_host=first_sample),
+            )
             first_sample = False
 
             if foreground_provider is not None:
-                events.extend(foreground_provider.collect_snapshot())
+                events.extend(
+                    health_tracker.collect(
+                        "windows.foreground", foreground_provider.collect_snapshot
+                    )
+                )
             if uia_provider is not None:
-                events.extend(uia_provider.collect_snapshot())
+                events.extend(
+                    health_tracker.collect(
+                        "windows.uia", uia_provider.collect_snapshot
+                    )
+                )
 
             now = time.monotonic()
             if network_provider is not None and now >= next_network:
-                events.extend(network_provider.collect_snapshot())
+                events.extend(
+                    health_tracker.collect(
+                        "windows.network", network_provider.collect_snapshot
+                    )
+                )
                 next_network = now + network_interval
             if event_log_provider is not None and now >= next_event_log:
-                events.extend(event_log_provider.collect_snapshot())
+                events.extend(
+                    health_tracker.collect(
+                        "windows.eventlog", event_log_provider.collect_snapshot
+                    )
+                )
                 next_event_log = now + event_log_interval
             if process_resource_provider is not None and now >= next_process_resources:
                 events.extend(process_resource_provider.collect_snapshot())
@@ -171,6 +192,13 @@ def observe(
             if remaining > 0:
                 time.sleep(min(interval, remaining))
     finally:
+        summaries = health_tracker.summary_events()
+        if summaries:
+            total += store.append_many(summaries)
+            if output:
+                for event in summaries:
+                    output.write(event.model_dump_json() + "\n")
+                output.flush()
         if output:
             output.close()
     return total
