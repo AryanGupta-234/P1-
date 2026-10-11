@@ -125,7 +125,7 @@ def test_router_reports_when_no_eligible_model_is_installed(monkeypatch):
         "aie.models.router.runtime_profile",
         lambda: {"memory_available_gib": 12.0},
     )
-    with pytest.raises(ModelRoutingError, match="not installed"):
+    with pytest.raises(ModelRoutingError, match="No installed reasoning model"):
         LocalModelRouter(EmptyProvider()).generate(
             ModelRequest(messages=[ChatMessage(role="user", content="test")])
         )
