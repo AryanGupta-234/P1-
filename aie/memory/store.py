@@ -584,3 +584,15 @@ class MemoryStore:
         where = "" if include_superseded else " WHERE status = 'active'"
         with self._connect() as db:
             return int(db.execute("SELECT COUNT(*) FROM memories" + where).fetchone()[0])
+
+    def count_active(self, *, now: datetime | None = None) -> int:
+        """Count active, unexpired memories regardless of sensitivity visibility."""
+        current = self._aware_utc(now or datetime.now(timezone.utc), "now")
+        with self._connect() as db:
+            row = db.execute(
+                """SELECT COUNT(*) FROM memories
+                WHERE status = 'active'
+                AND (expires_at IS NULL OR expires_at > ?)""",
+                (current.isoformat(),),
+            ).fetchone()
+        return int(row[0])
