@@ -57,6 +57,8 @@ class ProposalSnapshot:
     reason: str
     reviewer: str | None = None
     action_executed: bool = False
+    execution_status: str | None = None
+    execution_verified: bool = False
 
 
 class PolicyLedger:
@@ -318,6 +320,16 @@ class PolicyLedger:
             reason=str(policy.get("reason", "No policy reason recorded.")),
             reviewer=latest_payload.get("reviewer"),
             action_executed=latest_payload.get("action_executed") is True,
+            execution_status=(
+                latest_payload.get("execution", {}).get("status")
+                if isinstance(latest_payload.get("execution"), dict)
+                else None
+            ),
+            execution_verified=(
+                latest_payload.get("execution", {}).get("verified") is True
+                if isinstance(latest_payload.get("execution"), dict)
+                else False
+            ),
         )
 
     def list(self, *, status: ProposalStatus | None = None, limit: int = 100) -> list[ProposalSnapshot]:
@@ -336,6 +348,79 @@ class PolicyLedger:
             if snapshot is not None and (status is None or snapshot.status == status):
                 result.append(snapshot)
         return result
+
+    def append_execution(
+        self,
+        proposal_id: str,
+        *,
+        status: Literal["succeeded", "failed"],
+        action_executed: bool,
+        verified: bool,
+        code: str,
+        summary: str,
+        elapsed_seconds: float,
+    ) -> ProposalSnapshot:
+        """Append one immutable execution receipt for an already-approved proposal."""
+        if status not in {"succeeded", "failed"}:
+            raise ValueError("invalid execution status")
+        if verified and not action_executed:
+            raise ValueError("an unexecuted action cannot be verified")
+        if len(code) > 80 or not code:
+            raise ValueError("execution code must contain 1 to 80 characters")
+        if len(summary) > 300:
+            raise ValueError("execution summary cannot exceed 300 characters")
+        if elapsed_seconds < 0:
+            raise ValueError("elapsed_seconds cannot be negative")
+
+        now = datetime.now(timezone.utc)
+        with self._connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            try:
+                rows = db.execute(
+                    """SELECT event_type, payload FROM audit_events
+                    WHERE proposal_id = ? ORDER BY sequence ASC""",
+                    (proposal_id,),
+                ).fetchall()
+                if not rows:
+                    raise ValueError("proposal was not found")
+                latest = json.loads(rows[-1][1])
+                if latest.get("status") != "approved":
+                    raise ValueError("only approved proposals may be executed")
+                if any(
+                    isinstance(json.loads(row[1]).get("execution"), dict)
+                    for row in rows
+                ):
+                    raise ValueError("proposal already has an execution receipt")
+                policy = latest.get("policy") or {}
+                if policy.get("allowed") is not True:
+                    raise ValueError("latest policy decision does not authorize execution")
+                payload = {
+                    "schema_version": 1,
+                    "status": "approved",
+                    "reviewer": latest.get("reviewer"),
+                    "policy": policy,
+                    "action_executed": bool(action_executed),
+                    "execution": {
+                        "status": status,
+                        "executed": bool(action_executed),
+                        "verified": bool(verified),
+                        "code": code,
+                        "summary": summary,
+                        "elapsed_seconds": round(elapsed_seconds, 3),
+                    },
+                }
+                self._append_row(
+                    db,
+                    proposal_id=proposal_id,
+                    event_type="policy.proposal.execution",
+                    timestamp=now,
+                    payload=payload,
+                )
+                db.execute("COMMIT")
+            except Exception:
+                db.execute("ROLLBACK")
+                raise
+        return self.get(proposal_id)  # type: ignore[return-value]
 
     def verify_integrity(self) -> AuditIntegrityReport:
         """Verify the global SHA-256 chain; any payload edit/deletion breaks a link."""
