@@ -78,6 +78,7 @@ Build persistent personal intelligence that observes explicitly permitted signal
 
 **Context and memory**
 - A bounded synchronous unified event bus fans normalized observations to the durable SQLite store and optional JSONL sink before downstream diagnostics/correlation.
+- Generic rule-driven temporal correlation can relate explicit event types within bounded time/host windows without asserting causality.
 - Freshness-weighted evidence assessment and a narrow explicit contradiction detector are available as context-layer primitives; heuristic weights are not calibrated probabilities.
 - Explicit user-controlled working sessions persisted locally; session metadata can be attached to model requests only on request.
 - Separate local SQLite memory store for explicit user-authored working/episodic/semantic/procedural/prospective records.
