@@ -237,7 +237,9 @@ def test_capture_cleans_workspace_when_session_start_fails(tmp_path):
     with pytest.raises(ETWProcessCaptureError, match="session_start_failed"):
         provider.collect()
 
-    assert len(calls) == 1
+    assert len(calls) == 2
+    assert calls[0] == ["logman.exe", "query", "providers"]
+    assert calls[1][:3] == ["logman.exe", "create", "trace"]
     assert list(tmp_path.iterdir()) == []
 
 
