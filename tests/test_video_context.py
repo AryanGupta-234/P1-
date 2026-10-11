@@ -110,3 +110,64 @@ def test_rejects_untyped_playback_state():
               "observation_window_seconds": 20},
     )
     assert build_video_observation_context([malformed]) is None
+
+
+def test_correlates_foreground_process_resources_without_copying_window_title():
+    browser = make_event(
+        "browser.video.snapshot",
+        data={
+            "playback_state": "stalled",
+            "stall_count": 3,
+            "observation_window_seconds": 30,
+        },
+        event_id="browser-stall",
+    )
+    foreground = make_event(
+        "window.foreground_changed",
+        seconds_ago=1,
+        data={
+            "pid": 4001,
+            "process_name": "msedge.exe",
+            "window_class": "Chrome_WidgetWin_1",
+            "window_title_collected": True,
+            "window_title": "Sensitive document title",
+        },
+        event_id="foreground-edge",
+    )
+    resource = make_event(
+        "process.foreground_resource_sample",
+        seconds_ago=1,
+        data={
+            "pid": 4001,
+            "process_name": "msedge.exe",
+            "cpu_pct": 67.5,
+            "memory_rss_bytes": 512 * 1024 * 1024,
+            "thread_count": 42,
+            "io_read_bytes": 1000,
+            "io_write_bytes": 2000,
+        },
+        event_id="edge-resource",
+    )
+    other_process = make_event(
+        "process.foreground_resource_sample",
+        seconds_ago=1,
+        data={"pid": 5002, "process_name": "unrelated.exe", "cpu_pct": 99.0},
+        event_id="unrelated-resource",
+    )
+
+    context = build_video_observation_context(
+        [browser, foreground, resource, other_process]
+    )
+
+    assert context is not None
+    assert context.active_application is not None
+    assert context.active_application.process_name == "msedge.exe"
+    assert context.active_application.pid == 4001
+    assert context.active_application.cpu_pct == 67.5
+    assert context.active_application.memory_rss_bytes == 512 * 1024 * 1024
+    assert context.active_application.thread_count == 42
+    assert context.active_application.window_title_collected is True
+    assert "window_title" not in context.active_application.__dict__
+    assert "foreground-edge" in context.evidence_event_ids
+    assert "edge-resource" in context.evidence_event_ids
+    assert "unrelated-resource" not in context.evidence_event_ids
