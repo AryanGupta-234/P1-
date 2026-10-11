@@ -352,10 +352,10 @@ def ask(
     temperature: float = typer.Option(0.2, min=0.0, max=2.0),
     max_output_tokens: int = typer.Option(512, min=32, max=4096),
 ) -> None:
-    """Send a prompt to an already-installed local Ollama model (never pulls models)."""
+    """Send a prompt to local Ollama or an explicitly authorized HTTPS cloud model."""
     from aie.models.base import ChatMessage, ModelRequest
-    from aie.models.ollama import OllamaClient, OllamaError
-    from aie.models.router import LocalModelRouter, ModelRoutingError
+    from aie.models.ollama import OllamaClient
+    from aie.models.router import LocalModelRouter
 
     try:
         request = ModelRequest(
@@ -365,10 +365,7 @@ def ask(
             max_output_tokens=max_output_tokens,
         )
         if provider == "cloud":
-            from aie.models.openai_compatible import (
-                CloudModelError,
-                OpenAICompatibleClient,
-            )
+            from aie.models.openai_compatible import OpenAICompatibleClient
 
             cloud_client = OpenAICompatibleClient(
                 allow_cloud_egress=allow_cloud_egress,
