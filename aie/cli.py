@@ -918,7 +918,7 @@ def plan_generate(
     """Generate a bounded declarative plan using installed local Ollama models only."""
     from aie.models.ollama import OllamaClient
     from aie.models.router import LocalModelRouter
-    from aie.planning.generator import PlanGenerationError, generate_task_plan
+    from aie.planning.generator import generate_task_plan
     from aie.policy.manifests import CapabilityManifestLoadError
 
     try:
