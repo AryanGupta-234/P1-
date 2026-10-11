@@ -1,20 +1,27 @@
 # Autonomous Intelligence Ecosystem (AIE)
 
-Windows-first, hybrid, persistent intelligence research platform. AGI is a research objective, not a capability claim.
+Windows-first, hybrid, persistent personal intelligence research platform. AGI is a research objective, not a capability claim.
+
+## Development branch
+Use `dev` as the integration branch. Create scoped `feat/*`, `fix/*`, or `integrate/*` branches from the latest `dev`; validate changes and merge via pull request. Keep `main` stable.
 
 ## Architecture spotlight
-**Current focus: AIE Foundation + Windows Environment Observer (M0/M1).**
-Track status and next evidence in [docs/ARCHITECTURE_SPOTLIGHT.md](docs/ARCHITECTURE_SPOTLIGHT.md) and [docs/ROADMAP.md](docs/ROADMAP.md).
+- [Architecture Spotlight](docs/ARCHITECTURE_SPOTLIGHT.md)
+- [Roadmap and task tracker](docs/ROADMAP.md)
+- [Video Intelligence](docs/VIDEO_INTELLIGENCE.md)
+- [Architecture](docs/ARCHITECTURE.md)
+- [Security and Privacy](docs/SECURITY_AND_PRIVACY.md)
+- [Contributing](CONTRIBUTING.md)
 
 ## Principles
-- Windows 10/11 only. Linux and WSL are out of scope.
-- Local-first observation and private memory; optional cloud reasoning through an explicit policy-controlled gateway.
-- High but bounded autonomy. All future execution is mediated by identity, capabilities, risk policy, budgets, approval and audit.
-- Model-independent, event-driven architecture.
-- Privacy by design: no keylogging, covert screenshots, microphone capture, credential collection or unrestricted content surveillance.
-- Deep telemetry uses supported Windows interfaces (ETW/Event Log). Kernel drivers are separate signed, reviewed work—not unrestricted access.
+- Windows 10/11 only; Linux and WSL are out of scope.
+- Local-first observation and private memory; optional cloud reasoning through explicit data-egress policy.
+- Autonomous actions are capability-scoped, budgeted, audited and verified.
+- Collectors are read-only. Models cannot grant themselves permissions.
+- No keylogging, covert screenshots, microphone capture, credentials, cookies, form content or unrestricted page surveillance.
+- Supported Windows interfaces (ETW/Event Log) first; no unsigned drivers or security-control bypass.
 
-## Quick start (Windows)
+## Windows quick start
 Python 3.11+:
 ```powershell
 py -3.11 -m venv .venv
@@ -23,15 +30,20 @@ python -m pip install -e ".[dev]"
 aie doctor
 aie inventory
 aie observe --duration 30
+python -m pytest
+python -m ruff check .
 ```
-The first release is read-only, local-only and stores events under %LOCALAPPDATA%\AIE. No model or network is required.
+Foundation works without models or internet. Local events are stored under `%LOCALAPPDATA%\AIE`.
 
-## Layout
-- `aie/`: contracts, observer, SQLite store and CLI.
-- `docs/`: architecture spotlight, roadmap, decisions and security.
-- `tests/`: deterministic synthetic tests.
+## Development workflow
+```powershell
+git switch dev
+git pull origin dev
+git switch -c feat/<short-scope>
+# implement, test, update ARC Spotlight + roadmap
+git push -u origin feat/<short-scope>
+```
+Open PRs against `dev`, not `main`.
 
 ## Current limitations
-Initial process lifecycle monitoring uses periodic user-mode snapshots and may miss short-lived processes. It is not complete kernel telemetry. ETW integration is a next milestone; a driver requires a separate threat model, signing, review, installation consent and removal plan.
-
-Run tests with `python -m pytest`.
+Process lifecycle observation uses best-effort user-mode snapshots and may miss transient processes. Video diagnostics analyze supplied metrics only; live browser telemetry, screen perception, model gateway, persistent learning and autonomous remediation are not implemented.

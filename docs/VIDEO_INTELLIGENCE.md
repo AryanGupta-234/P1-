@@ -1,26 +1,34 @@
-# Video Intelligence — first diagnostic slice
+# Video Intelligence
 
-## Scope delivered
-The first video-buffering component is a deterministic, read-only triage function in `aie/diagnostics/video_buffering.py`. It accepts normalized telemetry and returns evidence-linked hypotheses. It does not capture a screen, inspect page content, control a browser, modify network settings, or execute fixes.
+## Implemented
+`aie/diagnostics/video_buffering.py` is a deterministic read-only triage function. It analyzes supplied telemetry and returns evidence-linked hypotheses for throughput, packet loss, latency and local decode/render pressure. It refuses root-cause claims from a short/single stall or missing measurements. Confidence values are heuristic, not calibrated probabilities.
 
-## Input contract
-- `playback_stalled`: explicit playback-state signal from a future opt-in browser observer.
-- `stall_count` and `observation_window_seconds`: repeated-stall evidence.
-- `throughput_mbps` and `estimated_required_mbps`: sustained network capacity versus estimated stream demand.
-- `rtt_ms` and `packet_loss_pct`: network quality indicators.
-- `cpu_pct` and `dropped_frames_pct`: local resource/rendering indicators.
+## Not implemented
+There is no live browser extension, screen observer, network sampler, model reasoning or autonomous remediation yet.
 
-Unknown measurements must remain `None`; zero means a measured zero. The diagnostic refuses to infer a cause from a single stall or an insufficient observation window.
+## Future browser signals
+Use an explicit opt-in Edge/Chrome extension and collect only:
+- Playback state transitions (playing, waiting/stalled, paused, ended).
+- Stall count/duration and playback-position deltas.
+- Buffered-ahead duration.
+- Browser-provided dropped/decoded frame counters where supported.
+- Coarse site origin only when user permits it.
 
-## Interpretation
-The output ranks hypotheses for packet loss, insufficient throughput, high latency, and local decode/render pressure. Confidence values are heuristic ranking scores, not calibrated probabilities. Network tests alone cannot establish the cause of a CDN/server-side stall; future versions should add browser media telemetry and distinguish network, decoder, renderer, and remote-service signals.
+Never collect page text, credentials, cookies, form fields, browsing history or arbitrary DOM content. Provide site-level and global pause controls. Prefer structured local IPC/native messaging to a local service.
 
-## Safety boundary
-This component is a pure function. It produces recommendations only. Browser quality changes, network resets, process termination, service changes, or other remediation require a separate capability broker, explicit action policy, audit trail, and post-action verification. No autonomous remediation is implemented by this slice.
+## Future network signals
+- Interface/link status and Wi-Fi signal via supported Windows APIs.
+- Gateway RTT separately from external RTT.
+- DNS timing as its own metric.
+- Sustained throughput checks only with opt-in, strict duration/volume limits and backoff.
+- Explicit timeouts and bounded sample frequency.
 
-## Next implementation steps
-1. Add an opt-in Edge/Chrome extension or native-messaging bridge that reports only playback state and selected media timing counters—not page text, passwords, cookies, or form content.
-2. Add a Windows network sampler with bounded timeouts and clear separation between gateway and external measurements.
-3. Correlate browser and OS telemetry using timestamped evidence.
-4. Build synthetic traces and evaluate false positives/negatives before enabling recommendations.
-5. Add proposal/policy/approval/execution/verification infrastructure before any automated changes.
+ICMP ping does not establish stream throughput or CDN health. Diagnostics must not alter DNS, adapters, routes or proxy settings.
+
+## Remediation
+`observation -> correlated evidence -> hypothesis -> proposal -> policy -> approval if needed -> bounded execution -> verification -> audit/memory`
+
+Changing stream quality could become a low-risk, pre-authorized action if the site exposes a supported control. Network resets, process termination, service changes or OS configuration changes require approval and a recovery path.
+
+## Evaluation
+Add synthetic traces for congestion, Wi-Fi loss, decode pressure, remote-service failure and insufficient evidence. Measure precision/recall and false-positive rates before unattended recommendations.

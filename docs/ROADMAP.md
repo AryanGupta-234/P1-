@@ -1,88 +1,117 @@
-# AIE Roadmap and Task Tracker
+# AIE Roadmap and Development Tracker
 
-Status vocabulary: DONE / IN_PROGRESS / BLOCKED / PLANNED. Do not mark DONE without code/tests or documented research evidence.
+Statuses: DONE / IN_PROGRESS / BLOCKED / PLANNED. Mark DONE only with code, tests and validation evidence.
 
-**Last updated:** 2026-10-11
+**Last updated:** 2026-10-11 | **Integration branch:** `dev`
 
-| ID | Milestone | Status | Exit criteria |
+| ID | Workstream | Status | Exit criteria |
 |---|---|---|---|
-| M0 | Architecture and foundation | IN_PROGRESS | Contracts, package, CLI, tests, docs, Windows CI |
-| M1 | Windows environment observer | IN_PROGRESS | Inventory, process reconciliation, durable local event store |
+| M0 | Foundation and dev workflow | IN_PROGRESS | Stable package/contracts, Windows CI, reproducible setup |
+| M1 | Windows environment perception | IN_PROGRESS | Inventory, process reconciliation, durable events and telemetry |
+| M1.5 | First diagnostic capability | IN_PROGRESS | Video hypotheses and synthetic evaluation |
 | M2 | Context intelligence | PLANNED | Temporal correlation, state model, evidence-linked hypotheses |
-| M3 | Cognitive core | PLANNED | Model-independent reasoning/planning and router |
-| M4 | Persistent intelligence | PLANNED | Provenance-aware memory, consolidation, retrieval evaluation |
-| M5 | Controlled autonomy | PLANNED | Capability broker, policy, sandbox, audit, recovery |
-| M6 | Generalization research | PLANNED | Held-out transfer and novel-task benchmarks |
+| M3 | Cognitive core | PLANNED | Model adapters, routing, planning and evaluation |
+| M4 | Persistent memory and learning | PLANNED | Provenance-aware memory, retrieval, consolidation and feedback |
+| M5 | Controlled autonomy | PLANNED | Policy broker, scoped execution, audit, verification and recovery |
+| M6 | Generalization research | PLANNED | Held-out task transfer, robustness and reproducible benchmarks |
+| M7 | Personal assistant experience | PLANNED | Tray app, alerts, controls and explainability |
 
 ## M0 — Foundation
-- [x] Windows-only scope and architecture boundaries.
-- [x] Normalized event contract, package, CLI and local SQLite persistence.
-- [x] Architecture spotlight, roadmap and security documentation.
-- [ ] Run tests on Windows 10/11 and record results.
-- [ ] Add Windows CI.
+- [x] Windows-only architecture and boundaries.
+- [x] Versioned normalized event contract.
+- [x] Python package, CLI and SQLite event store.
+- [x] Read-only inventory and process reconciliation.
+- [x] Architecture spotlight and roadmap.
+- [ ] Full tests on Windows 10/11.
+- [ ] CI matrix on Python 3.11/3.12 and lint.
+- [ ] Dependency/security checks and contributor setup.
 
-## M1 — Windows Environment Observer
-- [x] Read-only host/process inventory.
-- [x] Best-effort process-state reconciliation with deduplication.
-- [x] Local SQLite persistence and optional JSONL export.
-- [x] Provider abstraction for ETW/Event Log.
-- [ ] ETW process telemetry provider.
+## M1 — Windows perception
+- [x] Host/process snapshot inventory.
+- [x] Best-effort process start/stop reconciliation.
+- [x] Read-only provider abstraction.
+- [ ] ETW process telemetry with bounded buffers.
 - [ ] Allowlisted Windows Event Log sources.
-- [ ] Service inventory and opt-in service state monitoring.
-- [ ] Network interface/connectivity change provider.
-- [ ] Scheduled-task inventory.
-- [ ] Executable/application inventory with signer/installation metadata.
-- [ ] Measure CPU, memory, latency and event loss.
-- [ ] Pause/resume and retention controls.
+- [ ] CPU/RAM/disk and per-process resource sampling.
+- [ ] Network interface, gateway, DNS and connectivity observations.
+- [ ] Service and scheduled-task inventory.
+- [ ] Installed application/executable metadata inventory.
+- [ ] Pause/resume, retention, export/delete and observer health.
+- [ ] Sampling overhead and event-loss measurements.
 
-## M2 — Context Intelligence
-- [ ] Temporal correlation and host state snapshots.
-- [ ] Separate observed facts from inferred hypotheses.
-- [ ] Evidence-backed relevance scoring and calibrated confidence.
-- [ ] Privacy-safe session/project context.
-- [ ] Synthetic evaluation corpus and false-positive/negative metrics.
+## M1.5 — Video diagnostics
+- [x] Deterministic telemetry contract and triage function.
+- [x] Hypotheses for throughput, packet loss, latency and local rendering pressure.
+- [x] Insufficient-evidence behavior and unknown-value handling.
+- [x] Synthetic unit tests.
+- [ ] Root-cause trace corpus and false-positive/negative evaluation.
+- [ ] Opt-in Edge/Chrome playback/performance extension.
+- [ ] Windows network sampler: gateway RTT vs external RTT, DNS timing, bounded throughput checks.
+- [ ] Browser + OS telemetry correlation.
+- [ ] Confidence calibration and actionable diagnostic proposals.
 
-## M3 — Cognitive Core
-- [ ] Provider-independent model adapter.
-- [ ] Local Ollama adapter with timeouts and structured output.
-- [ ] Optional cloud adapter behind data-egress policy.
-- [ ] Context packaging and token/cost budgets.
-- [ ] Planning state machine and deterministic fallback.
-- [ ] Reasoning evaluation; models cannot change policy/permissions.
+## M2 — Context intelligence
+- [ ] Unified event bus and temporal correlation.
+- [ ] Working context: foreground application, task and session state.
+- [ ] Facts-versus-hypotheses model, evidence lineage and contradictions.
+- [ ] User-approved profile/personalization.
+- [ ] Relevance scoring and false-positive evaluation.
 
-## M4 — Persistent Intelligence
-- [ ] Working, episodic, semantic, procedural and prospective schemas.
-- [ ] Provenance, confidence, sensitivity, TTL and verification state.
+## M3 — Cognitive core
+- [ ] Provider-independent model interface.
+- [ ] Local Ollama adapter with timeouts, structured outputs and cancellation.
+- [ ] Hardware-aware model selection, concurrency and memory budgets.
+- [ ] Optional cloud adapter behind explicit task-level egress policy.
+- [ ] Context packaging, token/cost budgets and prompt-injection boundaries.
+- [ ] Planner/state machine with deterministic fallback.
+- [ ] Reasoning/tool-selection evaluation harness.
+
+## M4 — Memory and learning
+- [ ] Working, episodic, semantic, procedural and prospective memory.
+- [ ] SQLite provenance store and optional local vector index.
+- [ ] Sensitivity, TTL, correction, export and deletion.
 - [ ] Retrieval benchmark and contradiction handling.
-- [ ] User review, correction, export and deletion controls.
-- [ ] Consolidation with regression tests.
+- [ ] Feedback: proposal, acceptance, execution, outcome and verification.
+- [ ] Memory consolidation with regression tests.
+- [ ] Reviewed/versioned skill induction.
 
-## M5 — Controlled Autonomy
-- [ ] Tool capability manifests and least-privilege identities.
+## M5 — Controlled autonomy
+- [ ] Capability manifests and least-privilege identities.
 - [ ] Proposal → policy → approval → sandbox → verification.
-- [ ] Command allowlists, resource budgets and timeouts.
-- [ ] Rollback/recovery interfaces and audit.
-- [ ] Prompt-injection/tool-misuse adversarial tests.
-- [ ] Approval gates for destructive, privileged, financial and external actions.
+- [ ] Allowlists, rate limits, timeouts and resource budgets.
+- [ ] Reversible actions and rollback/recovery.
+- [ ] Append-only audit and user-visible action history.
+- [ ] Prompt-injection, malicious-page and tool-misuse tests.
+- [ ] Risk tiers and approval requirements.
+- [ ] Global pause/kill switch.
 
-## M6 — Generalization Research
+## M6 — Generalization
 - [ ] Held-out task families and baselines.
 - [ ] Transfer to unseen task variations.
-- [ ] Causal/temporal reasoning evaluation separate from retrieval.
+- [ ] Causal/temporal reasoning separate from retrieval.
 - [ ] Calibration, robustness, forgetting and recovery metrics.
-- [ ] Reproducible experiments; benchmark progress is not proof of AGI.
+- [ ] Reproducible experiment/model manifests; no benchmark claimed as proof of AGI.
 
-## Current sprint
-1. Validate M0/M1 on Windows 10/11.
-2. Add GitHub Actions Windows CI.
-3. Prototype ETW and document constraints.
-4. Add allowlisted Event Log reader.
-5. Add service, network and application inventory incrementally.
+## M7 — Assistant experience
+- [ ] Windows tray app and lifecycle controls.
+- [ ] Live state, explainable alerts and recommendations.
+- [ ] Permission, pause and retention settings.
+- [ ] Diagnostics/action history and memory review.
+- [ ] Desktop UI after core telemetry and policy APIs stabilize.
+
+## Immediate dev sprint
+1. CI triggers on dev and runs lint + tests on 3.11/3.12.
+2. Add trace fixtures for buffering causes and unknown evidence.
+3. Implement bounded read-only network sampling.
+4. Design opt-in browser extension with minimal permissions.
+5. Update this tracker and Architecture Spotlight in every PR.
 
 ## Risk register
 | Risk | Mitigation | State |
 |---|---|---|
-| User-mode APIs lack complete kernel visibility | ETW/Event Log first; signed driver only if justified | OPEN |
-| Transient process events are missed | ETW plus snapshot reconciliation | OPEN |
-| Telemetry privacy exposure | Local-first, filtering, retention, pause controls | OPEN |
-| Model hallucination becomes action | Observer read-only; policy broker mandatory | CONTROLLED |
+| Snapshot polling misses short-lived events | ETW plus reconciliation; report coverage | OPEN |
+| Browser telemetry exposes private data | Explicit opt-in; playback-only signals; no cookies/forms | OPEN |
+| Model hallucination causes harmful changes | Model proposes; broker authorizes; verification required | CONTROLLED |
+| Noisy metrics cause false diagnosis | Repeated samples, multiple signals, evaluation | OPEN |
+| Memory retains sensitive data | Local-first, sensitivity labels, TTL, inspect/export/delete | OPEN |
+| Agent performs unbounded actions | Capability scopes, budgets, kill switch, audit | CONTROLLED |
