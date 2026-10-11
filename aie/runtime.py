@@ -10,6 +10,7 @@ from aie.contracts import AIEEvent
 from aie.diagnostics.monitor import VideoDiagnosticMonitor
 from aie.observer_health import ObserverHealthTracker
 from aie.providers.eventlog import WindowsEventLogProvider
+from aie.providers.etw_process import WindowsETWProcessProvider
 from aie.providers.foreground import WindowsForegroundProvider
 from aie.providers.network import WindowsNetworkProvider
 from aie.providers.process_resources import WindowsProcessResourceProvider
@@ -43,6 +44,8 @@ def observe(
     include_process_resources: bool = False,
     process_resource_interval: float = 10.0,
     process_resource_max_processes: int = 256,
+    include_etw: bool = False,
+    etw_max_events_per_poll: int = 100,
     health_interval: float = 30.0,
 ) -> int:
     """Persist read-only observations and privacy-safe observer health telemetry."""
@@ -68,6 +71,8 @@ def observe(
         raise ValueError("process_resource_interval must be between 2 and 300 seconds")
     if include_process_resources and not 1 <= process_resource_max_processes <= 512:
         raise ValueError("process_resource_max_processes must be between 1 and 512")
+    if include_etw and not 1 <= etw_max_events_per_poll <= 1000:
+        raise ValueError("etw_max_events_per_poll must be between 1 and 1000")
     if not 5.0 <= health_interval <= 300.0:
         raise ValueError("health_interval must be between 5 and 300 seconds")
 
@@ -87,6 +92,11 @@ def observe(
             sample_interval=process_resource_interval,
         )
         if include_process_resources
+        else None
+    )
+    etw_provider = (
+        WindowsETWProcessProvider(max_events_per_poll=etw_max_events_per_poll)
+        if include_etw
         else None
     )
     event_log_provider = (
@@ -122,6 +132,7 @@ def observe(
     next_process_resources = 0.0
     next_health = 0.0
     total = 0
+    etw_paused = False
 
     def collect(
         provider_name: str,
@@ -152,10 +163,17 @@ def observe(
     try:
         while time.monotonic() < deadline:
             if observer_is_paused():
+                if etw_provider is not None and not etw_paused:
+                    etw_provider.pause()
+                    etw_paused = True
                 remaining = deadline - time.monotonic()
                 if remaining > 0:
                     time.sleep(min(interval, remaining))
                 continue
+
+            if etw_provider is not None and etw_paused:
+                etw_provider.resume()
+                etw_paused = False
 
             events = collect(
                 provider.name,
@@ -193,6 +211,11 @@ def observe(
                     process_resource_provider.collect_snapshot,
                 ))
                 next_process_resources = now + process_resource_interval
+            if etw_provider is not None:
+                events.extend(collect(
+                    etw_provider.name,
+                    etw_provider.collect_snapshot,
+                ))
 
             total += store.append_many(events)
             diagnostic_events = (
@@ -221,6 +244,8 @@ def observe(
             if remaining > 0:
                 time.sleep(min(interval, remaining))
     finally:
+        if etw_provider is not None:
+            etw_provider.close()
         if output:
             output.close()
     return total
