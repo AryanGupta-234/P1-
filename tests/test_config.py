@@ -23,3 +23,10 @@ def test_resuming_when_not_paused_is_safe(tmp_path, monkeypatch):
     set_observer_paused(False)
 
     assert observer_is_paused() is False
+
+
+def test_agent_run_database_path_is_local_to_user_data_dir(tmp_path, monkeypatch):
+    from aie.config import agent_run_database_path
+
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    assert agent_run_database_path() == tmp_path / "AIE" / "agent-runs.sqlite3"
