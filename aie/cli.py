@@ -215,7 +215,7 @@ def observer_health(limit: int = typer.Option(1000, min=1, max=1000)) -> None:
 
     table = Table(
         "Provider", "Status", "Collections", "Failures", "Lost records",
-        "Last duration", "Last error", "Reason",
+        "Unquantified loss", "Coverage incidents", "Last duration", "Last error", "Reason",
     )
     for provider_name, event in sorted(latest.items()):
         data = event.data
@@ -229,6 +229,8 @@ def observer_health(limit: int = typer.Option(1000, min=1, max=1000)) -> None:
             str(data.get("collections", 0)),
             str(data.get("failures", 0)),
             str(data.get("dropped_records", 0)),
+            str(data.get("unknown_loss_incidents", 0)),
+            str(data.get("coverage_incidents", 0)),
             f"{data.get('last_duration_ms', 0)} ms",
             str(data.get("last_error_type") or "—"),
             str(data.get("reason_code") or "—"),
