@@ -26,6 +26,7 @@ jobs:
         run: python -m pip install -e ".[dev,windows]"
       - name: Audit installed Python dependencies
         run: |
+          python -m pip install --upgrade "setuptools>=83.0.0,<100"
           python -m pip install --disable-pip-version-check pip-audit
           python -m pip_audit --local
       - name: Set up .NET SDK for WPF dashboard
