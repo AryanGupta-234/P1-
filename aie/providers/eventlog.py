@@ -82,6 +82,7 @@ class WindowsEventLogProvider:
         self.api = api or _Win32EventLogApi()
         self.max_records_per_channel = max_records_per_channel
         self._last_record: dict[str, int] = {}
+        self._error_channels: set[str] = set()
 
     def collect_snapshot(self) -> list[AIEEvent]:
         events: list[AIEEvent] = []
@@ -99,11 +100,17 @@ class WindowsEventLogProvider:
                 # Establish a baseline on startup; do not replay historical logs.
                 if previous is None:
                     self._last_record[channel] = newest
+                    self._error_channels.discard(channel)
                     continue
+
+                # A cleared or wrapped log starts a new record-number sequence.
+                if newest < previous or previous < oldest - 1:
+                    previous = oldest - 1
 
                 start_record = max(oldest, previous + 1)
                 if start_record > newest:
-                    self._last_record[channel] = max(previous, newest)
+                    self._last_record[channel] = newest
+                    self._error_channels.discard(channel)
                     continue
 
                 records = self.api.read_from(
@@ -112,6 +119,7 @@ class WindowsEventLogProvider:
                     self.max_records_per_channel,
                 )
                 if not records:
+                    self._error_channels.discard(channel)
                     continue
 
                 for record in records:
@@ -160,13 +168,31 @@ class WindowsEventLogProvider:
                         self._last_record.get(channel, 0),
                         record_number,
                     )
-            except (OSError, RuntimeError):
+                self._error_channels.discard(channel)
+            except Exception as exc:
                 # Access denied, cleared logs or unavailable channels are non-fatal.
+                if channel not in self._error_channels:
+                    events.append(AIEEvent(
+                        timestamp=datetime.now(timezone.utc),
+                        host_id=host_id(),
+                        source=self.name,
+                        event_type="windows.eventlog.provider_error",
+                        entity=EntityRef(type="windows_eventlog_channel", name=channel),
+                        data={
+                            "channel": channel,
+                            "error_type": type(exc).__name__,
+                            "message_collected": False,
+                        },
+                        sensitivity="internal",
+                        confidence=1.0,
+                        evidence_kind="observed",
+                    ))
+                    self._error_channels.add(channel)
                 continue
             finally:
                 if handle is not None:
                     try:
                         self.api.close(handle)
-                    except OSError:
+                    except Exception:
                         pass
         return events
