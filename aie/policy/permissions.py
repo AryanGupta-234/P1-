@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import os
 from pathlib import Path
 
@@ -77,12 +76,15 @@ def set_capability_enabled(
     if temporary.is_symlink():
         raise CapabilityPermissionError("manifest temporary path cannot be a symlink")
     payload = updated.model_dump_json(indent=2)
+    temporary_created = False
     try:
         with temporary.open("x", encoding="utf-8", newline="\n") as stream:
+            temporary_created = True
             stream.write(payload)
             stream.flush()
             os.fsync(stream.fileno())
         os.replace(temporary, path)
+        temporary_created = False
     except FileExistsError as exc:
         raise CapabilityPermissionError(
             "manifest temporary file already exists; inspect and remove it manually"
