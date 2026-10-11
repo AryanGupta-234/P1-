@@ -225,6 +225,9 @@ class PolicyControlledExecutor:
             )
         budget = ExecutionBudget(max_seconds=max_seconds)
         started = self.clock()
+        # Atomically reserve this proposal before crossing the adapter boundary.
+        # A failed/raced reservation raises before any side effect can begin.
+        self.ledger.reserve_execution(proposal_id)
         try:
             result = adapter.execute(proposal, budget=budget)
             if not isinstance(result, AdapterResult):
