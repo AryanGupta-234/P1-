@@ -60,3 +60,17 @@ jobs:
           node --check browser_extension/popup.js
       - name: Run tests
         run: python -m pytest
+      - name: Build and validate Python distributions
+        run: |
+          python -m pip install --disable-pip-version-check build twine
+          python -m build --sdist --wheel
+          python -m twine check dist/*
+      - name: Upload Python distributions
+        uses: actions/upload-artifact@v4
+        with:
+          name: aie-python-${{ matrix.python-version }}
+          path: |
+            dist/*.whl
+            dist/*.tar.gz
+          if-no-files-found: error
+          retention-days: 7
