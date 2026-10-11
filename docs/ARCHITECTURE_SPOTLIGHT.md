@@ -56,6 +56,8 @@ Build persistent personal intelligence that observes explicitly permitted signal
 - Opt-in metadata-only Application/System Event Log reader, wired into the observer runtime. It skips historical backlog on startup and excludes message text, XML and Security logs.
 - Opt-in, allowlisted UI Automation structural snapshots with node/depth/time bounds.
 - Per-user pause/resume and age-based event pruning.
+- Provider health transitions and end-of-run summaries, with sanitized error classes and a local `aie health` view.
+- UIA timeout signals and Event Log provider recovery; exact retention rollover gaps are counted and log resets are marked unknown-loss.
 
 **Browser and diagnostics**
 - Opt-in MV3 Chrome/Edge HTML-video observer and strict Windows native-messaging host.
@@ -83,10 +85,10 @@ Build persistent personal intelligence that observes explicitly permitted signal
 - Policy decisions do not execute actions. No OS executor or autonomous remediation is implemented.
 
 ## Pending validation and implementation
-- Full latest Windows CI run for Event Log runtime wiring and its runtime-level persistence test.
+- Target-desktop validation of browser/native-host, UIA and Application/System Event Log behavior.
 - Target-desktop Chrome/Edge extension/native-host installation and live playback validation.
 - Target-desktop UIA and Application/System Event Log permission/behavior validation.
-- ETW subscriptions and higher-fidelity process telemetry.
+- ETW process lifecycle subscriptions, owned-session cleanup and buffer-loss metrics.
 - Windows Graphics Capture (screenshots), still intentionally separate from UIA structure.
 - Unified event bus and semantic task/session interpretation.
 - Embedding retrieval, memory consolidation and evaluated learning from verified outcomes.
@@ -96,9 +98,9 @@ Build persistent personal intelligence that observes explicitly permitted signal
 - Windows tray/desktop assistant UI.
 
 ## Immediate engineering sequence
-1. Validate the unified activity and explicit memory layers on Windows CI.
-2. Validate browser/native-host, UIA and Event Log sampling on the target Windows desktop.
-3. Add ETW process telemetry with coverage and buffer-loss reporting.
+1. Validate browser/native-host, UIA and Event Log sampling on the target Windows desktop.
+2. Add ETW process lifecycle telemetry with owned-session cleanup, event-loss counters and snapshot reconciliation.
+3. Measure observer CPU/RAM overhead and lifecycle event latency before broadening sampling.
 4. Extend the activity timeline into a user-controlled task/session model.
 5. Add persistent memory consolidation with retrieval and forgetting evaluation.
 6. Connect policy decisions to a proposal queue and append-only audit.
