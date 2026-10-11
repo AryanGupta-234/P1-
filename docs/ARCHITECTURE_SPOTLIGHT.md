@@ -47,16 +47,16 @@ Build persistent personal intelligence that observes explicitly permitted signal
 ## Current capability state
 **Foundation present:** Python package/CLI, versioned event contract, SQLite store, read-only Windows inventory, best-effort process reconciliation, provider interface, hardware/model selection utilities.
 
-**Integrated on dev:** deterministic video-buffering triage; bounded read-only network sampling; temporal event correlation; and an opt-in MV3 Chrome/Edge playback observer prototype with a strict Windows native-messaging host. Monitoring defaults to off and collects HTML video playback/performance counters only. The network provider is now wired into the observer CLI with a default 15-second cadence (configurable from 5–300 seconds) and a --no-network opt-out. DNS probes use a single-flight guard so a stuck resolver cannot accumulate worker threads. The network provider samples interface counters, TCP connection-establishment latency to a private gateway and two public endpoints, and DNS resolution timing; this is not packet RTT and it does not measure sustained stream throughput. The correlator preserves connect latency as distinct evidence and leaves packet loss/throughput unknown when they were not measured. These are telemetry building blocks, not a live browser monitor, and no fixes are executed.
+**Integrated on dev:** deterministic video-buffering triage; bounded read-only network sampling; temporal event correlation; an opt-in MV3 Chrome/Edge playback observer prototype with a strict Windows native-messaging host; and a read-only foreground-window transition observer. Window titles are not collected by default. Monitoring defaults to off and collects HTML video playback/performance counters only. The network provider is now wired into the observer CLI with a default 15-second cadence (configurable from 5–300 seconds) and a --no-network opt-out. DNS probes use a single-flight guard so a stuck resolver cannot accumulate worker threads. The network provider samples interface counters, TCP connection-establishment latency to a private gateway and two public endpoints, and DNS resolution timing; this is not packet RTT and it does not measure sustained stream throughput. The correlator preserves connect latency as distinct evidence and leaves packet loss/throughput unknown when they were not measured. These are telemetry building blocks, not a live browser monitor, and no fixes are executed.
 
-**Not implemented:** ETW subscriptions, Event Log provider, per-process resource sampling, validation of native-host registration on the target desktop, Windows Graphics Capture/UIA observer, full context graph, model gateway, persistent memory layers, policy broker, sandboxed executor, autonomous remediation or assistant dashboard.
+**Not implemented:** ETW subscriptions, Event Log provider, per-process resource sampling, native-host registration/real-browser end-to-end validation on the target desktop, Windows Graphics Capture and UI Automation control tree capture, full context graph, model gateway, persistent memory layers, policy broker, sandboxed executor, autonomous remediation or assistant dashboard.
 
 ## Immediate engineering sequence
-1. Verify Windows CI and the full test matrix on Python 3.11/3.12.
-2. Add service/process resource samples and pause/retention controls.
-3. Build the opt-in Edge/Chrome playback telemetry bridge.
-4. Correlate browser and OS metrics into timestamped evidence.
-5. Implement the context/state model and uncertainty-aware diagnosis.
+1. Verify CI after foreground observer integration on Python 3.11/3.12.
+2. Add CPU, memory and I/O deltas for foreground processes.
+3. Add explicit pause/retention controls and user-visible observation status.
+4. Add Windows UI Automation metadata for selected controls with per-app opt-in.
+5. Correlate browser, foreground-app and network events into user task context.
 6. Integrate the local Ollama adapter; optional cloud only through explicit egress policy.
 7. Build capability manifests, policy broker, sandbox, audit and verification.
 8. Implement persistent memory, feedback and held-out generalization evaluation.
