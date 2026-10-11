@@ -57,6 +57,7 @@ Build persistent personal intelligence that observes explicitly permitted signal
 - Bounded network interface counters, TCP connection-establishment latency and DNS resolution timing.
 - Opt-in metadata-only Application/System Event Log reader, wired into the observer runtime. It skips historical backlog on startup and excludes message text, XML and Security logs.
 - Privacy-safe observer health telemetry with per-provider latency, success/error, consecutive-failure and event-loss accounting; health records exclude exception text and provider payloads.
+- User-controlled privacy controls: `aie health` inspection, JSONL export with sensitive-data opt-in, and confirm-only delete-all after observation pause.
 - Opt-in, allowlisted UI Automation structural snapshots with node/depth/time bounds.
 - Per-user pause/resume and age-based event pruning.
 
@@ -91,10 +92,10 @@ Build persistent personal intelligence that observes explicitly permitted signal
 - Approval records authorization for a future executor only. Policy decisions do not execute actions; no OS executor or autonomous remediation is implemented.
 
 ## Pending validation and implementation
-- Windows CI run [#448](https://github.com/AryanGupta-234/P1-/actions/runs/38122160376) passed on Python 3.11 and 3.12, including systemwide process telemetry and activity-summary privacy tests.
+- Windows CI run [#581](https://github.com/AryanGupta-234/P1-/actions/runs/38123875398) passed on Python 3.11 and 3.12, including the current observer-health, ETW lifecycle/loss, task-session, dry-run governance and privacy-control tests.
 - Target-desktop Chrome/Edge extension/native-host installation and live playback validation.
 - Target-desktop UIA and Application/System Event Log permission/behavior validation.
-- Higher-fidelity ETW process telemetry beyond lifecycle events (buffer-loss accounting and optional thread/file/network categories).
+- Higher-fidelity ETW telemetry beyond process lifecycle events (optional thread/file/network categories and provider-specific coverage reporting).
 - Windows Graphics Capture (screenshots), still intentionally separate from UIA structure.
 - Unified event bus and semantic task/session interpretation.
 - Embedding retrieval, memory consolidation and evaluated learning from verified outcomes.
@@ -104,14 +105,13 @@ Build persistent personal intelligence that observes explicitly permitted signal
 - Windows tray/desktop assistant UI.
 
 ## Immediate engineering sequence
-1. Validate the unified activity, explicit memory and observer-health layers on Windows CI.
-2. Validate browser/native-host, UIA and Event Log sampling on the target Windows desktop.
-3. Extend ETW from process lifecycle into explicitly selected thread/file/network categories, with provider-specific coverage reporting.
-4. Extend the activity timeline into a user-controlled task/session model.
-5. Add persistent memory consolidation with retrieval and forgetting evaluation.
-6. Connect policy decisions to a proposal queue and append-only audit.
-7. Implement an executor only after sandboxing, least privilege, kill switch, rollback and verification.
-8. Add a tray/desktop interface after core APIs stabilize.
+1. Validate browser/native-host, UIA, Event Log and ETW elevation/behavior on the target Windows desktop.
+2. Extend ETW from process lifecycle into explicitly selected thread/file/network categories with provider-specific coverage reporting.
+3. Add evidence freshness, contradiction handling and calibrated confidence to context/session interpretation.
+4. Add persistent memory consolidation with retrieval/forgetting evaluation and reviewed skill induction.
+5. Harden the policy proposal → dry-run → audit path before any mutating executor work.
+6. Implement a real executor only after sandboxing, least privilege, kill switch, rollback and postcondition verification.
+7. Add tray/desktop controls after the core APIs stabilize.
 
 ## Validation policy
 Hosted CI proves code behavior on GitHub's Windows runners; it does not prove installation or runtime behavior on the user's desktop. Mark target-desktop validation complete only after running those checks on the actual Windows machine.
