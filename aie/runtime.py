@@ -8,6 +8,7 @@ from pathlib import Path
 from aie.config import observer_is_paused
 from aie.contracts import AIEEvent
 from aie.diagnostics.monitor import VideoDiagnosticMonitor
+from aie.event_bus import EventBus
 from aie.observer_health import ObserverHealthTracker
 from aie.providers.eventlog import WindowsEventLogProvider
 from aie.providers.etw_process import WindowsETWProcessProvider
@@ -116,6 +117,8 @@ def observe(
         else None
     )
     store = EventStore(db_path)
+    event_bus = EventBus(max_batch_size=2_000)
+    event_bus.subscribe("store", store.append_many)
     diagnostic_monitor = (
         VideoDiagnosticMonitor(
             store,
@@ -168,6 +171,15 @@ def observe(
     if jsonl_path:
         jsonl_path.parent.mkdir(parents=True, exist_ok=True)
     output = jsonl_path.open("a", encoding="utf-8") if jsonl_path else None
+
+    if output:
+        def write_jsonl(events: list[AIEEvent] | tuple[AIEEvent, ...]) -> int:
+            for event in events:
+                output.write(event.model_dump_json() + "\n")
+            output.flush()
+            return len(events)
+
+        event_bus.subscribe("jsonl", write_jsonl)
     first_sample = True
     try:
         while time.monotonic() < deadline:
@@ -226,7 +238,8 @@ def observe(
                     etw_provider.collect_snapshot,
                 ))
 
-            total += store.append_many(events)
+            publish_results = event_bus.publish(events)
+            total += publish_results.get("store", 0)
             diagnostic_events = (
                 diagnostic_monitor.poll()
                 if diagnostic_monitor is not None
@@ -238,12 +251,9 @@ def observe(
                 health_events.append(health.to_event(host_id()))
                 next_health = now + health_interval
 
-            total += store.append_many([*diagnostic_events, *health_events])
-
-            if output:
-                for event in [*events, *diagnostic_events, *health_events]:
-                    output.write(event.model_dump_json() + "\n")
-                output.flush()
+            derived_events = [*diagnostic_events, *health_events]
+            publish_results = event_bus.publish(derived_events)
+            total += publish_results.get("store", 0)
 
             if on_diagnostic is not None:
                 for event in diagnostic_events:
