@@ -70,6 +70,11 @@ class CapabilityRegistry:
                 raise ValueError(f"duplicate capability adapter: {capability_id}")
             self._adapters[capability_id] = adapter
 
+    @property
+    def capability_ids(self) -> frozenset[str]:
+        """Return registered IDs without exposing mutable registry internals."""
+        return frozenset(self._adapters)
+
     def get(self, capability_id: str) -> CapabilityAdapter | None:
         return self._adapters.get(capability_id)
 
