@@ -137,10 +137,17 @@ def test_uia_scan_timeout_does_not_accumulate_worker_threads():
 
     clock_now = [100.0]
     monitor = provider(reader=SlowReader(), timeout=0.1, clock=lambda: clock_now[0])
-    assert monitor.collect_snapshot() == []
+    first = monitor.collect_snapshot()
+    assert len(first) == 1
+    assert first[0].event_type == "windows.uia.provider_timeout"
+    assert first[0].data["reason_code"] == "scan_timeout_or_busy"
     assert started.wait(1.0)
     clock_now[0] += 11.0
     assert monitor.collect_snapshot() == []
     release.set()
     assert monitor._scan_lock.acquire(timeout=1.0)
     monitor._scan_lock.release()
+    clock_now[0] += 11.0
+    recovered = monitor.collect_snapshot()
+    assert len(recovered) == 1
+    assert recovered[0].event_type == "window.uia_tree_snapshot"
