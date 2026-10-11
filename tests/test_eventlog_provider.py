@@ -123,7 +123,8 @@ def test_eventlog_clear_or_record_number_reset_is_detected():
     api.records["System"] = [record(1, 6000), record(2, 6001)]
     emitted = provider.collect_snapshot()
 
-    assert [event.data["record_number"] for event in emitted] == [1, 2]
+    assert emitted[0].event_type == "windows.eventlog.sequence_reset"
+    assert [event.data["record_number"] for event in emitted if event.event_type == "windows.eventlog.record"] == [1, 2]
 
 
 class FailingEventLogApi(FakeEventLogApi):
@@ -143,3 +144,20 @@ def test_eventlog_access_error_is_reported_once_without_error_message():
     assert first[0].data["error_type"] == "PermissionError"
     assert "message" not in first[0].data
     assert second == []
+
+
+
+def test_eventlog_reports_exact_records_lost_after_retention_rollover():
+    api = FakeEventLogApi()
+    api.records["System"] = [record(1), record(2)]
+    provider = WindowsEventLogProvider(channels=["System"], api=api)
+    assert provider.collect_snapshot() == []
+
+    # The oldest retained record advanced from 1 to 5: records 3 and 4 rolled off.
+    api.records["System"] = [record(5), record(6)]
+    events = provider.collect_snapshot()
+
+    loss = next(event for event in events if event.event_type == "windows.eventlog.records_lost")
+    assert loss.data["dropped_records"] == 2
+    assert loss.data["loss_count_known"] is True
+    assert [event.data["record_number"] for event in events if event.event_type == "windows.eventlog.record"] == [5, 6]
