@@ -142,6 +142,18 @@ aie capability-disable windows.settings.open
 
 Enabling a manifest cannot make an unregistered capability executable, remove mandatory approval or enable autonomous operation. The global execution marker and kill switch are independent gates.
 
+## Native Windows dashboard
+
+The WPF dashboard is a user-started desktop client over the installed `aie` CLI. Build it with the .NET 8 SDK after installing the Python CLI:
+
+```powershell
+pip install -e ".[windows]"
+dotnet build .\desktop\P1Dashboard\P1Dashboard.csproj --configuration Release
+.\desktop\P1Dashboard\bin\Release\net8.0-windows\P1Dashboard.exe
+```
+
+The dashboard reads local status, health, retention and task history; launches the bounded local `aie agent run` workflow; pauses/resumes an existing observer; and exposes emergency execution disable/kill controls. It does not start observation on launch, supply capability IDs, approve proposals or enable execution. The CLI must already be installed and available as `aie` on PATH.
+
 ## Windows tray controls
 
 Start the user-controlled notification-area controller with:
