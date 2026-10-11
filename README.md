@@ -40,6 +40,8 @@ aie observe --duration 30 --no-foreground
 aie observe --duration 30 --include-window-titles
 # Adjust active-process metric cadence (seconds):
 aie observe --duration 60 --foreground-sample-interval 10
+# Inspect cross-provider activity sessions safely:
+aie activity --hours 4
 # Inspect correlated browser, active-app and network evidence:
 aie context
 # Prompt an installed local Ollama model:
@@ -59,7 +61,7 @@ git push -u origin feat/<short-scope>
 ```
 Open PRs against `dev`, not `main`.
 
-## Diagnostic feedback
+## Unified activity timeline\n`aie activity --hours 4` queries the local event store by time window and groups browser, foreground-app, network, process, Event Log and diagnostic signals into temporal sessions. It displays a safe projection of metadata only; it never dumps raw event payloads, window titles, UIA content or feedback notes. Grouping is time-based and does not infer user intent.\n\n## Diagnostic feedback
 Use `aie events` to find a `diagnostic.video_finding` event ID, then record the outcome with `aie feedback <EVENT_ID> --outcome resolved`, `not_resolved`, or `not_attempted`. Run `aie learning-report` to see sample counts and observed resolution rates by cause. An optional `--note` is stored locally as sensitive data. This captures user feedback; it does not retrain a model or imply that AIE executed the recommendation.
 
 ## Windows Event Log metadata (optional)
