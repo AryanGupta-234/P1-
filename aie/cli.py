@@ -1462,14 +1462,16 @@ def skill_save(
         run = task_store.get(run_id)
         if run is None:
             raise SkillInductionError("task run was not found")
+        ledger = PolicyLedger(policy_audit_database_path())
         candidate = build_skill_candidate(
             run,
-            policy_ledger=PolicyLedger(policy_audit_database_path()),
+            policy_ledger=ledger,
         )
         memory = save_skill_candidate(
             candidate,
             memory_store=MemoryStore(memory_database_path()),
             task_run_store=task_store,
+            policy_ledger=ledger,
             sensitivity="internal" if internal else "sensitive",
         )
     except (SkillInductionError, ValueError, OSError) as exc:
