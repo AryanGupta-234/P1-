@@ -156,6 +156,42 @@ Plan drafting does not pull models, attach observations automatically or select 
 
 Action steps queue policy proposals. Review them with `aie approve-proposal <PROPOSAL_ID>`; approval alone never executes anything. A separate `aie execute-proposal` command is required and the execution gate is disabled by default.
 
+## Memory retrieval and conflict evaluation
+
+Create a small JSON benchmark whose expected memory IDs are reviewed by you:
+
+```json
+{
+  "dataset_id": "desktop-memory-v1",
+  "description": "Queries for explicitly reviewed desktop workflow memories",
+  "cases": [
+    {
+      "case_id": "browser-playback",
+      "query": "browser playback troubleshooting",
+      "relevant_memory_ids": ["<ACTIVE_MEMORY_ID>"]
+    }
+  ]
+}
+```
+
+Evaluate local lexical retrieval or an already-installed local embedding model:
+
+```powershell
+aie memory-evaluate .\memory-eval.json --k 5
+aie memory-evaluate .\memory-eval.json --k 5 --semantic-model nomic-embed-text:latest
+```
+
+The report includes mean Recall@k, Precision@k, Mean Reciprocal Rank and Hit Rate. It checks that every expected memory is active, unexpired and visible under the selected sensitivity policy. It does not change memories, embeddings or model weights. Use `--include-sensitive` only when the benchmark intentionally includes sensitive records.
+
+Review possible lexical polarity conflicts separately:
+
+```powershell
+aie memory-conflicts
+aie memory-conflicts --include-sensitive
+```
+
+These candidates are not semantic contradiction proofs. The tool flags a small, explicit list of opposing words with shared context and prints IDs/terms only; inspect the underlying records and timestamps before correcting anything.
+
 ## Reviewed memory consolidation and verified procedural skills
 
 `aie memory-consolidate` identifies likely duplicate pairs but never changes memory. Review both records locally, then provide the resulting content explicitly to the separate merge command:
