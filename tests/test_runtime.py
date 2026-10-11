@@ -108,3 +108,62 @@ def test_opt_in_eventlog_provider_is_polled_and_persisted(tmp_path, monkeypatch)
     assert eventlog_calls
     assert added >= 1
     assert stored.get("eventlog-001") is not None
+
+
+def test_opt_in_system_process_resource_provider_is_polled_and_persisted(tmp_path, monkeypatch):
+    from datetime import datetime, timezone
+
+    from aie.contracts import AIEEvent, EntityRef
+    from aie.store import EventStore
+
+    calls = []
+
+    class FakeProcessResourceProvider:
+        def __init__(self, *, max_processes, sample_interval):
+            assert max_processes == 64
+            assert sample_interval == 10.0
+
+        def collect_snapshot(self):
+            calls.append(True)
+            return [AIEEvent(
+                event_id="process-resource-001",
+                timestamp=datetime.now(timezone.utc),
+                host_id="host-a",
+                source="windows.process_resources",
+                event_type="process.system_resource_snapshot",
+                entity=EntityRef(type="host_process_set", name="top_process_consumers"),
+                data={
+                    "total_processes_seen": 20,
+                    "sampled_processes": 20,
+                    "reported_processes": 10,
+                    "truncated": False,
+                    "processes": [{"pid": 10, "process_name": "browser.exe"}],
+                },
+            )]
+
+    install_fake_clock(monkeypatch)
+    monkeypatch.setattr(runtime, "WindowsProvider", FakeWindowsProvider)
+    monkeypatch.setattr(
+        runtime,
+        "WindowsProcessResourceProvider",
+        FakeProcessResourceProvider,
+    )
+    monkeypatch.setattr(runtime, "observer_is_paused", lambda: False)
+
+    db_path = tmp_path / "observer-process-resources.sqlite3"
+    added = runtime.observe(
+        duration=1,
+        interval=0.5,
+        db_path=db_path,
+        include_network=False,
+        include_foreground=False,
+        include_process_resources=True,
+        process_resource_interval=10.0,
+        process_resource_max_processes=64,
+        include_video_diagnostics=False,
+    )
+
+    stored = EventStore(db_path)
+    assert calls == [True]
+    assert added >= 1
+    assert stored.get("process-resource-001") is not None
