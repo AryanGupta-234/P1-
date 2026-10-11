@@ -39,6 +39,8 @@ aie observe --duration 30 --no-foreground
 aie observe --duration 30 --include-window-titles
 # Adjust active-process metric cadence (seconds):
 aie observe --duration 60 --foreground-sample-interval 10
+# Inspect correlated browser, active-app and network evidence:
+aie context
 python -m pytest
 python -m ruff check .
 ```
