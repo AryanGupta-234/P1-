@@ -58,6 +58,7 @@ def generate_plan(
     }
     request = ModelRequest(
         task="complex",
+        response_format="json",
         messages=[
             ChatMessage(role="system", content=system),
             ChatMessage(
