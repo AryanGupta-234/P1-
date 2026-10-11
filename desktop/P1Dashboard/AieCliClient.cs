@@ -37,6 +37,8 @@ internal sealed class AieCliClient
             StandardOutputEncoding = System.Text.Encoding.UTF8,
             StandardErrorEncoding = System.Text.Encoding.UTF8,
         };
+        startInfo.Environment["NO_COLOR"] = "1";
+        startInfo.Environment["TERM"] = "dumb";
 
         // ArgumentList avoids shell parsing and command-string injection.
         foreach (var argument in arguments)
