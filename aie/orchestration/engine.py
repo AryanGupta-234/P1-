@@ -127,6 +127,89 @@ class TaskOrchestrator:
             event_type="task.paused",
         )
 
+    def recover_interrupted(
+        self,
+        run_id: str,
+        *,
+        minimum_age_seconds: int = 300,
+        now: datetime | None = None,
+    ) -> TaskRun:
+        """Move stale running steps to human review; never replay their handlers.
+
+        A still-running task can only be recovered after the configured age threshold.
+        A run already marked interrupted by the engine is eligible immediately.
+        Action handlers use deterministic proposal IDs, so a proposal written just
+        before a process crash can be discovered and reused rather than duplicated.
+        """
+        if isinstance(minimum_age_seconds, bool) or not 1 <= minimum_age_seconds <= 86400:
+            raise ValueError("minimum_age_seconds must be between 1 and 86400")
+        current = now or datetime.now(timezone.utc)
+        if current.tzinfo is None:
+            raise ValueError("recovery clock must be timezone-aware")
+        current = current.astimezone(timezone.utc)
+
+        run = self.get(run_id)
+        already_failed_interrupted = (
+            run.status == "failed"
+            and run.failure_type == "interrupted_step_requires_review"
+        )
+        if run.status != "running" and not already_failed_interrupted:
+            raise ValueError("only a running or interrupted task run can be recovered")
+
+        active = [item for item in run.steps if item.status == "running"]
+        if not active:
+            raise ValueError("task run has no interrupted handler step to recover")
+
+        if run.status == "running":
+            for item in active:
+                if item.started_at is None or item.started_at.tzinfo is None:
+                    raise ValueError(
+                        "running step has no trustworthy start time; inspect it manually"
+                    )
+                age = (current - item.started_at.astimezone(timezone.utc)).total_seconds()
+                if age < minimum_age_seconds:
+                    raise ValueError(
+                        f"handler may still be active; wait at least "
+                        f"{minimum_age_seconds - int(max(0, age))} more seconds"
+                    )
+
+        replacements = []
+        for item in run.steps:
+            if item.status != "running":
+                replacements.append(item)
+                continue
+            replacements.append(
+                item.model_copy(
+                    update={
+                        "status": "awaiting_input",
+                        "summary": (
+                            "Handler interruption detected. Inspect local side effects and "
+                            "record the result explicitly; this handler will not be replayed."
+                        ),
+                        "verified": False,
+                        "error_type": "interrupted_requires_review",
+                        "completed_at": None,
+                    }
+                )
+            )
+
+        updated = run.model_copy(
+            update={
+                "status": "awaiting_input",
+                "steps": tuple(replacements),
+                "failure_type": None,
+            }
+        )
+        return self.store.save(
+            updated,
+            expected_version=run.version,
+            event_type="task.recovered_for_review",
+            details={
+                "step_ids": [item.step_id for item in active],
+                "minimum_age_seconds": minimum_age_seconds,
+            },
+        )
+
     def resume(self, run_id: str) -> TaskRun:
         run = self.get(run_id)
         if run.status != "paused":
