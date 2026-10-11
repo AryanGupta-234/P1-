@@ -53,8 +53,8 @@ def test_action_step_waits_for_approval_and_execution_receipt(tmp_path):
     assert needs_execution.status == "awaiting_input"
     assert needs_execution.steps[0].proposal_id == proposal_id
 
-    ledger.append_execution(
-        proposal_id,
+    ledger.reserve_execution(proposal_id)
+    ledger.append_execution(proposal_id,
         status="succeeded",
         action_executed=True,
         verified=False,
