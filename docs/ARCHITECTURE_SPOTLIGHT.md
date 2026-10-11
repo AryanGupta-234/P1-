@@ -76,8 +76,9 @@ Build persistent personal intelligence that observes explicitly permitted signal
 **Context and memory**
 - Indexed event queries and `aie activity` temporal sessions across the normalized event categories.
 - Separate local SQLite memory store for explicit user-authored working/episodic/semantic/procedural/prospective records.
-- Source-event provenance validation, TTL, supersession history, deletion and deterministic local keyword/tag retrieval.
-- Sensitive memories are excluded by default; the sensitivity flag is not encryption and credentials must not be stored.
+- Source-event provenance validation, TTL, supersession history, deletion, lexical retrieval and optional local Ollama embedding/cosine retrieval.
+- Embeddings are keyed by memory ID and model; deletion/expiry removes associated vectors.
+- Sensitive memories are excluded from listing, retrieval and embedding by default; explicit indexing is available with a warning. Memory text and vectors are local SQLite data, not encrypted at the application layer; credentials must not be stored.
 
 **Governance**
 - Default-deny user-managed capability manifests, low-risk autonomy declarations, approval gates, bounded flat parameters and rate limits.
