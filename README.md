@@ -114,6 +114,34 @@ The current integrated Windows build passed [GitHub Actions run #448](https://gi
 ## CI validation
 Windows CI passed on the current development baseline for Python 3.11 and 3.12, including Ruff, extension JavaScript syntax checks and pytest. See [run #206](https://github.com/AryanGupta-234/P1-/actions/runs/38118517008). This does not replace testing the browser extension/native host and UI Automation against your own Windows desktop.
 
+## Local retention and permission review
+
+Inspect local retention candidates and status counts without modifying any database:
+
+```powershell
+aie retention-status
+aie retention-status --event-retention-days 90
+```
+
+The report covers evidence older than the selected age, expired memories, active/total memory counts, and bounded task-run/policy-proposal state counts. It does not delete anything. Event retention and memory expiry use separate explicit operations:
+
+```powershell
+aie prune --older-than-days 30
+aie prune --older-than-days 30 --confirm
+aie memory-prune
+aie memory-prune --confirm
+```
+
+Inspect permission state and the registered adapter boundary:
+
+```powershell
+aie capability-permissions
+aie capability-enable windows.settings.open --confirm
+aie capability-disable windows.settings.open
+```
+
+Enabling a manifest cannot make an unregistered capability executable, remove mandatory approval or enable autonomous operation. The global execution marker and kill switch are independent gates.
+
 ## Windows tray controls
 
 Start the user-controlled notification-area controller with:
