@@ -54,7 +54,6 @@ def test_execution_attempt_cannot_be_revoked(tmp_path):
     broker, ledger, queue, proposal = prepared(tmp_path)
     queue.review(proposal.proposal_id, approve=True, broker=broker)
     ledger.reserve_execution(proposal.proposal_id)
-    ledger.reserve_execution(proposal.proposal_id)
     ledger.append_execution(proposal.proposal_id,
         status="succeeded",
         action_executed=True,
