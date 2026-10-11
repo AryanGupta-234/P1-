@@ -38,6 +38,8 @@ class VideoObservationContext:
     playback_state: str
     metrics: VideoMetrics
     network_evidence: tuple[NetworkEvidence, ...]
+    buffered_ahead_seconds: float | None
+    playback_progress_delta_seconds: float | None
     evidence_event_ids: tuple[str, ...]
     observed_at: datetime
     generated_at: datetime
@@ -172,6 +174,10 @@ def build_video_observation_context(
         playback_state=playback_state,
         metrics=metrics,
         network_evidence=tuple(network_evidence),
+        buffered_ahead_seconds=_number(data, "buffered_ahead_seconds", minimum=0, maximum=3600),
+        playback_progress_delta_seconds=_number(
+            data, "playback_progress_delta_seconds", minimum=0, maximum=300
+        ),
         evidence_event_ids=tuple(dict.fromkeys(evidence_ids)),
         observed_at=browser_event.timestamp,
         generated_at=current,
