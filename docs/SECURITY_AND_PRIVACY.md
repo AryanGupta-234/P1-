@@ -21,6 +21,9 @@ Structural UI Automation sampling is off by default and requires an explicit per
 
 Screen capture must be visibly enabled, pauseable and event-driven where practical. Capture only for an explicitly selected capability. No hidden continuous recording; avoid storing raw screenshots unless explicitly requested.
 
+## Windows Event Log observation
+Event Log collection is off by default and restricted to the classic Application/System channels. The first sample establishes a cursor and does not replay historical records. Only provider name, event ID/type/category, record number, machine and event timestamp are stored; message text, XML payloads and Security logs are excluded. Polling is bounded and uses the optional pywin32 dependency.
+
 ## Browser observation
 Use explicit extension permissions. Collect only playback/performance metrics needed for diagnosis. Never collect page text, credentials, cookies, payment data, form fields or browsing history.
 

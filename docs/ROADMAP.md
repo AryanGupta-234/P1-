@@ -31,7 +31,8 @@ Statuses: DONE / IN_PROGRESS / BLOCKED / PLANNED. Mark DONE only with code, test
 - [x] Best-effort process start/stop reconciliation.
 - [x] Read-only provider abstraction.
 - [ ] ETW process telemetry with bounded buffers.
-- [ ] Allowlisted Windows Event Log sources.
+- [x] Opt-in metadata-only Application/System Event Log provider; messages/XML omitted.
+- [ ] Expand to selected providers/event IDs with explicit privacy review.
 - [x] Throttled CPU, resident memory, thread-count and I/O counters for the active foreground process.
 - [ ] CPU/RAM/disk and resource sampling across all processes.
 - [x] Read-only network interface counters, gateway/external TCP reachability RTT and DNS resolution probes.

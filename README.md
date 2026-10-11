@@ -62,6 +62,9 @@ Open PRs against `dev`, not `main`.
 ## Diagnostic feedback
 Use `aie events` to find a `diagnostic.video_finding` event ID, then record the outcome with `aie feedback <EVENT_ID> --outcome resolved`, `not_resolved`, or `not_attempted`. An optional `--note` is stored locally as sensitive data. This captures user feedback; it does not retrain a model or imply that AIE executed the recommendation.
 
+## Windows Event Log metadata (optional)
+Use `aie observe --event-logs --event-log-channels Application,System --event-log-interval 30` to opt in to bounded metadata-only polling of the Windows Application/System logs. It skips historical backlog on startup and does not collect event message text or XML. The optional `windows` extra supplies pywin32.
+
 ## Observer controls
 Use `aie pause` to pause all running observer loops for the current Windows user, `aie resume` to resume them, and `aie status` to inspect pause state and local event count. Pausing does not erase retained events. `aie prune --older-than-days 30` previews old records; add `--confirm` to delete only the expired local events.
 

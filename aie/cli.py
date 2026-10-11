@@ -135,6 +135,10 @@ def observe(
     ui_tree: bool = typer.Option(False, "--ui-tree/--no-ui-tree", help="Opt in to structural UI Automation metadata."),
     ui_tree_apps: str | None = typer.Option(None, help="Comma-separated process allowlist, e.g. msedge.exe,notepad.exe."),
     ui_tree_sample_interval: float = typer.Option(10.0, min=2.0, max=300.0),
+    event_logs: bool = typer.Option(False, "--event-logs/--no-event-logs", help="Opt in to Application/System event metadata."),
+    event_log_channels: str = typer.Option("Application,System", help="Comma-separated allowlisted Windows event log channels."),
+    event_log_interval: float = typer.Option(30.0, min=5.0, max=300.0),
+    event_log_max_records: int = typer.Option(50, min=1, max=200),
 ) -> None:
     """Observe selected Windows metadata (read-only)."""
     from aie.runtime import observe as run_observer
@@ -147,6 +151,20 @@ def observe(
     if ui_tree and not allowed_ui_apps:
         console.print("[red]UI Automation requires --ui-tree-apps with an explicit app allowlist.[/red]")
         raise typer.Exit(2)
+    selected_event_logs = tuple(
+        item.strip() for item in event_log_channels.split(",") if item.strip()
+    )
+    if event_logs:
+        invalid_channels = set(selected_event_logs) - {"Application", "System"}
+        if not selected_event_logs or invalid_channels:
+            console.print("[red]Event log channels must be Application and/or System.[/red]")
+            raise typer.Exit(2)
+        try:
+            import win32evtlog  # noqa: F401
+        except ImportError:
+            console.print("[red]Install Windows event log support with: python -m pip install -e .[windows][/red]")
+            raise typer.Exit(2)
+
     if ui_tree:
         import importlib.util
         if importlib.util.find_spec("pywinauto") is None:
@@ -168,8 +186,12 @@ def observe(
             include_ui_tree=ui_tree,
             ui_tree_app_names=allowed_ui_apps,
             ui_tree_sample_interval=ui_tree_sample_interval,
+            include_event_logs=event_logs,
+            event_log_channels=selected_event_logs,
+            event_log_interval=event_log_interval,
+            event_log_max_records=event_log_max_records,
         )
-    except OSError as exc:
+    except (OSError, RuntimeError, ValueError) as exc:
         console.print(f"[red]Observer unavailable:[/red] {exc}")
         raise typer.Exit(2) from exc
     console.print(f"Finished: {added} new events stored in {db}")
