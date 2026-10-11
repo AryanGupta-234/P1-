@@ -410,7 +410,7 @@ class TaskRunStore:
                     )
                     db.execute(
                         """UPDATE agent_run_steps SET status='cancelled',completed_at=?
-                        WHERE run_id=? AND status IN ('pending','waiting_approval')""",
+                        WHERE run_id=? AND status IN ('pending','waiting_approval','authorized')""",
                         (now, run_id),
                     )
                     self._event(db, run_id, "run.cancelled")
