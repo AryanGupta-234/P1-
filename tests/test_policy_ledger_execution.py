@@ -38,6 +38,7 @@ def test_execution_receipt_is_single_attempt_and_part_of_hash_chain(tmp_path):
         )
 
     queue.review(proposal.proposal_id, approve=True, broker=broker)
+    ledger.reserve_execution(proposal.proposal_id)
     executed = ledger.append_execution(
         proposal.proposal_id,
         status="succeeded",
