@@ -81,7 +81,7 @@ Statuses: DONE / IN_PROGRESS / BLOCKED / PLANNED. Mark DONE only with code, test
 - [x] Hardware-aware routing to already-installed 3B/7B models; no implicit downloads.
 - [ ] Structured-output modes, streaming and request cancellation.
 - [ ] Inference concurrency guard and explicit memory/token budgets.
-- [ ] Optional cloud adapter behind explicit task-level egress policy.
+- [x] Optional OpenAI-compatible HTTPS cloud adapter behind explicit per-request egress opt-in and environment-configured credentials.
 - [ ] Context packaging, token/cost budgets and prompt-injection boundaries.
 - [ ] Planner/state machine with deterministic fallback.
 - [ ] Reasoning/tool-selection evaluation harness.
