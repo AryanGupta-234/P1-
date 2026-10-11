@@ -4,6 +4,8 @@ from aie import runtime
 
 
 class FakeWindowsProvider:
+    name = "windows.user_mode"
+
     def __init__(self):
         self.calls = 0
 
@@ -43,22 +45,70 @@ def test_paused_observer_collects_no_events(tmp_path: Path, monkeypatch):
     assert provider.calls == 0
 
 
-def test_unpaused_observer_resumes_sampling(tmp_path: Path, monkeypatch):
+def test_unpaused_observer_resumes_sampling_and_emits_health(tmp_path: Path, monkeypatch):
     provider = FakeWindowsProvider()
     install_fake_clock(monkeypatch)
     monkeypatch.setattr(runtime, "WindowsProvider", lambda: provider)
     monkeypatch.setattr(runtime, "observer_is_paused", lambda: False)
 
+    db_path = tmp_path / "running.sqlite3"
     total = runtime.observe(
         duration=1,
         interval=0.5,
-        db_path=tmp_path / "running.sqlite3",
+        db_path=db_path,
         include_network=False,
         include_foreground=False,
     )
 
-    assert total == 0
+    from aie.store import EventStore
+    stored = EventStore(db_path)
+    health_events = stored.query_events(event_types=["observer.health"], limit=10)
+
+    assert total == 1
     assert provider.calls == 2
+    assert len(health_events) == 1
+    assert health_events[0].data["providers"]["windows.user_mode"]["samples_attempted"] == 1
+
+
+def test_provider_failure_is_isolated_and_reported_in_health(tmp_path: Path, monkeypatch):
+    from aie.store import EventStore
+
+    class FailingForegroundProvider:
+        name = "windows.foreground"
+
+        def __init__(self, **kwargs):
+            pass
+
+        def collect_snapshot(self):
+            raise PermissionError("this private message must never be persisted")
+
+    provider = FakeWindowsProvider()
+    install_fake_clock(monkeypatch)
+    monkeypatch.setattr(runtime, "WindowsProvider", lambda: provider)
+    monkeypatch.setattr(runtime, "WindowsForegroundProvider", FailingForegroundProvider)
+    monkeypatch.setattr(runtime, "observer_is_paused", lambda: False)
+
+    db_path = tmp_path / "failing-provider.sqlite3"
+    total = runtime.observe(
+        duration=1,
+        interval=0.5,
+        db_path=db_path,
+        include_network=False,
+        include_foreground=True,
+        include_video_diagnostics=False,
+    )
+
+    health_events = EventStore(db_path).query_events(
+        event_types=["observer.health"],
+        limit=10,
+    )
+    assert total == 1
+    assert health_events
+    foreground_health = health_events[-1].data["providers"]["windows.foreground"]
+    assert foreground_health["state"] == "degraded"
+    assert foreground_health["errors"] == 1
+    assert foreground_health["last_error_type"] == "PermissionError"
+    assert "private message" not in str(health_events[-1].data)
 
 
 def test_opt_in_eventlog_provider_is_polled_and_persisted(tmp_path, monkeypatch):
@@ -71,6 +121,8 @@ def test_opt_in_eventlog_provider_is_polled_and_persisted(tmp_path, monkeypatch)
     eventlog_calls = []
 
     class FakeEventLogProvider:
+        name = "windows.eventlog"
+
         def __init__(self, *, channels, max_records_per_channel):
             assert channels == ("Application", "System")
             assert max_records_per_channel == 5
@@ -119,6 +171,8 @@ def test_opt_in_system_process_resource_provider_is_polled_and_persisted(tmp_pat
     calls = []
 
     class FakeProcessResourceProvider:
+        name = "windows.process_resources"
+
         def __init__(self, *, max_processes, sample_interval):
             assert max_processes == 64
             assert sample_interval == 10.0
