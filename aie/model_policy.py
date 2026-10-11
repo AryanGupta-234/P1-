@@ -59,7 +59,11 @@ def choose_local_model(
 
     if task == "embedding":
         selected = DEFAULT_EMBEDDING if DEFAULT_EMBEDDING in installed else None
-        reason = "Dedicated local embedding model." if selected else "Embedding model is not installed."
+        reason = (
+            "Dedicated local embedding model."
+            if selected
+            else "Embedding model is not installed."
+        )
     elif task == "routine":
         selected = DEFAULT_ROUTINE if DEFAULT_ROUTINE in installed else None
         reason = "Default lightweight local reasoning model." if selected else (
