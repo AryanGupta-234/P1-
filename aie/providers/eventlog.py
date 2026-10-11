@@ -142,6 +142,7 @@ class WindowsEventLogProvider:
                         evidence_kind="observed",
                     ))
                     previous = oldest - 1
+                    self._last_record[channel] = previous
                 elif previous < oldest - 1:
                     dropped_records = oldest - previous - 1
                     events.append(AIEEvent(
