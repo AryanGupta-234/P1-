@@ -36,7 +36,8 @@ Statuses: DONE / IN_PROGRESS / BLOCKED / PLANNED. Mark DONE only with code, test
 - [x] Opt-in allowlisted UI Automation structural tree sampler with node/depth/time bounds.
 - [x] Global per-user observer pause/resume, status and age-based retention pruning.
 - [ ] ETW process telemetry and event-loss metrics.
-- [ ] Systemwide per-process CPU/memory/disk/network sampling.
+- [x] Opt-in bounded systemwide process CPU/RSS/thread/I/O snapshots; top consumers only, no command lines or executable paths.
+- [ ] Disk/network per-process deltas and event-loss accounting.
 - [ ] Export/delete-all controls and observer health view.
 - [ ] Validate Event Log/UIA permissions and data collection on the target Windows desktop.
 
