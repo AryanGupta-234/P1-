@@ -121,7 +121,8 @@ class FakeProcess:
         return SimpleNamespace(read_bytes=1000, write_bytes=2000)
 
 
-def test_foreground_resource_samples_are_throttled_and_pid_scoped():
+def test_foreground_resource_samples_are_throttled_and_pid_scoped(monkeypatch):
+    monkeypatch.setattr("aie.providers.foreground.psutil.cpu_count", lambda logical=True: 1)
     api = FakeForegroundApi()
     clock_state = [100.0]
     process = FakeProcess()
