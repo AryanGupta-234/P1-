@@ -114,6 +114,8 @@ class TaskOrchestrator:
         run = self.get(run_id)
         if run.status in {"completed", "failed", "cancelled", "paused"}:
             raise ValueError(f"cannot pause a task run in state {run.status!r}")
+        if any(item.status == "running" for item in run.steps):
+            raise ValueError("cannot pause during a handler invocation; pause between steps")
         updated = run.model_copy(update={"status": "paused"})
         return self.store.save(
             updated,
@@ -136,6 +138,8 @@ class TaskOrchestrator:
         run = self.get(run_id)
         if run.status in {"completed", "failed", "cancelled"}:
             raise ValueError(f"cannot cancel a task run in state {run.status!r}")
+        if any(item.status == "running" for item in run.steps):
+            raise ValueError("cannot cancel during a handler invocation; cancel between steps")
         now = datetime.now(timezone.utc)
         steps = tuple(
             item.model_copy(update={"status": "skipped", "completed_at": now})
@@ -165,6 +169,8 @@ class TaskOrchestrator:
     ) -> TaskRun:
         """Record explicit user input; verification steps require a positive assertion."""
         run = self.get(run_id)
+        if not isinstance(summary, str) or not summary.strip() or len(summary) > 1000:
+            raise ValueError("summary must contain 1 to 1000 non-whitespace characters")
         if run.status != "awaiting_input":
             raise ValueError("task run is not awaiting user input")
         step_state = self._step(run, step_id)
