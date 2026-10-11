@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime
 
 import pytest
 from pydantic import ValidationError
