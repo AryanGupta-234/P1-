@@ -35,3 +35,23 @@ def test_missing_models_never_triggers_implicit_download():
     result = choose_local_model("routine", set(), available_memory_gib=12.0)
     assert result.selected_model is None
     assert not result.available
+
+
+def test_routine_can_fall_back_to_installed_seven_b_with_memory():
+    result = choose_local_model(
+        "routine",
+        {DEFAULT_COMPLEX},
+        available_memory_gib=9.0,
+    )
+    assert result.selected_model == DEFAULT_COMPLEX
+    assert "7B model" in result.reason
+
+
+def test_routine_refuses_seven_b_fallback_under_memory_pressure():
+    result = choose_local_model(
+        "routine",
+        {DEFAULT_COMPLEX},
+        available_memory_gib=4.0,
+    )
+    assert result.selected_model is None
+    assert not result.available
