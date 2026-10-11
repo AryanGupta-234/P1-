@@ -1614,9 +1614,7 @@ def _render_proposal(snapshot) -> None:
     )
     console.print(snapshot.reason)
     if snapshot.execution_status is None:
-        console.print("[dim]No action was performed; approval is not execution.[/dim]")
-    else:
-        console.print("[dim]Execution: not attempted.[/dim]")
+        console.print("[dim]Execution: not attempted. No action was performed; approval is not execution.[/dim]")
     else:
         console.print(
             f"[dim]Execution: {snapshot.execution_status} · "
