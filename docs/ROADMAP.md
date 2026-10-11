@@ -58,8 +58,8 @@ Statuses: DONE / IN_PROGRESS / BLOCKED / PLANNED. Mark DONE only with code, test
 - [x] Temporal correlator for browser video, foreground app and fresh same-host network evidence.
 - [x] CLI for inspecting correlated video context and evidence.
 - [x] UIA structural snapshot inspection without control text.
-- [ ] Unified event bus and general temporal correlation.
-- [ ] Working context for application/task/session state.
+- [x] Indexed event-store queries by time window, source and event type.\n- [x] Unified privacy-safe activity timeline grouping browser, application, network, process, Event Log and diagnostic metadata.\n- [ ] Unified event bus and general temporal correlation.
+- [x] Initial temporal activity session model with explicit time-gap boundaries.\n- [ ] Semantic task/session state and evidence contradiction handling.
 - [ ] Evidence freshness, contradiction handling and calibrated confidence.
 - [ ] User-approved profile and personalization controls.
 
