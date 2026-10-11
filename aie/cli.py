@@ -13,7 +13,7 @@ from rich.console import Console
 from rich.table import Table
 
 from aie import __version__
-from aie.config import database_path, memory_database_path, observer_is_paused, set_observer_paused
+from aie.config import (\n    capability_manifest_dir,\n    database_path,\n    memory_database_path,\n    observer_is_paused,\n    policy_audit_database_path,\n    set_observer_paused,\n)
 from aie.hardware import runtime_profile
 from aie.model_policy import choose_local_model, discover_local_models
 from aie.store import EventStore
@@ -755,6 +755,185 @@ def memory_prune(
         return
     deleted = store.prune_expired(now=now)
     console.print(f"[green]Pruned {deleted} expired memory record(s).[/green]")
+
+
+
+
+def _load_local_policy_broker():
+    from aie.policy.broker import CapabilityPolicyBroker
+    from aie.policy.manifests import load_capability_manifests
+
+    manifests = load_capability_manifests(capability_manifest_dir())
+    return CapabilityPolicyBroker(manifests), manifests
+
+
+def _render_proposal(snapshot) -> None:
+    status_color = {
+        "pending_review": "yellow",
+        "approved": "green",
+        "rejected": "red",
+        "blocked": "red",
+    }.get(snapshot.status, "white")
+    console.print(
+        f"[bold]{snapshot.proposal.proposal_id}[/bold] · "
+        f"{snapshot.proposal.capability_id} · "
+        f"[{status_color}]{snapshot.status}[/{status_color}]"
+    )
+    console.print(snapshot.proposal.summary)
+    console.print(
+        f"Risk: {snapshot.risk_tier or 'unknown'} · "
+        f"Policy allowed: {snapshot.policy_allowed} · "
+        f"Approval required: {snapshot.approval_required}"
+    )
+    console.print(snapshot.reason)
+    console.print("[dim]Execution: not implemented; no action was performed.[/dim]")
+
+
+@app.command("capabilities")
+def list_capabilities() -> None:
+    """List locally authored capability manifests; no built-in capability is enabled."""
+    from aie.policy.manifests import CapabilityManifestLoadError
+
+    try:
+        _, manifests = _load_local_policy_broker()
+    except CapabilityManifestLoadError as exc:
+        console.print(f"[red]Capability manifests rejected:[/red] {exc}")
+        raise typer.Exit(2) from exc
+    if not manifests:
+        console.print(
+            f"No capability manifests found in {capability_manifest_dir()}. "
+            "Unknown capabilities remain denied."
+        )
+        return
+    table = Table("Capability", "Risk", "Enabled", "Approval", "Allowed parameters")
+    for manifest in manifests:
+        table.add_row(
+            manifest.capability_id,
+            manifest.risk_tier,
+            str(manifest.enabled),
+            str(manifest.approval_required),
+            ", ".join(sorted(manifest.allowed_parameters)),
+        )
+    console.print(table)
+
+
+@app.command("propose")
+def propose_action(
+    capability_id: str = typer.Argument(...),
+    summary: str = typer.Argument(..., min_length=1, help="Short human-readable action summary."),
+    parameters_json: str = typer.Option("{}", "--parameters", help="Flat JSON object of allowlisted parameters."),
+) -> None:
+    """Queue an action proposal for policy evaluation and explicit user review."""
+    import json
+
+    from aie.policy.ledger import PolicyLedger, PolicyProposalQueue
+    from aie.policy.manifests import CapabilityManifestLoadError
+    from aie.policy.models import ActionProposal
+
+    try:
+        parameters = json.loads(parameters_json)
+        if not isinstance(parameters, dict):
+            raise ValueError("--parameters must decode to a JSON object")
+        proposal = ActionProposal(
+            capability_id=capability_id,
+            summary=summary,
+            parameters=parameters,
+            source="user",
+        )
+        broker, _ = _load_local_policy_broker()
+        snapshot = PolicyProposalQueue(
+            PolicyLedger(policy_audit_database_path())
+        ).create(proposal, broker)
+    except (ValueError, CapabilityManifestLoadError) as exc:
+        console.print(f"[red]Proposal not queued:[/red] {exc}")
+        raise typer.Exit(2) from exc
+    _render_proposal(snapshot)
+
+
+@app.command("proposals")
+def list_proposals(
+    status: Literal["all", "pending_review", "approved", "rejected", "blocked"] = typer.Option("pending_review"),
+    limit: int = typer.Option(100, min=1, max=1000),
+) -> None:
+    """List proposal review states without displaying raw parameter payloads."""
+    from aie.policy.ledger import PolicyLedger
+    from aie.policy.manifests import CapabilityManifestLoadError
+
+    try:
+        _load_local_policy_broker()
+        ledger = PolicyLedger(policy_audit_database_path())
+        snapshots = ledger.list(
+            status=None if status == "all" else status,
+            limit=limit,
+        )
+    except CapabilityManifestLoadError as exc:
+        console.print(f"[red]Capability manifests rejected:[/red] {exc}")
+        raise typer.Exit(2) from exc
+    if not snapshots:
+        console.print("No proposals match that status.")
+        return
+    table = Table("Proposal ID", "Capability", "Status", "Risk", "Summary", "Updated")
+    for item in snapshots:
+        table.add_row(
+            item.proposal.proposal_id,
+            item.proposal.capability_id,
+            item.status,
+            item.risk_tier or "unknown",
+            item.proposal.summary[:100],
+            item.updated_at.astimezone().strftime("%Y-%m-%d %H:%M:%S"),
+        )
+    console.print(table)
+
+
+def _review_queued_proposal(proposal_id: str, *, approve: bool) -> None:
+    from aie.policy.ledger import PolicyLedger, PolicyProposalQueue
+    from aie.policy.manifests import CapabilityManifestLoadError
+
+    try:
+        broker, _ = _load_local_policy_broker()
+        queue = PolicyProposalQueue(PolicyLedger(policy_audit_database_path()))
+        snapshot = queue.review(proposal_id, approve=approve, broker=broker)
+    except (ValueError, CapabilityManifestLoadError) as exc:
+        console.print(f"[red]Proposal review failed:[/red] {exc}")
+        raise typer.Exit(2) from exc
+    _render_proposal(snapshot)
+
+
+@app.command("approve-proposal")
+def approve_proposal(proposal_id: str = typer.Argument(...)) -> None:
+    """Record explicit local-user approval after re-evaluating current capability policy."""
+    _review_queued_proposal(proposal_id, approve=True)
+
+
+@app.command("reject-proposal")
+def reject_proposal(proposal_id: str = typer.Argument(...)) -> None:
+    """Record explicit local-user rejection; no action is executed."""
+    _review_queued_proposal(proposal_id, approve=False)
+
+
+@app.command("proposal-audit")
+def proposal_audit(proposal_id: str = typer.Argument(...)) -> None:
+    """Show the append-only review history without dumping proposal parameters."""
+    from aie.policy.ledger import PolicyLedger
+
+    trail = PolicyLedger(policy_audit_database_path()).audit_trail(proposal_id)
+    if not trail:
+        console.print("Proposal not found.")
+        return
+    table = Table("Sequence", "Event", "Timestamp", "Status", "Policy allowed", "Reason")
+    for event in trail:
+        payload = event["payload"]
+        policy = payload.get("policy", {})
+        table.add_row(
+            str(event["sequence"]),
+            event["event_type"],
+            event["timestamp"],
+            str(payload.get("status", "created")),
+            str(policy.get("allowed", False)),
+            str(policy.get("reason", ""))[:160],
+        )
+    console.print(table)
+    console.print("[dim]Audit records are append-only through the AIE API. No execution records exist because the executor is not implemented.[/dim]")
 
 
 
