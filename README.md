@@ -68,6 +68,9 @@ The opt-in Chrome/Edge extension prototype is in `browser_extension/`. Load it u
 ## Foreground application observation
 The observer emits foreground-window transition events using the Windows user32 API. Process name and window class are collected by default; window titles are omitted. Explicitly passing `--include-window-titles` collects them as sensitive data.
 
+## Live diagnostic suggestions
+While `aie observe` is running, fresh browser video events are correlated with foreground-app and network telemetry. New diagnostic hypotheses are persisted and printed once per incident/cooldown, with evidence and a recommended next step. The observer does not apply fixes automatically.
+
 ## Action policy foundation
 The `aie.policy` module currently evaluates action proposals against explicit capability manifests. Unknown/disabled capabilities are denied, parameters are allowlisted, medium/high-risk proposals require approval, and critical-risk actions are blocked. This is an authorization prototype only; AIE does not yet execute operating-system actions.
 
