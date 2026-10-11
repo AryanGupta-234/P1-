@@ -30,6 +30,9 @@ python -m pip install -e ".[dev]"
 aie doctor
 aie inventory
 aie observe --duration 30
+aie observe --duration 60 --network-interval 30
+# Disable network probes when needed:
+aie observe --duration 30 --no-network
 python -m pytest
 python -m ruff check .
 ```
