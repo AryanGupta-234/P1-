@@ -76,7 +76,14 @@ class ModelReasoningHandler:
             max_output_tokens=512,
             timeout_seconds=90.0,
         )
-        response = self.router.generate(request)
+        try:
+            response = self.router.generate(request)
+        except Exception as exc:  # noqa: BLE001 - allow explicit human fallback when local inference is unavailable.
+            return HandlerResult.awaiting_input(
+                "Local reasoning is unavailable ("
+                + type(exc).__name__
+                + "). Provide the reasoning result explicitly with the task complete command."
+            )
         summary = " ".join(response.content.split()).strip()
         if not summary:
             return HandlerResult.failed(
