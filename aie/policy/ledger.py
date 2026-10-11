@@ -379,8 +379,9 @@ class PolicyLedger:
     def reserve_execution(self, proposal_id: str) -> ProposalSnapshot:
         """Atomically reserve a single execution attempt and append the audit event.
 
-        Repeated reservations before a receipt are idempotent for recovery and test
-        callers; once a receipt exists, another reservation is rejected. Revocation
+        A reservation is a one-time claim. If the process crashes after the claim,
+        execution is intentionally blocked for manual inspection; the adapter is not
+        automatically retried because its side-effect state may be unknown. Revocation
         and reservation serialize under BEGIN IMMEDIATE, so only one can win.
         """
         now = datetime.now(timezone.utc)
@@ -401,6 +402,10 @@ class PolicyLedger:
                     raise ValueError("latest policy decision does not authorize execution")
                 if any(isinstance(json.loads(row[0]).get("execution"), dict) for row in rows):
                     raise ValueError("proposal already has an execution receipt")
+                if any(json.loads(row[0]).get("execution_reserved") is True for row in rows):
+                    raise ValueError(
+                        "an execution attempt is already reserved; inspect its state before taking further action"
+                    )
                 if not any(json.loads(row[0]).get("execution_reserved") is True for row in rows):
                     payload = {
                         "schema_version": 1, "status": "approved",
