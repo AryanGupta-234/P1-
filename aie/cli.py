@@ -82,6 +82,74 @@ def models() -> None:
         console.print("  No local Ollama response. Start Ollama; AIE will not pull models.")
 
 
+@app.command("etw-catalog")
+def etw_catalog(
+    contains: str = typer.Option("Kernel", help="Filter provider names; empty string lists all."),
+    output: Path | None = typer.Option(None, "--output", "-o"),
+) -> None:
+    """List registered ETW providers without starting or changing a trace session."""
+    from aie.providers.etw_catalog import discover_etw_providers, filter_providers
+
+    try:
+        providers = filter_providers(discover_etw_providers(), contains)
+    except RuntimeError as exc:
+        console.print(f"[red]ETW catalog unavailable:[/red] {exc}")
+        raise typer.Exit(2) from exc
+
+    rendered = json.dumps(providers, indent=2)
+    if output:
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(rendered, encoding="utf-8")
+        console.print(f"Provider catalog saved to {output}")
+    else:
+        table = Table("Provider", "GUID")
+        for provider in providers:
+            table.add_row(provider["name"], provider["guid"])
+        console.print(table)
+    console.print(f"Providers found: {len(providers)}")
+
+
+@app.command("etw-process")
+def etw_process(
+    duration: int = typer.Option(
+        15, "--duration", min=1, max=1800,
+        help="Capture duration in seconds (1–1800); the session is always stopped afterward.",
+    ),
+) -> None:
+    """Capture a bounded, read-only ETW process start/stop trace and store normalized events."""
+    from aie.providers.etw_process import (
+        ETWProcessCaptureError,
+        WindowsETWProcessProvider,
+    )
+    from aie.providers.windows import host_id
+
+    try:
+        capture = WindowsETWProcessProvider().collect(duration_seconds=duration)
+    except (ETWProcessCaptureError, ValueError) as exc:
+        console.print(f"[red]ETW process capture unavailable:[/red] {exc}")
+        raise typer.Exit(2) from exc
+
+    coverage = capture.coverage_event(machine_id=host_id())
+    stored = EventStore(database_path()).append_many([*capture.events, coverage])
+    console.print(f"ETW session stopped: {capture.session_name}")
+    console.print(f"Capture duration: {capture.duration_seconds:.2f}s")
+    console.print(f"Process lifecycle events: {len(capture.events)}")
+    console.print(f"New local events stored: {stored}")
+    console.print(f"ETL size: {capture.etl_size_bytes:,} bytes")
+    console.print(
+        "Events lost: " + (
+            str(capture.events_lost) if capture.events_lost is not None else "unknown (not reported)"
+        )
+    )
+    console.print(
+        "Buffers lost: " + (
+            str(capture.buffers_lost) if capture.buffers_lost is not None else "unknown (not reported)"
+        )
+    )
+    if capture.truncated:
+        console.print("[yellow]The process event cap was reached; the persisted event list is truncated.[/yellow]")
+
+
 @app.command()
 def inventory(output: Path | None = typer.Option(None, "--output", "-o")) -> None:
     """Generate a read-only host, process, app, service, network and task inventory."""
@@ -459,6 +527,9 @@ def ask(
     memory_limit: int = typer.Option(5, min=1, max=10),
 ) -> None:
     """Send a prompt to local Ollama or an explicitly authorized HTTPS cloud model."""
+    if not prompt.strip():
+        console.print("[red]Prompt cannot be empty.[/red]")
+        raise typer.Exit(2)
     from aie.models.base import ChatMessage, ModelRequest
     from aie.models.ollama import OllamaClient
     from aie.models.router import LocalModelRouter
@@ -688,6 +759,9 @@ def recall(
     limit: int = typer.Option(10, min=1, max=100),
 ) -> None:
     """Retrieve local memories using transparent keyword/tag overlap scoring."""
+    if not query.strip():
+        console.print("[red]Memory query cannot be empty.[/red]")
+        raise typer.Exit(2)
     from aie.memory.store import MemoryStore
 
     hits = MemoryStore(memory_database_path()).search(
@@ -745,6 +819,9 @@ def correct_memory(
     content: str = typer.Argument(..., help="Corrected memory text."),
 ) -> None:
     """Create a corrected memory while retaining the old version as superseded."""
+    if not content.strip():
+        console.print("[red]Corrected memory text cannot be empty.[/red]")
+        raise typer.Exit(2)
     from aie.memory.models import MemoryRecord
     from aie.memory.store import MemoryStore
 
@@ -884,6 +961,9 @@ def propose_action(
     parameters_json: str = typer.Option("{}", "--parameters", help="Flat JSON object of allowlisted parameters."),
 ) -> None:
     """Queue an action proposal for policy evaluation and explicit user review."""
+    if not summary.strip():
+        console.print("[red]Proposal summary cannot be empty.[/red]")
+        raise typer.Exit(2)
     import json
 
     from aie.policy.ledger import PolicyLedger, PolicyProposalQueue
