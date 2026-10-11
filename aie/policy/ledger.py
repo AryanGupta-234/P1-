@@ -397,7 +397,7 @@ class PolicyLedger:
                 latest = json.loads(rows[-1][0])
                 if latest.get("status") != "approved":
                     raise ValueError("only approved proposals may reserve execution")
-                if not (latest.get("policy") or {}).get("allowed") is True:
+                if (latest.get("policy") or {}).get("allowed") is not True:
                     raise ValueError("latest policy decision does not authorize execution")
                 if any(isinstance(json.loads(row[0]).get("execution"), dict) for row in rows):
                     raise ValueError("proposal already has an execution receipt")
