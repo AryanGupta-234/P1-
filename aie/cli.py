@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import os
 import platform
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import typer
@@ -279,6 +280,25 @@ def status() -> None:
         latest[0].timestamp.isoformat() if latest else "No events stored",
     )
     console.print(table)
+
+
+@app.command()
+def prune(
+    older_than_days: int = typer.Option(30, min=1, max=3650, help="Delete records older than this many days."),
+    confirm: bool = typer.Option(False, "--confirm", help="Confirm deletion of old local event records."),
+) -> None:
+    """Preview or delete old local observation events (never deletes recent events)."""
+    cutoff = datetime.now(timezone.utc) - timedelta(days=older_than_days)
+    store = EventStore(database_path())
+    candidates = store.count_before(cutoff)
+    if not confirm:
+        console.print(
+            f"{candidates} event(s) are older than {older_than_days} days. "
+            "No data was deleted. Re-run with --confirm to prune them."
+        )
+        return
+    deleted = store.delete_before(cutoff)
+    console.print(f"Deleted {deleted} event(s) older than {older_than_days} days.")
 
 
 if __name__ == "__main__":
