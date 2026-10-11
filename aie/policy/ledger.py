@@ -155,7 +155,7 @@ class PolicyLedger:
                     raise ValueError("proposal was not found")
                 latest = json.loads(row[1])
                 if latest.get("status") != "pending_review":
-                    raise ValueError("proposal is no longer awaiting review")
+                    raise ValueError("proposal is not awaiting review; it is no longer awaiting review")
                 if decision is not None and decision.proposal_id != proposal_id:
                     raise ValueError("policy decision does not match the proposal ID")
                 db.execute(
