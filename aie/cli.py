@@ -462,6 +462,8 @@ def ask(
         "--with-memory/--no-memory",
         help="Explicitly attach matching local memories to this request.",
     ),
+    semantic_memory: bool = typer.Option(False, "--semantic-memory/--lexical-memory", help="Use local embeddings for memory retrieval."),
+    embedding_model: str = typer.Option("nomic-embed-text", help="Already-installed local embedding model."),
     include_sensitive_memory: bool = typer.Option(
         False,
         help="Include sensitive memories (local inference only).",
@@ -483,6 +485,9 @@ def ask(
     remote_selected = provider == "cloud" or allow_remote_ollama
     if with_activity and remote_selected and not confirm_activity_egress:
         console.print("[red]Attaching activity context to a remote model needs --confirm-activity-egress.[/red]")
+        raise typer.Exit(2)
+    if semantic_memory and not with_memory:
+        console.print("[red]--semantic-memory requires --with-memory.[/red]")
         raise typer.Exit(2)
     if include_sensitive_memory and not with_memory:
         console.print("[red]--include-sensitive-memory requires --with-memory.[/red]")
@@ -512,11 +517,18 @@ def ask(
         from aie.memory.prompt_context import build_memory_prompt_context
         from aie.memory.store import MemoryStore
 
+        embedding_client = None
+        if semantic_memory:
+            from aie.models.ollama import OllamaClient
+
+            embedding_client = OllamaClient()
         memory_context = build_memory_prompt_context(
             prompt,
             MemoryStore(memory_database_path()),
             include_sensitive=include_sensitive_memory,
             limit=memory_limit,
+            semantic_model=embedding_model if semantic_memory else None,
+            embedding_provider=embedding_client,
         )
         memory_ids = memory_context.memory_ids
         if memory_context.content:
@@ -724,16 +736,36 @@ def recall(
     kind: Literal["working", "episodic", "semantic", "procedural", "prospective"] | None = typer.Option(None),
     include_sensitive: bool = typer.Option(False, help="Explicitly include sensitive memories."),
     limit: int = typer.Option(10, min=1, max=100),
+    semantic: bool = typer.Option(False, "--semantic/--lexical"),
+    embedding_model: str = typer.Option("nomic-embed-text"),
 ) -> None:
-    """Retrieve local memories using transparent keyword/tag overlap scoring."""
+    """Retrieve memories using lexical overlap or local Ollama embeddings."""
     from aie.memory.store import MemoryStore
 
-    hits = MemoryStore(memory_database_path()).search(
-        query,
-        kind=kind,
-        include_sensitive=include_sensitive,
-        limit=limit,
-    )
+    store = MemoryStore(memory_database_path())
+    try:
+        if semantic:
+            from aie.models.ollama import OllamaClient
+
+            client = OllamaClient()
+            vector = client.embed([query], model=embedding_model)[0]
+            hits = store.search_semantic(
+                vector,
+                model=embedding_model,
+                kind=kind,
+                include_sensitive=include_sensitive,
+                limit=limit,
+            )
+        else:
+            hits = store.search(
+                query,
+                kind=kind,
+                include_sensitive=include_sensitive,
+                limit=limit,
+            )
+    except (RuntimeError, ValueError) as exc:
+        console.print(f"[red]Memory retrieval unavailable:[/red] {exc}")
+        raise typer.Exit(2) from exc
     if not hits:
         console.print("No matching local memories.")
         return
@@ -836,6 +868,38 @@ def forget_memory(
         return
     store.delete(memory_id)
     console.print(f"[green]Deleted memory {memory_id}.[/green]")
+
+
+
+@app.command("memory-index")
+def memory_index(
+    model: str = typer.Option("nomic-embed-text", help="Already-installed local Ollama embedding model."),
+    batch_size: int = typer.Option(8, min=1, max=32),
+    include_sensitive: bool = typer.Option(False, help="Explicitly index sensitive local memories."),
+) -> None:
+    """Create/update local semantic embeddings; never downloads a model."""
+    from aie.memory.semantic import index_memory_embeddings
+    from aie.memory.store import MemoryStore
+    from aie.models.ollama import OllamaClient
+
+    try:
+        report = index_memory_embeddings(
+            MemoryStore(memory_database_path()),
+            OllamaClient(),
+            model=model,
+            batch_size=batch_size,
+            include_sensitive=include_sensitive,
+        )
+    except (RuntimeError, ValueError) as exc:
+        console.print(f"[red]Memory indexing unavailable:[/red] {exc}")
+        raise typer.Exit(2) from exc
+
+    console.print(
+        f"[green]Memory index updated.[/green] Model: {report.model} · "
+        f"Eligible: {report.eligible_memories} · "
+        f"Already indexed: {report.already_indexed} · "
+        f"New vectors: {report.indexed_now}"
+    )
 
 
 @app.command("memory-prune")
