@@ -9,7 +9,7 @@ from aie.policy.capabilities import (
     CapabilityRegistry,
     PolicyControlledExecutor,
 )
-from aie.policy.execution_control import ExecutionControl
+from aie.policy.execution_control import ExecutionBlocked, ExecutionControl
 from aie.policy.ledger import PolicyLedger, PolicyProposalQueue
 from aie.policy.models import ActionProposal, CapabilityManifest
 
@@ -61,7 +61,7 @@ def test_execution_requires_gate_and_explicit_approval(tmp_path, monkeypatch):
         control=control,
     )
 
-    with pytest.raises(ActionExecutionDenied):
+    with pytest.raises(ExecutionBlocked):
         executor.execute(proposal.proposal_id)
     assert called == []
     assert ledger.get(proposal.proposal_id).execution_status is None
