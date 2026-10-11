@@ -1,54 +1,48 @@
 # Video Intelligence
 
-## Implemented
-`aie/diagnostics/video_buffering.py` is a deterministic read-only triage function. It analyzes supplied telemetry and returns evidence-linked hypotheses for throughput, packet loss, latency and local decode/render pressure. It refuses root-cause claims from a short/single stall or missing measurements. Confidence values are heuristic, not calibrated probabilities.
+## Implemented pipeline
 
-## Not implemented
-There is no live browser extension, screen observer, model reasoning or autonomous remediation yet. The network sampler is implemented as a read-only Windows provider and is wired into the observer CLI. A context correlator now joins synthetic/future `browser.video.snapshot` events with fresh same-host network evidence; it does not itself collect browser signals.
+1. **Browser observation:** the opt-in Chrome/Edge MV3 extension observes HTML video elements after the user enables monitoring. It reports playback state, a rolling stall count, buffered-ahead duration, playback-position delta and dropped-frame deltas when the browser exposes them.
+2. **Local transport:** the extension sends a strict native-messaging payload to the Windows host. The host rejects unknown fields and stores normalized `browser.video.snapshot` events in the local SQLite store.
+3. **Windows telemetry:** a bounded read-only provider samples interface counters, TCP connection-establishment latency to a private gateway and two public endpoints, and DNS resolution timing.
+4. **Foreground context:** the Windows foreground observer records app/process transitions without reading window titles by default. It samples the active process CPU, RSS memory, thread count and process I/O counters on a bounded cadence.
+5. **Context assembly:** `aie.context.video` correlates fresh browser, same-host foreground-app and network observations. It never copies window-title text into the resulting context.
+6. **Diagnostics:** `aie.diagnostics.video_buffering` produces conservative evidence-backed hypotheses. The `aie context` command displays the latest context and hypotheses.
 
-## Future browser signals
-Use an explicit opt-in Edge/Chrome extension and collect only:
-- Playback state transitions (playing, waiting/stalled, paused, ended).
-- Stall count/duration and playback-position deltas.
-- Buffered-ahead duration.
-- Browser-provided dropped/decoded frame counters where supported.
-- Coarse site origin only when user permits it.
+## Diagnostic logic
 
-Never collect page text, credentials, cookies, form fields, browsing history or arbitrary DOM content. The separate foreground-window observer also omits window titles by default because they can contain private document names, chat titles or email subjects. Provide site-level and global pause controls. Prefer structured local IPC/native messaging to a local service.
+A diagnosis requires repeated stalls and a minimum observation window (defaults: at least 2 stalls over at least 20 seconds). A single stall or short sample is reported as insufficient evidence.
 
-## Future network signals
-- Interface/link status and Wi-Fi signal via supported Windows APIs.
-- Gateway and external TCP connection-establishment latency as separate signals; do not label it packet RTT.
-- DNS timing as its own metric.
-- Sustained throughput checks only with opt-in, strict duration/volume limits and backoff.
-- Explicit timeouts and bounded sample frequency.
+Available hypotheses include:
+- **Stream buffer starvation:** little buffered media ahead (default threshold 0.75 seconds). This suggests that the player is running out of buffered media; it does not prove a network fault or distinguish CDN/server issues from local connectivity.
+- **Playback pipeline not advancing with buffer available:** at least 5 seconds buffered while playback progress is effectively zero. Inspect the player/decoder/render path before changing networking.
+- **Local decode/render pressure:** high foreground browser CPU together with elevated dropped-frame ratio.
+- **Insufficient streaming throughput, packet loss or high packet RTT:** only evaluated when a source actually supplies those specific measurements. TCP connection-establishment time and aggregate interface bytes are not substituted for packet RTT, stream throughput or packet loss.
 
-TCP connect duration includes connection setup (and may include name resolution when the target is a hostname); it is not a pure packet RTT. A failed TCP connection to a specific port does not prove the gateway or endpoint is unreachable. ICMP ping does not establish stream throughput or CDN health. Diagnostics must not alter DNS, adapters, routes or proxy settings.
+Thresholds and confidence values are heuristics, not calibrated probabilities. Root-cause accuracy must be evaluated against representative traces before unattended remediation is enabled.
 
-## Remediation
-`observation -> correlated evidence -> hypothesis -> proposal -> policy -> approval if needed -> bounded execution -> verification -> audit/memory`
+## Privacy and controls
 
-Changing stream quality could become a low-risk, pre-authorized action if the site exposes a supported control. Network resets, process termination, service changes or OS configuration changes require approval and a recovery path.
+- Extension monitoring defaults to **off** and has an explicit popup toggle.
+- Content collection is limited to HTML video playback/performance signals. It does not send page URLs/origins, titles, text, media source URLs, screenshots, audio, cookies, credentials, form fields or browsing history.
+- The extension requires HTTP/HTTPS site permission to operate across different video websites. That broad permission is visible in the browser's permission UI.
+- Window titles are not collected by default. `--include-window-titles` is a separate explicit opt-in and marks the corresponding event as sensitive.
+- `aie pause` pauses all AIE observer loops for the current Windows user; `aie resume` resumes them. Pausing does not delete stored events.
+- The native host accepts only a strict, versioned metric allowlist. Browser content never becomes an action or a policy instruction.
 
-## Evaluation
-Add synthetic traces for congestion, Wi-Fi loss, decode pressure, remote-service failure and insufficient evidence. Measure precision/recall and false-positive rates before unattended recommendations.
+## Install for local development (Chrome or Edge)
 
-
-## Browser extension prototype
-
-The MV3 extension is in `browser_extension/`. It monitors HTML video elements only after the user enables it in the extension popup. It forwards playback state, a rolling stall count, buffered-ahead duration, playback-progress delta and available dropped-frame deltas. It does not send page URLs/origins, titles, text, media source URLs, screenshots, audio, cookies, credentials, form values or browsing history.
-
-The extension requires HTTP/HTTPS site access to work across different video websites. That broad site permission is shown by Chrome/Edge; monitoring itself defaults to off and can be toggled off at any time. No telemetry is sent to a cloud endpoint.
-
-### Install for local development (Chrome or Edge)
-1. Install AIE into the Windows virtual environment: `python -m pip install -e .`.
+1. In PowerShell, install AIE into the Windows virtual environment: `python -m pip install -e .`.
 2. Open `chrome://extensions` or `edge://extensions`, enable Developer mode, and choose **Load unpacked**.
 3. Select the repository's `browser_extension` directory and copy its extension ID.
-4. In PowerShell, run `scripts/register-native-host.ps1 -ExtensionId <ID> -Browser Chrome` (or `-Browser Edge`).
+4. Register the host: `scripts/register-native-host.ps1 -ExtensionId <ID> -Browser Chrome` (or `-Browser Edge`).
 5. Restart the browser, open the extension popup, and explicitly enable monitoring.
-6. Run `aie events` to inspect locally stored playback events.
+6. Start AIE: `aie observe --duration 3600`.
+7. Inspect: `aie status`, `aie events`, and `aie context`.
+8. Stop data collection immediately with `aie pause`; use `aie resume` to resume.
 
-The registration helper writes a per-user native-messaging manifest under `%LOCALAPPDATA%\AIE` and registers it under HKCU. Use `scripts/unregister-native-host.ps1` to remove the selected browser registration. The native host accepts only the documented metric fields and rejects unexpected fields.
+The registration helper writes a per-user native-messaging manifest under `%LOCALAPPDATA%\AIE` and registers it under HKCU. Use `scripts/unregister-native-host.ps1 -Browser Chrome` (or Edge) to remove the browser registration.
 
-### Limitations
-This first observer sees HTML video elements, not proprietary playback internals. Some streaming sites may use protected or embedded players where counters are unavailable. It does not measure sustained throughput or packet loss; those remain unknown until a separate telemetry source measures them.
+## Limitations and next validation
+
+The extension sees HTML video elements, not proprietary player internals. Some protected or embedded players may expose no useful metrics. The network sampler does not measure sustained streaming throughput or packet loss. Native host registration and end-to-end operation still need validation on the target Windows desktop. No autonomous remediation is implemented: the current system diagnoses and suggests only.
