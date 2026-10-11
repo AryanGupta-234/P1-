@@ -1,7 +1,9 @@
 import pytest
 
+from aie.contracts import AIEEvent, EntityRef
 from aie.memory.models import MemoryRecord
 from aie.memory.store import MemoryStore
+from aie.store import EventStore
 
 
 def test_reviewed_merge_supersedes_both_sources_and_preserves_lineage(tmp_path):
@@ -116,19 +118,32 @@ def test_merge_preserves_earliest_expiry_and_rejects_kind_mismatch(tmp_path):
 
 def test_merge_requires_retaining_provenance_ids(tmp_path):
     store = MemoryStore(tmp_path / "memory-provenance.sqlite3")
+    events = EventStore(tmp_path / "events.sqlite3")
+    for event_id in ("event-001", "event-002"):
+        events.append(
+            AIEEvent(
+                event_id=event_id,
+                host_id="test-host",
+                source="test",
+                event_type="test.observation",
+                entity=EntityRef(type="test", name=event_id),
+            )
+        )
     first = store.save(
         MemoryRecord(
             kind="semantic",
             content="Fact from an event.",
             source_event_ids=["event-001"],
-        )
+        ),
+        event_store=events,
     )
     second = store.save(
         MemoryRecord(
             kind="semantic",
             content="Another fact from an event.",
             source_event_ids=["event-002"],
-        )
+        ),
+        event_store=events,
     )
 
     with pytest.raises(ValueError, match="retain all source event provenance"):
@@ -139,6 +154,27 @@ def test_merge_requires_retaining_provenance_ids(tmp_path):
                 content="Merged facts.",
                 source_event_ids=["event-001"],
             ),
+            event_store=events,
         )
 
-    assert store.count(include_superseded=False) == 2
+    with pytest.raises(ValueError, match="event_store is required"):
+        store.merge(
+            (first.memory.memory_id, second.memory.memory_id),
+            MemoryRecord(
+                kind="semantic",
+                content="Merged facts.",
+                source_event_ids=["event-001", "event-002"],
+            ),
+        )
+
+    result = store.merge(
+        (first.memory.memory_id, second.memory.memory_id),
+        MemoryRecord(
+            kind="semantic",
+            content="Merged facts.",
+            source_event_ids=["event-001", "event-002"],
+        ),
+        event_store=events,
+    )
+    assert set(result.source_event_ids) == {"event-001", "event-002"}
+    assert store.count(include_superseded=False) == 1
