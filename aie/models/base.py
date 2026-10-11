@@ -15,6 +15,7 @@ class ChatMessage(BaseModel):
 class ModelRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     task: Literal["routine", "complex"] = "routine"
+    response_format: Literal["text", "json"] = "text"
     messages: list[ChatMessage] = Field(min_length=1, max_length=32)
     temperature: float = Field(default=0.2, ge=0.0, le=2.0)
     max_output_tokens: int = Field(default=512, ge=32, le=4096)
