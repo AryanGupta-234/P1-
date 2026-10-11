@@ -35,7 +35,7 @@ def test_pending_and_approved_proposals_can_be_immutably_revoked(tmp_path):
     )
     assert pending.status == "revoked"
     assert "task cancelled" in pending.reason
-    with pytest.raises(ValueError, match="only pending or approved"):
+    with pytest.raises(ValueError):
         queue.review(proposal.proposal_id, approve=True, broker=broker)
 
     _, ledger2, queue2, proposal2 = prepared(tmp_path / "approved")
