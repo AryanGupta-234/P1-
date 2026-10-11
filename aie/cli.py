@@ -63,7 +63,7 @@ def models() -> None:
             "[green]yes[/green]" if decision.available else "[red]no[/red]",
             decision.reason,
         )
-    console.print(f"Ollama endpoint: local only (127.0.0.1 by default)")
+    console.print("Ollama endpoint: local only (127.0.0.1 by default)")
     console.print(f"Available memory: {memory:.2f} GiB")
     console.print(table)
     console.print("Installed models:")
