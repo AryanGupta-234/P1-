@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import os
 from dataclasses import asdict, dataclass
+from urllib.parse import urlparse
 from typing import Literal
 from urllib.error import URLError
 from urllib.request import Request, urlopen
@@ -27,13 +28,19 @@ class ModelDecision:
 
 
 def ollama_base_url() -> str:
-    return os.environ.get("AIE_OLLAMA_URL", "http://127.0.0.1:11434").rstrip("/")
+    base = os.environ.get("AIE_OLLAMA_URL", "http://127.0.0.1:11434").rstrip("/")
+    parsed = urlparse(base)
+    if parsed.scheme not in {"http", "https"} or parsed.hostname not in {
+        "127.0.0.1", "localhost", "::1"
+    }:
+        raise ValueError("AIE Ollama endpoint must be a loopback address.")
+    return base
 
 
 def discover_local_models(timeout: float = 1.5) -> list[str]:
-    """Query only the local Ollama endpoint. Never pulls or contacts a cloud service."""
-    request = Request(f"{ollama_base_url()}/api/tags", headers={"Accept": "application/json"})
+    """Query only a loopback Ollama endpoint. Never pulls or contacts a cloud service."""
     try:
+        request = Request(f"{ollama_base_url()}/api/tags", headers={"Accept": "application/json"})
         with urlopen(request, timeout=timeout) as response:
             payload = json.loads(response.read().decode("utf-8"))
     except (OSError, URLError, TimeoutError, ValueError, json.JSONDecodeError):
