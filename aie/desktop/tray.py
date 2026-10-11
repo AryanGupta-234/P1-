@@ -36,7 +36,8 @@ MENU_RESUME = 1002
 MENU_STATUS = 1003
 MENU_EXIT = 1004
 
-WNDPROC = ctypes.WINFUNCTYPE(
+_WINFUNCTYPE = getattr(ctypes, "WINFUNCTYPE", ctypes.CFUNCTYPE)
+WNDPROC = _WINFUNCTYPE(
     ctypes.c_ssize_t,
     wintypes.HWND,
     wintypes.UINT,
