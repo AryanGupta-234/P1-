@@ -100,11 +100,13 @@ def test_dns_probe_does_not_spawn_unbounded_workers(monkeypatch):
 
     assert resolver_started.wait(1.0)
     assert network_module._dns_timing_ms("second.test", 0.1) is None
-    release_resolver.set()
     caller.join(timeout=1.0)
 
+    # Keep the underlying resolver blocked until the caller's bounded wait expires.
     assert not caller.is_alive()
     assert first_result == [None]
+
+    release_resolver.set()
     assert resolver_finished.wait(1.0)
     assert network_module._DNS_PROBE_LOCK.acquire(timeout=1.0)
     network_module._DNS_PROBE_LOCK.release()
