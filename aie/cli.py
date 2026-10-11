@@ -428,7 +428,7 @@ def prune(
 
 @app.command()
 def ask(
-    prompt: str = typer.Argument(..., min_length=1, help="Prompt to send to the model."),
+    prompt: str = typer.Argument(..., help="Prompt to send to the model."),
     task: Literal["routine", "complex"] = typer.Option("routine", help="Choose the reasoning tier."),
     provider: Literal["local", "cloud"] = typer.Option("local", help="Select local Ollama or explicitly enabled cloud inference."),
     allow_remote_ollama: bool = typer.Option(
@@ -459,6 +459,9 @@ def ask(
     memory_limit: int = typer.Option(5, min=1, max=10),
 ) -> None:
     """Send a prompt to local Ollama or an explicitly authorized HTTPS cloud model."""
+    if not prompt.strip():
+        console.print("[red]Prompt cannot be empty.[/red]")
+        raise typer.Exit(2)
     from aie.models.base import ChatMessage, ModelRequest
     from aie.models.ollama import OllamaClient
     from aie.models.router import LocalModelRouter
@@ -682,12 +685,15 @@ def remember(
 
 @app.command("recall")
 def recall(
-    query: str = typer.Argument(..., min_length=1, help="Local keyword query."),
+    query: str = typer.Argument(..., help="Local keyword query."),
     kind: Literal["working", "episodic", "semantic", "procedural", "prospective"] | None = typer.Option(None),
     include_sensitive: bool = typer.Option(False, help="Explicitly include sensitive memories."),
     limit: int = typer.Option(10, min=1, max=100),
 ) -> None:
     """Retrieve local memories using transparent keyword/tag overlap scoring."""
+    if not query.strip():
+        console.print("[red]Memory query cannot be empty.[/red]")
+        raise typer.Exit(2)
     from aie.memory.store import MemoryStore
 
     hits = MemoryStore(memory_database_path()).search(
@@ -742,9 +748,12 @@ def memories(
 @app.command("correct-memory")
 def correct_memory(
     memory_id: str = typer.Argument(..., help="Active memory ID to supersede."),
-    content: str = typer.Argument(..., min_length=1, help="Corrected memory text."),
+    content: str = typer.Argument(..., help="Corrected memory text."),
 ) -> None:
     """Create a corrected memory while retaining the old version as superseded."""
+    if not content.strip():
+        console.print("[red]Corrected memory text cannot be empty.[/red]")
+        raise typer.Exit(2)
     from aie.memory.models import MemoryRecord
     from aie.memory.store import MemoryStore
 
@@ -880,10 +889,13 @@ def list_capabilities() -> None:
 @app.command("propose")
 def propose_action(
     capability_id: str = typer.Argument(...),
-    summary: str = typer.Argument(..., min_length=1, help="Short human-readable action summary."),
+    summary: str = typer.Argument(..., help="Short human-readable action summary."),
     parameters_json: str = typer.Option("{}", "--parameters", help="Flat JSON object of allowlisted parameters."),
 ) -> None:
     """Queue an action proposal for policy evaluation and explicit user review."""
+    if not summary.strip():
+        console.print("[red]Proposal summary cannot be empty.[/red]")
+        raise typer.Exit(2)
     import json
 
     from aie.policy.ledger import PolicyLedger, PolicyProposalQueue
