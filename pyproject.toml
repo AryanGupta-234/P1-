@@ -12,7 +12,7 @@ dependencies = ["pydantic>=2.7,<3", "psutil>=5.9,<8", "typer>=0.12,<1", "rich>=1
 
 [project.optional-dependencies]
 dev = ["pytest>=8,<9", "pytest-cov>=5,<7", "ruff>=0.5,<1"]
-windows = ["pywinauto>=0.6.8,<1", "pywin32>=306,<400"]
+windows = ["pywinauto>=0.6.8,<1", "pywin32>=306,<400", "pyetwkit==3.2.0"]
 
 [project.scripts]
 aie = "aie.cli:app"
