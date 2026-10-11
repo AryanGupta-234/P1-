@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Callable, Mapping
+from collections.abc import Mapping
 from typing import Protocol
 
 from aie.models.base import ChatMessage, ModelRequest
@@ -48,7 +48,8 @@ class TaskOrchestrator:
             if current.status in {"completed", "failed", "cancelled", "waiting_approval", "blocked"}:
                 return current
             if current.cancel_requested:
-                return self.store.claim_next_ready(run_id) and self.store.get(run_id) or self.store.get(run_id)  # type: ignore[return-value]
+                self.store.claim_next_ready(run_id)
+                return self.store.get(run_id)  # type: ignore[return-value]
 
             claimed = self.store.claim_next_ready(run_id)
             if claimed is None:
@@ -82,11 +83,11 @@ class TaskOrchestrator:
                     return self.store.wait_for_approval(
                         run_id, step_id, snapshot.proposal.proposal_id
                     )
-                return self.store.resolve_action_review(
+                return self.store.finish_step(
                     run_id,
                     step_id,
-                    outcome="blocked",
-                    reason=snapshot.reason,
+                    success=False,
+                    summary=("Action proposal blocked by policy: " + snapshot.reason)[:500],
                 )
 
             handler = self.handlers.get(step.kind)
