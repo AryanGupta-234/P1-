@@ -789,6 +789,40 @@ def sessions(limit: int = typer.Option(25, min=1, max=100)) -> None:
         )
     console.print(table)
 
+@app.command("dry-run-proposal")
+def dry_run_proposal(proposal_id: str = typer.Argument(...)) -> None:
+    """Validate an approved proposal through the non-mutating executor boundary."""
+    from aie.policy.executor import DryRunExecutor
+    from aie.policy.manifests import CapabilityManifestLoadError
+    from aie.policy.ledger import PolicyLedger
+
+    try:
+        broker, _ = _load_local_policy_broker()
+        ledger = PolicyLedger(policy_audit_database_path())
+        snapshot = ledger.get(proposal_id)
+        if snapshot is None:
+            console.print("[red]Proposal not found.[/red]")
+            raise typer.Exit(2)
+        if snapshot.status != "approved":
+            console.print(
+                f"[red]Proposal is not approved.[/red] Current status: {snapshot.status}"
+            )
+            raise typer.Exit(2)
+        decision = broker.evaluate(snapshot.proposal, user_approved=True)
+        result = DryRunExecutor().execute(snapshot.proposal, decision)
+    except (ValueError, CapabilityManifestLoadError) as exc:
+        console.print(f"[red]Dry run unavailable:[/red] {exc}")
+        raise typer.Exit(2) from exc
+
+    console.print(
+        f"Proposal: {result.proposal_id}\n"
+        f"Capability: {result.capability_id}\n"
+        f"Status: {result.status}\n"
+        f"Executed: {result.executed}\n"
+        f"Verified: {result.verified}\n"
+        f"Reason: {result.reason}"
+    )
+
 
 @app.command("feedback")
 def feedback(
