@@ -190,7 +190,7 @@ class WindowsProvider(ObserverProvider):
                 "is_up": info.isup,
                 "speed_mbps": info.speed,
                 "mtu": info.mtu,
-                "duplex": int(info.duplex),
+                "duplex": int(info.duplex or 0),
             }
             for name, info in sorted(stats.items())
         ]
