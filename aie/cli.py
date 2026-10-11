@@ -103,7 +103,7 @@ def _print_video_diagnostic(event) -> None:
     recommendation = str(event.data.get("recommendation", "Review diagnostic evidence."))
     color = "red" if severity == "HIGH" else "yellow"
     console.print(
-        f"\\n[{color}]P1 video intelligence: {cause} ({severity}, {confidence:.0%})[/{color}]"
+        f"\n[{color}]P1 video intelligence: {cause} ({severity}, {confidence:.0%})[/{color}]"
     )
     console.print(recommendation)
     console.print("[dim]Suggestion only — no action was executed.[/dim]")
