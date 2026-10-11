@@ -11,6 +11,7 @@ from aie.diagnostics.monitor import VideoDiagnosticMonitor
 from aie.providers.foreground import WindowsForegroundProvider
 from aie.providers.network import WindowsNetworkProvider
 from aie.providers.windows import WindowsProvider
+from aie.providers.uia import WindowsUIATreeProvider
 from aie.config import observer_is_paused
 from aie.store import EventStore
 
@@ -30,6 +31,9 @@ def observe(
     diagnostic_max_age_seconds: float = 45.0,
     diagnostic_cooldown_seconds: float = 120.0,
     on_diagnostic: Callable[[AIEEvent], None] | None = None,
+    include_ui_tree: bool = False,
+    ui_tree_app_names: set[str] | None = None,
+    ui_tree_sample_interval: float = 10.0,
 ) -> int:
     """Persist read-only system, foreground-app and bounded network observations."""
     if duration < 1:
@@ -42,6 +46,10 @@ def observe(
         raise ValueError("window titles require foreground observation to be enabled")
     if not 1.0 <= foreground_sample_interval <= 60.0:
         raise ValueError("foreground_sample_interval must be between 1 and 60 seconds")
+    if include_ui_tree and not ui_tree_app_names:
+        raise ValueError("UI Automation requires an explicit foreground app allowlist")
+    if include_ui_tree and not 2.0 <= ui_tree_sample_interval <= 300.0:
+        raise ValueError("ui_tree_sample_interval must be between 2 and 300 seconds")
 
     provider = WindowsProvider()
     network_provider = WindowsNetworkProvider() if include_network else None
@@ -51,6 +59,14 @@ def observe(
             resource_sample_interval=foreground_sample_interval,
         )
         if include_foreground
+        else None
+    )
+    uia_provider = (
+        WindowsUIATreeProvider(
+            allowed_process_names=ui_tree_app_names or set(),
+            sample_interval=ui_tree_sample_interval,
+        )
+        if include_ui_tree
         else None
     )
     store = EventStore(db_path)
@@ -84,6 +100,8 @@ def observe(
 
             if foreground_provider is not None:
                 events.extend(foreground_provider.collect_snapshot())
+            if uia_provider is not None:
+                events.extend(uia_provider.collect_snapshot())
 
             now = time.monotonic()
             if network_provider is not None and now >= next_network:
