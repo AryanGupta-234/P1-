@@ -1,6 +1,5 @@
-import pytest
-
 from aie.orchestration.engine import TaskOrchestrator
+
 from aie.orchestration.handlers import PolicyProposalHandler
 from aie.orchestration.store import TaskRunStore
 from aie.planning.models import PlanStep, TaskPlan
@@ -86,7 +85,8 @@ def test_cancel_preserves_already_executed_action_receipt(tmp_path):
     PolicyProposalQueue(ledger).review(proposal_id, approve=True, broker=broker)
     ledger.reserve_execution(proposal_id)
     ledger.reserve_execution(proposal_id)
-    ledger.append_execution(proposal_id,
+    ledger.append_execution(
+        proposal_id,
         status="succeeded",
         action_executed=True,
         verified=False,
@@ -103,6 +103,7 @@ def test_cancel_preserves_already_executed_action_receipt(tmp_path):
     assert snapshot.execution_status == "succeeded"
     assert snapshot.action_executed is True
     assert ledger.verify_integrity().valid is True
+
 
 def test_cancel_revokes_proposal_written_before_task_checkpoint(tmp_path):
     from aie.orchestration.ids import proposal_id_for_task_step
@@ -132,4 +133,3 @@ def test_cancel_revokes_proposal_written_before_task_checkpoint(tmp_path):
     assert cancelled.status == "cancelled"
     assert ledger.get(deterministic_id).status == "revoked"
     assert ledger.verify_integrity().valid is True
-
