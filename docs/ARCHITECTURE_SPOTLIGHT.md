@@ -52,6 +52,7 @@ Build persistent personal intelligence that observes explicitly permitted signal
 - Read-only host/process/application/service/scheduled-task/network-interface inventory.
 - Best-effort process lifecycle observations.
 - Foreground app transitions and throttled active-process CPU, RSS, thread and I/O samples.
+- Opt-in bounded systemwide process CPU/RSS/thread/I/O snapshots, reporting top consumers only.
 - Bounded network interface counters, TCP connection-establishment latency and DNS resolution timing.
 - Opt-in metadata-only Application/System Event Log reader, wired into the observer runtime. It skips historical backlog on startup and excludes message text, XML and Security logs.
 - Opt-in, allowlisted UI Automation structural snapshots with node/depth/time bounds.
