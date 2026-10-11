@@ -72,3 +72,8 @@ def execution_enabled_path() -> Path:
 def execution_kill_switch_path() -> Path:
     """Global kill-switch marker that must block all future mutation."""
     return data_dir() / "execution.kill"
+
+
+def agent_run_database_path() -> Path:
+    """Private local database for persistent agent task-run state."""
+    return data_dir() / "agent-runs.sqlite3"
