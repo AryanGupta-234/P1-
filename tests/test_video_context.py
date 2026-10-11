@@ -59,6 +59,8 @@ def test_correlates_fresh_browser_snapshot_and_network_evidence():
     assert context.metrics.packet_loss_pct is None
     assert context.buffered_ahead_seconds == 0.4
     assert context.playback_progress_delta_seconds == 0.0
+    assert context.metrics.buffered_ahead_seconds == 0.4
+    assert context.metrics.playback_progress_delta_seconds == 0.0
     assert len(context.network_evidence) == 1
     assert context.network_evidence[0].connect_latency_ms == 85
     assert context.evidence_event_ids == ("browser-1", "network-1")
