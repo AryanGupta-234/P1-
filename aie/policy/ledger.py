@@ -295,7 +295,7 @@ class PolicyLedger:
                     or json.loads(row[0]).get("execution_reserved") is True
                     for row in rows
                 ):
-                    raise ValueError("an execution attempt has already been reserved")
+                    raise ValueError("an execution attempt cannot be revoked after it has been reserved")
                 policy = latest.get("policy") or {}
                 payload = {
                     "schema_version": 1, "status": "revoked", "reviewer": reviewer,
