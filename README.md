@@ -76,6 +76,11 @@ Run `aie observe --process-resources --process-resource-interval 10 --process-re
 ## Windows Event Log metadata (optional)
 Install optional Windows dependencies with `python -m pip install -e ".[dev,windows]"`. Use `aie observe --event-logs --event-log-channels Application,System --event-log-interval 30` to opt in to bounded metadata-only polling of the Windows Application/System logs. It skips historical backlog on startup and does not collect event message text or XML. The optional `windows` extra supplies pywin32.
 
+## ETW process lifecycle capture (manual opt-in prototype)
+The read-only provider catalog command, aie etw-catalog --contains Kernel, lists registered ETW provider names/GUIDs and does not start a trace. The separate aie etw-process --duration 15 command performs a bounded, one-shot process start/stop capture using a uniquely named AIE-owned ETW session. It enables only the Kernel-Process provider's process keyword, uses an 8 MiB circular ETL and bounded buffers, stops only its own session, then parses an allowlisted subset of process metadata. It does not run automatically with aie observe and never stops another ETW session.
+
+ETW access may be restricted by Windows policy or account privileges; AIE does not auto-elevate. If session shutdown cannot be confirmed, the CLI reports the exact session stop command and preserves the trace workspace for recovery. Event/buffer loss counters are displayed as unknown when the trace summary does not report them. Provider schema, keywords, permissions, delivered events, loss counters and overhead still require validation on the target Windows build. See [Windows ETW research](docs/WINDOWS_ETW_RESEARCH.md).
+
 ## Observer controls
 Use `aie pause` to pause all running observer loops for the current Windows user, `aie resume` to resume them, and `aie status` to inspect pause state and local event count. Pausing does not erase retained events. `aie prune --older-than-days 30` previews old records; add `--confirm` to delete only the expired local events.
 
