@@ -106,7 +106,9 @@ Build persistent personal intelligence that observes explicitly permitted signal
 - Higher-fidelity ETW telemetry beyond process lifecycle events (optional thread/file/network categories and provider-specific coverage reporting).
 - Windows Graphics Capture (screenshots), still intentionally separate from UIA structure.
 - Unified event bus and semantic task/session interpretation.
-- Embedding retrieval quality evaluation, semantic contradiction resolution and forgetting/regression evaluation.
+- A user-authored retrieval benchmark reports Recall@k, Precision@k, Mean Reciprocal Rank and Hit Rate for lexical and local semantic retrieval without modifying memory or model weights. Sensitive target memories require explicit inclusion.
+- A conservative polarity-conflict review queue flags explicit opposing lexical markers only when records share context; it does not prove semantic contradiction or modify records.
+- Remaining evaluation: held-out task families, semantic retrieval quality, temporal contradiction resolution and forgetting/regression.
 - Evaluation of procedural-skill quality and transfer; skill induction currently creates reviewed local records only and never retrains a model.
 - Cloud egress gateway/redaction policy and model request budgets.
 - OS-process sandboxing, rollback and automatic recovery for interrupted handlers.
