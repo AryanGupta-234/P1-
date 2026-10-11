@@ -129,6 +129,10 @@ def test_eventlog_clear_or_record_number_reset_is_detected():
         if event.event_type == "windows.eventlog.record"
     ] == [1, 2]
 
+    api.records["System"].append(record(3, 6002))
+    next_poll = provider.collect_snapshot()
+    assert [event.data["record_number"] for event in next_poll] == [3]
+
 
 class FailingEventLogApi(FakeEventLogApi):
     def open(self, channel):
