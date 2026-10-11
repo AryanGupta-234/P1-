@@ -124,6 +124,17 @@ aie tray
 
 Right-click the P1- icon to pause/resume the existing observer or open the local status dialog. Double-click the icon to show status. The tray does not start observation, change provider settings, enable capabilities, or create an auto-start service. Exit closes only the tray process. Provider configuration and full diagnostics remain in the CLI.
 
+Generic local diagnostic balloons are disabled by default. Enable them explicitly and configure quiet hours:
+
+```powershell
+aie notifications-status
+aie notifications-enable --confirm
+aie notifications-quiet-hours 22:00 07:00
+aie notifications-disable
+```
+
+The tray displays at most two generic playback-diagnostic notices per poll. It never places a process name, window title, URL, event payload or recommendation in the balloon. New events observed while notifications are disabled, the observer is paused, or quiet hours are active are not queued for later delivery.
+
 ## Current limitations
 Process lifecycle observation uses best-effort user-mode snapshots and may miss transient processes. Foreground process resource sampling is limited to the active application; it is not a systemwide per-process profiler. Video diagnostics analyze supplied metrics only. The project has a restricted Windows Settings URI adapter, but general autonomous remediation, OS-process sandboxing, rollback, automated recovery, evaluated learning and a full desktop assistant dashboard are not implemented.
 
