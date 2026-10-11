@@ -114,8 +114,18 @@ The current integrated Windows build passed [GitHub Actions run #448](https://gi
 ## CI validation
 Windows CI passed on the current development baseline for Python 3.11 and 3.12, including Ruff, extension JavaScript syntax checks and pytest. See [run #206](https://github.com/AryanGupta-234/P1-/actions/runs/38118517008). This does not replace testing the browser extension/native host and UI Automation against your own Windows desktop.
 
+## Windows tray controls
+
+Start the user-controlled notification-area controller with:
+
+```powershell
+aie tray
+```
+
+Right-click the P1- icon to pause/resume the existing observer or open the local status dialog. Double-click the icon to show status. The tray does not start observation, change provider settings, enable capabilities, or create an auto-start service. Exit closes only the tray process. Provider configuration and full diagnostics remain in the CLI.
+
 ## Current limitations
-Process lifecycle observation uses best-effort user-mode snapshots and may miss transient processes. Foreground process resource sampling is limited to the active application; it is not a systemwide per-process profiler. Video diagnostics analyze supplied metrics only. The project has a restricted Windows Settings URI adapter, but general autonomous remediation, process sandboxing, rollback, evaluated learning and the desktop assistant UI are not implemented.
+Process lifecycle observation uses best-effort user-mode snapshots and may miss transient processes. Foreground process resource sampling is limited to the active application; it is not a systemwide per-process profiler. Video diagnostics analyze supplied metrics only. The project has a restricted Windows Settings URI adapter, but general autonomous remediation, OS-process sandboxing, rollback, automated recovery, evaluated learning and a full desktop assistant dashboard are not implemented.
 
 
 ## Validated planning and task orchestration
