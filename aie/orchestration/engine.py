@@ -36,6 +36,10 @@ class HandlerResult:
     error_type: str | None = None
 
     def __post_init__(self) -> None:
+        if self.status not in {
+            "completed", "awaiting_approval", "awaiting_input", "failed"
+        }:
+            raise ValueError("invalid handler result status")
         if not self.summary or len(self.summary) > 1000:
             raise ValueError("handler summary must contain 1 to 1000 characters")
         if self.status == "awaiting_approval" and not self.proposal_id:
