@@ -127,7 +127,7 @@ def build_video_observation_context(
     data = browser_event.data
     playback_state = data.get("playback_state")
     allowed_states = {"playing", "waiting", "stalled", "paused", "ended"}
-    if playback_state not in allowed_states:
+    if not isinstance(playback_state, str) or playback_state not in allowed_states:
         return None
 
     playback_stalled = playback_state in {"waiting", "stalled"}

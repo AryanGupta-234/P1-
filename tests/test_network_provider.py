@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import pytest
 
-from aie.providers.network import ProbeTarget, WindowsNetworkProvider, _dns_timing_ms, _tcp_rtt_ms
+from aie.providers.network import ProbeTarget, WindowsNetworkProvider, _dns_timing_ms, _tcp_connect_latency_ms
 
 
 def test_provider_refuses_non_windows(monkeypatch):
@@ -34,7 +34,7 @@ def test_tcp_probe_returns_none_on_connection_error(monkeypatch):
     def fail(*args, **kwargs):
         raise OSError("unreachable")
     monkeypatch.setattr(socket, "create_connection", fail)
-    assert _tcp_rtt_ms("127.0.0.1", 443, 0.1) is None
+    assert _tcp_connect_latency_ms("127.0.0.1", 443, 0.1) is None
 
 
 def test_dns_probe_returns_none_when_resolution_fails(monkeypatch):
@@ -58,7 +58,7 @@ def test_collect_snapshot_emits_normalized_events(monkeypatch):
     )
     monkeypatch.setattr(network_module.psutil, "net_io_counters", lambda pernic=True: {})
     monkeypatch.setattr(network_module, "_default_gateway", lambda: None)
-    monkeypatch.setattr(network_module, "_tcp_rtt_ms", lambda *args: 30.0)
+    monkeypatch.setattr(network_module, "_tcp_connect_latency_ms", lambda *args: 30.0)
     monkeypatch.setattr(network_module, "_dns_timing_ms", lambda *args: 12.0)
 
     provider = WindowsNetworkProvider(
@@ -72,7 +72,7 @@ def test_collect_snapshot_emits_normalized_events(monkeypatch):
         "network.dns_probe",
     ]
     assert all(event.source == "windows.network" for event in events)
-    assert events[1].data["rtt_ms"] == 30.0
+    assert events[1].data["connect_latency_ms"] == 30.0
     assert events[2].data["resolution_ms"] == 12.0
 
 

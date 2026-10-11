@@ -47,13 +47,14 @@ Statuses: DONE / IN_PROGRESS / BLOCKED / PLANNED. Mark DONE only with code, test
 - [x] Synthetic unit tests.
 - [ ] Root-cause trace corpus and false-positive/negative evaluation.
 - [ ] Opt-in Edge/Chrome playback/performance extension.
-- [x] Windows network sampler: interface counters, gateway/external TCP reachability RTT and DNS timing.
+- [x] Windows network sampler: interface counters, gateway/external TCP connection latency and DNS timing.
 - [ ] Add configurable per-target policy and sustained throughput measurement (opt-in only).
 - [ ] Browser + OS telemetry correlation.
 - [ ] Confidence calibration and actionable diagnostic proposals.
 
 ## M2 — Context intelligence
-- [ ] Unified event bus and temporal correlation.
+- [x] Initial temporal correlator for browser-video snapshots and fresh same-host network evidence (synthetic contract; live browser bridge remains planned).
+- [ ] Unified event bus and general temporal correlation.
 - [ ] Working context: foreground application, task and session state.
 - [ ] Facts-versus-hypotheses model, evidence lineage and contradictions.
 - [ ] User-approved profile/personalization.

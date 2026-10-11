@@ -33,7 +33,7 @@ class ProbeTarget:
     timeout_seconds: float = 1.5
 
 
-def _tcp_rtt_ms(host: str, port: int, timeout: float) -> float | None:
+def _tcp_connect_latency_ms(host: str, port: int, timeout: float) -> float | None:
     """Return TCP connect latency; None means the endpoint did not connect in time."""
     started = time.perf_counter()
     try:
@@ -161,24 +161,24 @@ class WindowsNetworkProvider:
 
         gateway = _default_gateway()
         if gateway:
-            gateway_rtt = _tcp_rtt_ms(gateway, 80, self.timeout_seconds)
+            gateway_connect_latency = _tcp_connect_latency_ms(gateway, 80, self.timeout_seconds)
             events.append(AIEEvent(
                 host_id=host_id(),
                 source=self.name,
                 event_type="network.gateway_probe",
                 entity=EntityRef(type="network_gateway", name="default_gateway"),
                 data={
-                    "rtt_ms": gateway_rtt,
+                    "connect_latency_ms": gateway_connect_latency,
                     "probe": "tcp_connect_port_80",
                     "target_is_private": True,
                 },
                 sensitivity="internal",
-                confidence=0.9 if gateway_rtt is not None else 0.7,
+                confidence=0.9 if gateway_connect_latency is not None else 0.7,
                 evidence_kind="observed",
             ))
 
         for target in self.external_targets:
-            rtt = _tcp_rtt_ms(
+            connect_latency = _tcp_connect_latency_ms(
                 target.host, target.port, min(target.timeout_seconds, self.timeout_seconds)
             )
             events.append(AIEEvent(
@@ -189,11 +189,11 @@ class WindowsNetworkProvider:
                 data={
                     "host": target.host,
                     "port": target.port,
-                    "rtt_ms": rtt,
+                    "connect_latency_ms": connect_latency,
                     "probe": "tcp_connect",
                 },
                 sensitivity="internal",
-                confidence=0.85 if rtt is not None else 0.65,
+                confidence=0.85 if connect_latency is not None else 0.65,
                 evidence_kind="observed",
             ))
 
