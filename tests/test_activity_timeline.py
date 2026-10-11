@@ -121,3 +121,42 @@ def test_activity_rejects_naive_clock_and_invalid_budgets():
         build_activity_timeline([], max_age_seconds=0)
     with pytest.raises(ValueError):
         build_activity_timeline([], session_gap_seconds=1)
+
+
+def test_activity_safely_summarizes_bounded_system_process_resources():
+    now = datetime.now(timezone.utc)
+    event = AIEEvent(
+        event_id="system-process-snapshot",
+        timestamp=now,
+        host_id="host-a",
+        source="windows.process_resources",
+        event_type="process.system_resource_snapshot",
+        entity=EntityRef(type="host_process_set", name="top_process_consumers"),
+        data={
+            "sampled_processes": 20,
+            "truncated": False,
+            "processes": [
+                {
+                    "pid": 100,
+                    "process_name": "msedge.exe",
+                    "cpu_pct_total_capacity": 25.0,
+                    "memory_rss_bytes": 300 * 1024 * 1024,
+                    "command_line": "PRIVATE COMMAND CONTENT",
+                },
+                {
+                    "pid": 101,
+                    "process_name": "python.exe",
+                    "cpu_pct_total_capacity": 10.0,
+                    "memory_rss_bytes": 100 * 1024 * 1024,
+                },
+            ],
+        },
+    )
+
+    timeline = build_activity_timeline([event], now=now)
+    title = timeline.sessions[0].signals[0].title
+
+    assert "msedge.exe" in title
+    assert "CPU 25.0%" in title
+    assert "python.exe" in title
+    assert "PRIVATE" not in title
