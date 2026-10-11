@@ -42,3 +42,42 @@ def test_unknown_metrics_are_not_treated_as_zero():
 def test_invalid_metrics_are_rejected():
     with pytest.raises(ValueError):
         VideoMetrics(playback_stalled=True, packet_loss_pct=101)
+
+
+def test_low_buffer_ahead_suggests_starvation_without_proving_network_fault():
+    report = diagnose_video_buffering(VideoMetrics(
+        playback_stalled=True,
+        stall_count=3,
+        observation_window_seconds=30,
+        buffered_ahead_seconds=0.2,
+        playback_progress_delta_seconds=0.0,
+    ))
+    finding = next(item for item in report.findings if item.cause == "stream_buffer_starvation")
+
+    assert finding.severity == "medium"
+    assert finding.confidence < 1.0
+    assert "does not prove a network fault" in finding.recommendation
+    assert "network_packet_loss" not in {item.cause for item in report.findings}
+    assert "insufficient_streaming_throughput" not in {
+        item.cause for item in report.findings
+    }
+
+
+def test_buffered_media_with_no_progress_suggests_pipeline_investigation():
+    report = diagnose_video_buffering(VideoMetrics(
+        playback_stalled=True,
+        stall_count=4,
+        observation_window_seconds=45,
+        buffered_ahead_seconds=12.0,
+        playback_progress_delta_seconds=0.0,
+    ))
+    assert "playback_pipeline_not_advancing_with_buffer" in {
+        item.cause for item in report.findings
+    }
+
+
+def test_buffer_and_progress_ranges_are_validated():
+    with pytest.raises(ValueError):
+        VideoMetrics(playback_stalled=True, buffered_ahead_seconds=-1)
+    with pytest.raises(ValueError):
+        VideoMetrics(playback_stalled=True, playback_progress_delta_seconds=301)
