@@ -109,6 +109,7 @@ def approved_action_ledger(tmp_path):
     queue.create(proposal, broker)
     queue.review(proposal.proposal_id, approve=True, broker=broker)
     ledger.reserve_execution(proposal.proposal_id)
+    ledger.reserve_execution(proposal.proposal_id)
     ledger.append_execution(proposal.proposal_id,
         status="succeeded",
         action_executed=True,
