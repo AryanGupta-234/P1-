@@ -446,6 +446,100 @@ def prune(
     console.print(f"Deleted {deleted} event(s) older than {older_than_days} days.")
 
 
+@app.command("health")
+def health(
+    limit: int = typer.Option(5, min=1, max=20, help="Number of recent observer-health records to inspect."),
+) -> None:
+    """Show privacy-safe observer provider health; payload data is not displayed."""
+    store = EventStore(database_path())
+    records = store.query_events(event_types=("observer.health",), limit=limit)
+    if not records:
+        console.print("No observer-health records available.")
+        return
+
+    latest = records[0]
+    console.print(f"Latest health record: {latest.timestamp.isoformat()}")
+    table = Table(
+        "Provider",
+        "State",
+        "Samples",
+        "Errors",
+        "Consecutive",
+        "Events",
+        "Loss",
+        "Avg latency",
+    )
+    providers = latest.data.get("providers", {})
+    if isinstance(providers, dict):
+        for name, value in sorted(providers.items()):
+            if not isinstance(value, dict):
+                continue
+            avg = value.get("average_latency_ms")
+            avg_text = "unknown" if avg is None else f"{avg:.2f} ms"
+            table.add_row(
+                str(name),
+                str(value.get("state", "unknown")),
+                str(value.get("samples_attempted", 0)),
+                str(value.get("errors", 0)),
+                str(value.get("consecutive_errors", 0)),
+                str(value.get("events_emitted", 0)),
+                str(value.get("event_loss", 0)),
+                avg_text,
+            )
+    console.print(table)
+    console.print(
+        "[dim]Health records contain provider metadata only; exception messages and "
+        "observation payloads are excluded.[/dim]"
+    )
+
+
+@app.command("export")
+def export_events(
+    output: Path = typer.Argument(..., help="Destination JSONL file."),
+    include_sensitive: bool = typer.Option(
+        False,
+        "--include-sensitive",
+        help="Explicitly include sensitive event records.",
+    ),
+) -> None:
+    """Export local observation events to JSONL; sensitive data is excluded by default."""
+    store = EventStore(database_path())
+    try:
+        count = store.export_jsonl(output, include_sensitive=include_sensitive)
+    except (OSError, ValueError) as exc:
+        console.print(f"[red]Export failed:[/red] {exc}")
+        raise typer.Exit(2) from exc
+    console.print(
+        f"[green]Exported {count} event(s).[/green] "
+        f"{'Sensitive records included.' if include_sensitive else 'Sensitive records excluded by default.'}"
+    )
+
+
+@app.command("delete-all")
+def delete_all_events(
+    confirm: bool = typer.Option(
+        False,
+        "--confirm",
+        help="Confirm permanent deletion of all local observation events.",
+    ),
+) -> None:
+    """Delete every local observation event; requires pause and explicit confirmation."""
+    if not confirm:
+        console.print(
+            "Nothing deleted. Re-run with --confirm after checking the candidate count."
+        )
+        return
+    if not observer_is_paused():
+        console.print(
+            "[red]Refusing to delete while observation is runnable.[/red] "
+            "Run 'aie pause' first, then retry."
+        )
+        raise typer.Exit(2)
+    store = EventStore(database_path())
+    deleted = store.delete_all()
+    console.print(f"[green]Deleted {deleted} local observation event(s).[/green]")
+
+
 @app.command()
 def ask(
     prompt: str = typer.Argument(..., help="Prompt to send to the model."),
