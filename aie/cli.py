@@ -1289,6 +1289,92 @@ def memory_consolidate(
     )
 
 
+@app.command("memory-merge")
+def memory_merge(
+    memory_a: str = typer.Argument(...),
+    memory_b: str = typer.Argument(...),
+    content: str = typer.Argument(..., help="User-authored merged memory content."),
+    confirm: bool = typer.Option(False, "--confirm", help="Confirm superseding both source memories."),
+    include_sensitive: bool = typer.Option(
+        False, "--include-sensitive", help="Explicitly permit merging sensitive source memories."
+    ),
+) -> None:
+    """Preview or explicitly merge two active memories while retaining both lineage links."""
+    from aie.memory.models import MemoryRecord
+    from aie.memory.store import MemoryStore
+
+    if memory_a == memory_b:
+        console.print("[red]Choose two different source memory IDs.[/red]")
+        raise typer.Exit(2)
+
+    store = MemoryStore(memory_database_path())
+    first = store.get(memory_a)
+    second = store.get(memory_b)
+    if first is None or second is None:
+        console.print("[red]Both source memories must exist and be active.[/red]")
+        raise typer.Exit(2)
+    sources = (first.memory, second.memory)
+    if sources[0].kind != sources[1].kind:
+        console.print("[red]Source memories must have the same kind.[/red]")
+        raise typer.Exit(2)
+    if any(item.sensitivity == "sensitive" for item in sources) and not include_sensitive:
+        console.print(
+            "[yellow]At least one source is sensitive. Re-run with --include-sensitive "
+            "after reviewing the local records.[/yellow]"
+        )
+        raise typer.Exit(2)
+
+    from datetime import datetime, timezone
+
+    expiry_values = [item.expires_at for item in sources if item.expires_at is not None]
+    expiry = min(expiry_values) if expiry_values else None
+    tags = list(dict.fromkeys(tag for item in sources for tag in item.tags))[:30]
+    provenance = list(dict.fromkeys(
+        event_id for item in sources for event_id in item.source_event_ids
+    ))
+    if len(provenance) > 100:
+        console.print("[red]Combined provenance exceeds the memory schema limit.[/red]")
+        raise typer.Exit(2)
+    sensitivity_order = {"public": 0, "internal": 1, "sensitive": 2}
+    sensitivity = max(
+        (item.sensitivity for item in sources),
+        key=sensitivity_order.__getitem__,
+    )
+    merged = MemoryRecord(
+        kind=sources[0].kind,
+        content=content,
+        tags=tags,
+        sensitivity=sensitivity,
+        confidence=min(item.confidence for item in sources),
+        source_event_ids=provenance,
+        created_at=datetime.now(timezone.utc),
+        expires_at=expiry,
+    )
+
+    console.print(
+        f"Merge candidate: {memory_a} + {memory_b}\n"
+        f"Kind: {merged.kind} · Sensitivity: {merged.sensitivity}\n"
+        f"Tags retained: {len(merged.tags)} · Provenance IDs retained: {len(provenance)}\n"
+        "The merged content is user-supplied; both original records will remain as "
+        "superseded history, and their embeddings will be removed."
+    )
+    if not confirm:
+        console.print("[yellow]Nothing changed. Re-run with --confirm to commit this merge.[/yellow]")
+        return
+
+    try:
+        saved = store.merge(
+            (memory_a, memory_b),
+            merged,
+            event_store=EventStore(database_path()) if provenance else None,
+        )
+    except (ValueError, OSError) as exc:
+        console.print(f"[red]Memory merge rejected:[/red] {exc}")
+        raise typer.Exit(2) from exc
+    console.print(f"[green]Reviewed memory merge saved.[/green] New ID: {saved.memory_id}")
+    console.print(f"Lineage: {', '.join(store.lineage(saved.memory_id))}")
+
+
 @app.command("memory-prune")
 def memory_prune(
     confirm: bool = typer.Option(False, "--confirm"),
