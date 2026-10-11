@@ -35,7 +35,7 @@ Statuses: DONE / IN_PROGRESS / BLOCKED / PLANNED. Mark DONE only with code, test
 - [x] Event Log provider wired into observer runtime with bounded polling and per-pass record cap.
 - [x] Opt-in allowlisted UI Automation structural tree sampler with node/depth/time bounds.
 - [x] Global per-user observer pause/resume, status and age-based retention pruning.
-- [ ] ETW process telemetry and event-loss metrics.
+- [ ] Validate the bounded opt-in ETW process start/stop prototype, local provider schema and permissions, exact/unknown loss counters, delivery latency and CPU/RAM overhead.
 - [x] Opt-in bounded systemwide process CPU/RSS/thread/I/O snapshots; top consumers only, no command lines or executable paths.
 - [ ] Disk/network per-process deltas and event-loss accounting.
 - [ ] Export/delete-all controls and observer health view.
