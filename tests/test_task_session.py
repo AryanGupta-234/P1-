@@ -52,3 +52,13 @@ def test_session_prompt_context_contains_only_explicit_metadata(tmp_path):
     assert "Review private project" in context.content
     assert "intent" in context.content
     assert "authorize actions" in context.content
+
+
+def test_task_session_types_are_exposed_from_context_root():
+    from aie.context import TaskSession, TaskSessionPromptContext, TaskSessionStore, build_task_session_prompt_context, new_task_session
+
+    assert TaskSession is not None
+    assert TaskSessionPromptContext is not None
+    assert TaskSessionStore is not None
+    assert build_task_session_prompt_context is not None
+    assert new_task_session is not None
