@@ -72,3 +72,39 @@ def test_memory_prompt_context_rejects_invalid_budgets(tmp_path):
         build_memory_prompt_context("query", store, limit=0)
     with pytest.raises(ValueError):
         build_memory_prompt_context("query", store, max_characters=100)
+
+
+def test_memory_prompt_context_can_use_local_semantic_retrieval(tmp_path):
+    store = MemoryStore(tmp_path / "semantic-prompt.sqlite3")
+    memory = store.save(MemoryRecord(
+        kind="semantic",
+        content="The preferred browser is Microsoft Edge.",
+        tags=["browser", "preference"],
+    ))
+    store.save_embedding(memory.memory_id, "nomic-embed-text", [1.0, 0.0, 0.0])
+
+    class FakeEmbeddingProvider:
+        def embed(self, inputs, *, model, timeout_seconds=60.0):
+            assert inputs == ["Which browser do I use?"]
+            assert model == "nomic-embed-text"
+            return [[0.95, 0.05, 0.0]]
+
+    result = build_memory_prompt_context(
+        "Which browser do I use?",
+        store,
+        semantic_model="nomic-embed-text",
+        embedding_provider=FakeEmbeddingProvider(),
+    )
+
+    assert result.memory_ids == (memory.memory_id,)
+    assert "Microsoft Edge" in result.content
+
+
+def test_semantic_prompt_context_requires_embedding_provider(tmp_path):
+    store = MemoryStore(tmp_path / "semantic-missing-provider.sqlite3")
+    with pytest.raises(ValueError, match="embedding_provider"):
+        build_memory_prompt_context(
+            "What was the user's browser preference?",
+            store,
+            semantic_model="nomic-embed-text",
+        )
