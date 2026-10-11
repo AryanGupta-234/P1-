@@ -84,8 +84,9 @@ class TaskOrchestrator:
     that a postcondition is true.
     """
 
-    def __init__(self, store: TaskRunStore) -> None:
+    def __init__(self, store: TaskRunStore, *, policy_ledger=None) -> None:
         self.store = store
+        self.policy_ledger = policy_ledger
 
     def create(self, plan: TaskPlan) -> TaskRun:
         validate_plan(plan)
@@ -227,6 +228,20 @@ class TaskOrchestrator:
             raise ValueError(f"cannot cancel a task run in state {run.status!r}")
         if any(item.status == "running" for item in run.steps):
             raise ValueError("cannot cancel during a handler invocation; cancel between steps")
+
+        if self.policy_ledger is not None:
+            for state in run.steps:
+                if not state.proposal_id:
+                    continue
+                proposal = self.policy_ledger.get(state.proposal_id)
+                if proposal is None or proposal.execution_status is not None:
+                    continue
+                if proposal.status in {"pending_review", "approved"}:
+                    self.policy_ledger.append_revocation(
+                        state.proposal_id,
+                        reason=f"task run {run_id} was cancelled",
+                    )
+
         now = datetime.now(timezone.utc)
         steps = tuple(
             item.model_copy(update={"status": "skipped", "completed_at": now})
