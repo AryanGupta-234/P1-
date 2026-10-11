@@ -102,19 +102,32 @@ def diagnose_video_buffering(
 
     findings: list[DiagnosticFinding] = []
 
-    if metrics.packet_loss_pct is not None and metrics.packet_loss_pct >= thresholds.packet_loss_pct:
+    if (
+        metrics.packet_loss_pct is not None
+        and metrics.packet_loss_pct >= thresholds.packet_loss_pct
+    ):
         findings.append(DiagnosticFinding(
             "network_packet_loss", "high", 0.78,
-            "Inspect Wi-Fi signal quality and compare packet loss against the local gateway and an external endpoint.",
+            (
+                "Inspect Wi-Fi signal quality and compare packet loss against the local "
+                "gateway and an external endpoint."
+            ),
             (f"Measured packet loss: {metrics.packet_loss_pct:.2f}%",),
         ))
 
-    if (metrics.throughput_mbps is not None and metrics.estimated_required_mbps is not None
-            and metrics.estimated_required_mbps > 0
-            and metrics.throughput_mbps < metrics.estimated_required_mbps * thresholds.throughput_headroom):
+    if (
+        metrics.throughput_mbps is not None
+        and metrics.estimated_required_mbps is not None
+        and metrics.estimated_required_mbps > 0
+        and metrics.throughput_mbps
+        < metrics.estimated_required_mbps * thresholds.throughput_headroom
+    ):
         findings.append(DiagnosticFinding(
             "insufficient_streaming_throughput", "high", 0.76,
-            "Compare sustained throughput with the stream's estimated requirement; if confirmed, offer a lower playback quality.",
+            (
+                "Compare sustained throughput with the stream's estimated requirement; "
+                "if confirmed, offer a lower playback quality."
+            ),
             (f"Measured throughput: {metrics.throughput_mbps:.2f} Mbps",
              f"Estimated requirement: {metrics.estimated_required_mbps:.2f} Mbps"),
         ))
@@ -122,7 +135,10 @@ def diagnose_video_buffering(
     if metrics.rtt_ms is not None and metrics.rtt_ms >= thresholds.high_rtt_ms:
         findings.append(DiagnosticFinding(
             "high_network_latency", "medium", 0.66,
-            "Compare gateway and external round-trip times to isolate local Wi-Fi latency from upstream latency.",
+            (
+                "Compare gateway and external round-trip times to isolate local Wi-Fi "
+                "latency from upstream latency."
+            ),
             (f"Measured round-trip time: {metrics.rtt_ms:.1f} ms",),
         ))
 
@@ -131,7 +147,10 @@ def diagnose_video_buffering(
             and metrics.dropped_frames_pct >= thresholds.dropped_frames_pct):
         findings.append(DiagnosticFinding(
             "local_decode_or_render_pressure", "medium", 0.73,
-            "Inspect browser/GPU process load and dropped-frame trend before changing network settings.",
+            (
+                "Inspect browser/GPU process load and dropped-frame trend before changing "
+                "network settings."
+            ),
             (f"System CPU: {metrics.cpu_pct:.1f}%",
              f"Dropped frames: {metrics.dropped_frames_pct:.1f}%"),
         ))
