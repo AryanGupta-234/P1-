@@ -1,6 +1,7 @@
 """SQLite-backed personal memory with explicit capture and local retrieval."""
 from __future__ import annotations
 
+import math
 import re
 import sqlite3
 from dataclasses import dataclass
@@ -42,6 +43,19 @@ class MemoryStore:
             )
             db.execute(
                 "CREATE INDEX IF NOT EXISTS idx_memories_expiry ON memories(expires_at)"
+            )
+            db.execute(
+                """CREATE TABLE IF NOT EXISTS memory_embeddings (
+                    memory_id TEXT NOT NULL,
+                    model TEXT NOT NULL,
+                    dimensions INTEGER NOT NULL,
+                    vector_json TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    PRIMARY KEY (memory_id, model)
+                )"""
+            )
+            db.execute(
+                "CREATE INDEX IF NOT EXISTS idx_memory_embeddings_model ON memory_embeddings(model)"
             )
 
     def _connect(self) -> sqlite3.Connection:
@@ -201,8 +215,139 @@ class MemoryStore:
         hits.sort(key=lambda hit: (hit.score, hit.memory.updated_at), reverse=True)
         return hits[:limit]
 
+    def has_embedding(self, memory_id: str, model: str) -> bool:
+        with self._connect() as db:
+            row = db.execute(
+                "SELECT 1 FROM memory_embeddings WHERE memory_id = ? AND model = ?",
+                (memory_id, model),
+            ).fetchone()
+        return row is not None
+
+    def save_embedding(
+        self,
+        memory_id: str,
+        model: str,
+        vector: list[float],
+    ) -> None:
+        """Store one local embedding for an active memory/model pair."""
+        if not isinstance(model, str) or not model.strip() or len(model) > 120:
+            raise ValueError("embedding model must be a non-empty name up to 120 characters")
+        memory = self.get(memory_id)
+        if memory is None:
+            raise ValueError("only active memories can be embedded")
+        if not isinstance(vector, list) or not 1 <= len(vector) <= 4096:
+            raise ValueError("embedding vectors must contain between 1 and 4096 values")
+        normalized: list[float] = []
+        for value in vector:
+            if isinstance(value, bool) or not isinstance(value, (int, float)):
+                raise ValueError("embedding values must be numeric")
+            number = float(value)
+            if not math.isfinite(number):
+                raise ValueError("embedding values must be finite")
+            normalized.append(number)
+        if math.sqrt(sum(value * value for value in normalized)) <= 1e-12:
+            raise ValueError("embedding vector cannot be zero")
+        now = datetime.now(timezone.utc).isoformat()
+        with self._connect() as db:
+            db.execute(
+                """INSERT INTO memory_embeddings
+                (memory_id, model, dimensions, vector_json, updated_at)
+                VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT(memory_id, model) DO UPDATE SET
+                    dimensions = excluded.dimensions,
+                    vector_json = excluded.vector_json,
+                    updated_at = excluded.updated_at""",
+                (
+                    memory_id,
+                    model,
+                    len(normalized),
+                    json.dumps(normalized, separators=(",", ":"), allow_nan=False),
+                    now,
+                ),
+            )
+
+    def search_semantic(
+        self,
+        vector: list[float],
+        *,
+        model: str,
+        kind: MemoryKind | None = None,
+        include_sensitive: bool = False,
+        limit: int = 10,
+        now: datetime | None = None,
+    ) -> list[MemorySearchHit]:
+        """Search stored local vectors using cosine similarity for one embedding model."""
+        if not 1 <= limit <= 100:
+            raise ValueError("limit must be between 1 and 100")
+        if not isinstance(model, str) or not model.strip():
+            raise ValueError("embedding model is required")
+        if not isinstance(vector, list) or not 1 <= len(vector) <= 4096:
+            raise ValueError("query vector must contain between 1 and 4096 values")
+        query: list[float] = []
+        for value in vector:
+            if isinstance(value, bool) or not isinstance(value, (int, float)):
+                raise ValueError("query embedding values must be numeric")
+            number = float(value)
+            if not math.isfinite(number):
+                raise ValueError("query embedding values must be finite")
+            query.append(number)
+        query_norm = math.sqrt(sum(value * value for value in query))
+        if query_norm <= 1e-12:
+            raise ValueError("query embedding cannot be zero")
+
+        eligible = self.list_memories(
+            kind=kind,
+            include_sensitive=include_sensitive,
+            limit=1000,
+            now=now,
+        )
+        records = {item.memory.memory_id: item.memory for item in eligible}
+        if not records:
+            return []
+        placeholders = ",".join("?" for _ in records)
+        parameters: list[object] = [model, *records.keys()]
+        with self._connect() as db:
+            rows = db.execute(
+                "SELECT memory_id, dimensions, vector_json FROM memory_embeddings "
+                f"WHERE model = ? AND memory_id IN ({placeholders})",
+                parameters,
+            ).fetchall()
+
+        hits: list[MemorySearchHit] = []
+        for memory_id, dimensions, raw_vector in rows:
+            if dimensions != len(query):
+                continue
+            try:
+                stored = json.loads(raw_vector)
+                if (
+                    not isinstance(stored, list)
+                    or len(stored) != len(query)
+                    or any(
+                        isinstance(value, bool)
+                        or not isinstance(value, (int, float))
+                        or not math.isfinite(float(value))
+                        for value in stored
+                    )
+                ):
+                    continue
+                values = [float(value) for value in stored]
+            except (TypeError, ValueError, json.JSONDecodeError):
+                continue
+            stored_norm = math.sqrt(sum(value * value for value in values))
+            if stored_norm <= 1e-12:
+                continue
+            cosine = sum(
+                left * right for left, right in zip(query, values, strict=True)
+            ) / (query_norm * stored_norm)
+            score = max(0.0, min(2.0, cosine + 1.0))
+            hits.append(MemorySearchHit(memory=records[memory_id], score=score))
+
+        hits.sort(key=lambda hit: (hit.score, hit.memory.updated_at), reverse=True)
+        return hits[:limit]
+
     def delete(self, memory_id: str) -> bool:
         with self._connect() as db:
+            db.execute("DELETE FROM memory_embeddings WHERE memory_id = ?", (memory_id,))
             cursor = db.execute("DELETE FROM memories WHERE memory_id = ?", (memory_id,))
             return cursor.rowcount > 0
 
@@ -218,11 +363,23 @@ class MemoryStore:
     def prune_expired(self, *, now: datetime | None = None) -> int:
         current = self._aware_utc(now or datetime.now(timezone.utc), "now")
         with self._connect() as db:
-            cursor = db.execute(
-                "DELETE FROM memories WHERE expires_at IS NOT NULL AND expires_at <= ?",
+            expired = db.execute(
+                "SELECT memory_id FROM memories WHERE expires_at IS NOT NULL AND expires_at <= ?",
                 (current.isoformat(),),
-            )
-            return int(cursor.rowcount)
+            ).fetchall()
+            ids = [row[0] for row in expired]
+            if ids:
+                placeholders = ",".join("?" for _ in ids)
+                db.execute(
+                    f"DELETE FROM memory_embeddings WHERE memory_id IN ({placeholders})",
+                    ids,
+                )
+                cursor = db.execute(
+                    f"DELETE FROM memories WHERE memory_id IN ({placeholders})",
+                    ids,
+                )
+                return int(cursor.rowcount)
+            return 0
 
     def count(self, *, include_superseded: bool = True) -> int:
         where = "" if include_superseded else " WHERE status = 'active'"
