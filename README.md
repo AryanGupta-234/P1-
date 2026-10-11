@@ -29,6 +29,7 @@ py -3.11 -m venv .venv
 python -m pip install -e ".[dev]"
 aie doctor
 aie inventory
+aie status
 aie observe --duration 30
 aie observe --duration 60 --network-interval 30
 # Disable network probes when needed:
@@ -55,6 +56,9 @@ git switch -c feat/<short-scope>
 git push -u origin feat/<short-scope>
 ```
 Open PRs against `dev`, not `main`.
+
+## Observer controls
+Use `aie pause` to pause all running observer loops for the current Windows user, `aie resume` to resume them, and `aie status` to inspect pause state and local event count. Pausing does not erase retained events.
 
 ## Browser playback observer
 The opt-in Chrome/Edge extension prototype is in `browser_extension/`. Load it unpacked, then register its Windows native host using `scripts/register-native-host.ps1`. See [Video Intelligence setup](docs/VIDEO_INTELLIGENCE.md). Monitoring defaults to off.
