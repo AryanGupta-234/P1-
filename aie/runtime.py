@@ -91,21 +91,22 @@ def observe(
                 next_network = now + network_interval
 
             total += store.append_many(events)
-            if diagnostic_monitor is not None:
-                diagnostic_events = diagnostic_monitor.poll()
-                if diagnostic_events:
-                    total += store.append_many(diagnostic_events)
-                    if output:
-                        for event in diagnostic_events:
-                            output.write(event.model_dump_json() + "\\n")
-                        output.flush()
-                    if on_diagnostic is not None:
-                        for event in diagnostic_events:
-                            on_diagnostic(event)
+            diagnostic_events = (
+                diagnostic_monitor.poll()
+                if diagnostic_monitor is not None
+                else []
+            )
+            if diagnostic_events:
+                total += store.append_many(diagnostic_events)
+
             if output:
-                for event in events:
-                    output.write(event.model_dump_json() + "\n")
+                for event in [*events, *diagnostic_events]:
+                    output.write(event.model_dump_json() + "\\n")
                 output.flush()
+
+            if on_diagnostic is not None:
+                for event in diagnostic_events:
+                    on_diagnostic(event)
 
             remaining = deadline - time.monotonic()
             if remaining > 0:
