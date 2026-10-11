@@ -13,7 +13,14 @@ from rich.console import Console
 from rich.table import Table
 
 from aie import __version__
-from aie.config import (\n    capability_manifest_dir,\n    database_path,\n    memory_database_path,\n    observer_is_paused,\n    policy_audit_database_path,\n    set_observer_paused,\n)
+from aie.config import (
+    capability_manifest_dir,
+    database_path,
+    memory_database_path,
+    observer_is_paused,
+    policy_audit_database_path,
+    set_observer_paused,
+)
 from aie.hardware import runtime_profile
 from aie.model_policy import choose_local_model, discover_local_models
 from aie.store import EventStore
