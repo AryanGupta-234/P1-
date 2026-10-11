@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections import Counter
+from uuid import NAMESPACE_URL, uuid5
 
 from aie.models.base import ChatMessage, ModelRequest
 from aie.orchestration.engine import HandlerResult, StepContext
@@ -203,13 +204,35 @@ class PolicyProposalHandler:
                 "Advance again with --setting display|sound|bluetooth|network|"
                 "windows_update|apps|privacy. The model cannot choose this parameter."
             )
+        proposal_id = str(
+            uuid5(
+                NAMESPACE_URL,
+                f"aie-task-proposal:{context.run_id}:{step.step_id}",
+            )
+        )
         proposal = ActionProposal(
+            proposal_id=proposal_id,
             capability_id=step.capability_id,
             summary=step.description,
             parameters=parameters,
             source=f"task:{context.run_id}",
         )
-        snapshot = self.queue.create(proposal, self.broker)
+        existing = self.ledger.get(proposal_id)
+        if existing is not None:
+            if (
+                existing.proposal.capability_id != proposal.capability_id
+                or existing.proposal.summary != proposal.summary
+                or existing.proposal.parameters != proposal.parameters
+                or existing.proposal.source != proposal.source
+            ):
+                return HandlerResult.failed(
+                    "proposal_idempotency_conflict",
+                    "A deterministic proposal ID exists with different request data; "
+                    "operator review is required.",
+                )
+            snapshot = existing
+        else:
+            snapshot = self.queue.create(proposal, self.broker)
         if snapshot.status == "blocked":
             return HandlerResult.failed(
                 "policy_blocked",
