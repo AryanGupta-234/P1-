@@ -55,6 +55,7 @@ Build persistent personal intelligence that observes explicitly permitted signal
 - Opt-in bounded systemwide process CPU/RSS/thread/I/O snapshots, reporting top consumers only.
 - Bounded network interface counters, TCP connection-establishment latency and DNS resolution timing.
 - Opt-in metadata-only Application/System Event Log reader, wired into the observer runtime. It skips historical backlog on startup and excludes message text, XML and Security logs.
+- Privacy-safe observer health telemetry with per-provider latency, success/error, consecutive-failure and event-loss accounting; health records exclude exception text and provider payloads.
 - Opt-in, allowlisted UI Automation structural snapshots with node/depth/time bounds.
 - Per-user pause/resume and age-based event pruning.
 
@@ -100,7 +101,7 @@ Build persistent personal intelligence that observes explicitly permitted signal
 - Windows tray/desktop assistant UI.
 
 ## Immediate engineering sequence
-1. Validate the unified activity and explicit memory layers on Windows CI.
+1. Validate the unified activity, explicit memory and observer-health layers on Windows CI.
 2. Validate browser/native-host, UIA and Event Log sampling on the target Windows desktop.
 3. Add ETW process telemetry with coverage and buffer-loss reporting.
 4. Extend the activity timeline into a user-controlled task/session model.
