@@ -106,13 +106,27 @@ class ObserverHealthTracker:
                 unknown_loss=any(event.event_type.endswith(".sequence_reset") for event in failures),
             )
         else:
-            transition = self._record(
-                provider,
-                status="healthy",
-                reason_code="collection_ok",
-                events=len(events),
-                duration_ms=duration_ms,
-            )
+            previous = self._states.get(provider)
+            if previous is not None and previous.status == "degraded" and not events:
+                # Empty polls are not proof of recovery; wait for a positive observation
+                # or an explicit provider-recovered event from the sensor.
+                transition = self._record(
+                    provider,
+                    status="degraded",
+                    reason_code=previous.reason_code,
+                    events=0,
+                    duration_ms=duration_ms,
+                    error_type=previous.last_error_type,
+                    count_failure=False,
+                )
+            else:
+                transition = self._record(
+                    provider,
+                    status="healthy",
+                    reason_code="collection_ok",
+                    events=len(events),
+                    duration_ms=duration_ms,
+                )
         if transition:
             events.append(transition)
         return events
@@ -142,6 +156,7 @@ class ObserverHealthTracker:
         error_type: str | None = None,
         dropped_records: int = 0,
         unknown_loss: bool = False,
+        count_failure: bool = True,
     ) -> AIEEvent | None:
         state = self._states.setdefault(provider, _ProviderState())
         previous_status = state.status
@@ -153,12 +168,13 @@ class ObserverHealthTracker:
         now = self._utcnow().astimezone(timezone.utc).isoformat()
 
         if status == "degraded":
-            state.failures += 1
-            state.consecutive_failures += 1
-            state.last_failure_at = now
-            state.last_error_type = error_type or "ProviderReportedError"
-            state.dropped_records += dropped_records
-            state.unknown_loss_incidents += int(unknown_loss)
+            if count_failure:
+                state.failures += 1
+                state.consecutive_failures += 1
+                state.last_failure_at = now
+                state.last_error_type = error_type or "ProviderReportedError"
+                state.dropped_records += dropped_records
+                state.unknown_loss_incidents += int(unknown_loss)
         else:
             state.consecutive_failures = 0
             state.last_success_at = now
