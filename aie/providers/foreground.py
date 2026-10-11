@@ -153,7 +153,12 @@ class WindowsForegroundProvider:
                     cpu_pct = None
                 else:
                     cpu_value = process.cpu_percent(interval=None)
-                    cpu_pct = float(cpu_value) if cpu_value is not None else None
+                    logical_cpus = max(1, psutil.cpu_count(logical=True) or 1)
+                    cpu_pct = (
+                        min(100.0, max(0.0, float(cpu_value) / logical_cpus))
+                        if cpu_value is not None
+                        else None
+                    )
 
             try:
                 memory_rss_bytes = int(process.memory_info().rss)
