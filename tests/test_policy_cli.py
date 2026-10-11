@@ -1,5 +1,6 @@
 import json
 import re
+import sqlite3
 
 from typer.testing import CliRunner
 
@@ -117,3 +118,39 @@ def test_sensitive_memory_context_is_never_sent_to_remote_provider():
 
     assert result.exit_code == 2
     assert "Sensitive memories cannot be attached" in result.output
+
+
+def test_policy_audit_check_cli_verifies_hash_chain(tmp_path, monkeypatch):
+    runner, _, audit_path = runner_with_paths(tmp_path, monkeypatch)
+    result = runner.invoke(
+        cli.app,
+        ["propose", "unknown.capability", "Audit CLI check."],
+    )
+    assert result.exit_code == 0, result.output
+
+    checked = runner.invoke(cli.app, ["policy-audit-check"])
+
+    assert checked.exit_code == 0, checked.output
+    assert "verified" in checked.output.lower()
+    assert "1 entries checked" in checked.output
+
+
+def test_policy_audit_check_cli_fails_after_database_payload_edit(tmp_path, monkeypatch):
+    runner, _, audit_path = runner_with_paths(tmp_path, monkeypatch)
+    created = runner.invoke(
+        cli.app,
+        ["propose", "unknown.capability", "Tamper detection check."],
+    )
+    assert created.exit_code == 0, created.output
+    proposal = PolicyLedger(audit_path).list(status="blocked")[0]
+
+    with sqlite3.connect(audit_path) as db:
+        db.execute(
+            "UPDATE audit_events SET payload = ? WHERE proposal_id = ?",
+            ('{"tampered":true}', proposal.proposal.proposal_id),
+        )
+
+    checked = runner.invoke(cli.app, ["policy-audit-check"])
+
+    assert checked.exit_code == 1
+    assert "integrity failure" in checked.output.lower()
