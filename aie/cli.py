@@ -17,6 +17,8 @@ from aie.config import (
     capability_manifest_dir,
     database_path,
     egress_audit_database_path,
+    execution_enabled_path,
+    execution_kill_switch_path,
     memory_database_path,
     observer_is_paused,
     policy_audit_database_path,
@@ -1509,6 +1511,127 @@ def policy_audit_check() -> None:
         f"Sequence {report.first_invalid_sequence}: {report.reason}"
     )
     raise typer.Exit(1)
+
+
+
+@app.command("execution-enable")
+def execution_enable(
+    confirm: bool = typer.Option(False, "--confirm", help="Confirm enabling registered capability adapters."),
+) -> None:
+    """Enable the explicit execution gate; disabled by default."""
+    from aie.policy.execution_control import ExecutionControl
+
+    if not confirm:
+        console.print("[yellow]Pass --confirm to enable the execution gate.[/yellow]")
+        raise typer.Exit(2)
+    control = ExecutionControl(
+        enabled_path=execution_enabled_path(),
+        kill_switch_path=execution_kill_switch_path(),
+    )
+    control.set_enabled(True)
+    console.print("[green]Execution gate enabled.[/green] The global kill switch still overrides it.")
+
+
+@app.command("execution-disable")
+def execution_disable() -> None:
+    """Disable all capability execution through the local execution gate."""
+    from aie.policy.execution_control import ExecutionControl
+
+    control = ExecutionControl(
+        enabled_path=execution_enabled_path(),
+        kill_switch_path=execution_kill_switch_path(),
+    )
+    control.set_enabled(False)
+    console.print("[green]Execution gate disabled.[/green]")
+
+
+@app.command("execution-kill")
+def execution_kill() -> None:
+    """Activate the global execution kill switch immediately."""
+    from aie.policy.execution_control import ExecutionControl
+
+    control = ExecutionControl(
+        enabled_path=execution_enabled_path(),
+        kill_switch_path=execution_kill_switch_path(),
+    )
+    control.set_kill_switch(True)
+    console.print("[red]Global execution kill switch is active.[/red]")
+
+
+@app.command("execution-resume")
+def execution_resume(
+    confirm: bool = typer.Option(False, "--confirm", help="Confirm clearing the execution kill switch."),
+) -> None:
+    """Clear the kill switch; the positive execution-enable marker is still required."""
+    from aie.policy.execution_control import ExecutionControl
+
+    if not confirm:
+        console.print("[yellow]Pass --confirm to clear the kill switch.[/yellow]")
+        raise typer.Exit(2)
+    control = ExecutionControl(
+        enabled_path=execution_enabled_path(),
+        kill_switch_path=execution_kill_switch_path(),
+    )
+    control.set_kill_switch(False)
+    console.print("[green]Kill switch cleared.[/green] Execution remains disabled unless separately enabled.")
+
+
+@app.command("execute-proposal")
+def execute_approved_proposal(
+    proposal_id: str = typer.Argument(...),
+    confirm: bool = typer.Option(False, "--confirm", help="Confirm this specific approved action."),
+) -> None:
+    """Execute one approved proposal through a registered safe adapter."""
+    from aie.policy.capabilities import (
+        CapabilityRegistry,
+        PolicyControlledExecutor,
+    )
+    from aie.policy.broker import CapabilityPolicyBroker
+    from aie.policy.execution_control import ExecutionControl
+    from aie.policy.ledger import PolicyLedger
+    from aie.policy.manifests import (
+        CapabilityManifestLoadError,
+        load_capability_manifests,
+    )
+
+    if not confirm:
+        console.print("[yellow]Pass --confirm to execute this specific proposal.[/yellow]")
+        raise typer.Exit(2)
+    try:
+        manifests = load_capability_manifests(capability_manifest_dir())
+        executor = PolicyControlledExecutor(
+            broker=CapabilityPolicyBroker(manifests),
+            ledger=PolicyLedger(policy_audit_database_path()),
+            manifests=manifests,
+            registry=CapabilityRegistry.windows_safe_defaults(),
+            control=ExecutionControl(
+                enabled_path=execution_enabled_path(),
+                kill_switch_path=execution_kill_switch_path(),
+            ),
+        )
+        receipt = executor.execute(proposal_id)
+    except (ValueError, PermissionError, RuntimeError, CapabilityManifestLoadError) as exc:
+        console.print(f"[red]Execution denied:[/red] {type(exc).__name__}: {exc}")
+        raise typer.Exit(2) from exc
+
+    color = "green" if receipt.status == "succeeded" else "red"
+    console.print(
+        f"[{color}]{receipt.status}[/{color}] · "
+        f"Executed: {receipt.executed} · Verified: {receipt.verified}"
+    )
+    console.print(f"{receipt.capability_id}: {receipt.summary}")
+    console.print(
+        "[dim]The execution receipt was appended to the local policy audit ledger. "
+        "A successful dispatch is not proof of the target application's postcondition.[/dim]"
+    )
+    if receipt.status != "succeeded":
+        raise typer.Exit(1)
+
+
+from aie.orchestration.cli import plan_app as _plan_app, task_app as _task_app
+
+app.add_typer(_plan_app, name="plan")
+app.add_typer(_task_app, name="task")
 
 
 if __name__ == "__main__":
