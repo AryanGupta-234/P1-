@@ -70,7 +70,7 @@ def test_activity_sessions_split_by_host_and_time_gap():
 
 def test_activity_ignores_stale_future_naive_and_sensitive_events_by_default():
     now = datetime(2026, 10, 11, 12, 0, tzinfo=timezone.utc)
-    stale = make_event("stale", 10_000, "host.snapshot")
+    stale = make_event("stale", 100_000, "host.snapshot")
     future = AIEEvent(
         event_id="future",
         timestamp=now + timedelta(seconds=10),
