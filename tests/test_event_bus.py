@@ -34,7 +34,7 @@ def test_publish_preserves_order_and_calls_sinks_in_registration_order():
 
     handled = bus.publish([event("a"), event("b")])
 
-    assert handled == 4
+    assert handled == {"first": 2, "second": 2}
     assert bus.sink_names == ("first", "second")
     assert calls == [
         ("first", ["a", "b"]),
