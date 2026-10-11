@@ -27,7 +27,7 @@ jobs:
       - name: Lint
         run: python -m ruff check .
       - name: Validate Windows-only optional imports
-        run: python -c "import pywinauto; import win32evtlog; from aie.browser.native_host import event_from_browser_payload; from aie.providers.uia import WindowsUIATreeProvider; from aie.providers.eventlog import WindowsEventLogProvider"
+        run: python -c "import pywinauto; import win32evtlog; from aie.providers.process_resources import WindowsProcessResourceProvider; from aie.browser.native_host import event_from_browser_payload; from aie.providers.uia import WindowsUIATreeProvider; from aie.providers.eventlog import WindowsEventLogProvider"
       - name: Validate PowerShell helper syntax
         shell: pwsh
         run: |
