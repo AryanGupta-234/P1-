@@ -69,6 +69,11 @@ def egress_audit_database_path() -> Path:
     return data_dir() / "egress-audit.sqlite3"
 
 
+def notification_preferences_path() -> Path:
+    """Private local JSON preferences for optional desktop notifications."""
+    return data_dir() / "notifications.json"
+
+
 def execution_enabled_path() -> Path:
     """Positive marker required before any future mutating executor may run."""
     return data_dir() / "execution.enabled"
