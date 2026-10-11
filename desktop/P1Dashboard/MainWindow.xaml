@@ -21,7 +21,7 @@
                         </Border>
                         <StackPanel Margin="11,1,0,0">
                             <TextBlock Text="P1-" FontSize="20" FontWeight="Bold"/>
-                            <TextBlock Text="PERSONAL INTELLIGENCE" FontSize="8" Foreground="{StaticResource TextMutedBrush}" CharacterSpacing="1.2"/>
+                            <TextBlock Text="PERSONAL INTELLIGENCE" FontSize="8" Foreground="{StaticResource TextMutedBrush}"/>
                         </StackPanel>
                     </StackPanel>
 
