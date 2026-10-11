@@ -2,7 +2,7 @@
 
 Statuses: DONE / IN_PROGRESS / BLOCKED / PLANNED. Mark DONE only with code, tests and validation evidence.
 
-**Last updated:** 2026-10-11 | **Target integration:** `dev` | **Current feature branch:** `feat/agent-orchestration-core` | **Current PR:** [#16](https://github.com/AryanGupta-234/P1-/pull/16) draft; CI rerun pending
+**Last updated:** 2026-10-11 | **Target integration:** `dev` | **Current feature branch:** `feat/agent-orchestration-core` | **Current PR:** [#16](https://github.com/AryanGupta-234/P1-/pull/16) draft; Windows CI run [#1041](https://github.com/AryanGupta-234/P1-/actions/runs/38151881805) passed
 
 | ID | Workstream | Status | Exit criteria |
 |---|---|---|---|
@@ -25,7 +25,9 @@ Statuses: DONE / IN_PROGRESS / BLOCKED / PLANNED. Mark DONE only with code, test
 - [x] Hosted Windows CI on Python 3.11/3.12 with Ruff, optional Windows imports, PowerShell syntax, JS syntax and pytest.
 - [x] Hosted Windows CI also compiles the .NET 8 WPF dashboard; this verifies the build, not interactive behavior on the target desktop.
 - [x] Event Log runtime integration, ETW lifecycle/loss accounting, systemwide process telemetry and privacy controls validated in hosted Windows CI run #581 (Python 3.11/3.12).
-- [ ] Dependency/security scanning and reproducible release packaging.
+- [x] Installed-dependency vulnerability audit in Windows CI with `pip-audit`; weekly Dependabot checks for Python and GitHub Actions updates.
+- [x] Windows CI builds wheel and source distributions, validates metadata with Twine, and uploads short-lived artifacts.
+- [ ] Pinned/hash-verified dependency lock and signed, reproducible release provenance.
 
 ## M1 — Windows perception
 - [x] Host/process snapshot inventory and best-effort process lifecycle observations.
