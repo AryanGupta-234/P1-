@@ -23,7 +23,7 @@ Statuses: DONE / IN_PROGRESS / BLOCKED / PLANNED. Mark DONE only with code, test
 - [x] Read-only inventory and process reconciliation.
 - [x] ARC Architecture Spotlight, roadmap and contribution guide.
 - [x] Hosted Windows CI on Python 3.11/3.12 with Ruff, optional Windows imports, PowerShell syntax, JS syntax and pytest.
-- [x] Event Log runtime integration and systemwide process telemetry validated in hosted Windows CI run #448 (Python 3.11/3.12).
+- [x] Event Log runtime integration, ETW lifecycle/loss accounting, systemwide process telemetry and privacy controls validated in hosted Windows CI run #581 (Python 3.11/3.12).
 - [ ] Dependency/security scanning and reproducible release packaging.
 
 ## M1 — Windows perception
@@ -35,12 +35,13 @@ Statuses: DONE / IN_PROGRESS / BLOCKED / PLANNED. Mark DONE only with code, test
 - [x] Event Log provider wired into observer runtime with bounded polling and per-pass record cap.
 - [x] Opt-in allowlisted UI Automation structural tree sampler with node/depth/time bounds.
 - [x] Global per-user observer pause/resume, status and age-based retention pruning.
-- [ ] ETW process telemetry and provider-level event-loss reporting.
+- [x] Opt-in ETW process lifecycle telemetry with bounded queue and provider-reported loss accounting.
 - [x] Opt-in bounded systemwide process CPU/RSS/thread/I/O snapshots; top consumers only, no command lines or executable paths.
-- [ ] Disk/network per-process deltas and provider-level event-loss accounting.
+- [ ] Disk/network per-process deltas and higher-fidelity provider coverage.
 - [x] Privacy-safe observer health telemetry with provider latency/error counters and event-loss hooks.
-- [x] `aie health` view for provider errors, latency and event-loss counters.
-- [ ] Export/delete-all controls and richer observer health UI.
+- [x] `aie health` CLI view for provider errors, latency and event-loss counters.
+- [x] Explicit JSONL export and confirm-only delete-all controls; sensitive export requires an explicit opt-in.
+- [ ] Rich observer health desktop UI.
 - [ ] Validate ETW elevation, Event Log/UIA permissions and data collection on the target Windows desktop.
 
 ## M1.5 — Video intelligence
@@ -66,6 +67,7 @@ Statuses: DONE / IN_PROGRESS / BLOCKED / PLANNED. Mark DONE only with code, test
 - [x] Safe activity-summary context packager for explicit per-request model inclusion; remote inclusion requires separate confirmation.
 - [ ] Unified event bus and general temporal correlation.
 - [x] Initial temporal activity session model with explicit time-gap boundaries.
+- [x] Explicit user-controlled task/session state with opt-in model-context packaging and CLI lifecycle controls.
 - [ ] Semantic task/session state and evidence contradiction handling.
 - [ ] Evidence freshness, contradiction handling and calibrated confidence.
 - [ ] User-approved profile and personalization controls.
@@ -126,10 +128,10 @@ Statuses: DONE / IN_PROGRESS / BLOCKED / PLANNED. Mark DONE only with code, test
 - [ ] Desktop UI after core telemetry and policy APIs stabilize.
 
 ## Immediate dev sprint
-1. Verify the combined activity, memory, Event Log and observer-health runtime tests on the current Windows CI matrix.
-2. Add observer health telemetry for permission errors, sensor timeouts and event loss.
-3. Validate browser/native-host, UIA and Event Log behavior on the target Windows desktop.
-4. Extend ETW categories with explicit coverage boundaries and measured event-loss behavior.
+1. Keep target-desktop validation for browser/native-host, UIA, Event Log and ETW elevation as the primary validation gate.
+2. Extend ETW from process lifecycle into explicitly selected thread/file/network categories with coverage reporting.
+3. Add evidence freshness, contradiction handling and calibrated confidence to the context layer.
+4. Add memory consolidation with evaluated retrieval/forgetting and reviewed skill induction.
 5. Update this tracker and Architecture Spotlight with each implementation increment.
 
 ## Risk register
