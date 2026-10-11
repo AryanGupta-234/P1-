@@ -11,6 +11,7 @@ from aie.diagnostics.monitor import VideoDiagnosticMonitor
 from aie.providers.foreground import WindowsForegroundProvider
 from aie.providers.eventlog import WindowsEventLogProvider
 from aie.providers.network import WindowsNetworkProvider
+from aie.providers.process_resources import WindowsProcessResourceProvider
 from aie.providers.windows import WindowsProvider
 from aie.providers.uia import WindowsUIATreeProvider
 from aie.config import observer_is_paused
@@ -39,6 +40,9 @@ def observe(
     event_log_channels: tuple[str, ...] = ("Application", "System"),
     event_log_interval: float = 30.0,
     event_log_max_records: int = 50,
+    include_process_resources: bool = False,
+    process_resource_interval: float = 10.0,
+    process_resource_max_processes: int = 256,
 ) -> int:
     """Persist read-only system, foreground-app and bounded network observations."""
     if duration < 1:
@@ -59,6 +63,10 @@ def observe(
         raise ValueError("event_log_interval must be between 5 and 300 seconds")
     if include_event_logs and not 1 <= event_log_max_records <= 200:
         raise ValueError("event_log_max_records must be between 1 and 200")
+    if include_process_resources and not 2.0 <= process_resource_interval <= 300.0:
+        raise ValueError("process_resource_interval must be between 2 and 300 seconds")
+    if include_process_resources and not 1 <= process_resource_max_processes <= 512:
+        raise ValueError("process_resource_max_processes must be between 1 and 512")
 
     provider = WindowsProvider()
     network_provider = WindowsNetworkProvider() if include_network else None
@@ -68,6 +76,14 @@ def observe(
             resource_sample_interval=foreground_sample_interval,
         )
         if include_foreground
+        else None
+    )
+    process_resource_provider = (
+        WindowsProcessResourceProvider(
+            max_processes=process_resource_max_processes,
+            sample_interval=process_resource_interval,
+        )
+        if include_process_resources
         else None
     )
     event_log_provider = (
@@ -99,6 +115,7 @@ def observe(
     deadline = time.monotonic() + duration
     next_network = 0.0
     next_event_log = 0.0
+    next_process_resources = 0.0
     total = 0
 
     if jsonl_path:
@@ -128,6 +145,9 @@ def observe(
             if event_log_provider is not None and now >= next_event_log:
                 events.extend(event_log_provider.collect_snapshot())
                 next_event_log = now + event_log_interval
+            if process_resource_provider is not None and now >= next_process_resources:
+                events.extend(process_resource_provider.collect_snapshot())
+                next_process_resources = now + process_resource_interval
 
             total += store.append_many(events)
             diagnostic_events = (
