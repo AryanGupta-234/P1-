@@ -13,6 +13,7 @@ from rich.table import Table
 from aie.config import (
     capability_manifest_dir,
     database_path,
+    memory_database_path,
     policy_audit_database_path,
     task_run_database_path,
 )
