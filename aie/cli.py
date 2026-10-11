@@ -29,6 +29,56 @@ from aie.store import EventStore
 app = typer.Typer(no_args_is_help=True, help="AIE Windows-first environment observer.")
 console = Console()
 
+@app.command("health")
+def observer_health() -> None:
+    """Show the latest privacy-safe observer health snapshot."""
+    store = EventStore(database_path())
+    event = next(
+        (item for item in store.recent(500) if item.event_type == "observer.health"),
+        None,
+    )
+    if event is None:
+        console.print("No observer health snapshot is stored yet.")
+        return
+
+    providers = event.data.get("providers")
+    if not isinstance(providers, dict):
+        console.print("Observer health record is malformed.")
+        return
+
+    table = Table(
+        "Provider",
+        "State",
+        "Samples",
+        "Errors",
+        "Loss",
+        "Events",
+        "Avg latency",
+        "Last error",
+    )
+    for name, value in sorted(providers.items()):
+        if not isinstance(value, dict):
+            continue
+        table.add_row(
+            str(name),
+            str(value.get("state", "unknown")),
+            str(value.get("samples_attempted", 0)),
+            str(value.get("errors", 0)),
+            str(value.get("event_loss", 0)),
+            str(value.get("events_emitted", 0)),
+            (
+                "unknown"
+                if value.get("average_latency_ms") is None
+                else f"{value['average_latency_ms']:.1f} ms"
+            ),
+            str(value.get("last_error_type") or "-"),
+        )
+    console.print(table)
+    console.print(
+        f"Snapshot: {event.timestamp.isoformat()} · "
+        f"Runtime: {event.data.get('runtime_seconds', 'unknown')}s"
+    )
+
 
 @app.command()
 def version() -> None:
