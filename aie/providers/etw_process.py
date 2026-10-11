@@ -315,9 +315,10 @@ class WindowsETWProcessProvider:
         xml_path = workspace / "process.xml"
         summary_path = workspace / "summary.txt"
         started = False
+        start_uncertain = False
         stopped = False
+        cleanup_attempted = False
         started_at = self._monotonic()
-        capture_error: ETWProcessCaptureError | None = None
 
         try:
             start_command = [
@@ -327,7 +328,11 @@ class WindowsETWProcessProvider:
                 "-o", str(etl_path), "-f", "bincirc", "-max", str(MAX_TRACE_MIB),
                 "-bs", "16", "-nb", "2", "8", "-ft", "5", "-ets",
             ]
-            result = self._run(start_command, timeout=20.0)
+            try:
+                result = self._run(start_command, timeout=20.0)
+            except ETWProcessCaptureError as exc:
+                start_uncertain = exc.reason_code == "command_timeout"
+                raise
             if result.returncode != 0:
                 raise ETWProcessCaptureError(
                     "session_start_failed", return_code=result.returncode,
@@ -337,16 +342,17 @@ class WindowsETWProcessProvider:
             started_at = self._monotonic()
             self._sleep(float(duration_seconds))
 
-            if not self._stop_owned_session(session_name):
-                if not self._stop_owned_session(session_name):
-                    capture_error = ETWProcessCaptureError(
-                        "session_stop_failed",
-                        session_name=session_name,
-                        recovery_command=f"logman stop {session_name} -ets",
-                        workspace=str(workspace),
-                    )
-                    raise capture_error
-            stopped = True
+            cleanup_attempted = True
+            stopped = self._stop_owned_session(session_name)
+            if not stopped:
+                stopped = self._stop_owned_session(session_name)
+            if not stopped:
+                raise ETWProcessCaptureError(
+                    "session_stop_failed",
+                    session_name=session_name,
+                    recovery_command=f"logman stop {session_name} -ets",
+                    workspace=str(workspace),
+                )
 
             if not etl_path.is_file():
                 raise ETWProcessCaptureError("etl_file_missing", session_name=session_name)
@@ -397,8 +403,18 @@ class WindowsETWProcessProvider:
         except BaseException:
             raise
         finally:
-            if started and not stopped:
+            if (started or start_uncertain) and not stopped and not cleanup_attempted:
+                cleanup_attempted = True
                 stopped = self._stop_owned_session(session_name)
-            if stopped or not started:
+                if not stopped:
+                    stopped = self._stop_owned_session(session_name)
+                if not stopped:
+                    raise ETWProcessCaptureError(
+                        "session_cleanup_unconfirmed",
+                        session_name=session_name,
+                        recovery_command=f"logman stop {session_name} -ets",
+                        workspace=str(workspace),
+                    )
+            if stopped or (not started and not start_uncertain):
                 shutil.rmtree(workspace, ignore_errors=True)
 
