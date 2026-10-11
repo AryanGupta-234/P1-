@@ -69,6 +69,8 @@ class MemoryRecord(BaseModel):
         for name in ("created_at", "updated_at"):
             if getattr(self, name).tzinfo is None:
                 raise ValueError(f"{name} must be timezone-aware")
+        if self.updated_at < self.created_at:
+            raise ValueError("updated_at must not be earlier than created_at")
         if self.expires_at is not None:
             if self.expires_at.tzinfo is None:
                 raise ValueError("expires_at must be timezone-aware")
