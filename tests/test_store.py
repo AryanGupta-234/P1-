@@ -56,3 +56,53 @@ def test_retention_rejects_naive_cutoff(tmp_path):
         store.count_before(datetime(2026, 1, 1))
     with pytest.raises(ValueError):
         store.delete_before(datetime(2026, 1, 1))
+
+
+from datetime import datetime, timedelta, timezone
+
+import pytest
+
+from aie.contracts import AIEEvent, EntityRef
+from aie.store import EventStore
+
+
+def query_event(event_id, seconds_ago, event_type, source):
+    return AIEEvent(
+        event_id=event_id,
+        timestamp=datetime.now(timezone.utc) - timedelta(seconds=seconds_ago),
+        host_id="test",
+        source=source,
+        event_type=event_type,
+        entity=EntityRef(type="test", name=event_id),
+    )
+
+
+def test_query_events_filters_by_time_type_and_source(tmp_path):
+    store = EventStore(tmp_path / "query.sqlite3")
+    store.append_many([
+        query_event("browser-old", 3600, "browser.video.snapshot", "browser.extension"),
+        query_event("browser-new", 10, "browser.video.snapshot", "browser.extension"),
+        query_event("net-new", 5, "network.external_probe", "windows.network"),
+    ])
+
+    results = store.query_events(
+        since=datetime.now(timezone.utc) - timedelta(minutes=5),
+        event_types=("browser.video.snapshot", "network.external_probe"),
+        sources=("browser.extension",),
+        limit=10,
+    )
+
+    assert [item.event_id for item in results] == ["browser-new"]
+
+
+def test_query_events_rejects_naive_or_inverted_time_windows(tmp_path):
+    store = EventStore(tmp_path / "query-validation.sqlite3")
+    naive = datetime(2026, 10, 11, 12, 0)
+    aware = datetime(2026, 10, 11, 12, 0, tzinfo=timezone.utc)
+
+    with pytest.raises(ValueError, match="timezone-aware"):
+        store.query_events(since=naive)
+    with pytest.raises(ValueError, match="not be later"):
+        store.query_events(since=aware, until=aware - timedelta(seconds=1))
+    with pytest.raises(ValueError, match="limit"):
+        store.query_events(limit=0)
