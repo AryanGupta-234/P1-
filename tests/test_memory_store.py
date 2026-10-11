@@ -40,7 +40,7 @@ def test_sensitive_memories_are_excluded_from_retrieval_by_default(tmp_path):
 
 def test_expired_memories_are_hidden_and_can_be_pruned(tmp_path):
     store = MemoryStore(tmp_path / "expiry.sqlite3")
-    now = datetime(2026, 10, 11, 12, 0, tzinfo=timezone.utc)
+    now = datetime.now(timezone.utc)
     expiring = store.save(MemoryRecord(
         kind="working",
         content="Temporary task context.",
