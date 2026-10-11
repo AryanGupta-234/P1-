@@ -441,6 +441,16 @@ def ask(
         "--allow-cloud-egress",
         help="Explicitly authorize sending this prompt to the configured HTTPS cloud provider.",
     ),
+    with_activity: bool = typer.Option(
+        False,
+        "--with-activity/--no-activity",
+        help="Explicitly attach a bounded safe activity summary to this request.",
+    ),
+    activity_lookback_minutes: int = typer.Option(120, min=1, max=1440),
+    confirm_activity_egress: bool = typer.Option(
+        False,
+        help="Confirm sending safe activity summaries to a remote model endpoint.",
+    ),
     with_memory: bool = typer.Option(
         False,
         "--with-memory/--no-memory",
@@ -465,6 +475,9 @@ def ask(
 
     memory_ids: tuple[str, ...] = ()
     remote_selected = provider == "cloud" or allow_remote_ollama
+    if with_activity and remote_selected and not confirm_activity_egress:
+        console.print("[red]Attaching activity context to a remote model needs --confirm-activity-egress.[/red]")
+        raise typer.Exit(2)
     if include_sensitive_memory and not with_memory:
         console.print("[red]--include-sensitive-memory requires --with-memory.[/red]")
         raise typer.Exit(2)
@@ -478,6 +491,17 @@ def ask(
         raise typer.Exit(2)
 
     messages = [ChatMessage(role="user", content=prompt)]
+    activity_event_count = 0
+    if with_activity:
+        from aie.context.activity_context import build_activity_prompt_context
+
+        activity_context = build_activity_prompt_context(
+            EventStore(database_path()),
+            lookback_minutes=activity_lookback_minutes,
+        )
+        activity_event_count = len(activity_context.event_ids)
+        if activity_context.content:
+            messages.insert(0, ChatMessage(role="system", content=activity_context.content))
     if with_memory:
         from aie.memory.prompt_context import build_memory_prompt_context
         from aie.memory.store import MemoryStore
@@ -523,12 +547,17 @@ def ask(
         if with_memory
         else ""
     )
+    activity_note = (
+        f" · Activity signals: {activity_event_count} (explicit opt-in)"
+        if with_activity
+        else ""
+    )
     console.print(
         f"\n[dim]Model: {response.model} · "
         f"Elapsed: {response.elapsed_seconds:.2f}s · "
         f"Prompt tokens: {response.prompt_tokens or 'unknown'} · "
         f"Output tokens: {response.completion_tokens or 'unknown'}"
-        f"{memory_note}[/dim]"
+        f"{memory_note}{activity_note}[/dim]"
     )
 
 
