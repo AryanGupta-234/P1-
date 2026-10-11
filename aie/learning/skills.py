@@ -182,7 +182,7 @@ def save_skill_candidate(
     rebuilt = build_skill_candidate(source, policy_ledger=policy_ledger)
     if rebuilt != candidate:
         raise SkillInductionError(
-            "candidate no longer matches the persisted task run and audit evidence"
+            "candidate does not match the persisted task run and audit evidence"
         )
     record = candidate.to_memory_record(sensitivity=sensitivity)
     return memory_store.save(record, task_run_store=task_run_store)
