@@ -58,8 +58,11 @@ Statuses: DONE / IN_PROGRESS / BLOCKED / PLANNED. Mark DONE only with code, test
 - [x] Temporal correlator for browser video, foreground app and fresh same-host network evidence.
 - [x] CLI for inspecting correlated video context and evidence.
 - [x] UIA structural snapshot inspection without control text.
-- [x] Indexed event-store queries by time window, source and event type.\n- [x] Unified privacy-safe activity timeline grouping browser, application, network, process, Event Log and diagnostic metadata.\n- [ ] Unified event bus and general temporal correlation.
-- [x] Initial temporal activity session model with explicit time-gap boundaries.\n- [ ] Semantic task/session state and evidence contradiction handling.
+- [x] Indexed event-store queries by time window, source and event type.
+- [x] Unified privacy-safe activity timeline grouping browser, application, network, process, Event Log and diagnostic metadata.
+- [ ] Unified event bus and general temporal correlation.
+- [x] Initial temporal activity session model with explicit time-gap boundaries.
+- [ ] Semantic task/session state and evidence contradiction handling.
 - [ ] Evidence freshness, contradiction handling and calibrated confidence.
 - [ ] User-approved profile and personalization controls.
 
@@ -79,7 +82,9 @@ Statuses: DONE / IN_PROGRESS / BLOCKED / PLANNED. Mark DONE only with code, test
 - [x] Capture user-reported diagnostic outcomes: resolved, not resolved, not attempted.
 - [x] Typed local memory schema: working, episodic, semantic, procedural and prospective.
 - [x] Source-event provenance validation, sensitivity labels, TTL, correction/supersession and explicit deletion.
-- [x] Interactive hidden input for sensitive memory entry; explicitly document that sensitivity labels are not encryption.\n- [x] Local keyword/tag retrieval with sensitive memories excluded by default.\n- [ ] Embedding retrieval, export, contradiction resolution and consolidation.
+- [x] Interactive hidden input for sensitive memory entry; explicitly document that sensitivity labels are not encryption.
+- [x] Local keyword/tag retrieval with sensitive memories excluded by default.
+- [ ] Embedding retrieval, export, contradiction resolution and consolidation.
 - [ ] Retrieval benchmark, contradiction handling and consolidation.
 - [ ] Evaluated learning from verified outcomes; do not learn unverified fixes.
 - [ ] Reviewed and versioned reusable skill induction.
@@ -111,7 +116,7 @@ Statuses: DONE / IN_PROGRESS / BLOCKED / PLANNED. Mark DONE only with code, test
 - [ ] Desktop UI after core telemetry and policy APIs stabilize.
 
 ## Immediate dev sprint
-1. Verify Event Log runtime integration tests on the current Windows CI matrix.
+1. Verify the combined activity, memory and Event Log runtime tests on the current Windows CI matrix.
 2. Add observer health telemetry for permission errors, sensor timeouts and event loss.
 3. Validate browser/native-host, UIA and Event Log behavior on the target Windows desktop.
 4. Implement ETW process telemetry with explicit coverage boundaries.
