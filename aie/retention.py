@@ -67,7 +67,7 @@ def collect_retention_snapshot(
         event_count=event_store.count(),
         event_prune_candidates=event_store.count_before(cutoff),
         memory_count=memory_store.count(include_superseded=True),
-        active_memory_count=memory_store.count(include_superseded=False),
+        active_memory_count=memory_store.count_active(now=current),
         expired_memory_count=memory_store.count_expired(now=current),
         task_run_count_sampled=len(task_runs),
         task_run_status_counts=task_counts,
