@@ -428,7 +428,7 @@ def prune(
 
 @app.command()
 def ask(
-    prompt: str = typer.Argument(..., min_length=1, help="Prompt to send to the local model."),
+    prompt: str = typer.Argument(..., min_length=1, help="Prompt to send to the model."),
     task: Literal["routine", "complex"] = typer.Option("routine", help="Choose the reasoning tier."),
     provider: Literal["local", "cloud"] = typer.Option("local", help="Select local Ollama or explicitly enabled cloud inference."),
     allow_remote_ollama: bool = typer.Option(
@@ -436,19 +436,66 @@ def ask(
         "--allow-remote-ollama",
         help="Explicitly permit AIE_OLLAMA_URL to point to a remote HTTPS Ollama host.",
     ),
-    allow_cloud_egress: bool = typer.Option(False, "--allow-cloud-egress", help="Explicitly authorize sending this prompt to the configured HTTPS cloud provider."),
+    allow_cloud_egress: bool = typer.Option(
+        False,
+        "--allow-cloud-egress",
+        help="Explicitly authorize sending this prompt to the configured HTTPS cloud provider.",
+    ),
+    with_memory: bool = typer.Option(
+        False,
+        "--with-memory/--no-memory",
+        help="Explicitly attach matching local memories to this request.",
+    ),
+    include_sensitive_memory: bool = typer.Option(
+        False,
+        help="Include sensitive memories (local inference only).",
+    ),
+    confirm_memory_egress: bool = typer.Option(
+        False,
+        help="Confirm sending non-sensitive memory references to a remote model endpoint.",
+    ),
     temperature: float = typer.Option(0.2, min=0.0, max=2.0),
     max_output_tokens: int = typer.Option(512, min=32, max=4096),
+    memory_limit: int = typer.Option(5, min=1, max=10),
 ) -> None:
     """Send a prompt to local Ollama or an explicitly authorized HTTPS cloud model."""
     from aie.models.base import ChatMessage, ModelRequest
     from aie.models.ollama import OllamaClient
     from aie.models.router import LocalModelRouter
 
+    memory_ids: tuple[str, ...] = ()
+    remote_selected = provider == "cloud" or allow_remote_ollama
+    if include_sensitive_memory and not with_memory:
+        console.print("[red]--include-sensitive-memory requires --with-memory.[/red]")
+        raise typer.Exit(2)
+    if with_memory and remote_selected and not confirm_memory_egress:
+        console.print(
+            "[red]Attaching memory to a remote model needs --confirm-memory-egress.[/red]"
+        )
+        raise typer.Exit(2)
+    if with_memory and remote_selected and include_sensitive_memory:
+        console.print("[red]Sensitive memories cannot be attached to remote model requests.[/red]")
+        raise typer.Exit(2)
+
+    messages = [ChatMessage(role="user", content=prompt)]
+    if with_memory:
+        from aie.memory.prompt_context import build_memory_prompt_context
+        from aie.memory.store import MemoryStore
+
+        memory_context = build_memory_prompt_context(
+            prompt,
+            MemoryStore(memory_database_path()),
+            include_sensitive=include_sensitive_memory,
+            limit=memory_limit,
+        )
+        memory_ids = memory_context.memory_ids
+        if memory_context.content:
+            messages.insert(0, ChatMessage(role="system", content=memory_context.content))
+
     try:
         request = ModelRequest(
             task=task,
-            messages=[ChatMessage(role="user", content=prompt)],
+            messages=messages,
             temperature=temperature,
             max_output_tokens=max_output_tokens,
         )
@@ -471,11 +518,17 @@ def ask(
         raise typer.Exit(2) from exc
 
     console.print(response.content)
+    memory_note = (
+        f" · Memory references: {len(memory_ids)} (explicit opt-in)"
+        if with_memory
+        else ""
+    )
     console.print(
         f"\n[dim]Model: {response.model} · "
         f"Elapsed: {response.elapsed_seconds:.2f}s · "
         f"Prompt tokens: {response.prompt_tokens or 'unknown'} · "
-        f"Output tokens: {response.completion_tokens or 'unknown'}[/dim]"
+        f"Output tokens: {response.completion_tokens or 'unknown'}"
+        f"{memory_note}[/dim]"
     )
 
 
