@@ -127,7 +127,73 @@ class EventStore:
             ).fetchall()
         return [AIEEvent.model_validate(json.loads(row[0])) for row in rows]
 
-    def count(self) -> int:
+
+    def export_jsonl(
+        self,
+        output_path: Path,
+        *,
+        since: datetime | None = None,
+        until: datetime | None = None,
+        event_types: Iterable[str] = (),
+        sources: Iterable[str] = (),
+        include_sensitive: bool = False,
+    ) -> int:
+        """Export selected local events to JSONL, newest-to-oldest, with sensitive data opt-in."""
+        if output_path.resolve() == self.path.resolve():
+            raise ValueError("export destination must not overwrite the event database")
+        if since is not None and since.tzinfo is None:
+            raise ValueError("since must be timezone-aware")
+        if until is not None and until.tzinfo is None:
+            raise ValueError("until must be timezone-aware")
+        if since is not None and until is not None and since > until:
+            raise ValueError("since must not be later than until")
+
+        normalized_types = tuple(dict.fromkeys(event_types))
+        normalized_sources = tuple(dict.fromkeys(sources))
+        if any(not isinstance(value, str) or not value.strip() for value in normalized_types):
+            raise ValueError("event_types must contain non-empty strings")
+        if any(not isinstance(value, str) or not value.strip() for value in normalized_sources):
+            raise ValueError("sources must contain non-empty strings")
+
+        clauses: list[str] = []
+        parameters: list[object] = []
+        if since is not None:
+            clauses.append("timestamp >= ?")
+            parameters.append(since.astimezone(timezone.utc).isoformat())
+        if until is not None:
+            clauses.append("timestamp <= ?")
+            parameters.append(until.astimezone(timezone.utc).isoformat())
+        if normalized_types:
+            placeholders = ",".join("?" for _ in normalized_types)
+            clauses.append(f"event_type IN ({placeholders})")
+            parameters.extend(normalized_types)
+        if normalized_sources:
+            placeholders = ",".join("?" for _ in normalized_sources)
+            clauses.append(f"source IN ({placeholders})")
+            parameters.extend(normalized_sources)
+
+        where = f" WHERE {' AND '.join(clauses)}" if clauses else ""
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        exported = 0
+        with self._connect() as db, output_path.open("w", encoding="utf-8") as output:
+            rows = db.execute(
+                "SELECT payload FROM events" + where + " ORDER BY timestamp DESC",
+                parameters,
+            )
+            for (payload,) in rows:
+                event = AIEEvent.model_validate(json.loads(payload))
+                if event.sensitivity == "sensitive" and not include_sensitive:
+                    continue
+                output.write(event.model_dump_json() + "\\n")
+                exported += 1
+        return exported
+
+    def delete_all(self) -> int:
+        """Delete every stored event and return the number of removed records."""
+        with self._connect() as db:
+            cursor = db.execute("DELETE FROM events")
+            return int(cursor.rowcount)
+\n    def count(self) -> int:
         with self._connect() as db:
             return int(db.execute("SELECT COUNT(*) FROM events").fetchone()[0])
 
