@@ -1170,6 +1170,7 @@ def correct_memory(
         sensitivity=previous.memory.sensitivity,
         confidence=previous.memory.confidence,
         source_event_ids=previous.memory.source_event_ids,
+        source_task_run_ids=previous.memory.source_task_run_ids,
         supersedes_id=memory_id,
         expires_at=expiry,
     )
@@ -1177,6 +1178,12 @@ def correct_memory(
         new_record = store.save(
             corrected,
             event_store=EventStore(database_path()) if corrected.source_event_ids else None,
+            task_run_store=(
+                __import__("aie.orchestration.store", fromlist=["TaskRunStore"])
+                .TaskRunStore(task_run_database_path())
+                if corrected.source_task_run_ids
+                else None
+            ),
         )
     except ValueError as exc:
         console.print(f"[red]Correction failed:[/red] {exc}")
@@ -1332,6 +1339,9 @@ def memory_merge(
     provenance = list(dict.fromkeys(
         event_id for item in sources for event_id in item.source_event_ids
     ))
+    task_run_provenance = list(dict.fromkeys(
+        run_id for item in sources for run_id in item.source_task_run_ids
+    ))
     if len(provenance) > 100:
         console.print("[red]Combined provenance exceeds the memory schema limit.[/red]")
         raise typer.Exit(2)
@@ -1367,6 +1377,12 @@ def memory_merge(
             (memory_a, memory_b),
             merged,
             event_store=EventStore(database_path()) if provenance else None,
+            task_run_store=(
+                __import__("aie.orchestration.store", fromlist=["TaskRunStore"])
+                .TaskRunStore(task_run_database_path())
+                if task_run_provenance
+                else None
+            ),
         )
     except (ValueError, OSError) as exc:
         console.print(f"[red]Memory merge rejected:[/red] {exc}")
