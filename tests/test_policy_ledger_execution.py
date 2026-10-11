@@ -64,3 +64,34 @@ def test_execution_receipt_is_single_attempt_and_part_of_hash_chain(tmp_path):
             summary="duplicate execution attempt",
             elapsed_seconds=0.01,
         )
+
+
+def test_execution_reservation_is_exclusive_and_blocks_duplicate_claims(tmp_path):
+    manifest = CapabilityManifest(
+        capability_id="windows.settings.open",
+        description="Open one fixed Windows Settings page.",
+        risk_tier="low",
+        enabled=True,
+        approval_required=True,
+        allowed_parameters=frozenset({"setting"}),
+    )
+    broker = CapabilityPolicyBroker([manifest])
+    ledger = PolicyLedger(tmp_path / "policy.sqlite3")
+    proposal = ActionProposal(
+        capability_id=manifest.capability_id,
+        summary="Open Display.",
+        parameters={"setting": "display"},
+    )
+    queue = PolicyProposalQueue(ledger)
+    queue.create(proposal, broker)
+    queue.review(proposal.proposal_id, approve=True, broker=broker)
+
+    reserved = ledger.reserve_execution(proposal.proposal_id)
+    assert reserved.execution_reserved is True
+    with pytest.raises(ValueError, match="already reserved"):
+        ledger.reserve_execution(proposal.proposal_id)
+
+    # A reservation without a receipt is intentionally left blocked after an
+    # ambiguous attempt; callers must inspect state and cannot automatically retry.
+    assert ledger.get(proposal.proposal_id).execution_status is None
+    assert ledger.verify_integrity().valid is True
