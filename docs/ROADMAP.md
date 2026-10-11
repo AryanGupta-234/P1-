@@ -2,7 +2,7 @@
 
 Statuses: DONE / IN_PROGRESS / BLOCKED / PLANNED. Mark DONE only with code, tests and validation evidence.
 
-**Last updated:** 2026-10-11 | **Integration branch:** `dev`
+**Last updated:** 2026-10-11 | **Target integration:** `dev` | **Current feature branch:** `feat/agent-orchestration-core`
 
 | ID | Workstream | Status | Exit criteria |
 |---|---|---|---|
@@ -152,7 +152,7 @@ Statuses: DONE / IN_PROGRESS / BLOCKED / PLANNED. Mark DONE only with code, test
 | Snapshot polling misses short-lived processes | ETW plus reconciliation and coverage reporting | OPEN |
 | Browser telemetry exposes private page data | Explicit opt-in; playback-only fields; strict native host | CONTROLLED |
 | Event Log access denied or logs roll over | Allowlisted classic channels, record cursors, bounded error events | OPEN |
-| Model hallucination causes harmful actions | Default-deny policy; no executor yet; approval/audit required | CONTROLLED |
+| Model hallucination causes harmful actions | Default-deny broker, audited approval, explicit execution gate and fixed adapter allowlist | CONTROLLED |
 | Noisy metrics cause false diagnosis | Repeated samples, multiple signals and evaluation | OPEN |
 | Memory retains sensitive data | Local-first, sensitivity labels, TTL and user deletion | CONTROLLED |
 | Agent performs unbounded actions | Capability scopes, budgets, kill switch, audit and verification | CONTROLLED |
