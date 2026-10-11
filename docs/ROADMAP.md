@@ -78,7 +78,8 @@ Statuses: DONE / IN_PROGRESS / BLOCKED / PLANNED. Mark DONE only with code, test
 ## M4 — Persistent memory and learning
 - [x] Capture user-reported diagnostic outcomes: resolved, not resolved, not attempted.
 - [x] Typed local memory schema: working, episodic, semantic, procedural and prospective.
-- [x] Source-event provenance validation, sensitivity labels, TTL, correction/supersession and explicit deletion.\n- [x] Local keyword/tag retrieval with sensitive memories excluded by default.\n- [ ] Embedding retrieval, export, contradiction resolution and consolidation.
+- [x] Source-event provenance validation, sensitivity labels, TTL, correction/supersession and explicit deletion.
+- [x] Interactive hidden input for sensitive memory entry; explicitly document that sensitivity labels are not encryption.\n- [x] Local keyword/tag retrieval with sensitive memories excluded by default.\n- [ ] Embedding retrieval, export, contradiction resolution and consolidation.
 - [ ] Retrieval benchmark, contradiction handling and consolidation.
 - [ ] Evaluated learning from verified outcomes; do not learn unverified fixes.
 - [ ] Reviewed and versioned reusable skill induction.
