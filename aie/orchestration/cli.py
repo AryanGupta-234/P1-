@@ -48,8 +48,14 @@ def _load_plan(path: Path) -> TaskPlan:
         raise typer.BadParameter(f"invalid plan file ({type(exc).__name__}): {exc}") from exc
 
 
-def _engine() -> TaskOrchestrator:
-    return TaskOrchestrator(TaskRunStore(task_run_database_path()))
+def _engine(*, with_policy: bool = False) -> TaskOrchestrator:
+    ledger = None
+    if with_policy:
+        ledger = PolicyLedger(policy_audit_database_path())
+    return TaskOrchestrator(
+        TaskRunStore(task_run_database_path()),
+        policy_ledger=ledger,
+    )
 
 
 @plan_app.command("validate")
@@ -467,24 +473,8 @@ def complete_task_step(
 
 
 def _change_task_state(run_id: str, operation: Literal["pause", "resume", "cancel"]) -> None:
-    engine = _engine()
+    engine = _engine(with_policy=operation == "cancel")
     try:
-        if operation == "cancel":
-            from aie.policy.ledger import PolicyLedger
-
-            run_before_cancel = engine.get(run_id)
-            ledger = PolicyLedger(policy_audit_database_path())
-            for state in run_before_cancel.steps:
-                if not state.proposal_id:
-                    continue
-                proposal = ledger.get(state.proposal_id)
-                if proposal is None or proposal.execution_status is not None:
-                    continue
-                if proposal.status in {"pending_review", "approved"}:
-                    ledger.append_revocation(
-                        state.proposal_id,
-                        reason=f"task run {run_id} was cancelled",
-                    )
         run = getattr(engine, operation)(run_id)
     except ValueError as exc:
         console.print(f"[red]Task transition rejected:[/red] {exc}")
@@ -568,6 +558,16 @@ def resume_task(run_id: str = typer.Argument(...)) -> None:
 
 
 @task_app.command("cancel")
-def cancel_task(run_id: str = typer.Argument(...)) -> None:
-    """Cancel a queued or waiting task; active adapters must enforce their own deadlines."""
+def cancel_task(
+    run_id: str = typer.Argument(...),
+    confirm: bool = typer.Option(
+        False, "--confirm", help="Confirm cancellation and revocation of outstanding proposals."
+    ),
+) -> None:
+    """Cancel a task and revoke pending/unexecuted proposals; executed actions remain audited."""
+    if not confirm:
+        console.print(
+            "[yellow]Pass --confirm to cancel this task and revoke any outstanding proposal.[/yellow]"
+        )
+        raise typer.Exit(2)
     _change_task_state(run_id, "cancel")
