@@ -260,13 +260,28 @@ def build_video_observation_context(
     if observation_window is None:
         return None
 
+    application = _application_evidence(
+        events,
+        host=browser_event.host_id,
+        anchor=browser_event.timestamp,
+        current=current,
+        max_age_seconds=max_age_seconds,
+    )
+    browser_cpu = _number(data, "cpu_pct", minimum=0, maximum=100)
+    if (
+        browser_cpu is None
+        and application is not None
+        and application.process_name.casefold() in {"chrome.exe", "msedge.exe"}
+    ):
+        browser_cpu = application.cpu_pct
+
     metrics = VideoMetrics(
         playback_stalled=playback_stalled,
         stall_count=stall_count,
         observation_window_seconds=observation_window,
         throughput_mbps=_number(data, "throughput_mbps", minimum=0),
         estimated_required_mbps=_number(data, "estimated_required_mbps", minimum=0),
-        cpu_pct=_number(data, "cpu_pct", minimum=0, maximum=100),
+        cpu_pct=browser_cpu,
         dropped_frames_pct=_number(data, "dropped_frames_pct", minimum=0, maximum=100),
     )
 
@@ -287,13 +302,6 @@ def build_video_observation_context(
             evidence_ids.append(event.event_id)
 
     network_evidence.sort(key=lambda item: item.age_seconds)
-    application = _application_evidence(
-        events,
-        host=browser_event.host_id,
-        anchor=browser_event.timestamp,
-        current=current,
-        max_age_seconds=max_age_seconds,
-    )
     if application is not None:
         evidence_ids.extend(application.evidence_event_ids)
 
