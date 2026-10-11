@@ -23,7 +23,7 @@ Statuses: DONE / IN_PROGRESS / BLOCKED / PLANNED. Mark DONE only with code, test
 - [x] Read-only inventory and process reconciliation.
 - [x] Architecture spotlight and roadmap.
 - [ ] Full tests on Windows 10/11.
-- [ ] CI matrix on Python 3.11/3.12 and lint (initial runs exposed lint errors; revalidation pending).
+- [x] Windows CI matrix on Python 3.11/3.12 with Ruff lint, browser JavaScript syntax checks and pytest.
 - [ ] Dependency/security checks and contributor setup.
 
 ## M1 — Windows perception
@@ -35,8 +35,8 @@ Statuses: DONE / IN_PROGRESS / BLOCKED / PLANNED. Mark DONE only with code, test
 - [ ] CPU/RAM/disk and per-process resource sampling.
 - [x] Read-only network interface counters, gateway/external TCP reachability RTT and DNS resolution probes.
 - [x] Wire bounded network provider into observer CLI with configurable sampling interval, event-store integration and --no-network opt-out.
-- [ ] Service and scheduled-task inventory.
-- [ ] Installed application/executable metadata inventory.
+- [x] Read-only service and scheduled-task inventory.
+- [x] Read-only installed application metadata inventory.
 - [ ] Pause/resume, retention, export/delete and observer health.
 - [ ] Sampling overhead and event-loss measurements.
 
@@ -56,9 +56,10 @@ Statuses: DONE / IN_PROGRESS / BLOCKED / PLANNED. Mark DONE only with code, test
 - [ ] Confidence calibration and actionable diagnostic proposals.
 
 ## M2 — Context intelligence
+- [x] Read-only foreground-window transition observer with titles omitted by default.
 - [x] Initial temporal correlator for browser-video snapshots and fresh same-host network evidence (synthetic contract; live browser bridge remains planned).
 - [ ] Unified event bus and general temporal correlation.
-- [ ] Working context: foreground application, task and session state.
+- [ ] Working context: correlate foreground process transitions, browser playback and session/task state.
 - [ ] Facts-versus-hypotheses model, evidence lineage and contradictions.
 - [ ] User-approved profile/personalization.
 - [ ] Relevance scoring and false-positive evaluation.
@@ -106,10 +107,10 @@ Statuses: DONE / IN_PROGRESS / BLOCKED / PLANNED. Mark DONE only with code, test
 - [ ] Desktop UI after core telemetry and policy APIs stabilize.
 
 ## Immediate dev sprint
-1. Resolve remaining lint findings and verify the Windows CI matrix on dev.
-2. Add trace fixtures for buffering causes and unknown evidence.
-3. Add service/process resource samples and pause/retention controls.
-4. Design opt-in browser extension with minimal permissions.
+1. Verify CI for foreground observer integration.
+2. Add foreground-process CPU, memory and I/O deltas.
+3. Implement global pause/resume and retention controls.
+4. Add opt-in Windows UI Automation metadata for selected applications.
 5. Update this tracker and Architecture Spotlight in every PR.
 
 ## Risk register
