@@ -40,3 +40,15 @@ def set_observer_paused(paused: bool) -> None:
 def memory_database_path() -> Path:
     """Private local database for user-authored persistent memories."""
     return data_dir() / "memory.sqlite3"
+
+
+def capability_manifest_dir() -> Path:
+    """User-managed directory for explicitly authored capability manifest JSON files."""
+    directory = data_dir() / "capabilities"
+    directory.mkdir(parents=True, exist_ok=True)
+    return directory
+
+
+def policy_audit_database_path() -> Path:
+    """Separate append-only proposal-review audit database."""
+    return data_dir() / "policy-audit.sqlite3"
