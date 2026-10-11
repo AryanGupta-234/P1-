@@ -73,6 +73,32 @@ def models() -> None:
         console.print("  No local Ollama response. Start Ollama; AIE will not pull models.")
 
 
+@app.command("etw-catalog")
+def etw_catalog(
+    contains: str = typer.Option("Kernel", help="Filter provider names; use an empty string for all."),
+    output: Path | None = typer.Option(None, "--output", "-o"),
+) -> None:
+    """List registered ETW providers without starting or changing a trace session."""
+    from aie.providers.etw_catalog import discover_etw_providers, filter_providers
+
+    try:
+        providers = filter_providers(discover_etw_providers(), contains)
+    except RuntimeError as exc:
+        console.print(f"[red]ETW catalog unavailable:[/red] {exc}")
+        raise typer.Exit(2) from exc
+    rendered = json.dumps(providers, indent=2)
+    if output:
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(rendered, encoding="utf-8")
+        console.print(f"Provider catalog saved to {output}")
+    else:
+        table = Table("Provider", "GUID")
+        for provider in providers:
+            table.add_row(provider["name"], provider["guid"])
+        console.print(table)
+    console.print(f"Providers found: {len(providers)}")
+
+
 @app.command()
 def inventory(output: Path | None = typer.Option(None, "--output", "-o")) -> None:
     """Generate a read-only host, process, app, service, network and task inventory."""
