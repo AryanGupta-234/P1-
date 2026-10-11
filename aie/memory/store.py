@@ -116,6 +116,10 @@ class MemoryStore:
                     "UPDATE memories SET status = 'superseded' WHERE memory_id = ?",
                     (normalized.supersedes_id,),
                 )
+                db.execute(
+                    "DELETE FROM memory_embeddings WHERE memory_id = ?",
+                    (normalized.supersedes_id,),
+                )
             db.execute(
                 """INSERT INTO memories
                 (memory_id, kind, sensitivity, status, created_at, expires_at, payload)
@@ -275,11 +279,16 @@ class MemoryStore:
         kind: MemoryKind | None = None,
         include_sensitive: bool = False,
         limit: int = 10,
+        minimum_score: float = 0.05,
         now: datetime | None = None,
     ) -> list[MemorySearchHit]:
-        """Search stored local vectors using cosine similarity for one embedding model."""
+        """Search local vectors; ignore unrelated records below cosine-similarity threshold."""
         if not 1 <= limit <= 100:
             raise ValueError("limit must be between 1 and 100")
+        if isinstance(minimum_score, bool) or not isinstance(minimum_score, (int, float)):
+            raise ValueError("minimum_score must be numeric between 0 and 1")
+        if not 0.0 <= float(minimum_score) <= 1.0:
+            raise ValueError("minimum_score must be between 0 and 1")
         if not isinstance(model, str) or not model.strip():
             raise ValueError("embedding model is required")
         if not isinstance(vector, list) or not 1 <= len(vector) <= 4096:
@@ -340,8 +349,9 @@ class MemoryStore:
             cosine = sum(
                 left * right for left, right in zip(query, values, strict=True)
             ) / (query_norm * stored_norm)
-            score = max(0.0, min(2.0, cosine + 1.0))
-            hits.append(MemorySearchHit(memory=records[memory_id], score=score))
+            score = max(0.0, min(1.0, cosine))
+            if score >= float(minimum_score):
+                hits.append(MemorySearchHit(memory=records[memory_id], score=score))
 
         hits.sort(key=lambda hit: (hit.score, hit.memory.updated_at), reverse=True)
         return hits[:limit]
