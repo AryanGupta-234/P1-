@@ -151,3 +151,22 @@ def test_memory_search_is_kind_filterable_and_bounded(tmp_path):
     assert hits[0].memory.kind == "episodic"
     with pytest.raises(ValueError):
         store.search("Windows", limit=0)
+
+
+
+def test_memory_save_preserves_timestamp_order_when_source_clock_is_ahead(tmp_path):
+    store = MemoryStore(tmp_path / "clock-skew.sqlite3")
+    future_created_at = datetime.now(timezone.utc) + timedelta(days=1)
+    record = MemoryRecord(
+        kind="working",
+        content="Clock-skew regression fixture.",
+        created_at=future_created_at,
+        updated_at=future_created_at,
+    )
+
+    saved = store.save(record)
+    loaded = store.get(saved.memory_id)
+
+    assert saved.updated_at >= saved.created_at
+    assert loaded is not None
+    assert loaded.memory.updated_at >= loaded.memory.created_at
