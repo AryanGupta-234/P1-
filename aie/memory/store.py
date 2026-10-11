@@ -1,0 +1,219 @@
+"""SQLite-backed personal memory with explicit capture and local retrieval."""
+from __future__ import annotations
+
+import re
+import sqlite3
+from dataclasses import dataclass
+from datetime import datetime, timezone
+from pathlib import Path
+
+from aie.memory.models import MemoryKind, MemoryRecord, MemorySearchHit
+from aie.store import EventStore
+
+_TOKEN = re.compile(r"[a-z0-9][a-z0-9_.-]{1,39}")
+
+
+@dataclass(frozen=True, slots=True)
+class StoredMemory:
+    memory: MemoryRecord
+    status: str
+
+
+class MemoryStore:
+    """User-controlled memory database with TTL, provenance and correction history."""
+
+    def __init__(self, path: Path) -> None:
+        self.path = path
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        with self._connect() as db:
+            db.execute(
+                """CREATE TABLE IF NOT EXISTS memories (
+                    memory_id TEXT PRIMARY KEY,
+                    kind TEXT NOT NULL,
+                    sensitivity TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    expires_at TEXT,
+                    payload TEXT NOT NULL
+                )"""
+            )
+            db.execute(
+                "CREATE INDEX IF NOT EXISTS idx_memories_status_kind ON memories(status, kind)"
+            )
+            db.execute(
+                "CREATE INDEX IF NOT EXISTS idx_memories_expiry ON memories(expires_at)"
+            )
+
+    def _connect(self) -> sqlite3.Connection:
+        db = sqlite3.connect(self.path, timeout=10)
+        db.execute("PRAGMA journal_mode=WAL")
+        db.execute("PRAGMA busy_timeout=10000")
+        return db
+
+    @staticmethod
+    def _aware_utc(value: datetime, field: str) -> datetime:
+        if value.tzinfo is None:
+            raise ValueError(f"{field} must be timezone-aware")
+        return value.astimezone(timezone.utc)
+
+    def save(
+        self,
+        memory: MemoryRecord,
+        *,
+        event_store: EventStore | None = None,
+    ) -> MemoryRecord:
+        """Insert a memory and atomically supersede a prior version if requested."""
+        if memory.source_event_ids:
+            if event_store is None:
+                raise ValueError("event_store is required when memory provenance IDs are supplied")
+            missing = [
+                event_id for event_id in memory.source_event_ids
+                if event_store.get(event_id) is None
+            ]
+            if missing:
+                raise ValueError(f"source event not found: {missing[0]}")
+
+        now = datetime.now(timezone.utc)
+        normalized = memory.model_copy(
+            update={
+                "created_at": self._aware_utc(memory.created_at, "created_at"),
+                "updated_at": now,
+                "expires_at": (
+                    self._aware_utc(memory.expires_at, "expires_at")
+                    if memory.expires_at is not None
+                    else None
+                ),
+            }
+        )
+        with self._connect() as db:
+            if normalized.supersedes_id:
+                previous = db.execute(
+                    "SELECT status, kind FROM memories WHERE memory_id = ?",
+                    (normalized.supersedes_id,),
+                ).fetchone()
+                if previous is None:
+                    raise ValueError("memory to supersede was not found")
+                if previous[0] != "active":
+                    raise ValueError("only an active memory can be superseded")
+                if previous[1] != normalized.kind:
+                    raise ValueError("a correction must keep the original memory kind")
+                db.execute(
+                    "UPDATE memories SET status = 'superseded' WHERE memory_id = ?",
+                    (normalized.supersedes_id,),
+                )
+            db.execute(
+                """INSERT INTO memories
+                (memory_id, kind, sensitivity, status, created_at, expires_at, payload)
+                VALUES (?, ?, ?, 'active', ?, ?, ?)""",
+                (
+                    normalized.memory_id,
+                    normalized.kind,
+                    normalized.sensitivity,
+                    normalized.created_at.isoformat(),
+                    normalized.expires_at.isoformat() if normalized.expires_at else None,
+                    normalized.model_dump_json(),
+                ),
+            )
+        return normalized
+
+    def get(self, memory_id: str, *, include_superseded: bool = False) -> StoredMemory | None:
+        with self._connect() as db:
+            row = db.execute(
+                "SELECT status, payload FROM memories WHERE memory_id = ?",
+                (memory_id,),
+            ).fetchone()
+        if row is None or (row[0] != "active" and not include_superseded):
+            return None
+        return StoredMemory(memory=MemoryRecord.model_validate_json(row[1]), status=row[0])
+
+    def list_memories(
+        self,
+        *,
+        kind: MemoryKind | None = None,
+        include_sensitive: bool = False,
+        include_superseded: bool = False,
+        include_expired: bool = False,
+        limit: int = 100,
+        now: datetime | None = None,
+    ) -> list[StoredMemory]:
+        if not 1 <= limit <= 1000:
+            raise ValueError("limit must be between 1 and 1000")
+        current = self._aware_utc(now or datetime.now(timezone.utc), "now")
+        clauses: list[str] = []
+        parameters: list[object] = []
+        if not include_superseded:
+            clauses.append("status = 'active'")
+        if not include_sensitive:
+            clauses.append("sensitivity != 'sensitive'")
+        if kind is not None:
+            clauses.append("kind = ?")
+            parameters.append(kind)
+        if not include_expired:
+            clauses.append("(expires_at IS NULL OR expires_at > ?)")
+            parameters.append(current.isoformat())
+        where = f" WHERE {' AND '.join(clauses)}" if clauses else ""
+        parameters.append(limit)
+        with self._connect() as db:
+            rows = db.execute(
+                "SELECT status, payload FROM memories" + where
+                + " ORDER BY created_at DESC LIMIT ?",
+                parameters,
+            ).fetchall()
+        return [
+            StoredMemory(memory=MemoryRecord.model_validate_json(row[1]), status=row[0])
+            for row in rows
+        ]
+
+    def search(
+        self,
+        query: str,
+        *,
+        kind: MemoryKind | None = None,
+        include_sensitive: bool = False,
+        limit: int = 10,
+        now: datetime | None = None,
+    ) -> list[MemorySearchHit]:
+        """Rank local memories by deterministic token/tag overlap (not embeddings)."""
+        if not 1 <= limit <= 100:
+            raise ValueError("limit must be between 1 and 100")
+        query_tokens = set(_TOKEN.findall(query.lower()))
+        if not query_tokens:
+            return []
+        records = self.list_memories(
+            kind=kind,
+            include_sensitive=include_sensitive,
+            limit=1000,
+            now=now,
+        )
+        hits: list[MemorySearchHit] = []
+        for item in records:
+            memory = item.memory
+            content_tokens = set(_TOKEN.findall(memory.content.lower()))
+            tag_tokens = set(_TOKEN.findall(" ".join(memory.tags).lower()))
+            content_match = len(query_tokens & content_tokens) / len(query_tokens)
+            tag_match = len(query_tokens & tag_tokens) / len(query_tokens)
+            phrase_bonus = 0.5 if query.strip().lower() in memory.content.lower() else 0.0
+            score = min(2.0, content_match + (0.5 * tag_match) + phrase_bonus)
+            if score > 0:
+                hits.append(MemorySearchHit(memory=memory, score=score))
+        hits.sort(key=lambda hit: (hit.score, hit.memory.updated_at), reverse=True)
+        return hits[:limit]
+
+    def delete(self, memory_id: str) -> bool:
+        with self._connect() as db:
+            cursor = db.execute("DELETE FROM memories WHERE memory_id = ?", (memory_id,))
+            return cursor.rowcount > 0
+
+    def prune_expired(self, *, now: datetime | None = None) -> int:
+        current = self._aware_utc(now or datetime.now(timezone.utc), "now")
+        with self._connect() as db:
+            cursor = db.execute(
+                "DELETE FROM memories WHERE expires_at IS NOT NULL AND expires_at <= ?",
+                (current.isoformat(),),
+            )
+            return int(cursor.rowcount)
+
+    def count(self, *, include_superseded: bool = True) -> int:
+        where = "" if include_superseded else " WHERE status = 'active'"
+        with self._connect() as db:
+            return int(db.execute("SELECT COUNT(*) FROM memories" + where).fetchone()[0])
