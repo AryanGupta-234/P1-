@@ -4,11 +4,28 @@
   const STORAGE_KEY = "enabled";
   const SAMPLE_INTERVAL_MS = 5000;
   const OBSERVATION_WINDOW_SECONDS = 60;
+  const MAX_TRACKED_VIDEOS = 8;
   const watchedVideos = new Map();
 
   let enabled = false;
   let mutationObserver = null;
   let sampleTimer = null;
+
+  function createMediaSessionId() {
+    if (typeof crypto.randomUUID === "function") return crypto.randomUUID();
+    const bytes = new Uint8Array(16);
+    crypto.getRandomValues(bytes);
+    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    const hex = Array.from(bytes, (value) => value.toString(16).padStart(2, "0"));
+    return [
+      hex.slice(0, 4).join(""),
+      hex.slice(4, 6).join(""),
+      hex.slice(6, 8).join(""),
+      hex.slice(8, 10).join(""),
+      hex.slice(10, 16).join("")
+    ].join("-");
+  }
 
   function sendSnapshot(payload) {
     try {
@@ -51,6 +68,11 @@
     if (!enabled || !video.isConnected) return;
 
     const now = Date.now();
+    const currentState = playbackState(video, state);
+    if (currentState === "waiting" && !state.isStalled) {
+      state.isStalled = true;
+      state.stallTimes.push(now);
+    }
     state.stallTimes = state.stallTimes.filter(
       (timestamp) => now - timestamp <= OBSERVATION_WINDOW_SECONDS * 1000
     );
@@ -98,9 +120,12 @@
     const payload = {
       kind: "video_snapshot",
       media_session_id: state.mediaSessionId,
-      playback_state: playbackState(video, state),
+      playback_state: currentState,
       stall_count: state.stallTimes.length,
-      observation_window_seconds: OBSERVATION_WINDOW_SECONDS
+      observation_window_seconds: Math.max(
+        1,
+        Math.min(OBSERVATION_WINDOW_SECONDS, (now - state.startedAt) / 1000)
+      )
     };
 
     const buffered = bufferedAheadSeconds(video);
@@ -119,9 +144,11 @@
 
   function attach(video) {
     if (!(video instanceof HTMLVideoElement) || watchedVideos.has(video)) return;
+    if (watchedVideos.size >= MAX_TRACKED_VIDEOS) return;
 
     const state = {
-      mediaSessionId: crypto.randomUUID(),
+      mediaSessionId: createMediaSessionId(),
+      startedAt: Date.now(),
       stallTimes: [],
       isStalled: false,
       lastPosition: null,
@@ -165,6 +192,24 @@
     }
   }
 
+  function detach(root) {
+    if (!root) return;
+    const candidates = [];
+    if (root instanceof HTMLVideoElement) candidates.push(root);
+    if (typeof root.querySelectorAll === "function") {
+      candidates.push(...root.querySelectorAll("video"));
+    }
+    for (const video of candidates) {
+      if (video.isConnected) continue;
+      const state = watchedVideos.get(video);
+      if (!state) continue;
+      for (const [eventName, handler] of state.listeners) {
+        video.removeEventListener(eventName, handler);
+      }
+      watchedVideos.delete(video);
+    }
+  }
+
   function startMonitoring() {
     if (enabled) return;
     enabled = true;
@@ -173,6 +218,7 @@
     mutationObserver = new MutationObserver((records) => {
       for (const record of records) {
         record.addedNodes.forEach(scan);
+        record.removedNodes.forEach(detach);
       }
     });
 
