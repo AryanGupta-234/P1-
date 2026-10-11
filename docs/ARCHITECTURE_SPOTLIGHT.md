@@ -80,6 +80,9 @@ See [HARDWARE_PROFILE.md](HARDWARE_PROFILE.md) for the sanitized host baseline.
 7. Documented ETW/Event Log first. No unsigned driver, stealth collection, credential extraction or security-control bypass.
 8. Do not capture keystrokes, screenshots, clipboard, mic/camera or arbitrary app content by default.
 
+## Active implementation issue
+[Issue #3 — Windows Observer validation and ETW process telemetry](https://github.com/AryanGupta-234/P1-/issues/3)
+
 ## Next actions — priority order
 1. Run Windows CI and resolve every failure.
 2. Add service/network state deltas and retention controls.
