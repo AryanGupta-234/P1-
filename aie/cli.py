@@ -541,12 +541,15 @@ def feedback(
     ),
     note: str | None = typer.Option(
         None,
-        max_length=1000,
         help="Optional feedback note; stored locally as sensitive data.",
     ),
 ) -> None:
     """Record whether a diagnostic recommendation helped."""
     from aie.learning.feedback import FeedbackRequest, record_diagnostic_feedback
+
+    if note is not None and len(note) > 1000:
+        console.print("[red]Feedback note must be at most 1000 characters.[/red]")
+        raise typer.Exit(2)
 
     try:
         event = record_diagnostic_feedback(
