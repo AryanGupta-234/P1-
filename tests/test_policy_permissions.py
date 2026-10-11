@@ -71,7 +71,7 @@ def test_enable_requires_registered_adapter_and_approval_gates(tmp_path):
         )
 
     path.write_text(
-        json.dumps(manifest(allow_autonomous=True)),
+        json.dumps(manifest(allow_autonomous=True, approval_required=False)),
         encoding="utf-8",
     )
     with pytest.raises(CapabilityPermissionError, match="allow_autonomous=false"):
