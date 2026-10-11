@@ -104,6 +104,16 @@ def observe(
         help="Include bounded network probes.",
     ),
     network_interval: float = typer.Option(15.0, min=5.0, max=300.0),
+    foreground: bool = typer.Option(
+        True,
+        "--foreground/--no-foreground",
+        help="Observe foreground application transitions.",
+    ),
+    include_window_titles: bool = typer.Option(
+        False,
+        "--include-window-titles",
+        help="Opt in to collecting sensitive foreground window titles.",
+    ),
 ) -> None:
     """Observe selected Windows metadata (read-only)."""
     from aie.runtime import observe as run_observer
@@ -116,6 +126,8 @@ def observe(
             jsonl,
             include_network=network,
             network_interval=network_interval,
+            include_foreground=foreground,
+            include_window_titles=include_window_titles,
         )
     except OSError as exc:
         console.print(f"[red]Observer unavailable:[/red] {exc}")
