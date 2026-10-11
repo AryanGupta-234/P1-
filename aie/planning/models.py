@@ -27,7 +27,7 @@ class PlanStep(BaseModel):
     kind: StepKind
     description: str = Field(min_length=1, max_length=300)
     success_criteria: str = Field(min_length=1, max_length=300)
-    depends_on: list[str] = Field(default_factory=list, max_length=24)
+    depends_on: tuple[str, ...] = Field(default_factory=tuple, max_length=24)
     capability_id: str | None = Field(
         default=None,
         min_length=3,
@@ -56,8 +56,8 @@ class TaskPlan(BaseModel):
 
     plan_id: str = Field(default_factory=lambda: str(uuid4()), min_length=1, max_length=80)
     goal: str = Field(min_length=1, max_length=500)
-    steps: list[PlanStep] = Field(min_length=1, max_length=25)
-    constraints: list[str] = Field(default_factory=list, max_length=20)
+    steps: tuple[PlanStep, ...] = Field(min_length=1, max_length=25)
+    constraints: tuple[str, ...] = Field(default_factory=tuple, max_length=20)
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     @model_validator(mode="after")
