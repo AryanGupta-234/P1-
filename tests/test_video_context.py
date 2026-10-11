@@ -171,3 +171,63 @@ def test_correlates_foreground_process_resources_without_copying_window_title():
     assert "foreground-edge" in context.evidence_event_ids
     assert "edge-resource" in context.evidence_event_ids
     assert "unrelated-resource" not in context.evidence_event_ids
+
+
+def test_browser_cpu_falls_back_to_fresh_foreground_browser_process():
+    browser = make_event(
+        "browser.video.snapshot",
+        data={
+            "playback_state": "stalled",
+            "stall_count": 4,
+            "observation_window_seconds": 45,
+            "dropped_frames_pct": 8.0,
+        },
+        event_id="browser-cpu-fallback",
+    )
+    foreground = make_event(
+        "window.foreground_changed",
+        seconds_ago=1,
+        data={"pid": 4001, "process_name": "msedge.exe", "window_class": "Chrome_WidgetWin_1"},
+        event_id="edge-active",
+    )
+    resource = make_event(
+        "process.foreground_resource_sample",
+        seconds_ago=1,
+        data={"pid": 4001, "cpu_pct": 96.0},
+        event_id="edge-cpu",
+    )
+
+    context = build_video_observation_context([browser, foreground, resource])
+
+    assert context is not None
+    assert context.metrics.cpu_pct == 96.0
+
+
+def test_non_browser_foreground_process_does_not_supply_browser_cpu():
+    browser = make_event(
+        "browser.video.snapshot",
+        data={
+            "playback_state": "stalled",
+            "stall_count": 4,
+            "observation_window_seconds": 45,
+            "dropped_frames_pct": 8.0,
+        },
+        event_id="browser-no-fallback",
+    )
+    foreground = make_event(
+        "window.foreground_changed",
+        seconds_ago=1,
+        data={"pid": 5001, "process_name": "notepad.exe", "window_class": "Notepad"},
+        event_id="notepad-active",
+    )
+    resource = make_event(
+        "process.foreground_resource_sample",
+        seconds_ago=1,
+        data={"pid": 5001, "cpu_pct": 99.0},
+        event_id="notepad-cpu",
+    )
+
+    context = build_video_observation_context([browser, foreground, resource])
+
+    assert context is not None
+    assert context.metrics.cpu_pct is None
