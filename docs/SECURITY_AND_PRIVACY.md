@@ -30,7 +30,7 @@ Memory records are written only through explicit user commands or reviewed appli
 ## Browser observation
 Use explicit extension permissions. Collect only playback/performance metrics needed for diagnosis. Never collect page text, credentials, cookies, payment data, form fields or browsing history.
 
-## Autonomy tiers
+## Action proposal ledger\nProposals are stored in a separate local SQLite audit database. The AIE API appends creation and review events and exposes no update/delete operation for that ledger. Capability manifests are user-authored JSON files in `%LOCALAPPDATA%\\AIE\\capabilities`; an empty or invalid capability directory grants no capabilities. Proposal parameter names resembling credentials are rejected, nested payloads are disallowed, and values are size-bounded. User approval re-runs the current policy. A status of approved means authorized for a future reviewed executor only; it does not mean an action ran. There is currently no executor. This is append-only at the application API level, not tamper-proof against a user with direct filesystem/database access.\n\n## Autonomy tiers
 - Tier 0: observe and explain.
 - Tier 1: propose reversible changes.
 - Tier 2: execute explicitly pre-authorized low-risk actions within allowlists and budgets.
