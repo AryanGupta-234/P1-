@@ -627,7 +627,7 @@ def ask(
         f"Elapsed: {response.elapsed_seconds:.2f}s · "
         f"Prompt tokens: {response.prompt_tokens or 'unknown'} · "
         f"Output tokens: {response.completion_tokens or 'unknown'}"
-        f"{memory_note}{activity_note}[/dim]"
+        f"{memory_note}{activity_note}{session_note}[/dim]"
     )
 
 @app.command("session-start")
