@@ -35,7 +35,7 @@ Statuses: DONE / IN_PROGRESS / BLOCKED / PLANNED. Mark DONE only with code, test
 - [x] Event Log provider wired into observer runtime with bounded polling and per-pass record cap.
 - [x] Opt-in allowlisted UI Automation structural tree sampler with node/depth/time bounds.
 - [x] Global per-user observer pause/resume, status and age-based retention pruning.
-- [ ] ETW process telemetry and event-loss metrics.
+- [ ] Validate the bounded opt-in ETW process start/stop prototype, local provider schema and permissions, exact/unknown loss counters, delivery latency and CPU/RAM overhead.
 - [ ] Systemwide per-process CPU/memory/disk/network sampling.
 - [ ] Export/delete-all controls and observer health view.
 - [ ] Validate Event Log/UIA permissions and data collection on the target Windows desktop.
@@ -116,11 +116,12 @@ Statuses: DONE / IN_PROGRESS / BLOCKED / PLANNED. Mark DONE only with code, test
 - [ ] Desktop UI after core telemetry and policy APIs stabilize.
 
 ## Immediate dev sprint
-1. Verify the combined activity, memory and Event Log runtime tests on the current Windows CI matrix.
-2. Add observer health telemetry for permission errors, sensor timeouts and event loss.
-3. Validate browser/native-host, UIA and Event Log behavior on the target Windows desktop.
-4. Implement ETW process telemetry with explicit coverage boundaries.
-5. Update this tracker and Architecture Spotlight with each implementation increment.
+1. Restore a passing Windows CI baseline (Typer CLI argument compatibility, memory timestamp ordering, activity timeline and policy-ledger tests).
+2. Validate browser/native-host, UIA and Event Log behavior on the target Windows desktop.
+3. Review and validate the bounded ETW process capture prototype: provider schema, permissions, session cleanup, loss counters and resource overhead.
+4. Integrate sanitized observer health transitions and coverage reporting.
+5. Only then consider ETW runtime scheduling or systemwide process sampling; maintain explicit opt-in and measured overhead.
+6. Update this tracker and Architecture Spotlight with each implementation increment.
 
 ## Risk register
 | Risk | Mitigation | State |
