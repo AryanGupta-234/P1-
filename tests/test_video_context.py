@@ -23,6 +23,8 @@ def test_correlates_fresh_browser_snapshot_and_network_evidence():
             "playback_state": "stalled",
             "stall_count": 3,
             "observation_window_seconds": 30,
+            "buffered_ahead_seconds": 0.4,
+            "playback_progress_delta_seconds": 0.0,
             "cpu_pct": 45,
             "dropped_frames_pct": 1,
         },
@@ -55,6 +57,8 @@ def test_correlates_fresh_browser_snapshot_and_network_evidence():
     assert context.metrics.stall_count == 3
     assert context.metrics.throughput_mbps is None
     assert context.metrics.packet_loss_pct is None
+    assert context.buffered_ahead_seconds == 0.4
+    assert context.playback_progress_delta_seconds == 0.0
     assert len(context.network_evidence) == 1
     assert context.network_evidence[0].connect_latency_ms == 85
     assert context.evidence_event_ids == ("browser-1", "network-1")
@@ -97,3 +101,12 @@ def test_requires_positive_freshness_window():
 
     with pytest.raises(ValueError):
         build_video_observation_context([], max_age_seconds=0)
+
+
+def test_rejects_untyped_playback_state():
+    malformed = make_event(
+        "browser.video.snapshot",
+        data={"playback_state": ["stalled"], "stall_count": 2,
+              "observation_window_seconds": 20},
+    )
+    assert build_video_observation_context([malformed]) is None
