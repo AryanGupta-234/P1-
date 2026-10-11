@@ -2,7 +2,11 @@
 from __future__ import annotations
 
 import time
+from collections.abc import Callable
 from pathlib import Path
+
+from aie.contracts import AIEEvent
+from aie.diagnostics.monitor import VideoDiagnosticMonitor
 
 from aie.providers.foreground import WindowsForegroundProvider
 from aie.providers.network import WindowsNetworkProvider
@@ -22,6 +26,10 @@ def observe(
     include_foreground: bool = True,
     include_window_titles: bool = False,
     foreground_sample_interval: float = 5.0,
+    include_video_diagnostics: bool = True,
+    diagnostic_max_age_seconds: float = 45.0,
+    diagnostic_cooldown_seconds: float = 120.0,
+    on_diagnostic: Callable[[AIEEvent], None] | None = None,
 ) -> int:
     """Persist read-only system, foreground-app and bounded network observations."""
     if duration < 1:
@@ -46,6 +54,15 @@ def observe(
         else None
     )
     store = EventStore(db_path)
+    diagnostic_monitor = (
+        VideoDiagnosticMonitor(
+            store,
+            max_age_seconds=diagnostic_max_age_seconds,
+            alert_cooldown_seconds=diagnostic_cooldown_seconds,
+        )
+        if include_video_diagnostics
+        else None
+    )
     deadline = time.monotonic() + duration
     next_network = 0.0
     total = 0
@@ -74,6 +91,17 @@ def observe(
                 next_network = now + network_interval
 
             total += store.append_many(events)
+            if diagnostic_monitor is not None:
+                diagnostic_events = diagnostic_monitor.poll()
+                if diagnostic_events:
+                    total += store.append_many(diagnostic_events)
+                    if output:
+                        for event in diagnostic_events:
+                            output.write(event.model_dump_json() + "\\n")
+                        output.flush()
+                    if on_diagnostic is not None:
+                        for event in diagnostic_events:
+                            on_diagnostic(event)
             if output:
                 for event in events:
                     output.write(event.model_dump_json() + "\n")
