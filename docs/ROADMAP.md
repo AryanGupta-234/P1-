@@ -64,6 +64,7 @@ Statuses: DONE / IN_PROGRESS / BLOCKED / PLANNED. Mark DONE only with code, test
 
 ## M2 — Context intelligence
 - [x] Read-only foreground-window transition observer with titles omitted by default.
+- [x] Opt-in allowlisted UI Automation structural tree sampler (control type/class/geometry only; no text/value patterns).
 - [x] Throttled active-foreground process CPU/memory/thread/I/O event sampling.
 - [x] CLI command to inspect correlated playback, foreground-app and network evidence.
 - [x] Initial temporal correlator for browser-video snapshots and fresh same-host network evidence (synthetic contract; live browser bridge remains planned).
