@@ -176,6 +176,8 @@ class MemoryStore:
         """Rank local memories by deterministic token/tag overlap (not embeddings)."""
         if not 1 <= limit <= 100:
             raise ValueError("limit must be between 1 and 100")
+        if not isinstance(query, str) or len(query) > 500:
+            raise ValueError("query must be a string of at most 500 characters")
         query_tokens = set(_TOKEN.findall(query.lower()))
         if not query_tokens:
             return []
@@ -203,6 +205,15 @@ class MemoryStore:
         with self._connect() as db:
             cursor = db.execute("DELETE FROM memories WHERE memory_id = ?", (memory_id,))
             return cursor.rowcount > 0
+
+    def count_expired(self, *, now: datetime | None = None) -> int:
+        current = self._aware_utc(now or datetime.now(timezone.utc), "now")
+        with self._connect() as db:
+            row = db.execute(
+                "SELECT COUNT(*) FROM memories WHERE expires_at IS NOT NULL AND expires_at <= ?",
+                (current.isoformat(),),
+            ).fetchone()
+        return int(row[0])
 
     def prune_expired(self, *, now: datetime | None = None) -> int:
         current = self._aware_utc(now or datetime.now(timezone.utc), "now")
