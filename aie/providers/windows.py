@@ -106,13 +106,13 @@ class WindowsProvider(ObserverProvider):
 
         roots = [
             (winreg.HKEY_LOCAL_MACHINE,
-             r"SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall",
+             r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall",
              winreg.KEY_READ | getattr(winreg, "KEY_WOW64_64KEY", 0)),
             (winreg.HKEY_LOCAL_MACHINE,
-             r"SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall",
+             r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall",
              winreg.KEY_READ | getattr(winreg, "KEY_WOW64_32KEY", 0)),
             (winreg.HKEY_CURRENT_USER,
-             r"SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall",
+             r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall",
              winreg.KEY_READ),
         ]
         apps: dict[tuple[str, str], dict] = {}
