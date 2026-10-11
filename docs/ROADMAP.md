@@ -53,12 +53,13 @@ Statuses: DONE / IN_PROGRESS / BLOCKED / PLANNED. Mark DONE only with code, test
 - [x] Windows network sampler: interface counters, gateway/external TCP connection latency and DNS timing.
 - [ ] Add configurable per-target policy and sustained throughput measurement (opt-in only).
 - [x] Correlate synthetic browser playback snapshots with fresh same-host network evidence.
-- [ ] Validate end-to-end browser → native host → event store → context pipeline on a target desktop.
+- [ ] Validate end-to-end browser → native host → event store → context CLI pipeline on a target desktop.
 - [ ] Confidence calibration and actionable diagnostic proposals.
 
 ## M2 — Context intelligence
 - [x] Read-only foreground-window transition observer with titles omitted by default.
 - [x] Throttled active-foreground process CPU/memory/thread/I/O event sampling.
+- [x] CLI command to inspect correlated playback, foreground-app and network evidence.
 - [x] Initial temporal correlator for browser-video snapshots and fresh same-host network evidence (synthetic contract; live browser bridge remains planned).
 - [ ] Unified event bus and general temporal correlation.
 - [ ] Working context: correlate foreground process transitions, browser playback and session/task state.
