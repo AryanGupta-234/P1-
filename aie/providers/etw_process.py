@@ -412,8 +412,6 @@ class WindowsETWProcessProvider:
             )
         except ETWProcessCaptureError:
             raise
-        except BaseException:
-            raise
         finally:
             if (started or start_uncertain) and not stopped and not cleanup_attempted:
                 cleanup_attempted = True
@@ -428,5 +426,12 @@ class WindowsETWProcessProvider:
                         workspace=str(workspace),
                     )
             if stopped or (not started and not start_uncertain):
-                shutil.rmtree(workspace, ignore_errors=True)
+                try:
+                    shutil.rmtree(workspace)
+                except OSError as exc:
+                    raise ETWProcessCaptureError(
+                        "workspace_cleanup_failed",
+                        session_name=session_name,
+                        workspace=str(workspace),
+                    ) from exc
 
