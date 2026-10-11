@@ -69,7 +69,7 @@ Build persistent personal intelligence that observes explicitly permitted signal
 - Provider-independent model request/response contracts.
 - Local Ollama client and hardware-aware selection of already-installed models; no implicit model pulls.
 - Optional OpenAI-compatible HTTPS provider requiring explicit `--provider cloud --allow-cloud-egress`.
-- Cloud requests contain only the prompt explicitly supplied to `aie ask`; observer telemetry is not automatically attached.
+- Cloud requests contain only the prompt explicitly supplied to `aie ask` unless the user additionally enables `--with-memory` and `--confirm-memory-egress`; observer telemetry is never automatically attached. Sensitive memory is blocked from remote model requests.
 
 **Context and memory**
 - Indexed event queries and `aie activity` temporal sessions across the normalized event categories.
