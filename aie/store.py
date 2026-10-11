@@ -58,3 +58,25 @@ class EventStore:
     def count(self) -> int:
         with self._connect() as db:
             return int(db.execute("SELECT COUNT(*) FROM events").fetchone()[0])
+
+    def count_before(self, cutoff: datetime) -> int:
+        """Count events older than an aware UTC cutoff without deleting them."""
+        if cutoff.tzinfo is None:
+            raise ValueError("cutoff must be timezone-aware")
+        with self._connect() as db:
+            row = db.execute(
+                "SELECT COUNT(*) FROM events WHERE timestamp < ?",
+                (cutoff.isoformat(),),
+            ).fetchone()
+        return int(row[0])
+
+    def delete_before(self, cutoff: datetime) -> int:
+        """Delete events older than an aware UTC cutoff; newer events are untouched."""
+        if cutoff.tzinfo is None:
+            raise ValueError("cutoff must be timezone-aware")
+        with self._connect() as db:
+            cursor = db.execute(
+                "DELETE FROM events WHERE timestamp < ?",
+                (cutoff.isoformat(),),
+            )
+            return int(cursor.rowcount)
