@@ -22,8 +22,8 @@ Statuses: DONE / IN_PROGRESS / BLOCKED / PLANNED. Mark DONE only with code, test
 - [x] Python package, CLI and SQLite event store.
 - [x] Read-only inventory and process reconciliation.
 - [x] Architecture spotlight and roadmap.
-- [ ] Full tests on Windows 10/11.
-- [ ] CI matrix on Python 3.11/3.12 and lint (initial runs exposed lint errors; revalidation pending).
+- [ ] Live smoke test on the target Windows 11 desktop and selected installed applications.
+- [x] Windows CI on Python 3.11/3.12: dependency install, optional pywinauto import, Ruff and pytest all passed on PR #4 head.
 - [ ] Dependency/security checks and contributor setup.
 
 ## M1 — Windows perception
@@ -59,7 +59,7 @@ Statuses: DONE / IN_PROGRESS / BLOCKED / PLANNED. Mark DONE only with code, test
 - [ ] Confidence calibration and actionable diagnostic proposals.
 
 ## M2 — Context intelligence
-- [x] Initial temporal correlator for browser-video snapshots and fresh same-host network evidence (synthetic contract; live browser bridge remains planned).
+- [x] Initial temporal correlator for browser-video snapshots and fresh same-host network evidence (synthetic contract; browser extension/native host prototype exists, end-to-end desktop validation remains pending).
 - [ ] Unified event bus and general temporal correlation.
 - [ ] Working context: foreground application, task and session state.
 - [ ] Facts-versus-hypotheses model, evidence lineage and contradictions.
@@ -88,7 +88,7 @@ Statuses: DONE / IN_PROGRESS / BLOCKED / PLANNED. Mark DONE only with code, test
 ## M5 — Controlled autonomy
 - [x] Read-only UIA window metadata listing and bounded tree inspector (PR #4; metadata-only, no actions).
 - [x] Synthetic tests for traversal bounds, provider errors and text-property exclusion.
-- [ ] Confirm optional pywinauto installation/import in Windows CI on Python 3.11/3.12.
+- [x] Confirm optional pywinauto installation/import in Windows CI on Python 3.11/3.12.
 - [ ] Validate UIA support/limitations against selected desktop applications.
 - [ ] Capability manifests and least-privilege identities.
 - [ ] Proposal → policy → approval → sandbox → verification.
