@@ -1,16 +1,4 @@
-"""Temporal and activity context projections."""
-from aie.context.activity import (
-    ActivitySession,
-    ActivitySignal,
-    ActivityTimeline,
-    build_activity_timeline,
-)
-from aie.context.video import build_video_observation_context
+"""Temporal and activity context modules for AIE.
 
-__all__ = [
-    "ActivitySession",
-    "ActivitySignal",
-    "ActivityTimeline",
-    "build_activity_timeline",
-    "build_video_observation_context",
-]
+Import concrete modules explicitly to avoid cross-package initialization cycles.
+"""
