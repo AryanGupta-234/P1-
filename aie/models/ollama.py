@@ -117,6 +117,8 @@ class OllamaClient:
 
         if not isinstance(model, str) or not model:
             raise ValueError("model must be a non-empty installed model name")
+        if not isinstance(inputs, list):
+            raise ValueError("embedding inputs must be supplied as a list of strings")
         if not 1 <= len(inputs) <= 32:
             raise ValueError("embedding batches must contain between 1 and 32 texts")
         if any(not isinstance(item, str) or not item.strip() or len(item) > 8000 for item in inputs):
