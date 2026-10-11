@@ -25,6 +25,7 @@ class MemoryRecord(BaseModel):
     sensitivity: MemorySensitivity = "internal"
     confidence: float = Field(default=1.0, ge=0.0, le=1.0)
     source_event_ids: list[str] = Field(default_factory=list, max_length=100)
+    source_task_run_ids: list[str] = Field(default_factory=list, max_length=20)
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     expires_at: datetime | None = None
@@ -60,6 +61,18 @@ class MemoryRecord(BaseModel):
             candidate = value.strip()
             if not candidate or len(candidate) > 80:
                 raise ValueError("source event IDs must be non-empty and at most 80 characters")
+            if candidate not in normalized:
+                normalized.append(candidate)
+        return normalized
+
+    @field_validator("source_task_run_ids")
+    @classmethod
+    def validate_source_task_run_ids(cls, values: list[str]) -> list[str]:
+        normalized: list[str] = []
+        for value in values:
+            candidate = value.strip()
+            if not candidate or len(candidate) > 80:
+                raise ValueError("source task run IDs must be non-empty and at most 80 characters")
             if candidate not in normalized:
                 normalized.append(candidate)
         return normalized
