@@ -88,6 +88,29 @@ def test_plan_rejects_duplicate_ids_and_unknown_completion_ids():
         next_ready_steps(plan, completed_step_ids={"not-in-plan"})
 
 
+def test_readiness_rejects_completed_steps_with_incomplete_prerequisites():
+    plan = TaskPlan(
+        goal="Inspect an application",
+        steps=[
+            step("observe"),
+            step("reason", depends_on=("observe",), kind="reason"),
+        ],
+    )
+
+    with pytest.raises(ValueError, match="incomplete dependencies"):
+        next_ready_steps(plan, completed_step_ids={"reason"})
+
+
+def test_plan_collections_are_immutable_after_validation():
+    plan = TaskPlan(goal="Immutable plan", steps=[step("observe")])
+
+    with pytest.raises((AttributeError, TypeError)):
+        plan.steps.append(step("extra"))
+
+    with pytest.raises((AttributeError, TypeError)):
+        plan.steps[0].depends_on.append("unknown")
+
+
 def test_action_steps_reference_a_capability_but_do_not_carry_tool_arguments():
     with pytest.raises(ValidationError, match="must reference a capability_id"):
         step("change-setting", kind="propose_action")
