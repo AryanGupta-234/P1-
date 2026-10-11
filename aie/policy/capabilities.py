@@ -212,6 +212,10 @@ class PolicyControlledExecutor:
             manifest.max_execution_seconds,
             decision.max_execution_seconds or manifest.max_execution_seconds,
         )
+        if max_seconds < 0.1:
+            raise ActionExecutionDenied(
+                "manifest execution budget is below the executor's minimum supported window"
+            )
         budget = ExecutionBudget(max_seconds=max_seconds)
         started = self.clock()
         try:
