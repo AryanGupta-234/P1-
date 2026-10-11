@@ -16,8 +16,10 @@ AIE observes local Windows activity and may later propose or execute scoped acti
 - Every action has a postcondition verifier; failed verification stops execution rather than blindly retrying.
 - Cloud model routing must respect explicit egress policy and minimize/redact telemetry.
 
-## Screen capture
-Screen perception must be visibly enabled, pauseable and event-driven where practical. Capture only for an explicitly selected capability. No hidden continuous recording; avoid storing raw screenshots unless explicitly requested.
+## Screen and UI Automation observation
+Structural UI Automation sampling is off by default and requires an explicit per-process allowlist. The initial provider records only control type, class, automation ID and geometry, with strict depth/node/time bounds. It does not query control text, values, passwords or screenshots. Window-title capture remains separately opt-in and sensitive.
+
+Screen capture must be visibly enabled, pauseable and event-driven where practical. Capture only for an explicitly selected capability. No hidden continuous recording; avoid storing raw screenshots unless explicitly requested.
 
 ## Browser observation
 Use explicit extension permissions. Collect only playback/performance metrics needed for diagnosis. Never collect page text, credentials, cookies, payment data, form fields or browsing history.
