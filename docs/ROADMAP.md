@@ -87,6 +87,9 @@ Status vocabulary: DONE / IN_PROGRESS / BLOCKED / PLANNED. A task is DONE only w
 - [ ] Calibration, robustness, forgetting and recovery metrics.
 - [ ] Reproducible experiment logs; benchmark progress is not proof of AGI.
 
+## Active GitHub work item
+- [Issue #3 — Validate Windows Observer and implement ETW process telemetry](https://github.com/AryanGupta-234/P1-/issues/3)
+
 ## Current sprint — target hardware: Windows 11 x64, 16 GB RAM
 1. Confirm Windows CI; run `python -m pytest` and `ruff check .` locally.
 2. Add service/network state deltas and event retention controls.
