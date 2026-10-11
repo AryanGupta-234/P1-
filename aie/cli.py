@@ -146,6 +146,9 @@ def observe(
     event_log_channels: str = typer.Option("Application,System", help="Comma-separated allowlisted Windows event log channels."),
     event_log_interval: float = typer.Option(30.0, min=5.0, max=300.0),
     event_log_max_records: int = typer.Option(50, min=1, max=200),
+    process_resources: bool = typer.Option(False, "--process-resources/--no-process-resources", help="Opt in to bounded systemwide process resource snapshots."),
+    process_resource_interval: float = typer.Option(10.0, min=2.0, max=300.0),
+    process_resource_max_processes: int = typer.Option(256, min=1, max=512),
 ) -> None:
     """Observe selected Windows metadata (read-only)."""
     from aie.runtime import observe as run_observer
@@ -197,6 +200,9 @@ def observe(
             event_log_channels=selected_event_logs,
             event_log_interval=event_log_interval,
             event_log_max_records=event_log_max_records,
+            include_process_resources=process_resources,
+            process_resource_interval=process_resource_interval,
+            process_resource_max_processes=process_resource_max_processes,
         )
     except (OSError, RuntimeError, ValueError) as exc:
         console.print(f"[red]Observer unavailable:[/red] {exc}")
