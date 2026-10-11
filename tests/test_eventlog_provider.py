@@ -111,3 +111,35 @@ def test_eventlog_handles_are_closed():
     provider.collect_snapshot()
 
     assert api.closed == ["Application", "System"]
+
+
+def test_eventlog_clear_or_record_number_reset_is_detected():
+    api = FakeEventLogApi()
+    api.records["System"] = [record(100), record(101)]
+    provider = WindowsEventLogProvider(channels=["System"], api=api)
+    assert provider.collect_snapshot() == []
+
+    # Simulate a cleared classic event log and a new record-number sequence.
+    api.records["System"] = [record(1, 6000), record(2, 6001)]
+    emitted = provider.collect_snapshot()
+
+    assert [event.data["record_number"] for event in emitted] == [1, 2]
+
+
+class FailingEventLogApi(FakeEventLogApi):
+    def open(self, channel):
+        raise PermissionError("private details should not be copied")
+
+
+def test_eventlog_access_error_is_reported_once_without_error_message():
+    api = FailingEventLogApi()
+    provider = WindowsEventLogProvider(channels=["System"], api=api)
+
+    first = provider.collect_snapshot()
+    second = provider.collect_snapshot()
+
+    assert len(first) == 1
+    assert first[0].event_type == "windows.eventlog.provider_error"
+    assert first[0].data["error_type"] == "PermissionError"
+    assert "message" not in first[0].data
+    assert second == []
