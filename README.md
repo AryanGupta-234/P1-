@@ -135,6 +135,31 @@ Plan drafting does not pull models, attach observations automatically or select 
 
 Action steps queue policy proposals. Review them with `aie approve-proposal <PROPOSAL_ID>`; approval alone never executes anything. A separate `aie execute-proposal` command is required and the execution gate is disabled by default.
 
+## Reviewed memory consolidation and verified procedural skills
+
+`aie memory-consolidate` identifies likely duplicate pairs but never changes memory. Review both records locally, then provide the resulting content explicitly to the separate merge command:
+
+```powershell
+aie memory-merge <MEMORY_ID_A> <MEMORY_ID_B> "User-reviewed combined procedure"
+# Preview only. To commit the merge:
+aie memory-merge <MEMORY_ID_A> <MEMORY_ID_B> "User-reviewed combined procedure" --confirm
+# Sensitive source records require a separate opt-in:
+aie memory-merge <MEMORY_ID_A> <MEMORY_ID_B> "User-reviewed combined procedure" --include-sensitive --confirm
+```
+
+A merge creates a new record and keeps both sources as superseded history. It retains both lineage links and provenance, will not reduce sensitivity, inflate confidence or extend expiry, and removes source embeddings so they cannot continue to appear as active memories. The resulting content is supplied by the user; the merge does not ask a model to invent a replacement.
+
+Completed task runs can be inspected for verified procedural-skill candidates:
+
+```powershell
+aie skill-candidate <RUN_ID>
+aie skill-save <RUN_ID> --confirm
+# Explicitly choose internal sensitivity instead of the sensitive default:
+aie skill-save <RUN_ID> --confirm --internal
+```
+
+Candidates require a completed run and at least one positive `verify` step. Action-bearing runs additionally require successful policy-ledger execution receipts and a verification step that depends on each action. The candidate is assembled deterministically from plan criteria and recorded step summaries. Saving creates a procedural memory linked to the originating task-run ID. It does not retrain a model or create an executable capability.
+
 ## Restricted Windows Settings capability
 
 The only built-in action adapter opens one fixed Windows Settings page; it does not change a setting, run commands or launch arbitrary processes. To enable this adapter, create a user-managed manifest at `%LOCALAPPDATA%\AIE\capabilities\windows-settings-open.json` with:
