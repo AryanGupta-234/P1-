@@ -161,3 +161,25 @@ def test_eventlog_reports_exact_records_lost_after_retention_rollover():
     assert loss.data["dropped_records"] == 2
     assert loss.data["loss_count_known"] is True
     assert [event.data["record_number"] for event in events if event.event_type == "windows.eventlog.record"] == [5, 6]
+
+
+
+def test_eventlog_emits_recovery_after_channel_becomes_readable():
+    class RecoveringEventLogApi(FakeEventLogApi):
+        unavailable = True
+
+        def open(self, channel):
+            if self.unavailable:
+                raise PermissionError("do not persist this message")
+            return channel
+
+    api = RecoveringEventLogApi()
+    provider = WindowsEventLogProvider(channels=["System"], api=api)
+
+    failed = provider.collect_snapshot()
+    assert failed[0].event_type == "windows.eventlog.provider_error"
+
+    api.unavailable = False
+    recovered = provider.collect_snapshot()
+    assert len(recovered) == 1
+    assert recovered[0].event_type == "windows.eventlog.provider_recovered"
