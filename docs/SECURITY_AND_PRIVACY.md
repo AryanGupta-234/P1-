@@ -24,6 +24,9 @@ Screen capture must be visibly enabled, pauseable and event-driven where practic
 ## Windows Event Log observation
 Event Log collection is off by default and restricted to the classic Application/System channels. The first sample establishes a cursor and does not replay historical records. Only provider name, event ID/type/category, record number, machine and event timestamp are stored; message text, XML payloads and Security logs are excluded. Polling is bounded and uses the optional pywin32 dependency.
 
+## Memory-to-model context egress
+Memory is never attached to a model request by default. The user must opt in per request. Matching records are bounded and quoted as untrusted reference data. Sensitive memories are excluded by default and cannot be attached to cloud or remote Ollama requests. Remote requests that include non-sensitive memories require a separate `--confirm-memory-egress` confirmation. Observer events and screen/browser telemetry are not attached by this mechanism.
+
 ## Persistent local memory
 Memory records are written only through explicit user commands or reviewed application calls; no collector or model silently promotes events into memory. Records are stored in a separate local SQLite database. Sensitivity is a handling label that controls default listing/retrieval, not encryption. Do not store passwords, API keys, tokens, recovery codes or other credentials in memory. Use the sensitive flag and hidden interactive input for private notes, and protect the Windows account/device. Memory expiry, correction/supersession and deletion are user-controlled.
 
