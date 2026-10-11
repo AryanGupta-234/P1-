@@ -42,6 +42,8 @@ aie observe --duration 30 --include-window-titles
 aie observe --duration 60 --foreground-sample-interval 10
 # Inspect correlated browser, active-app and network evidence:
 aie context
+# Prompt an installed local Ollama model:
+aie ask "Explain the latest AIE event context" --task routine
 python -m pytest
 python -m ruff check .
 ```
@@ -65,6 +67,9 @@ The opt-in Chrome/Edge extension prototype is in `browser_extension/`. Load it u
 
 ## Foreground application observation
 The observer emits foreground-window transition events using the Windows user32 API. Process name and window class are collected by default; window titles are omitted. Explicitly passing `--include-window-titles` collects them as sensitive data.
+
+## Local model runtime
+A provider-neutral request/response contract and Ollama adapter are available under `aie/models/`. The router selects only installed local models using available RAM; it never pulls a model. `aie ask` is local-only by default. A remote Ollama endpoint requires an explicit `--allow-remote-ollama` flag and HTTPS.
 
 ## Current limitations
 Process lifecycle observation uses best-effort user-mode snapshots and may miss transient processes. Foreground process resource sampling is limited to the active application; it is not a systemwide per-process profiler. Video diagnostics analyze supplied metrics only; live browser telemetry, screen perception, model gateway, persistent learning and autonomous remediation are not implemented.
