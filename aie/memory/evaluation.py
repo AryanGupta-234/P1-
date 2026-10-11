@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Literal
 
@@ -192,7 +193,5 @@ def evaluate_memory_retrieval(
         mean_precision_at_k=sum(item.precision_at_k for item in results) / total,
         mean_reciprocal_rank=sum(item.reciprocal_rank for item in results) / total,
         hit_rate_at_k=sum(item.relevant_returned > 0 for item in results) / total,
-        evaluated_at_utc=__import__("datetime").datetime.now(
-            __import__("datetime").timezone.utc
-        ).isoformat(),
+        evaluated_at_utc=datetime.now(timezone.utc).isoformat(),
     )
