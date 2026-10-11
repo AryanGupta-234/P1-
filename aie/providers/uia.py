@@ -142,6 +142,7 @@ class WindowsUIATreeProvider:
         self._last_identity: tuple[int, int] | None = None
         self._last_sample_at = float("-inf")
         self._scan_lock = threading.Lock()
+        self._read_degraded = False
 
     @staticmethod
     def _sanitize_nodes(raw_nodes: list[dict[str, Any]], max_nodes: int) -> list[dict[str, Any]]:
@@ -236,12 +237,53 @@ class WindowsUIATreeProvider:
         self._last_sample_at = now
         nodes = self._read_with_timeout(handle)
         if nodes is None:
-            return []
+            if self._read_degraded:
+                return []
+            self._read_degraded = True
+            return [AIEEvent(
+                host_id=host_id(),
+                source=self.name,
+                event_type="windows.uia.provider_timeout",
+                entity=EntityRef(
+                    type="application_window",
+                    name=process_name,
+                    stable_id=str(handle),
+                ),
+                data={
+                    "pid": pid,
+                    "process_name": process_name,
+                    "reason_code": "scan_timeout_or_busy",
+                    "timeout_seconds": self.timeout_seconds,
+                    "text_collected": False,
+                    "screenshot_collected": False,
+                },
+                sensitivity="internal",
+                confidence=1.0,
+                evidence_kind="observed",
+            )]
+
+        events: list[AIEEvent] = []
+        if self._read_degraded:
+            events.append(AIEEvent(
+                host_id=host_id(),
+                source=self.name,
+                event_type="windows.uia.provider_recovered",
+                entity=EntityRef(
+                    type="application_window",
+                    name=process_name,
+                    stable_id=str(handle),
+                ),
+                data={"pid": pid, "process_name": process_name, "recovered": True},
+                sensitivity="internal",
+                confidence=1.0,
+                evidence_kind="observed",
+            ))
+        self._read_degraded = False
         sanitized = self._sanitize_nodes(nodes, self.max_nodes)
         if not sanitized:
-            return []
+            return events
 
-        return [AIEEvent(
+        events.append(AIEEvent(
             host_id=host_id(),
             source=self.name,
             event_type="window.uia_tree_snapshot",
@@ -263,4 +305,5 @@ class WindowsUIATreeProvider:
             sensitivity="internal",
             confidence=0.95,
             evidence_kind="observed",
-        )]
+        ))
+        return events
