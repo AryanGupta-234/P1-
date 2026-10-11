@@ -149,6 +149,15 @@ def observe(
                 error_type=type(exc).__name__,
             )
             return []
+        loss_count = 0
+        for event in collected:
+            if not isinstance(event.data, dict) or not event.data.get("loss_kind"):
+                continue
+            dropped = event.data.get("dropped_events")
+            if isinstance(dropped, int) and dropped >= 0:
+                loss_count += dropped
+        if loss_count:
+            health.record_event_loss(provider_name, loss_count)
         health.record_sample(
             provider_name,
             elapsed_seconds=max(0.0, time.monotonic() - started),
