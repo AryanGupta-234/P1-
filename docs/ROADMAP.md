@@ -126,8 +126,10 @@ Statuses: DONE / IN_PROGRESS / BLOCKED / PLANNED. Mark DONE only with code, test
 - [ ] Enable any autonomous remediation only after end-to-end verification.
 
 ## M6 — Generalization research
+- [x] User-authored retrieval benchmark with Recall@k, Precision@k, MRR and Hit Rate for lexical or local semantic search; sensitive records require explicit inclusion.
+- [x] Conservative lexical polarity-conflict proposals for manual review; no automatic rewrite or resolution.
 - [ ] Held-out task families and deterministic baselines.
-- [ ] Transfer to unseen task variations.
+- [ ] Transfer to unseen task variations and evaluate procedural-skill quality.
 - [ ] Causal/temporal reasoning measured separately from retrieval.
 - [ ] Calibration, robustness, forgetting and recovery metrics.
 - [ ] Reproducible experiment manifests; no benchmark presented as proof of AGI.
@@ -143,7 +145,7 @@ Statuses: DONE / IN_PROGRESS / BLOCKED / PLANNED. Mark DONE only with code, test
 1. Validate the native tray, balloon notification behavior, browser/native-host, UIA, Event Log and elevated ETW on the actual target desktop; hosted CI cannot validate interactive desktop behavior.
 2. Extend ETW from process lifecycle into explicitly selected thread/file/network categories with coverage reporting.
 3. Evaluate freshness/contradiction signals and add calibrated confidence metrics without treating heuristics as probabilities.
-4. Evaluate semantic memory retrieval, reviewed merges, retention and contradiction handling.
+4. Evaluate semantic memory retrieval, reviewed merges, retention and temporal contradiction handling on held-out queries.
 5. Add process isolation and adapter-specific postcondition verifiers before expanding the narrow Windows Settings adapter.
 6. Evaluate planner quality, skill quality/transfer and verified outcome utility without learning from unverified or model-generated success claims.
 
