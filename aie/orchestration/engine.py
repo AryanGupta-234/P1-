@@ -246,6 +246,46 @@ class TaskOrchestrator:
             details={"reason": reason[:200]},
         )
 
+    def retry_step(self, run_id: str, step_id: str) -> TaskRun:
+        """Reset a waiting non-mutating step after its configuration is corrected."""
+        run = self.get(run_id)
+        if run.status != "awaiting_input":
+            raise ValueError("task run is not awaiting user input")
+        plan_step = next(
+            (step for step in run.plan.steps if step.step_id == step_id),
+            None,
+        )
+        if plan_step is None:
+            raise ValueError(f"step {step_id!r} does not exist in this task run")
+        if plan_step.kind not in {"observe", "reason", "inform"}:
+            raise ValueError(
+                "only observe, reason and inform steps can be explicitly retried; "
+                "actions and verification use their own gates"
+            )
+        current = self._step(run, step_id)
+        if current.status != "awaiting_input":
+            raise ValueError("step is not awaiting user input")
+        replacement = current.model_copy(
+            update={
+                "status": "pending",
+                "summary": None,
+                "error_type": None,
+                "started_at": None,
+                "completed_at": None,
+                "verified": False,
+                "proposal_id": None,
+            }
+        )
+        updated = self._replace_step(run, replacement).model_copy(
+            update={"status": "queued", "failure_type": None}
+        )
+        return self.store.save(
+            updated,
+            expected_version=run.version,
+            event_type="task.step.retry_requested",
+            details={"step_id": step_id, "kind": plan_step.kind},
+        )
+
     def complete_input(
         self,
         run_id: str,
