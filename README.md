@@ -21,17 +21,19 @@ py -3.11 -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install -e ".[dev]"
 aie doctor
-aie inventory
+aie hardware
+aie models
+aie inventory --output inventory.json
 aie observe --duration 30
 ```
 The first release is read-only, local-only and stores events under %LOCALAPPDATA%\AIE. No model or network is required.
 
 ## Layout
 - `aie/`: contracts, observer, SQLite store and CLI.
-- `docs/`: architecture spotlight, roadmap, decisions and security.
+- `docs/`: architecture spotlight, roadmap, hardware profile, Windows automation strategy and security.
 - `tests/`: deterministic synthetic tests.
 
 ## Current limitations
 Initial process lifecycle monitoring uses periodic user-mode snapshots and may miss short-lived processes. It is not complete kernel telemetry. ETW integration is a next milestone; a driver requires a separate threat model, signing, review, installation consent and removal plan.
 
-Run tests with `python -m pytest`.
+Run tests with `python -m pytest`. The Windows CI workflow runs tests and Ruff on pushes and pull requests.
