@@ -1464,6 +1464,48 @@ def memory_consolidate(
     )
 
 
+@app.command("memory-conflicts")
+def memory_conflicts(
+    kind: Literal["working", "episodic", "semantic", "procedural", "prospective"] | None = typer.Option(None),
+    include_sensitive: bool = typer.Option(
+        False, "--include-sensitive", help="Explicitly include sensitive memories in review."
+    ),
+    max_proposals: int = typer.Option(20, min=1, max=100),
+) -> None:
+    """Find explicit lexical polarity conflicts for human review; changes no records."""
+    from aie.memory.conflicts import generate_conflict_proposals
+    from aie.memory.store import MemoryStore
+
+    proposals = generate_conflict_proposals(
+        MemoryStore(memory_database_path()),
+        kind=kind,
+        include_sensitive=include_sensitive,
+        max_proposals=max_proposals,
+    )
+    if not proposals:
+        console.print("No lexical conflict candidates found.")
+        return
+    table = Table("Kind", "Opposing terms", "Shared context", "Memory A", "Memory B")
+    for item in proposals:
+        table.add_row(
+            item.kind,
+            " ↔ ".join(item.opposing_terms),
+            ", ".join(item.shared_context_tokens[:8]),
+            item.memory_ids[0],
+            item.memory_ids[1],
+        )
+    console.print(table)
+    console.print(
+        "[dim]Lexical polarity candidate only, not a contradiction proof. "
+        "Inspect both records and their timestamps. No memory was changed.[/dim]"
+    )
+    if include_sensitive:
+        console.print(
+            "[yellow]Sensitive records were eligible for review by explicit opt-in; "
+            "source content was not printed.[/yellow]"
+        )
+
+
 @app.command("memory-merge")
 def memory_merge(
     memory_a: str = typer.Argument(...),
