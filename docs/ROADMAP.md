@@ -88,7 +88,9 @@ Statuses: DONE / IN_PROGRESS / BLOCKED / PLANNED. Mark DONE only with code, test
 - [x] Interactive hidden input for sensitive memory entry; explicitly document that sensitivity labels are not encryption.
 - [x] Local keyword/tag retrieval with sensitive memories excluded by default.
 - [x] Optional local Ollama embedding index and cosine-similarity memory retrieval; no automatic model pulls.
-- [ ] Embedding retrieval evaluation, export, contradiction resolution and consolidation.
+- [x] Optional local Ollama embedding index with cosine retrieval, model-specific vector storage and deletion/expiry cleanup.
+- [x] CLI for memory indexing and semantic recall; sensitive indexing requires an explicit flag and warning.
+- [ ] Embedding retrieval quality evaluation, export, contradiction resolution and consolidation.
 - [ ] Retrieval benchmark, contradiction handling and consolidation.
 - [ ] Evaluated learning from verified outcomes; do not learn unverified fixes.
 - [ ] Reviewed and versioned reusable skill induction.
