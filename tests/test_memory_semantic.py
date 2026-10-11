@@ -144,3 +144,26 @@ def test_semantic_store_rejects_invalid_vectors_and_dimension_mismatch(tmp_path)
 
     store.save_embedding(memory.memory_id, "nomic-embed-text", [1.0, 0.0, 0.0])
     assert store.search_semantic([1.0, 0.0], model="nomic-embed-text") == []
+
+
+def test_semantic_search_excludes_orthogonal_or_unrelated_vectors_by_threshold(tmp_path):
+    store = MemoryStore(tmp_path / "semantic-threshold.sqlite3")
+    relevant = store.save(MemoryRecord(kind="semantic", content="Browser context."))
+    unrelated = store.save(MemoryRecord(kind="semantic", content="Network context."))
+    store.save_embedding(relevant.memory_id, "embed-v1", [1.0, 0.0, 0.0])
+    store.save_embedding(unrelated.memory_id, "embed-v1", [0.0, 1.0, 0.0])
+
+    hits = store.search_semantic(
+        [0.9, 0.1, 0.0],
+        model="embed-v1",
+        minimum_score=0.2,
+    )
+
+    assert [item.memory.memory_id for item in hits] == [relevant.memory_id]
+    assert hits[0].score > 0.9
+
+
+def test_semantic_search_rejects_invalid_similarity_threshold(tmp_path):
+    store = MemoryStore(tmp_path / "semantic-threshold-validation.sqlite3")
+    with pytest.raises(ValueError, match="minimum_score"):
+        store.search_semantic([1.0, 0.0], model="embed-v1", minimum_score=1.1)
