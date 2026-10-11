@@ -209,6 +209,65 @@ def events(limit: int = typer.Option(20, min=1, max=1000)) -> None:
     console.print(f"Total stored: {store.count()}")
 
 
+
+@app.command("activity")
+def show_activity(
+    hours: float = typer.Option(4.0, min=0.1, max=168.0, help="Look back this many hours."),
+    session_gap_minutes: float = typer.Option(5.0, min=0.5, max=60.0),
+    limit: int = typer.Option(1000, min=1, max=5000),
+    include_sensitive: bool = typer.Option(False, help="Include sensitive event metadata (payload text is never shown)."),
+) -> None:
+    """Show a privacy-safe timeline grouped into temporal activity sessions."""
+    from aie.context.activity import build_activity_timeline
+
+    now = datetime.now(timezone.utc)
+    store = EventStore(database_path())
+    events = store.query_events(
+        since=now - timedelta(hours=hours),
+        limit=limit,
+    )
+    timeline = build_activity_timeline(
+        events,
+        now=now,
+        max_age_seconds=hours * 3600,
+        session_gap_seconds=session_gap_minutes * 60,
+        include_sensitive=include_sensitive,
+    )
+    if not timeline.sessions:
+        console.print("No activity events in the selected time window.")
+        return
+
+    console.print(
+        f"Activity timeline · {timeline.event_count} events · "
+        f"{len(timeline.sessions)} sessions · lookback {hours:g}h"
+    )
+    for session in timeline.sessions:
+        duration = max(0.0, (session.ended_at - session.started_at).total_seconds())
+        state = "CURRENT" if session.session_id == timeline.current_session_id else "SESSION"
+        heading = (
+            f"{state} · {session.started_at.astimezone().strftime('%H:%M:%S')}–"
+            f"{session.ended_at.astimezone().strftime('%H:%M:%S')} · "
+            f"{duration / 60:.1f} min · {session.event_count} events"
+        )
+        console.print(f"\n[bold]{heading}[/bold]")
+        if session.applications:
+            console.print("Apps: " + ", ".join(session.applications))
+        console.print("Signals: " + ", ".join(session.kinds))
+        table = Table("Time", "Kind", "Observation", "Confidence")
+        for signal in session.signals[-20:]:
+            table.add_row(
+                signal.timestamp.astimezone().strftime("%H:%M:%S"),
+                signal.kind,
+                signal.title,
+                f"{signal.confidence:.0%}",
+            )
+        console.print(table)
+    console.print(
+        "[dim]Sessions are time-based groupings, not inferred user intent. "
+        "Raw event payloads, window titles, UIA text and feedback notes are not displayed.[/dim]"
+    )
+
+
 @app.command("context")
 def show_context(
     max_age_seconds: float = typer.Option(30.0, min=1.0, max=300.0),
