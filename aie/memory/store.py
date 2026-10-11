@@ -1,6 +1,7 @@
 """SQLite-backed personal memory with explicit capture and local retrieval."""
 from __future__ import annotations
 
+import json
 import math
 import re
 import sqlite3
