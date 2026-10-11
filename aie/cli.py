@@ -2050,11 +2050,47 @@ def proposal_audit(proposal_id: str = typer.Argument(...)) -> None:
     )
     console.print(f"Audit chain: {integrity_text}")
     console.print(
-        "[dim]The ledger includes review decisions and any execution receipts. "
-        "A successful dispatch receipt is not postcondition verification.[/dim]"
+        "[dim]The ledger includes review decisions, execution receipts and explicit postcondition records. "
+        "A human verification record is not independent OS-state inspection.[/dim]"
     )
 
 
+
+
+@app.command("verify-proposal")
+def verify_proposal(
+    proposal_id: str = typer.Argument(...),
+    outcome: str = typer.Argument(..., help="Postcondition outcome: confirmed or not-confirmed."),
+    evidence_code: str = typer.Option(..., "--evidence-code", help="Short non-sensitive evidence category."),
+    summary: str = typer.Option(..., "--summary", help="Brief human verification note; do not include secrets."),
+    confirm: bool = typer.Option(False, "--confirm", help="Confirm appending this verification decision."),
+) -> None:
+    """Append a one-time human postcondition result after successful action dispatch."""
+    from aie.policy.ledger import PolicyLedger
+
+    if not confirm:
+        console.print("[yellow]Pass --confirm to append this verification decision.[/yellow]")
+        raise typer.Exit(2)
+    if outcome not in {"confirmed", "not-confirmed"}:
+        console.print("[red]Outcome must be confirmed or not-confirmed.[/red]")
+        raise typer.Exit(2)
+    try:
+        snapshot = PolicyLedger(policy_audit_database_path()).append_postcondition_verification(
+            proposal_id,
+            confirmed=outcome == "confirmed",
+            verifier="local_user",
+            evidence_code=evidence_code,
+            summary=summary,
+        )
+    except ValueError as exc:
+        console.print(f"[red]Verification rejected:[/red] {exc}")
+        raise typer.Exit(2) from exc
+
+    console.print(
+        f"[green]Verification recorded.[/green] "
+        f"Outcome: {outcome} · Execution verified: {snapshot.execution_verified}"
+    )
+    console.print("[dim]This records your explicit assessment; it does not independently inspect Windows UI state.[/dim]")
 
 
 @app.command("policy-audit-check")
