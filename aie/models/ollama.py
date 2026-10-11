@@ -102,6 +102,75 @@ class OllamaClient:
             and item["name"]
         })
 
+    def embed(
+        self,
+        inputs: list[str],
+        *,
+        model: str,
+        timeout_seconds: float = 60.0,
+    ) -> list[list[float]]:
+        """Generate vectors with an already-installed local embedding model.
+
+        Uses Ollama POST /api/embed. No model download or remote fallback occurs.
+        """
+        import math
+
+        if not isinstance(model, str) or not model:
+            raise ValueError("model must be a non-empty installed model name")
+        if not 1 <= len(inputs) <= 32:
+            raise ValueError("embedding batches must contain between 1 and 32 texts")
+        if any(not isinstance(item, str) or not item.strip() or len(item) > 8000 for item in inputs):
+            raise ValueError("each embedding input must contain 1 to 8000 characters")
+        if not 1.0 <= timeout_seconds <= 300.0:
+            raise ValueError("timeout_seconds must be between 1 and 300")
+
+        installed = set(self.list_models(timeout=min(5.0, timeout_seconds)))
+        if model not in installed:
+            raise OllamaUnavailable(
+                f"Embedding model '{model}' is not installed. AIE never downloads models automatically."
+            )
+
+        if not self._inference_slot.acquire(timeout=timeout_seconds):
+            raise OllamaUnavailable(
+                "Another local inference is still running; retry after it completes."
+            )
+        try:
+            payload = self._request(
+                "/api/embed",
+                payload={
+                    "model": model,
+                    "input": inputs,
+                    "truncate": False,
+                    "keep_alive": "5m",
+                },
+                timeout=min(timeout_seconds, self.default_timeout),
+            )
+        finally:
+            self._inference_slot.release()
+
+        raw_embeddings = payload.get("embeddings")
+        if not isinstance(raw_embeddings, list) or len(raw_embeddings) != len(inputs):
+            raise OllamaUnavailable("Ollama embedding response has an invalid embeddings list")
+        vectors: list[list[float]] = []
+        expected_dimensions: int | None = None
+        for raw_vector in raw_embeddings:
+            if not isinstance(raw_vector, list) or not 1 <= len(raw_vector) <= 4096:
+                raise OllamaUnavailable("Ollama returned an invalid embedding vector")
+            vector: list[float] = []
+            for value in raw_vector:
+                if isinstance(value, bool) or not isinstance(value, (int, float)):
+                    raise OllamaUnavailable("Ollama embedding contains a non-numeric component")
+                number = float(value)
+                if not math.isfinite(number):
+                    raise OllamaUnavailable("Ollama embedding contains a non-finite component")
+                vector.append(number)
+            if expected_dimensions is None:
+                expected_dimensions = len(vector)
+            elif len(vector) != expected_dimensions:
+                raise OllamaUnavailable("Ollama returned inconsistent embedding dimensions")
+            vectors.append(vector)
+        return vectors
+
     def chat(
         self,
         request: ModelRequest,
