@@ -65,10 +65,15 @@ def choose_local_model(
             else "Embedding model is not installed."
         )
     elif task == "routine":
-        selected = DEFAULT_ROUTINE if DEFAULT_ROUTINE in installed else None
-        reason = "Default lightweight local reasoning model." if selected else (
-            "Routine local model is not installed; refusing an implicit model download."
-        )
+        if DEFAULT_ROUTINE in installed:
+            selected = DEFAULT_ROUTINE
+            reason = "Default lightweight local reasoning model."
+        elif DEFAULT_COMPLEX in installed and available_memory_gib >= COMPLEX_MIN_AVAILABLE_GIB:
+            selected = DEFAULT_COMPLEX
+            reason = "Lightweight model unavailable; using installed 7B model with sufficient memory."
+        else:
+            selected = None
+            reason = "No installed reasoning model is eligible for current memory headroom."
     elif task == "complex":
         if DEFAULT_COMPLEX in installed and available_memory_gib >= COMPLEX_MIN_AVAILABLE_GIB:
             selected = DEFAULT_COMPLEX
