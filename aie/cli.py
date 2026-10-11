@@ -1200,6 +1200,53 @@ def memory_index(
     )
 
 
+@app.command("memory-consolidate")
+def memory_consolidate(
+    kind: Literal["working", "episodic", "semantic", "procedural", "prospective"] | None = typer.Option(
+        None,
+        help="Restrict review candidates to one memory kind.",
+    ),
+    include_sensitive: bool = typer.Option(
+        False,
+        help="Include sensitive memories in local review candidates.",
+    ),
+    max_proposals: int = typer.Option(20, min=1, max=100),
+) -> None:
+    """Find likely duplicate memories for manual review; never merges automatically."""
+    from aie.memory.consolidation import generate_consolidation_proposals
+    from aie.memory.store import MemoryStore
+
+    if include_sensitive:
+        console.print(
+            "[yellow]Sensitive memory review enabled. Candidate content is not displayed.[/yellow]"
+        )
+
+    proposals = generate_consolidation_proposals(
+        MemoryStore(memory_database_path()),
+        kind=kind,
+        include_sensitive=include_sensitive,
+        max_proposals=max_proposals,
+    )
+    if not proposals:
+        console.print("No consolidation candidates found.")
+        return
+
+    table = Table("Similarity", "Kind", "Memory A", "Memory B", "Action")
+    for proposal in proposals:
+        table.add_row(
+            f"{proposal.similarity:.2%}",
+            proposal.kind,
+            proposal.memory_ids[0],
+            proposal.memory_ids[1],
+            proposal.recommended_action,
+        )
+    console.print(table)
+    console.print(
+        "[dim]Review-only: no memory record was merged, deleted, rewritten, "
+        "reweighted, or retrained.[/dim]"
+    )
+
+
 @app.command("memory-prune")
 def memory_prune(
     confirm: bool = typer.Option(False, "--confirm"),
