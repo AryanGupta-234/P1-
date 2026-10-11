@@ -154,3 +154,67 @@ def test_policy_audit_check_cli_fails_after_database_payload_edit(tmp_path, monk
 
     assert checked.exit_code == 1
     assert "integrity failure" in checked.output.lower()
+
+
+def test_remote_activity_context_requires_separate_egress_confirmation():
+    runner = CliRunner()
+
+    result = runner.invoke(
+        cli.app,
+        [
+            "ask",
+            "Summarize my recent activity.",
+            "--provider",
+            "cloud",
+            "--allow-cloud-egress",
+            "--with-activity",
+        ],
+    )
+
+    assert result.exit_code == 2
+    assert "--confirm-activity-egress" in result.output
+
+
+def test_remote_activity_context_is_allowed_only_after_explicit_confirmation(monkeypatch):
+    runner = CliRunner()
+    monkeypatch.setattr(
+        "aie.context.activity_context.build_activity_prompt_context",
+        lambda *args, **kwargs: type(
+            "Context",
+            (),
+            {"content": "", "event_ids": (), "session_count": 0, "signal_count": 0},
+        )(),
+    )
+    monkeypatch.setattr(
+        "aie.models.openai_compatible.OpenAICompatibleClient.chat",
+        lambda self, request: type(
+            "Response",
+            (),
+            {
+                "content": "ok",
+                "model": "test-model",
+                "elapsed_seconds": 0.1,
+                "prompt_tokens": 1,
+                "completion_tokens": 1,
+            },
+        )(),
+    )
+    monkeypatch.setenv("AIE_CLOUD_BASE_URL", "https://api.example.com/v1")
+    monkeypatch.setenv("AIE_CLOUD_API_KEY", "test-key")
+    monkeypatch.setenv("AIE_CLOUD_MODEL", "test-model")
+
+    result = runner.invoke(
+        cli.app,
+        [
+            "ask",
+            "Summarize my recent activity.",
+            "--provider",
+            "cloud",
+            "--allow-cloud-egress",
+            "--with-activity",
+            "--confirm-activity-egress",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "ok" in result.output
