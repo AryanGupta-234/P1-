@@ -350,6 +350,12 @@ def build_video_observation_context(
         if latest_video_probe is not None and latest_video_probe.target_labels
         else None
     )
+    browser_required_mbps = _number(data, "estimated_required_mbps", minimum=0)
+    probe_required_mbps = (
+        latest_video_probe.estimated_required_mbps
+        if latest_video_probe is not None
+        else None
+    )
     metrics = VideoMetrics(
         playback_stalled=playback_stalled,
         stall_count=stall_count,
@@ -360,11 +366,9 @@ def build_video_observation_context(
             else latest_video_probe.throughput_mbps if latest_video_probe is not None else None
         ),
         estimated_required_mbps=(
-            _number(data, "estimated_required_mbps", minimum=0)
-            if _number(data, "estimated_required_mbps", minimum=0) is not None
-            else latest_video_probe.estimated_required_mbps
-            if latest_video_probe is not None
-            else None
+            browser_required_mbps
+            if browser_required_mbps is not None
+            else probe_required_mbps
         ),
         packet_loss_pct=(
             browser_packet_loss
