@@ -633,7 +633,7 @@ def video_probe(
     ),
 ) -> None:
     """Run explicitly requested, bounded throughput/packet-loss probes and save evidence."""
-    from aie.browser.native_host import host_id
+    from aie.providers.windows import host_id
     from aie.contracts import AIEEvent, EntityRef
     from aie.diagnostics.video_probe import (
         VideoProbeError,
