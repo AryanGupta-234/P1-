@@ -1,7 +1,7 @@
-"""Chrome/Edge Native Messaging host for privacy-minimized playback events.
+"""Chrome/Edge/Brave Native Messaging host for privacy-minimized playback events.
 
-The host accepts only a strict video telemetry schema. It never accepts page text,
-URLs, cookies, credentials, arbitrary commands or action requests.
+The host accepts a strict video telemetry schema and a minimal bridge health-check.
+It never accepts page text, URLs, cookies, credentials, arbitrary commands or actions.
 """
 from __future__ import annotations
 
@@ -32,6 +32,8 @@ _ALLOWED_FIELDS = {
     "playback_progress_delta_seconds",
     "dropped_frames_pct",
 }
+_BRIDGE_PING = {"kind": "bridge_ping"}
+_BRIDGE_PONG = {"ok": True, "kind": "bridge_pong"}
 
 
 def _read_exact(stream: BinaryIO, size: int) -> bytes | None:
@@ -68,7 +70,7 @@ def iter_native_messages(stream: BinaryIO) -> Iterator[dict]:
 
 
 def write_native_message(stream: BinaryIO, payload: dict) -> None:
-    """Write one native messaging response without emitting any plain stdout text."""
+    """Write one native messaging response without emitting plain stdout text."""
     encoded = json.dumps(payload, separators=(",", ":"), ensure_ascii=True).encode("utf-8")
     if len(encoded) > MAX_MESSAGE_BYTES:
         raise ValueError("native messaging response exceeds size limit")
@@ -153,9 +155,12 @@ def event_from_browser_payload(payload: dict) -> AIEEvent:
 
 
 def run_host(input_stream: BinaryIO, output_stream: BinaryIO, store: EventStore) -> int:
-    """Consume native messages, persist valid events and acknowledge each message."""
+    """Respond to health checks and persist valid telemetry events."""
     accepted = 0
     for payload in iter_native_messages(input_stream):
+        if payload == _BRIDGE_PING:
+            write_native_message(output_stream, _BRIDGE_PONG)
+            continue
         try:
             event = event_from_browser_payload(payload)
             store.append(event)
@@ -169,12 +174,12 @@ def run_host(input_stream: BinaryIO, output_stream: BinaryIO, store: EventStore)
 def main() -> int:
     """Native host entry point; stdout is exclusively the binary protocol channel."""
     if os.name != "nt":
-        sys.stderr.write("AIE browser native host supports Windows only.\n")
+        sys.stderr.write("AIE browser native host supports Windows only.\\n")
         return 2
     try:
         run_host(sys.stdin.buffer, sys.stdout.buffer, EventStore(database_path()))
     except (EOFError, OSError, ValueError, json.JSONDecodeError) as exc:
-        sys.stderr.write(f"AIE browser native host stopped: {type(exc).__name__}\n")
+        sys.stderr.write(f"AIE browser native host stopped: {type(exc).__name__}\\n")
         return 1
     return 0
 
