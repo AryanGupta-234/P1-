@@ -610,6 +610,154 @@ def show_context(
     )
 
 
+@app.command("video-probe")
+def video_probe(
+    throughput_url: str | None = typer.Option(
+        None,
+        "--throughput-url",
+        help="User-selected public HTTPS test object; URL and response body are never stored.",
+    ),
+    packet_target: list[str] = typer.Option(
+        [],
+        "--packet-target",
+        help="Repeat as LABEL=HOST (for example gateway=192.168.1.1). Maximum two targets.",
+    ),
+    packets: int = typer.Option(4, min=1, max=4, help="One-shot pings per selected target."),
+    timeout_ms: int = typer.Option(750, min=100, max=1500, help="Per-packet ping timeout."),
+    estimated_required_mbps: float | None = typer.Option(
+        None,
+        "--estimated-required-mbps",
+        min=0.1,
+        max=10000.0,
+        help="Optional stream bitrate estimate from the selected playback quality.",
+    ),
+) -> None:
+    """Run explicitly requested, bounded throughput/packet-loss probes and save evidence."""
+    from aie.browser.native_host import host_id
+    from aie.contracts import AIEEvent, EntityRef
+    from aie.diagnostics.video_probe import (
+        VideoProbeError,
+        run_video_network_probe,
+        validate_packet_target,
+    )
+
+    parsed_targets: list[tuple[str, str]] = []
+    try:
+        for raw in packet_target:
+            if "=" not in raw:
+                raise VideoProbeError("each --packet-target must use LABEL=HOST")
+            label, host = raw.split("=", 1)
+            parsed_targets.append(validate_packet_target(label, host))
+        result = run_video_network_probe(
+            packet_targets=tuple(parsed_targets),
+            throughput_url=throughput_url,
+            estimated_required_mbps=estimated_required_mbps,
+            packets=packets,
+            timeout_ms=timeout_ms,
+        )
+    except (VideoProbeError, OSError, ValueError) as exc:
+        console.print(f"[red]Video network probe refused or failed:[/red] {exc}")
+        raise typer.Exit(2) from exc
+
+    throughput = result.throughput
+    event = AIEEvent(
+        timestamp=datetime.now(timezone.utc),
+        host_id=host_id(),
+        source="aie.video.network_probe",
+        event_type="network.video_probe",
+        entity=EntityRef(type="video_network_probe", name="user_selected_targets"),
+        data={
+            "packet_target_labels": list(result.target_labels),
+            "packets_sent": result.packets_sent,
+            "packets_received": result.packets_received,
+            "packet_loss_pct": result.packet_loss_pct,
+            "throughput_mbps": throughput.throughput_mbps if throughput else None,
+            "throughput_bytes": throughput.bytes_received if throughput else None,
+            "throughput_duration_seconds": throughput.elapsed_seconds if throughput else None,
+            "throughput_samples_completed": throughput.samples_completed if throughput else 0,
+            "estimated_required_mbps": result.estimated_required_mbps,
+            "action_executed": False,
+        },
+        sensitivity="internal",
+        confidence=1.0,
+        evidence_kind="observed",
+    )
+    EventStore(database_path()).append(event)
+
+    table = Table("Measurement", "Result")
+    if result.packet_results:
+        for item in result.packet_results:
+            table.add_row(
+                f"Packet loss ({item.label})",
+                f"{item.packet_loss_pct:.2f}% ({item.packets_received}/{item.packets_sent} replies)",
+            )
+    if throughput is not None:
+        table.add_row("Bounded HTTPS throughput", f"{throughput.throughput_mbps:.3f} Mbps")
+        table.add_row(
+            "Download sample",
+            f"{throughput.bytes_received:,} bytes in {throughput.elapsed_seconds:.2f}s "
+            f"({throughput.samples_completed} request(s))",
+        )
+    if result.estimated_required_mbps is not None:
+        table.add_row("User-supplied stream requirement", f"{result.estimated_required_mbps:.2f} Mbps")
+    console.print(table)
+    console.print(f"[green]Probe evidence saved:[/green] {event.event_id}")
+    console.print(
+        "[dim]Probe results describe only the selected targets and test object; "
+        "they do not prove the current CDN or media stream has the same path or bitrate.[/dim]"
+    )
+
+
+@app.command("video-evaluate")
+def video_evaluate(
+    dataset: Path = typer.Option(
+        Path(__file__).parent / "diagnostics" / "data" / "video_traces_v1.json",
+        "--dataset",
+        exists=True,
+        file_okay=True,
+        dir_okay=False,
+        readable=True,
+    ),
+) -> None:
+    """Evaluate video diagnostic causes against a versioned labelled trace corpus."""
+    from aie.diagnostics.video_evaluation import TraceDatasetError, evaluate_trace_dataset
+
+    try:
+        report = evaluate_trace_dataset(dataset)
+    except TraceDatasetError as exc:
+        console.print(f"[red]Video trace evaluation failed:[/red] {exc}")
+        raise typer.Exit(2) from exc
+
+    summary = Table("Metric", "Value")
+    summary.add_row("Dataset", report.dataset_name)
+    summary.add_row("Dataset type", report.dataset_kind)
+    summary.add_row("Traces", str(report.trace_count))
+    summary.add_row("Exact cause-set matches", f"{report.exact_match_count}/{report.trace_count}")
+    summary.add_row("Exact match rate", f"{report.exact_match_rate:.1%}")
+    summary.add_row("Micro precision", "n/a" if report.precision is None else f"{report.precision:.1%}")
+    summary.add_row("Micro recall", "n/a" if report.recall is None else f"{report.recall:.1%}")
+    summary.add_row("Micro F1", "n/a" if report.f1 is None else f"{report.f1:.1%}")
+    console.print(summary)
+
+    causes = Table("Cause", "TP", "FP", "FN", "Precision", "Recall", "F1")
+    for item in report.per_cause:
+        causes.add_row(
+            item.cause,
+            str(item.true_positive),
+            str(item.false_positive),
+            str(item.false_negative),
+            "n/a" if item.precision is None else f"{item.precision:.1%}",
+            "n/a" if item.recall is None else f"{item.recall:.1%}",
+            "n/a" if item.f1 is None else f"{item.f1:.1%}",
+        )
+    console.print(causes)
+    if report.dataset_kind == "synthetic":
+        console.print(
+            "[yellow]Synthetic regression results only. These metrics are not field accuracy, "
+            "confidence calibration, or evidence of production root-cause performance.[/yellow]"
+        )
+
+
 @app.command()
 def pause() -> None:
     """Pause all running AIE observer instances for this Windows user."""
