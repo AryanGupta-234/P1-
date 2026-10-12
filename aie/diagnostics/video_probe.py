@@ -14,6 +14,7 @@ import re
 import socket
 import ssl
 import subprocess
+import threading
 import time
 from dataclasses import dataclass
 from urllib.parse import urlsplit
@@ -71,6 +72,60 @@ class VideoProbeResult:
 
 _LABEL_RE = re.compile(r"^[a-z][a-z0-9_-]{0,23}$")
 _HOST_LABEL_RE = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?$")
+_DNS_PROBE_LOCK = threading.Lock()
+
+
+def _resolve_addresses_bounded(
+    host: str,
+    port: int,
+    *,
+    timeout_seconds: float = 2.0,
+) -> tuple[tuple[str, int], ...]:
+    """Resolve a target on a daemon worker so the caller has a fixed wait budget."""
+    try:
+        address = ipaddress.ip_address(host)
+        family = socket.AF_INET6 if address.version == 6 else socket.AF_INET
+        return ((str(address), family),)
+    except ValueError:
+        pass
+    if not _DNS_PROBE_LOCK.acquire(blocking=False):
+        raise VideoProbeError("DNS resolver is busy with an earlier timed-out lookup")
+
+    result: list[tuple[str, int]] = []
+    errors: list[OSError] = []
+    completed = threading.Event()
+
+    def resolve() -> None:
+        try:
+            for family, _socktype, _proto, _canonname, sockaddr in socket.getaddrinfo(
+                host, port, type=socket.SOCK_STREAM
+            ):
+                if family not in (socket.AF_INET, socket.AF_INET6):
+                    continue
+                candidate = str(ipaddress.ip_address(sockaddr[0]))
+                pair = (candidate, family)
+                if pair not in result:
+                    result.append(pair)
+        except OSError as exc:
+            errors.append(exc)
+        finally:
+            completed.set()
+            _DNS_PROBE_LOCK.release()
+
+    worker = threading.Thread(target=resolve, daemon=True, name="aie-video-dns-probe")
+    try:
+        worker.start()
+    except RuntimeError as exc:
+        _DNS_PROBE_LOCK.release()
+        raise VideoProbeError("DNS resolver worker could not start") from exc
+    if not completed.wait(timeout_seconds):
+        raise VideoProbeError("DNS resolution timed out")
+    if errors:
+        raise VideoProbeError("diagnostic target DNS resolution failed") from errors[0]
+    if not result:
+        raise VideoProbeError("diagnostic target did not resolve to an IPv4/IPv6 address")
+    result.sort(key=lambda item: item[1] != socket.AF_INET)
+    return tuple(result)
 
 
 def validate_packet_target(label: str, host: str) -> tuple[str, str]:
@@ -110,11 +165,9 @@ def measure_packet_loss(
     if not 100 <= timeout_ms <= 1500:
         raise VideoProbeError("timeout_ms must be between 100 and 1500")
 
-    try:
-        address = ipaddress.ip_address(host)
-        family = "-6" if address.version == 6 else "-4"
-    except ValueError:
-        family = "-4"
+    resolved_host = _resolve_addresses_bounded(host, 0)[0][0]
+    address = ipaddress.ip_address(resolved_host)
+    family = "-6" if address.version == 6 else "-4"
 
     received = 0
     for _ in range(packets):
@@ -140,7 +193,7 @@ def measure_packet_loss(
     return PacketLossResult(label, packets, received)
 
 
-def _validate_public_https_url(url: str) -> tuple[str, str]:
+def _validate_public_https_url(url: str) -> tuple[str, str, str]:
     if not isinstance(url, str) or len(url) > 2048:
         raise VideoProbeError("throughput URL must be a valid HTTPS URL no longer than 2048 characters")
     parsed = urlsplit(url)
@@ -154,15 +207,9 @@ def _validate_public_https_url(url: str) -> tuple[str, str]:
     ):
         raise VideoProbeError("throughput URL must use public HTTPS on port 443 without embedded credentials or fragments")
     host = parsed.hostname
+    addresses = _resolve_addresses_bounded(host, 443)
     try:
-        addresses = socket.getaddrinfo(host, 443, type=socket.SOCK_STREAM)
-    except OSError as exc:
-        raise VideoProbeError("throughput endpoint DNS resolution failed") from exc
-    resolved = {entry[4][0] for entry in addresses}
-    if not resolved:
-        raise VideoProbeError("throughput endpoint did not resolve to an address")
-    try:
-        for address in resolved:
+        for address, _family in addresses:
             ip = ipaddress.ip_address(address)
             if not ip.is_global:
                 raise VideoProbeError("throughput endpoint must resolve only to public IP addresses")
@@ -171,7 +218,25 @@ def _validate_public_https_url(url: str) -> tuple[str, str]:
     path = parsed.path or "/"
     if parsed.query:
         path += "?" + parsed.query
-    return host, path
+    if any(character in path for character in ("\\r", "\\n")):
+        raise VideoProbeError("throughput URL path contains an invalid control character")
+    return host, path, addresses[0][0]
+
+
+class _PinnedHTTPSConnection(http.client.HTTPSConnection):
+    """HTTPS connection pinned to a prevalidated public IP while retaining host SNI."""
+
+    def __init__(self, host: str, address: str, port: int, *, timeout: float, context):
+        super().__init__(host, port, timeout=timeout, context=context)
+        self._connect_address = address
+
+    def connect(self) -> None:
+        raw = socket.create_connection(
+            (self._connect_address, self.port),
+            timeout=self.timeout,
+            source_address=self.source_address,
+        )
+        self.sock = self._context.wrap_socket(raw, server_hostname=self.host)
 
 
 def measure_https_throughput(
@@ -181,7 +246,7 @@ def measure_https_throughput(
     max_bytes: int = 768 * 1024,
     sample_bytes: int = 256 * 1024,
     clock=time.monotonic,
-    connection_factory=http.client.HTTPSConnection,
+    connection_factory=None,
 ) -> ThroughputResult:
     """Measure a short multi-request HTTPS download without storing its URL/body.
 
@@ -196,7 +261,11 @@ def measure_https_throughput(
     if not 16 * 1024 <= sample_bytes <= 512 * 1024:
         raise VideoProbeError("sample_bytes must be between 16 KiB and 512 KiB")
 
-    host, path = _validate_public_https_url(url)
+    host, path, connect_address = _validate_public_https_url(url)
+    if connection_factory is None:
+        connection_factory = lambda host, port, **kwargs: _PinnedHTTPSConnection(
+            host, connect_address, port, **kwargs
+        )
     started = clock()
     deadline = started + timeout_seconds
     total_bytes = 0
@@ -215,6 +284,7 @@ def measure_https_throughput(
                 443,
                 timeout=min(2.0, remaining),
                 context=ssl.create_default_context(),
+                connect_address=connect_address,
             )
             start_byte = request_index * sample_bytes
             end_byte = start_byte + requested - 1
