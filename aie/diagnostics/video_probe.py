@@ -357,7 +357,10 @@ def run_video_network_probe(
     if len(packet_targets) > 2:
         raise VideoProbeError("at most two packet targets are allowed")
     if estimated_required_mbps is not None and (
-        not math.isfinite(estimated_required_mbps) or not 0 < estimated_required_mbps <= 10000
+        isinstance(estimated_required_mbps, bool)
+        or not isinstance(estimated_required_mbps, (int, float))
+        or not math.isfinite(estimated_required_mbps)
+        or not 0 < estimated_required_mbps <= 10000
     ):
         raise VideoProbeError("estimated_required_mbps must be greater than 0 and no more than 10000")
 
