@@ -9,7 +9,8 @@ from typing import Any
 from aie.context.video import build_video_observation_context
 from aie.diagnostics.video_buffering import diagnose_video_buffering
 from aie.learning.analytics import summarize_feedback
-from aie.model_policy import choose_local_model, discover_local_models
+from aie.model_policy import choose_local_model
+from aie.models.ollama import OllamaClient, OllamaError
 from aie.hardware import runtime_profile
 from aie.store import EventStore
 
@@ -235,7 +236,12 @@ def build_video_dashboard_snapshot(
         }
         for item in summarize_feedback(feedback_events)
     ]
-    models = discover_local_models()
+    try:
+        models = OllamaClient(default_timeout=2.0).list_models(timeout=2.0)
+        model_discovery_error = None
+    except OllamaError as exc:
+        models = []
+        model_discovery_error = str(exc)
     profile = runtime_profile()
     routine = choose_local_model("routine", models, profile["memory_available_gib"])
     complex_model = choose_local_model("complex", models, profile["memory_available_gib"])
@@ -263,6 +269,7 @@ def build_video_dashboard_snapshot(
         "events": [_safe_event(event) for event in newest_first[:event_limit]],
         "models": {
             "installed": models,
+            "discovery_error": model_discovery_error,
             "routine": {"model": routine.selected_model, "available": routine.available, "reason": routine.reason},
             "complex": {"model": complex_model.selected_model, "available": complex_model.available, "reason": complex_model.reason},
             "embedding": {"model": embedding.selected_model, "available": embedding.available, "reason": embedding.reason},
