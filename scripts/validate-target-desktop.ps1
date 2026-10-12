@@ -131,11 +131,12 @@ except subprocess.TimeoutExpired:
                 $detail = 'Registry entry exists but its browser-specific manifest is missing.'
             }
         } catch {
-            $detail = 'Browser native host registration could not be read safely.'
+            $registrationValid = $false
+            $detail = 'Browser native host validation failed: ' + $_.Exception.Message
         }
     }
 
-    $passed = $registrationValid -or -not $RequireBrowserRegistration
+    $passed = $registrationValid -or -not $RequireBrowserRegistration.IsPresent
     Add-Check ('Native host: ' + $selectedBrowser) $passed $detail
 }
 
