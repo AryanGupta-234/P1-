@@ -59,6 +59,9 @@ Development ownership and branch rules are defined in [Development Streams](DEVE
 - [x] Conservative hypotheses for buffer starvation, buffered-but-not-advancing playback and measured resource/network signals.
 - [x] Unknown throughput/packet-loss values remain unknown; TCP connect latency is not mislabeled packet RTT.
 - [x] Live deduplicated diagnostic suggestions with evidence IDs; no action execution.
+- [x] Native-host playback ingestion invokes the deduplicating video diagnostic monitor after persistence and writes evidence-linked findings automatically; the monitor never executes remediation.
+- [x] Dedicated WPF Video Intelligence workspace with live context, findings, event history, network probes, feedback, model inventory, synthetic evaluation and anonymized field-candidate export.
+- [x] Grounded local Ollama advisor explains deterministic findings with validated evidence IDs; routine/complex model tiers use the installed-model and RAM-aware router, with no cloud fallback or automatic model pulls.
 - [x] User-reported outcome feedback linked to diagnostic event IDs.
 - [ ] Run the expanded read-only target-desktop validator, verify simultaneous Chrome/Edge/Brave native-host registration, and exercise live player behavior on the target desktop.
 - [x] Add versioned synthetic video trace corpus covering each diagnostic rule, mixed causes, unknown metrics and insufficient evidence.
