@@ -90,6 +90,53 @@ public partial class VideoIntelligenceWindow : Window
     private static string Pretty(JsonElement element) =>
         JsonSerializer.Serialize(element, new JsonSerializerOptions { WriteIndented = true });
 
+    private static string FormatAdvice(JsonElement root)
+    {
+        var output = new StringBuilder();
+        output.AppendLine("EXECUTIVE SUMMARY");
+        output.AppendLine(Value(root, "summary"));
+        output.AppendLine();
+        output.AppendLine($"LOCAL MODEL  {Value(root, "model")}  ·  {FormatNumber(root, "elapsed_seconds", "s")}");
+        output.AppendLine("LOCAL-ONLY  ·  no actions executed");
+        output.AppendLine();
+
+        if (root.TryGetProperty("observations", out var observations) && observations.ValueKind == JsonValueKind.Array)
+        {
+            output.AppendLine("EVIDENCE-BASED OBSERVATIONS");
+            foreach (var item in observations.EnumerateArray())
+            {
+                output.AppendLine($"• {Value(item, "statement")}");
+                output.AppendLine($"  Evidence: {Value(item, "evidence_event_ids")}");
+            }
+            output.AppendLine();
+        }
+
+        if (root.TryGetProperty("next_steps", out var steps) && steps.ValueKind == JsonValueKind.Array)
+        {
+            output.AppendLine("SUGGESTED NEXT STEPS");
+            var index = 1;
+            foreach (var item in steps.EnumerateArray())
+            {
+                output.AppendLine($"{index}. [{Value(item, "priority").ToUpperInvariant()}] {Value(item, "title")}");
+                output.AppendLine($"   {Value(item, "rationale")}");
+                output.AppendLine($"   Mode: {Value(item, "mode")} · Evidence: {Value(item, "evidence_event_ids")}");
+                index++;
+            }
+            output.AppendLine();
+        }
+
+        if (root.TryGetProperty("unknowns", out var unknowns) && unknowns.ValueKind == JsonValueKind.Array)
+        {
+            output.AppendLine("WHAT REMAINS UNKNOWN");
+            foreach (var item in unknowns.EnumerateArray())
+                output.AppendLine($"• {item.GetString()}");
+            output.AppendLine();
+        }
+
+        output.AppendLine("Diagnosis remains rule-engine driven. Model text explains and prioritizes; it does not change the measured facts or execute remediation.");
+        return output.ToString();
+    }
+
     private async Task<CliResult?> RunAsync(params string[] arguments)
     {
         try
@@ -226,7 +273,7 @@ public partial class VideoIntelligenceWindow : Window
         try
         {
             using var document = JsonDocument.Parse(result.StandardOutput);
-            AdvisorOutput.Text = Pretty(document.RootElement);
+            AdvisorOutput.Text = FormatAdvice(document.RootElement);
             FooterStatus.Text = $"Local explanation generated · {Value(document.RootElement, "model")} · {FormatNumber(document.RootElement, "elapsed_seconds", "s")}";
         }
         catch (JsonException)
