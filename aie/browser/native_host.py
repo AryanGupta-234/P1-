@@ -154,16 +154,23 @@ def event_from_browser_payload(payload: dict) -> AIEEvent:
     )
 
 
-def run_host(input_stream: BinaryIO, output_stream: BinaryIO, store: EventStore) -> int:
-    """Respond to health checks and persist valid telemetry events."""
+def run_host(input_stream: BinaryIO, output_stream: BinaryIO, store: EventStore | None = None) -> int:
+    """Respond to health checks and persist valid telemetry events.
+
+    The event store is initialized lazily so a bridge health check has no database
+    side effects. Tests may inject a store to verify that health checks never append.
+    """
     accepted = 0
+    active_store = store
     for payload in iter_native_messages(input_stream):
         if payload == _BRIDGE_PING:
             write_native_message(output_stream, _BRIDGE_PONG)
             continue
         try:
             event = event_from_browser_payload(payload)
-            store.append(event)
+            if active_store is None:
+                active_store = EventStore(database_path())
+            active_store.append(event)
             write_native_message(output_stream, {"ok": True, "event_id": event.event_id})
             accepted += 1
         except (TypeError, ValueError) as exc:
@@ -177,7 +184,7 @@ def main() -> int:
         sys.stderr.write("AIE browser native host supports Windows only.\\n")
         return 2
     try:
-        run_host(sys.stdin.buffer, sys.stdout.buffer, EventStore(database_path()))
+        run_host(sys.stdin.buffer, sys.stdout.buffer)
     except (EOFError, OSError, ValueError, json.JSONDecodeError) as exc:
         sys.stderr.write(f"AIE browser native host stopped: {type(exc).__name__}\\n")
         return 1
