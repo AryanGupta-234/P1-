@@ -91,7 +91,11 @@ class FakeHTTPSConnection:
         self.response = None
         self.closed = False
 
+    def connect(self):
+        self.connected = True
+
     def request(self, method, path, *, headers):
+        assert self.connected
         self.request_args = (method, path, headers)
 
     def getresponse(self):
@@ -178,6 +182,31 @@ def test_throughput_never_follows_redirects(monkeypatch):
 def test_combined_probe_requires_at_least_one_explicit_target():
     with pytest.raises(video_probe.VideoProbeError):
         video_probe.run_video_network_probe()
+
+
+def test_multi_target_packet_loss_is_not_collapsed_into_one_percentage():
+    result = video_probe.VideoProbeResult(
+        packet_results=(
+            video_probe.PacketLossResult("gateway", 4, 3),
+            video_probe.PacketLossResult("video_path", 4, 4),
+        ),
+        throughput=None,
+        estimated_required_mbps=None,
+    )
+
+    assert result.packet_loss_pct is None
+    assert result.packets_sent == 8
+    assert result.packets_received == 7
+
+
+def test_single_target_packet_loss_is_available_as_one_scoped_value():
+    result = video_probe.VideoProbeResult(
+        packet_results=(video_probe.PacketLossResult("gateway", 4, 3),),
+        throughput=None,
+        estimated_required_mbps=None,
+    )
+
+    assert result.packet_loss_pct == 25.0
 
 def test_target_dns_resolution_is_bounded_and_returns_a_pinned_ip(monkeypatch):
     monkeypatch.setattr(
