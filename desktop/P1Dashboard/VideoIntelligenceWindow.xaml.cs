@@ -87,16 +87,16 @@ public partial class VideoIntelligenceWindow : Window
         return table.DefaultView;
     }
 
-    private static string Pretty(JsonElement element) =>
-        JsonSerializer.Serialize(element, new JsonSerializerOptions { WriteIndented = true });
-
     private static string FormatAdvice(JsonElement root)
     {
         var output = new StringBuilder();
+        var summary = Value(root, "summary");
+        var model = Value(root, "model");
+        var elapsed = FormatNumber(root, "elapsed_seconds", "s");
         output.AppendLine("EXECUTIVE SUMMARY");
-        output.AppendLine(Value(root, "summary"));
+        output.AppendLine(summary);
         output.AppendLine();
-        output.AppendLine($"LOCAL MODEL  {Value(root, "model")}  ·  {FormatNumber(root, "elapsed_seconds", "s")}");
+        output.AppendLine($"LOCAL MODEL  {model}  ·  {elapsed}");
         output.AppendLine("LOCAL-ONLY  ·  no actions executed");
         output.AppendLine();
 
@@ -105,8 +105,10 @@ public partial class VideoIntelligenceWindow : Window
             output.AppendLine("EVIDENCE-BASED OBSERVATIONS");
             foreach (var item in observations.EnumerateArray())
             {
-                output.AppendLine($"• {Value(item, "statement")}");
-                output.AppendLine($"  Evidence: {Value(item, "evidence_event_ids")}");
+                var statement = Value(item, "statement");
+                var evidence = Value(item, "evidence_event_ids");
+                output.AppendLine($"• {statement}");
+                output.AppendLine($"  Evidence: {evidence}");
             }
             output.AppendLine();
         }
@@ -117,9 +119,14 @@ public partial class VideoIntelligenceWindow : Window
             var index = 1;
             foreach (var item in steps.EnumerateArray())
             {
-                output.AppendLine($"{index}. [{Value(item, "priority").ToUpperInvariant()}] {Value(item, "title")}");
-                output.AppendLine($"   {Value(item, "rationale")}");
-                output.AppendLine($"   Mode: {Value(item, "mode")} · Evidence: {Value(item, "evidence_event_ids")}");
+                var priority = Value(item, "priority").ToUpperInvariant();
+                var title = Value(item, "title");
+                var rationale = Value(item, "rationale");
+                var mode = Value(item, "mode");
+                var evidence = Value(item, "evidence_event_ids");
+                output.AppendLine($"{index}. [{priority}] {title}");
+                output.AppendLine($"   {rationale}");
+                output.AppendLine($"   Mode: {mode} · Evidence: {evidence}");
                 index++;
             }
             output.AppendLine();
