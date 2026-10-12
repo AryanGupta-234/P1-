@@ -26,6 +26,7 @@ function settleHandshake(result) {
   const pending = pendingHandshake;
   pendingHandshake = null;
   clearTimeout(pending.timeout);
+  if (result && result.bridgeStatus) persistBridgeStatus(result.bridgeStatus);
   pending.respond(result);
 }
 
