@@ -18,7 +18,7 @@ def test_packet_loss_counts_only_successful_one_shot_replies(monkeypatch):
 
     def runner(command, **kwargs):
         commands.append(command)
-        assert kwargs["shell"] if "shell" in kwargs else True
+        assert kwargs["check"] is False
         assert kwargs["timeout"] <= 3
         return next(results)
 
