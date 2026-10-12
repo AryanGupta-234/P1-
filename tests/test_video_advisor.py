@@ -95,3 +95,10 @@ def test_video_advisor_refuses_to_invent_diagnosis_without_fresh_playback(tmp_pa
     store = EventStore(tmp_path / "empty.sqlite3")
     with pytest.raises(VideoAdvisorError, match="No fresh playback context"):
         generate_video_advice(store, client=FakeLocalOllama())
+
+
+
+def test_video_advisor_refuses_remote_ollama_endpoint(tmp_path, monkeypatch):
+    monkeypatch.setenv("AIE_OLLAMA_URL", "https://ollama.example.invalid")
+    with pytest.raises(VideoAdvisorError, match="Remote Ollama is disabled"):
+        generate_video_advice(_store_with_stall(tmp_path))
