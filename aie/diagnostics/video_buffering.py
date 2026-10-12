@@ -40,9 +40,13 @@ class VideoMetrics:
         if (
             isinstance(self.observation_window_seconds, bool)
             or not isinstance(self.observation_window_seconds, (int, float))
-            or not math.isfinite(self.observation_window_seconds)
-            or self.observation_window_seconds <= 0
         ):
+            raise ValueError("observation_window_seconds must be a finite positive number")
+        try:
+            observation_window = float(self.observation_window_seconds)
+        except (OverflowError, ValueError) as exc:
+            raise ValueError("observation_window_seconds must be a finite positive number") from exc
+        if not math.isfinite(observation_window) or observation_window <= 0:
             raise ValueError("observation_window_seconds must be a finite positive number")
         bounds = {
             "throughput_mbps": (0, None),
@@ -58,12 +62,18 @@ class VideoMetrics:
             value = getattr(self, name)
             if value is None:
                 continue
+            if isinstance(value, bool) or not isinstance(value, (int, float)):
+                upper = maximum if maximum is not None else "unbounded"
+                raise ValueError(f"{name} must be finite and between {minimum} and {upper}")
+            try:
+                numeric_value = float(value)
+            except (OverflowError, ValueError) as exc:
+                upper = maximum if maximum is not None else "unbounded"
+                raise ValueError(f"{name} must be finite and between {minimum} and {upper}") from exc
             if (
-                isinstance(value, bool)
-                or not isinstance(value, (int, float))
-                or not math.isfinite(value)
-                or value < minimum
-                or (maximum is not None and value > maximum)
+                not math.isfinite(numeric_value)
+                or numeric_value < minimum
+                or (maximum is not None and numeric_value > maximum)
             ):
                 upper = maximum if maximum is not None else "unbounded"
                 raise ValueError(f"{name} must be finite and between {minimum} and {upper}")
