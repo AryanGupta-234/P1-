@@ -50,7 +50,7 @@ Development ownership and branch rules are defined in [Development Streams](DEVE
 - [ ] Validate ETW elevation, Event Log/UIA permissions and data collection on the target Windows desktop.
 
 ## M1.5 — Video intelligence
-- [x] Opt-in Chrome/Edge MV3 HTML-video observer, disabled by default.
+- [x] Opt-in Chrome/Edge/Brave MV3 HTML-video observer, disabled by default.
 - [x] Strict Windows native-messaging host and local SQLite persistence.
 - [x] Stall, buffered-ahead, playback-progress and available dropped-frame telemetry.
 - [x] Correlate playback snapshots with same-host foreground-app and network evidence.
@@ -58,7 +58,7 @@ Development ownership and branch rules are defined in [Development Streams](DEVE
 - [x] Unknown throughput/packet-loss values remain unknown; TCP connect latency is not mislabeled packet RTT.
 - [x] Live deduplicated diagnostic suggestions with evidence IDs; no action execution.
 - [x] User-reported outcome feedback linked to diagnostic event IDs.
-- [ ] Run the expanded read-only target-desktop validator, verify simultaneous Chrome/Edge native-host registration, and exercise live player behavior on the target desktop.
+- [ ] Run the expanded read-only target-desktop validator, verify simultaneous Chrome/Edge/Brave native-host registration, and exercise live player behavior on the target desktop.
 - [x] Add versioned synthetic video trace corpus covering each diagnostic rule, mixed causes, unknown metrics and insufficient evidence.
 - [x] Add `aie video-evaluate` with exact-match rate and per-cause/micro precision, recall, F1 and TP/FP/FN/TN regression metrics.
 - [x] Add explicit, no-overwrite export of anonymized local playback trace candidates for manual ground-truth labeling.
