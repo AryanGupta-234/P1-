@@ -6,6 +6,7 @@ control browsers, change network settings, or execute remediation.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import math
 from typing import Literal
 
 Severity = Literal["low", "medium", "high"]
@@ -32,10 +33,17 @@ class VideoMetrics:
     playback_progress_delta_seconds: float | None = None
 
     def __post_init__(self) -> None:
-        if self.stall_count < 0:
-            raise ValueError("stall_count cannot be negative")
-        if self.observation_window_seconds <= 0:
-            raise ValueError("observation_window_seconds must be positive")
+        if not isinstance(self.playback_stalled, bool):
+            raise ValueError("playback_stalled must be a boolean")
+        if isinstance(self.stall_count, bool) or not isinstance(self.stall_count, int) or self.stall_count < 0:
+            raise ValueError("stall_count must be a non-negative integer")
+        if (
+            isinstance(self.observation_window_seconds, bool)
+            or not isinstance(self.observation_window_seconds, (int, float))
+            or not math.isfinite(self.observation_window_seconds)
+            or self.observation_window_seconds <= 0
+        ):
+            raise ValueError("observation_window_seconds must be a finite positive number")
         bounds = {
             "throughput_mbps": (0, None),
             "estimated_required_mbps": (0, None),
@@ -48,8 +56,21 @@ class VideoMetrics:
         }
         for name, (minimum, maximum) in bounds.items():
             value = getattr(self, name)
-            if value is not None and (value < minimum or (maximum is not None and value > maximum)):
-                raise ValueError(f"{name} must be between {minimum} and {maximum or 'unbounded'}")
+            if value is None:
+                continue
+            if (
+                isinstance(value, bool)
+                or not isinstance(value, (int, float))
+                or not math.isfinite(value)
+                or value < minimum
+                or (maximum is not None and value > maximum)
+            ):
+                upper = maximum if maximum is not None else "unbounded"
+                raise ValueError(f"{name} must be finite and between {minimum} and {upper}")
+        if self.packet_loss_scope is not None and (
+            not isinstance(self.packet_loss_scope, str) or len(self.packet_loss_scope) > 64
+        ):
+            raise ValueError("packet_loss_scope must be text no longer than 64 characters")
 
 
 @dataclass(frozen=True, slots=True)
