@@ -104,7 +104,7 @@ The exporter makes field-corpus preparation repeatable; it does not create field
    The second command fails when any selected browser is not registered. It checks the native-host manifest, extension origin, executable, required Python imports and bundled trace corpus; it does not modify the registry or browser configuration.
 9. Stop data collection immediately with `aie pause`; use `aie resume` to resume.
 
-The registration helper writes a per-user, browser-specific native-messaging manifest under `%LOCALAPPDATA%\AIE\native-host` and registers it under that browser's HKCU key. Chrome, Edge and Brave manifests are independent, so all three browsers can be registered at the same time. Brave uses the per-user `HKCU:\Software\BraveSoftware\Brave-Browser\NativeMessagingHosts` registry root. Use `scripts/unregister-native-host.ps1 -Browser Chrome` (or `Edge` or `Brave`) to remove only that browser's registration and manifest.
+The registration helper writes a per-user native-messaging manifest under `%LOCALAPPDATA%\AIE\native-host`. Edge has its own manifest and HKCU registry entry. Chrome and Brave share the Chromium `HKCU:\Software\Google\Chrome\NativeMessagingHosts` registry entry and a single manifest whose `allowed_origins` list preserves both extension IDs; registering or unregistering one Chromium browser must not remove the other browser's origin. This shared Brave lookup path was verified against the target Brave build with ProcMon. Use `scripts/unregister-native-host.ps1 -Browser Edge` for Edge, or pass `-Browser Chrome` / `-Browser Brave` plus `-ExtensionId` to remove only that extension origin from the shared Chromium manifest.
 
 ## Recording diagnostic outcomes
 Use `aie events` to find a `diagnostic.video_finding` event ID, then run:
