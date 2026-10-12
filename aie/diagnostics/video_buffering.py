@@ -25,6 +25,7 @@ class VideoMetrics:
     estimated_required_mbps: float | None = None
     rtt_ms: float | None = None
     packet_loss_pct: float | None = None
+    packet_loss_scope: str | None = None
     cpu_pct: float | None = None
     dropped_frames_pct: float | None = None
     buffered_ahead_seconds: float | None = None
@@ -116,10 +117,14 @@ def diagnose_video_buffering(
         findings.append(DiagnosticFinding(
             "network_packet_loss", "high", 0.78,
             (
-                "Inspect Wi-Fi signal quality and compare packet loss against the local "
-                "gateway and an external endpoint."
+                "Packet loss was measured against the explicitly selected diagnostic targets. "
+                "Compare gateway and video-path targets separately; ICMP loss is not proof "
+                "that the streaming CDN dropped media packets."
             ),
-            (f"Measured packet loss: {metrics.packet_loss_pct:.2f}%",),
+            tuple(
+                [f"Measured packet loss: {metrics.packet_loss_pct:.2f}%"]
+                + ([f"Probe target labels: {metrics.packet_loss_scope}"] if metrics.packet_loss_scope else [])
+            ),
         ))
 
     if (
