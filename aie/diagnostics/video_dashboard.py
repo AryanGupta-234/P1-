@@ -2,8 +2,8 @@
 from __future__ import annotations
 
 from collections import Counter
+import math
 from datetime import datetime, timedelta, timezone
-from pathlib import Path
 from typing import Any
 
 from aie.context.video import build_video_observation_context
@@ -17,7 +17,8 @@ from aie.store import EventStore
 def _number(value: Any, digits: int = 2) -> float | None:
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         return None
-    return round(float(value), digits)
+    number = float(value)
+    return round(number, digits) if math.isfinite(number) else None
 
 
 def _safe_event(event) -> dict[str, Any]:
@@ -65,7 +66,8 @@ def _safe_event(event) -> dict[str, Any]:
                     "received": row.get("packets_received"),
                     "loss_pct": _number(row.get("packet_loss_pct")),
                 }
-                for row in data.get("packet_loss_by_target", [])[:2]
+                for row in (data.get("packet_loss_by_target", [])[:2]
+                            if isinstance(data.get("packet_loss_by_target", []), list) else [])
                 if isinstance(row, dict)
             ],
             "throughput_mbps": _number(data.get("throughput_mbps"), 3),
