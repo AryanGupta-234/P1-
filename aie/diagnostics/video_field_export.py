@@ -7,6 +7,7 @@ are not evaluation data until a reviewer assigns expected causes.
 from __future__ import annotations
 
 from datetime import datetime, timedelta
+import math
 from typing import Any
 
 from aie.context.video import build_video_observation_context
@@ -41,6 +42,13 @@ def _candidate_score(event: AIEEvent) -> tuple[int, float, int, datetime]:
     window = data.get("observation_window_seconds", 0)
     if isinstance(window, bool) or not isinstance(window, (int, float)):
         window = 0.0
+    else:
+        try:
+            window = float(window)
+        except (OverflowError, ValueError):
+            window = 0.0
+        if not math.isfinite(window):
+            window = 0.0
     metric_count = sum(
         data.get(field) is not None
         for field in (
@@ -100,8 +108,15 @@ def prepare_field_trace_candidates(
         # Anchor to the selected browser snapshot. Future observations are excluded;
         # nearby same-host measurements can be correlated within the short window.
         anchor_now = candidate.timestamp + timedelta(milliseconds=1)
+        supporting_events = [
+            event
+            for event in events
+            if event.host_id == candidate.host_id
+            and event.timestamp.tzinfo is not None
+            and event.timestamp <= candidate.timestamp
+        ]
         context = build_video_observation_context(
-            events,
+            supporting_events,
             now=anchor_now,
             max_age_seconds=max_age_seconds,
         )
