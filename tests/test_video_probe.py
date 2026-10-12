@@ -67,14 +67,18 @@ class FakeSocket:
 class FakeResponse:
     status = 206
 
-    def __init__(self, size):
+    def __init__(self, size, range_start, range_end):
         self.remaining = size
+        self.content_range = f"bytes {range_start}-{range_end}/1048576"
         self.closed = False
 
     def read(self, size):
         count = min(size, self.remaining)
         self.remaining -= count
         return b"x" * count
+
+    def getheader(self, name):
+        return self.content_range if name.casefold() == "content-range" else None
 
     def close(self):
         self.closed = True
@@ -99,7 +103,9 @@ class FakeHTTPSConnection:
         self.request_args = (method, path, headers)
 
     def getresponse(self):
-        self.response = FakeResponse(16 * 1024)
+        range_header = self.request_args[2]["Range"]
+        range_start, range_end = (int(item) for item in range_header.removeprefix("bytes=").split("-"))
+        self.response = FakeResponse(16 * 1024, range_start, range_end)
         return self.response
 
     def close(self):
@@ -170,7 +176,7 @@ def test_throughput_never_follows_redirects(monkeypatch):
 
     class RedirectConnection(FakeHTTPSConnection):
         def getresponse(self):
-            return SimpleNamespace(status=302, close=lambda: None)
+            return SimpleNamespace(status=302, getheader=lambda _name: None, close=lambda: None)
 
     with pytest.raises(video_probe.VideoProbeError, match="redirects are not followed"):
         video_probe.measure_https_throughput(
