@@ -2,7 +2,9 @@
 
 Statuses: DONE / IN_PROGRESS / BLOCKED / PLANNED. Mark DONE only with code, tests and validation evidence.
 
-**Last updated:** 2026-10-11 | **Target integration:** `dev` | **Current feature branch:** `feat/agent-orchestration-core` | **Current PR:** [#16](https://github.com/AryanGupta-234/P1-/pull/16) draft; Windows CI run [#1041](https://github.com/AryanGupta-234/P1-/actions/runs/38151881805) passed
+Development ownership and branch rules are defined in [Development Streams](DEVELOPMENT_STREAMS.md). M1.5 browser/video work is tracked independently on `browser-video-intelligence`; ecosystem and shared-integration work remains on `dev`. The existing browser/video foundation is present in the integrated baseline, but new browser/video progress must stay isolated until a reviewed milestone is ready.
+
+**Last updated:** 2026-10-12 | **Ecosystem branch:** `dev` | **Browser/video branch:** `browser-video-intelligence` | **Stable release:** `main`
 
 | ID | Workstream | Status | Exit criteria |
 |---|---|---|---|
