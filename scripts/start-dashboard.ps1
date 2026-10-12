@@ -18,7 +18,7 @@ if ($Version -ne "True") { throw "AIE requires Python 3.11 or newer." }
 Write-Host "[P1] Installing AIE and pywebview dependencies..." -ForegroundColor Cyan
 & $VenvPython -m pip install --disable-pip-version-check --upgrade pip
 if ($LASTEXITCODE -ne 0) { throw "pip bootstrap failed." }
-& $VenvPython -m pip install --disable-pip-version-check -e .
+& $VenvPython -m pip install --disable-pip-version-check -e ".[windows]"
 if ($LASTEXITCODE -ne 0) { throw "AIE dependency installation failed." }
 $WebView2 = $false
 $RuntimeRoots = @("HKLM:\SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients","HKLM:\SOFTWARE\Microsoft\EdgeUpdate\Clients")
