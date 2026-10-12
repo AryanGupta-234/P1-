@@ -46,7 +46,7 @@ Development ownership and branch rules are defined in [Development Streams](DEVE
 - [x] Privacy-safe observer health telemetry with provider latency/error counters and event-loss hooks.
 - [x] `aie health` CLI view for provider errors, latency and event-loss counters.
 - [x] Explicit JSONL export and confirm-only delete-all controls; sensitive export requires an explicit opt-in.
-- [ ] Rich observer health desktop UI.
+- [x] Rich observer health desktop UI in the Python/pywebview workspace.
 - [ ] Validate ETW elevation, Event Log/UIA permissions and data collection on the target Windows desktop.
 
 ## M1.5 — Video intelligence
@@ -60,7 +60,7 @@ Development ownership and branch rules are defined in [Development Streams](DEVE
 - [x] Unknown throughput/packet-loss values remain unknown; TCP connect latency is not mislabeled packet RTT.
 - [x] Live deduplicated diagnostic suggestions with evidence IDs; no action execution.
 - [x] Native-host playback ingestion invokes the deduplicating video diagnostic monitor after persistence and writes evidence-linked findings automatically; the monitor never executes remediation.
-- [x] Dedicated WPF Video Intelligence workspace with live context, findings, event history, network probes, feedback, model inventory, synthetic evaluation and anonymized field-candidate export.
+- [x] Python/pywebview AIE workspace with live overview, video intelligence, evidence timeline, feedback/model inventory, task/memory views and system health; WPF implementation retained as legacy reference only.
 - [x] Grounded local Ollama advisor explains deterministic findings with validated evidence IDs; routine/complex model tiers use the installed-model and RAM-aware router, with no cloud fallback or automatic model pulls.
 - [x] User-reported outcome feedback linked to diagnostic event IDs.
 - [ ] Run the expanded read-only target-desktop validator, verify simultaneous Chrome/Edge/Brave native-host registration, and exercise live player behavior on the target desktop.
@@ -182,3 +182,12 @@ Development ownership and branch rules are defined in [Development Streams](DEVE
 | Noisy metrics cause false diagnosis | Repeated samples, multiple signals and evaluation | OPEN |
 | Memory retains sensitive data | Local-first, sensitivity labels, TTL and user deletion | CONTROLLED |
 | Agent performs unbounded actions | Capability scopes, budgets, kill switch, audit and verification | CONTROLLED |
+
+
+## Desktop workspace migration (2026-10-12)
+- [x] Replace the .NET/WPF launch requirement with Python + pywebview; dashboard launches through `aie dashboard`.
+- [x] Add a PowerShell bootstrap that creates `.venv`, installs the editable package and pywebview dependency, checks WebView2 and launches the workspace.
+- [x] Add responsive views for overview, video intelligence, evidence timeline, learning/model routing, tasks/memory and system health.
+- [x] Automatic 15-second read-only refresh; observation remains explicitly user-controlled.
+- [x] Expose only allow-listed AIE actions through the Python bridge; no arbitrary shell execution from JavaScript.
+- [ ] Verify renderer startup and interaction on the target Windows desktop; CI validates bridge logic and package assets but cannot prove local WebView2 health.

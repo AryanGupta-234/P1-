@@ -1,3 +1,13 @@
+## Desktop dashboard (Python + pywebview)
+
+The native Windows workspace is implemented in Python with a responsive HTML/CSS/JavaScript interface hosted by pywebview. It does not require the .NET SDK. From the repository root, run:
+
+```powershell
+.\scripts\start-dashboard.ps1
+```
+
+The bootstrap creates `.venv` when needed, installs the editable AIE package and desktop dependencies, checks for Microsoft Edge WebView2 Runtime, and launches the workspace. After setup, launch with `aie dashboard`. The dashboard refreshes local status and privacy-reviewed video telemetry every 15 seconds. It does not start observation or network probes automatically; use explicit controls when you want those activities.
+
 # Autonomous Intelligence Ecosystem (AIE)
 
 Windows-first, hybrid, persistent personal intelligence research platform. AGI is a research objective, not a capability claim.

@@ -636,6 +636,17 @@ def show_context(
     )
 
 
+@app.command("dashboard")
+def dashboard() -> None:
+    """Launch the native Python/pywebview AIE desktop workspace."""
+    from aie.desktop.webview import DashboardError, launch_dashboard
+    try:
+        launch_dashboard()
+    except (DashboardError, OSError, RuntimeError) as exc:
+        console.print(f"[red]Dashboard unavailable:[/red] {exc}")
+        raise typer.Exit(2) from exc
+
+
 @app.command("video-dashboard")
 def video_dashboard(
     lookback_hours: int = typer.Option(24, min=1, max=720),

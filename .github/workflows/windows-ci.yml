@@ -20,7 +20,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: \${{ matrix.python-version }}
           cache: pip
       - name: Install package and test dependencies
         run: python -m pip install -e ".[dev,windows]"
@@ -29,12 +29,6 @@ jobs:
           python -m pip install --upgrade "setuptools>=83.0.0,<100"
           python -m pip install --disable-pip-version-check pip-audit
           python -m pip_audit --local
-      - name: Set up .NET SDK for WPF dashboard
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: "8.0.x"
-      - name: Build Windows desktop dashboard
-        run: dotnet build desktop/P1Dashboard/P1Dashboard.csproj --configuration Release
       - name: Lint
         run: python -m ruff check .
       - name: Validate Windows-only optional imports
@@ -42,18 +36,13 @@ jobs:
       - name: Validate PowerShell helper syntax
         shell: pwsh
         run: |
-          $tokens = $null
-          $parseErrors = $null
-          [System.Management.Automation.Language.Parser]::ParseFile("scripts/register-native-host.ps1", [ref]$tokens, [ref]$parseErrors) | Out-Null
-          if ($parseErrors) { throw ($parseErrors | Out-String) }
-          $tokens = $null
-          $parseErrors = $null
-          [System.Management.Automation.Language.Parser]::ParseFile("scripts/unregister-native-host.ps1", [ref]$tokens, [ref]$parseErrors) | Out-Null
-          if ($parseErrors) { throw ($parseErrors | Out-String) }
-          $tokens = $null
-          $parseErrors = $null
-          [System.Management.Automation.Language.Parser]::ParseFile("scripts/validate-target-desktop.ps1", [ref]$tokens, [ref]$parseErrors) | Out-Null
-          if ($parseErrors) { throw ($parseErrors | Out-String) }
+          $scripts = @("scripts/register-native-host.ps1", "scripts/unregister-native-host.ps1", "scripts/validate-target-desktop.ps1", "scripts/start-dashboard.ps1")
+          foreach ($script in $scripts) {
+            $tokens = $null
+            $parseErrors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile($script, [ref]$tokens, [ref]$parseErrors) | Out-Null
+            if ($parseErrors) { throw ($parseErrors | Out-String) }
+          }
       - name: Validate browser extension JavaScript
         run: |
           node --check browser_extension/content.js
@@ -69,7 +58,7 @@ jobs:
       - name: Upload Python distributions
         uses: actions/upload-artifact@v4
         with:
-          name: aie-python-${{ matrix.python-version }}
+          name: aie-python-\${{ matrix.python-version }}
           path: |
             dist/*.whl
             dist/*.tar.gz
