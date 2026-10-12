@@ -270,8 +270,16 @@ def test_throughput_rejects_invalid_port():
         video_probe._validate_public_https_url("https://speed.example:99999/file")
 
 
-@pytest.mark.parametrize("estimate", [True, 10 ** 10000])
-def test_probe_rejects_boolean_or_oversized_bitrate_estimate(estimate):
+def test_probe_rejects_boolean_bitrate_estimate():
+    with pytest.raises(video_probe.VideoProbeError, match="estimated_required_mbps"):
+        video_probe.run_video_network_probe(
+            packet_targets=(("gateway", "192.168.1.1"),),
+            estimated_required_mbps=True,
+        )
+
+
+def test_probe_rejects_oversized_bitrate_estimate():
+    estimate = 10 ** 5000
     with pytest.raises(video_probe.VideoProbeError, match="estimated_required_mbps"):
         video_probe.run_video_network_probe(
             packet_targets=(("gateway", "192.168.1.1"),),
