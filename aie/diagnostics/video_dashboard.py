@@ -18,7 +18,10 @@ from aie.store import EventStore
 def _number(value: Any, digits: int = 2) -> float | None:
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         return None
-    number = float(value)
+    try:
+        number = float(value)
+    except (OverflowError, ValueError):
+        return None
     return round(number, digits) if math.isfinite(number) else None
 
 
