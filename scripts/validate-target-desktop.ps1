@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
-    [ValidateSet('Chrome', 'Edge')]
-    [string[]]$Browser = @('Chrome', 'Edge'),
+    [ValidateSet('Chrome', 'Edge', 'Brave')]
+    [string[]]$Browser = @('Chrome', 'Edge', 'Brave'),
 
     [switch]$RequireBrowserRegistration
 )
@@ -63,15 +63,15 @@ foreach ($relative in $artifacts) {
 }
 
 foreach ($selectedBrowser in $Browser) {
-    if ($selectedBrowser -eq 'Chrome') {
-        $registryRoot = 'HKCU:\Software\Google\Chrome\NativeMessagingHosts'
-    } else {
-        $registryRoot = 'HKCU:\Software\Microsoft\Edge\NativeMessagingHosts'
+    $registryRoot = switch ($selectedBrowser) {
+        'Chrome' { 'HKCU:\Software\Google\Chrome\NativeMessagingHosts' }
+        'Edge'   { 'HKCU:\Software\Microsoft\Edge\NativeMessagingHosts' }
+        'Brave'  { 'HKCU:\Software\BraveSoftware\Brave-Browser\NativeMessagingHosts' }
     }
 
     $registryKey = Join-Path $registryRoot 'com.aie.browser_bridge'
     $registrationValid = $false
-    $detail = 'Not registered. Load the unpacked extension, then run scripts/register-native-host.ps1.'
+    $detail = ('Not registered. Load the unpacked extension in {0}, then run scripts/register-native-host.ps1 -Browser {0}.' -f $selectedBrowser)
 
     if (Test-Path -LiteralPath $registryKey) {
         try {
