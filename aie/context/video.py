@@ -137,6 +137,11 @@ def _network_evidence(event: AIEEvent, age_seconds: float) -> NetworkEvidence | 
         target_rows = data.get("packet_loss_by_target")
         if not isinstance(target_rows, list):
             target_rows = []
+        target_loss = (
+            _number(data, "packet_loss_pct", minimum=0, maximum=100)
+            if len(target_rows) == 1
+            else None
+        )
         return NetworkEvidence(
             "video_probe",
             "user-selected diagnostic targets",
@@ -146,7 +151,7 @@ def _network_evidence(event: AIEEvent, age_seconds: float) -> NetworkEvidence | 
             age_seconds,
             event.event_id,
             _number(data, "throughput_mbps", minimum=0),
-            _number(data, "packet_loss_pct", minimum=0, maximum=100),
+            target_loss,
             safe_labels,
             tuple(
                 (
