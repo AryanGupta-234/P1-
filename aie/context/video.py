@@ -133,7 +133,10 @@ def _network_evidence(event: AIEEvent, age_seconds: float) -> NetworkEvidence | 
         safe_labels = tuple(
             item for item in labels
             if isinstance(item, str) and 1 <= len(item) <= 24
-        ) if isinstance(labels, list) else ()
+        )[:2] if isinstance(labels, list) else ()
+        target_rows = data.get("packet_loss_by_target")
+        if not isinstance(target_rows, list):
+            target_rows = []
         return NetworkEvidence(
             "video_probe",
             "user-selected diagnostic targets",
@@ -152,7 +155,7 @@ def _network_evidence(event: AIEEvent, age_seconds: float) -> NetworkEvidence | 
                     int(item["packets_sent"]),
                     int(item["packets_received"]),
                 )
-                for item in data.get("packet_loss_by_target", [])
+                for item in target_rows
                 if isinstance(item, dict)
                 and isinstance(item.get("label"), str)
                 and 1 <= len(item["label"]) <= 24
