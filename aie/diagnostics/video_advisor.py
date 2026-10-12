@@ -118,10 +118,10 @@ def generate_video_advice(
         max_output_tokens=900,
         timeout_seconds=120.0,
     )
-    provider = client or OllamaClient(default_timeout=120.0)
     try:
+        provider = client or OllamaClient(default_timeout=120.0)
         response = LocalModelRouter(provider).generate(request)
-    except (OllamaError, ModelRoutingError) as exc:
+    except (OllamaError, ModelRoutingError, ValueError) as exc:
         raise VideoAdvisorError(str(exc)) from exc
     try:
         parsed = VideoAdvice.model_validate_json(response.content)
