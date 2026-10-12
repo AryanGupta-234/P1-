@@ -14,7 +14,7 @@ from typing import Literal
 from aie.contracts import AIEEvent
 from aie.diagnostics.video_buffering import VideoMetrics
 
-NetworkEvidenceKind = Literal["gateway_probe", "external_probe", "dns_probe"]
+NetworkEvidenceKind = Literal["gateway_probe", "external_probe", "dns_probe", "video_probe"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -28,6 +28,9 @@ class NetworkEvidence:
     resolved: bool | None
     age_seconds: float
     event_id: str
+    throughput_mbps: float | None = None
+    packet_loss_pct: float | None = None
+    target_labels: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -121,6 +124,25 @@ def _network_evidence(event: AIEEvent, age_seconds: float) -> NetworkEvidence | 
             resolved,
             age_seconds,
             event.event_id,
+        )
+
+    if event.event_type == "network.video_probe":
+        labels = data.get("packet_target_labels")
+        safe_labels = tuple(
+            item for item in labels
+            if isinstance(item, str) and 1 <= len(item) <= 24
+        ) if isinstance(labels, list) else ()
+        return NetworkEvidence(
+            "video_probe",
+            "user-selected diagnostic targets",
+            None,
+            None,
+            None,
+            age_seconds,
+            event.event_id,
+            _number(data, "throughput_mbps", minimum=0),
+            _number(data, "packet_loss_pct", minimum=0, maximum=100),
+            safe_labels,
         )
     return None
 
@@ -275,20 +297,6 @@ def build_video_observation_context(
     ):
         browser_cpu = application.cpu_pct
 
-    metrics = VideoMetrics(
-        playback_stalled=playback_stalled,
-        stall_count=stall_count,
-        observation_window_seconds=observation_window,
-        throughput_mbps=_number(data, "throughput_mbps", minimum=0),
-        estimated_required_mbps=_number(data, "estimated_required_mbps", minimum=0),
-        cpu_pct=browser_cpu,
-        dropped_frames_pct=_number(data, "dropped_frames_pct", minimum=0, maximum=100),
-        buffered_ahead_seconds=_number(data, "buffered_ahead_seconds", minimum=0, maximum=3600),
-        playback_progress_delta_seconds=_number(
-            data, "playback_progress_delta_seconds", minimum=0, maximum=300
-        ),
-    )
-
     network_evidence: list[NetworkEvidence] = []
     evidence_ids = [browser_event.event_id]
     for event in events:
@@ -306,6 +314,42 @@ def build_video_observation_context(
             evidence_ids.append(event.event_id)
 
     network_evidence.sort(key=lambda item: item.age_seconds)
+    video_probes = [item for item in network_evidence if item.kind == "video_probe"]
+    latest_video_probe = video_probes[0] if video_probes else None
+    browser_throughput = _number(data, "throughput_mbps", minimum=0)
+    browser_packet_loss = _number(data, "packet_loss_pct", minimum=0, maximum=100)
+    packet_scope = (
+        ", ".join(latest_video_probe.target_labels)
+        if latest_video_probe is not None and latest_video_probe.target_labels
+        else None
+    )
+    metrics = VideoMetrics(
+        playback_stalled=playback_stalled,
+        stall_count=stall_count,
+        observation_window_seconds=observation_window,
+        throughput_mbps=(
+            browser_throughput
+            if browser_throughput is not None
+            else latest_video_probe.throughput_mbps if latest_video_probe is not None else None
+        ),
+        estimated_required_mbps=(
+            _number(data, "estimated_required_mbps", minimum=0)
+            if _number(data, "estimated_required_mbps", minimum=0) is not None
+            else None
+        ),
+        packet_loss_pct=(
+            browser_packet_loss
+            if browser_packet_loss is not None
+            else latest_video_probe.packet_loss_pct if latest_video_probe is not None else None
+        ),
+        packet_loss_scope=packet_scope,
+        cpu_pct=browser_cpu,
+        dropped_frames_pct=_number(data, "dropped_frames_pct", minimum=0, maximum=100),
+        buffered_ahead_seconds=_number(data, "buffered_ahead_seconds", minimum=0, maximum=3600),
+        playback_progress_delta_seconds=_number(
+            data, "playback_progress_delta_seconds", minimum=0, maximum=300
+        ),
+    )
     if application is not None:
         evidence_ids.extend(application.evidence_event_ids)
 
