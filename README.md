@@ -150,7 +150,7 @@ A provider-neutral request/response contract and Ollama adapter are available un
 
 ## Latest CI validation
 
-Windows CI run [#1041](https://github.com/AryanGupta-234/P1-/actions/runs/38151881805) passed on Python 3.11 and 3.12 for the current orchestration branch. The matrix includes the `pip-audit` dependency vulnerability scan, .NET 8 WPF dashboard compilation, Ruff, Windows-only optional imports, PowerShell parsing, browser-extension JavaScript syntax checks, the full pytest suite, Python wheel and source-distribution builds, Twine metadata validation, and short-lived build artifact uploads. Hosted CI verifies compilation and tests; it does not replace interactive testing of the tray, dashboard, ETW elevation, browser native host, or UI Automation on the target desktop.
+Pywebview migration CI run [#1264](https://github.com/AryanGupta-234/P1-/actions/runs/38245145701) passed on Python 3.11 and 3.12, including `pip-audit`, Ruff, Windows-only imports, PowerShell parsing, browser JavaScript checks, the full pytest suite and wheel/source-distribution validation. Follow-up run [#1266](https://github.com/AryanGupta-234/P1-/actions/runs/38245413250) validates the final Windows dependency bootstrap. Hosted CI cannot replace interactive WebView2 validation on the target desktop.
 
 ## Local retention and permission review
 
@@ -182,16 +182,13 @@ Enabling a manifest cannot make an unregistered capability executable, remove ma
 
 ## Native Windows dashboard
 
-The WPF dashboard is a user-started desktop client over the installed `aie` CLI. Build it with the .NET 8 SDK after installing the Python CLI:
+The native desktop workspace uses Python + pywebview and does not require the .NET SDK. From the repository root, run:
 
 ```powershell
-pip install -e ".[windows]"
-dotnet build .\desktop\P1Dashboard\P1Dashboard.csproj --configuration Release
-.\desktop\P1Dashboard\bin\Release
-et8.0-windows\P1Dashboard.exe
+.\scripts\start-dashboard.ps1
 ```
 
-The main dashboard reads local status, health, retention and task history; launches the bounded local `aie agent run` workflow; pauses/resumes an existing observer; and exposes emergency execution disable/kill controls. Its **Video intelligence** workspace opens a detailed playback dashboard with correlated telemetry, hypotheses, findings, network probes, feedback, event history, local model inventory, synthetic evaluation and field-trace export. A local Ollama advisor explains deterministic findings using evidence IDs; routine/complex tiers are routed through the installed-model and RAM policy. Neither dashboard starts observation on launch, supplies capability IDs, approves proposals or enables execution. The CLI must already be installed and available as `aie` on PATH.
+The bootstrap creates `.venv` when needed, installs the editable AIE package and Windows observer dependencies, installs/checks Microsoft Edge WebView2 Runtime when possible, and launches the app. After setup, use `aie dashboard`. The dashboard provides overview, video intelligence, evidence timeline, learning/model routing, tasks/memory and system-health views. It refreshes local data every 15 seconds. Opening the UI does not start observation or run network probes; those remain explicit user-controlled activities.
 
 ## Windows tray controls
 

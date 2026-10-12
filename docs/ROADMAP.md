@@ -25,7 +25,7 @@ Development ownership and branch rules are defined in [Development Streams](DEVE
 - [x] Read-only inventory and process reconciliation.
 - [x] ARC Architecture Spotlight, roadmap and contribution guide.
 - [x] Hosted Windows CI on Python 3.11/3.12 with Ruff, optional Windows imports, PowerShell syntax, JS syntax and pytest.
-- [x] Hosted Windows CI also compiles the .NET 8 WPF dashboard; this verifies the build, not interactive behavior on the target desktop.
+- [x] Hosted Windows CI validates the Python/pywebview package, Python bridge tests, Windows bootstrap syntax and packaged UI assets; target WebView2 interaction still requires desktop verification.
 - [x] Event Log runtime integration, ETW lifecycle/loss accounting, systemwide process telemetry and privacy controls validated in hosted Windows CI run #581 (Python 3.11/3.12).
 - [x] Installed-dependency vulnerability audit in Windows CI with `pip-audit`; weekly Dependabot checks for Python and GitHub Actions updates.
 - [x] Windows CI builds wheel and source distributions, validates metadata with Twine, and uploads short-lived artifacts.
