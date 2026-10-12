@@ -132,19 +132,38 @@ def _network_evidence(event: AIEEvent, age_seconds: float) -> NetworkEvidence | 
         )
 
     if event.event_type == "network.video_probe":
-        labels = data.get("packet_target_labels")
-        safe_labels = tuple(
-            item for item in labels[:2]
-            if isinstance(item, str) and 1 <= len(item) <= 24
-        )[:2] if isinstance(labels, list) else ()
-        target_rows = data.get("packet_loss_by_target")
-        if not isinstance(target_rows, list):
-            target_rows = []
-        target_loss = (
-            _number(data, "packet_loss_pct", minimum=0, maximum=100)
-            if len(target_rows) == 1
-            else None
-        )
+        raw_rows = data.get("packet_loss_by_target")
+        safe_rows: list[tuple[str, float, int, int]] = []
+        seen_labels: set[str] = set()
+        if isinstance(raw_rows, list):
+            for item in raw_rows[:2]:
+                if not isinstance(item, dict):
+                    continue
+                label = item.get("label")
+                loss = item.get("packet_loss_pct")
+                sent = item.get("packets_sent")
+                received = item.get("packets_received")
+                if (
+                    not isinstance(label, str)
+                    or not 1 <= len(label) <= 24
+                    or any(character not in "abcdefghijklmnopqrstuvwxyz0123456789_-" for character in label)
+                    or label in seen_labels
+                    or isinstance(loss, bool)
+                    or not isinstance(loss, (int, float))
+                    or not math.isfinite(float(loss))
+                    or not 0 <= loss <= 100
+                    or isinstance(sent, bool)
+                    or not isinstance(sent, int)
+                    or not 1 <= sent <= 4
+                    or isinstance(received, bool)
+                    or not isinstance(received, int)
+                    or not 0 <= received <= sent
+                ):
+                    continue
+                seen_labels.add(label)
+                safe_rows.append((label, float(loss), sent, received))
+        safe_labels = tuple(item[0] for item in safe_rows)
+        target_loss = safe_rows[0][1] if len(safe_rows) == 1 else None
         return NetworkEvidence(
             "video_probe",
             "user-selected diagnostic targets",
@@ -156,27 +175,7 @@ def _network_evidence(event: AIEEvent, age_seconds: float) -> NetworkEvidence | 
             _number(data, "throughput_mbps", minimum=0),
             target_loss,
             safe_labels,
-            tuple(
-                (
-                    item["label"],
-                    float(item["packet_loss_pct"]),
-                    int(item["packets_sent"]),
-                    int(item["packets_received"]),
-                )
-                for item in target_rows[:2]
-                if isinstance(item, dict)
-                and isinstance(item.get("label"), str)
-                and 1 <= len(item["label"]) <= 24
-                and isinstance(item.get("packet_loss_pct"), (int, float))
-                and not isinstance(item.get("packet_loss_pct"), bool)
-                and 0 <= item["packet_loss_pct"] <= 100
-                and isinstance(item.get("packets_sent"), int)
-                and not isinstance(item.get("packets_sent"), bool)
-                and 1 <= item["packets_sent"] <= 4
-                and isinstance(item.get("packets_received"), int)
-                and not isinstance(item.get("packets_received"), bool)
-                and 0 <= item["packets_received"] <= item["packets_sent"]
-            )[:2],
+            tuple(safe_rows),
             _number(data, "estimated_required_mbps", minimum=0),
         )
     return None
