@@ -636,6 +636,59 @@ def show_context(
     )
 
 
+@app.command("video-dashboard")
+def video_dashboard(
+    lookback_hours: int = typer.Option(24, min=1, max=720),
+    limit: int = typer.Option(500, min=1, max=1000),
+    as_json: bool = typer.Option(False, "--json", help="Emit a versioned JSON snapshot for the desktop dashboard."),
+) -> None:
+    """Build a privacy-safe, read-only dashboard snapshot of local video intelligence."""
+    from aie.diagnostics.video_dashboard import build_video_dashboard_snapshot
+
+    try:
+        snapshot = build_video_dashboard_snapshot(
+            EventStore(database_path()),
+            lookback_hours=lookback_hours,
+            event_limit=limit,
+        )
+    except (OSError, RuntimeError, ValueError) as exc:
+        console.print(f"[red]Video dashboard unavailable:[/red] {type(exc).__name__}")
+        raise typer.Exit(2) from exc
+    if as_json:
+        typer.echo(json.dumps(snapshot, ensure_ascii=False, separators=(",", ":"), allow_nan=False))
+        return
+    overview = snapshot["overview"]
+    table = Table("Signal", "Value")
+    for key, value in overview.items():
+        if key != "event_types":
+            table.add_row(key.replace("_", " ").title(), str(value))
+    console.print(table)
+    if snapshot["live_context"] is None:
+        console.print("[yellow]No fresh playback context is currently available.[/yellow]")
+    else:
+        console.print_json(json.dumps(snapshot["live_context"], ensure_ascii=False))
+    console.print(f"Current deterministic hypotheses: {len(snapshot['live_hypotheses'])}")
+    console.print(snapshot["disclaimer"])
+
+
+@app.command("video-advice")
+def video_advice(
+    tier: Literal["routine", "complex"] = typer.Option(
+        "routine",
+        help="Use the lightweight Qwen 3B tier or request the hardware-guarded complex tier.",
+    ),
+) -> None:
+    """Explain current deterministic video findings with an installed local Ollama model."""
+    from aie.diagnostics.video_advisor import VideoAdvisorError, generate_video_advice
+
+    try:
+        result = generate_video_advice(EventStore(database_path()), tier=tier)
+    except (VideoAdvisorError, OSError, ValueError) as exc:
+        console.print(f"[red]Local video advisor unavailable:[/red] {exc}")
+        raise typer.Exit(2) from exc
+    typer.echo(json.dumps(result, ensure_ascii=False, separators=(",", ":"), allow_nan=False))
+
+
 @app.command("video-probe")
 def video_probe(
     throughput_url: str | None = typer.Option(
