@@ -76,7 +76,10 @@ def _number(
     value = data.get(key)
     if value is None or isinstance(value, bool) or not isinstance(value, (int, float)):
         return None
-    result = float(value)
+    try:
+        result = float(value)
+    except (OverflowError, TypeError, ValueError):
+        return None
     if not math.isfinite(result) or result < minimum:
         return None
     if maximum is not None and result > maximum:
