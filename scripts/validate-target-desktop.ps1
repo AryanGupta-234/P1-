@@ -90,6 +90,40 @@ foreach ($selectedBrowser in $Browser) {
                 )
                 if ($registrationValid) {
                     $detail = 'Native host manifest, extension origin and executable are present.'
+                    $probe = @'
+import json
+import struct
+import subprocess
+import sys
+
+payload = json.dumps({"kind": "bridge_ping"}, separators=(",", ":")).encode("utf-8")
+frame = struct.pack("<I", len(payload)) + payload
+try:
+    result = subprocess.run(
+        [sys.argv[1]], input=frame, capture_output=True, timeout=8, check=False
+    )
+    if result.returncode != 0:
+        raise SystemExit("host exited with code " + str(result.returncode))
+    if len(result.stdout) < 4:
+        raise SystemExit("host returned no framed response")
+    size = struct.unpack("<I", result.stdout[:4])[0]
+    if size == 0 or size > 1024 * 1024 or len(result.stdout) != size + 4:
+        raise SystemExit("host returned an invalid response frame")
+    response = json.loads(result.stdout[4:].decode("utf-8"))
+    if response != {"ok": True, "kind": "bridge_pong"}:
+        raise SystemExit("unexpected host response: " + repr(response))
+    print("Native host launch and PING/PONG handshake passed.")
+except subprocess.TimeoutExpired:
+    raise SystemExit("native host handshake timed out")
+'@
+                    $probeResult = python -c $probe $hostPath 2>&1
+                    $probePassed = ($LASTEXITCODE -eq 0)
+                    if ($probePassed) {
+                        $detail += ' ' + [string]$probeResult
+                    } else {
+                        $registrationValid = $false
+                        $detail = 'Native host is registered but launch/handshake failed: ' + [string]$probeResult
+                    }
                 } else {
                     $detail = 'Native host manifest or executable is incomplete; re-register this browser.'
                 }
@@ -116,7 +150,7 @@ $failed = @($results | Where-Object { -not $_.Passed })
 
 Write-Host ''
 Write-Host 'AIE BROWSER/VIDEO TARGET DESKTOP VALIDATION' -ForegroundColor Cyan
-Write-Host 'Read-only checks only; no security, registry, browser or execution settings were changed.' -ForegroundColor DarkGray
+Write-Host 'Performs a framed PING/PONG process test; does not change registry, browser or execution settings.' -ForegroundColor DarkGray
 Write-Host ''
 $results | Format-Table -AutoSize
 
