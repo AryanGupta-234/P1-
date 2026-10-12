@@ -317,10 +317,22 @@ def measure_https_throughput(
             if connection.sock is not None:
                 connection.sock.settimeout(min(1.0, remaining))
             response = connection.getresponse()
-            if response.status not in (200, 206):
+            if response.status != 206:
                 raise VideoProbeError(
-                    "throughput endpoint must return HTTP 200/206; redirects are not followed"
+                    "throughput endpoint must honor HTTP byte ranges with status 206; redirects are not followed"
                 )
+            content_range = response.getheader("Content-Range")
+            range_match = (
+                re.fullmatch(r"bytes (\\d+)-(\\d+)/(?:\\d+|\\*)", content_range)
+                if isinstance(content_range, str)
+                else None
+            )
+            if (
+                range_match is None
+                or int(range_match.group(1)) != start_byte
+                or int(range_match.group(2)) < end_byte
+            ):
+                raise VideoProbeError("throughput endpoint returned an invalid Content-Range")
             remaining_sample = requested
             while remaining_sample > 0:
                 remaining_time = deadline - clock()
@@ -333,11 +345,11 @@ def measure_https_throughput(
                     break
                 total_bytes += len(chunk)
                 remaining_sample -= len(chunk)
-            samples_completed += 1
             response.close()
             request_index += 1
             if remaining_sample > 0:
                 break
+            samples_completed += 1
         except (OSError, TimeoutError, http.client.HTTPException) as exc:
             if total_bytes == 0:
                 raise VideoProbeError(f"throughput sample failed: {type(exc).__name__}") from exc
@@ -347,8 +359,8 @@ def measure_https_throughput(
                 connection.close()
 
     elapsed = max(0.001, clock() - started)
-    if total_bytes < 16 * 1024:
-        raise VideoProbeError("throughput endpoint returned too little data for a useful sample")
+    if total_bytes < 16 * 1024 or samples_completed == 0:
+        raise VideoProbeError("throughput endpoint returned too little complete range data for a useful sample")
     mbps = total_bytes * 8 / elapsed / 1_000_000
     if not math.isfinite(mbps) or mbps < 0:
         raise VideoProbeError("throughput sample produced an invalid measurement")
