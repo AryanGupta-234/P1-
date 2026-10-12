@@ -31,7 +31,8 @@ try {
 } catch { Add-Check "Provider and video imports" $false "One or more Windows/browser video imports failed." }
 
 try {
-    $evaluation = python -c "from pathlib import Path; from aie.diagnostics.video_evaluation import evaluate_trace_dataset; p=Path('aie/diagnostics/data/video_traces_v1.json'); r=evaluate_trace_dataset(p); assert r.trace_count > 0; print(f'{r.trace_count} synthetic traces loaded') " 2>&1
+    $traceDataset = Join-Path $PSScriptRoot '..\aie\diagnostics\data\video_traces_v1.json'
+    $evaluation = python -c "import sys; from pathlib import Path; from aie.diagnostics.video_evaluation import evaluate_trace_dataset; r=evaluate_trace_dataset(Path(sys.argv[1])); assert r.trace_count > 0; print(str(r.trace_count) + ' synthetic traces loaded')" $traceDataset 2>&1
     Add-Check "Video trace corpus" ($LASTEXITCODE -eq 0) ([string]$evaluation)
 } catch { Add-Check "Video trace corpus" $false "Synthetic video trace corpus could not be loaded." }
 
