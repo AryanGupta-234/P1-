@@ -90,39 +90,14 @@ foreach ($selectedBrowser in $Browser) {
                 )
                 if ($registrationValid) {
                     $detail = 'Native host manifest, extension origin and executable are present.'
-                    $probe = @'
-import json
-import struct
-import subprocess
-import sys
-
-payload = json.dumps({"kind": "bridge_ping"}, separators=(",", ":")).encode("utf-8")
-frame = struct.pack("<I", len(payload)) + payload
-try:
-    result = subprocess.run(
-        [sys.argv[1]], input=frame, capture_output=True, timeout=8, check=False
-    )
-    if result.returncode != 0:
-        raise SystemExit("host exited with code " + str(result.returncode))
-    if len(result.stdout) < 4:
-        raise SystemExit("host returned no framed response")
-    size = struct.unpack("<I", result.stdout[:4])[0]
-    if size == 0 or size > 1024 * 1024 or len(result.stdout) != size + 4:
-        raise SystemExit("host returned an invalid response frame")
-    response = json.loads(result.stdout[4:].decode("utf-8"))
-    if response != {"ok": True, "kind": "bridge_pong"}:
-        raise SystemExit("unexpected host response: " + repr(response))
-    print("Native host launch and PING/PONG handshake passed.")
-except subprocess.TimeoutExpired:
-    raise SystemExit("native host handshake timed out")
-'@
+                    $probe = "import json,struct,subprocess,sys; payload=json.dumps({'kind':'bridge_ping'},separators=(',',':')).encode('utf-8'); frame=struct.pack('<I',len(payload))+payload; result=subprocess.run([sys.argv[1]],input=frame,capture_output=True,timeout=8,check=False); assert result.returncode == 0, 'host exited with code ' + str(result.returncode) + ': ' + result.stderr.decode(errors='replace'); assert len(result.stdout) >= 4, 'host returned no framed response: ' + repr(result.stdout); size=struct.unpack('<I',result.stdout[:4])[0]; assert 0 < size <= 1024*1024 and len(result.stdout) == size+4, 'invalid response frame'; response=json.loads(result.stdout[4:].decode('utf-8')); assert response == {'ok':True,'kind':'bridge_pong'}, 'unexpected host response: ' + repr(response); print('Native host launch and PING/PONG handshake passed.')"
                     $probeResult = python -c $probe $hostPath 2>&1
                     $probePassed = ($LASTEXITCODE -eq 0)
                     if ($probePassed) {
                         $detail += ' ' + [string]$probeResult
                     } else {
                         $registrationValid = $false
-                        $detail = 'Native host is registered but launch/handshake failed: ' + [string]$probeResult
+                        $detail = 'Native host is registered but launch/handshake failed: ' + (($probeResult | ForEach-Object { [string]$_ }) -join ' ')
                     }
                 } else {
                     $detail = 'Native host manifest or executable is incomplete; re-register this browser.'
