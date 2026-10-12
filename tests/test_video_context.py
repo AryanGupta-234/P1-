@@ -310,3 +310,38 @@ def test_single_probe_target_can_supply_a_scoped_packet_loss_hypothesis():
     assert context.metrics.packet_loss_scope == "gateway"
     assert "video-probe-single" in context.evidence_event_ids
 
+def test_ignores_malformed_packet_loss_rows_even_when_legacy_aggregate_exists():
+    browser = make_event(
+        "browser.video.snapshot",
+        data={
+            "playback_state": "stalled",
+            "stall_count": 4,
+            "observation_window_seconds": 45,
+        },
+        event_id="browser-malformed-probe",
+    )
+    probe = make_event(
+        "network.video_probe",
+        seconds_ago=2,
+        data={
+            "packet_target_labels": ["gateway"],
+            "packet_loss_by_target": [
+                {
+                    "label": "gateway",
+                    "packets_sent": 4,
+                    "packets_received": 3,
+                    "packet_loss_pct": 10 ** 5000,
+                }
+            ],
+            "packet_loss_pct": 25.0,
+        },
+        event_id="video-probe-malformed",
+    )
+
+    context = build_video_observation_context([browser, probe])
+
+    assert context is not None
+    assert context.metrics.packet_loss_pct is None
+    assert context.metrics.packet_loss_scope is None
+    assert context.network_evidence[0].packet_loss_by_target == ()
+
