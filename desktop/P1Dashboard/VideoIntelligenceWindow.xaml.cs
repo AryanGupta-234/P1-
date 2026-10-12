@@ -241,6 +241,9 @@ public partial class VideoIntelligenceWindow : Window
                 modelText.AppendLine();
                 modelText.AppendLine($"Available RAM: {Value(models, "memory_available_gib")} GiB");
                 modelText.AppendLine($"CPU: {Value(models, "cpu_physical")} physical / {Value(models, "cpu_logical")} logical");
+                var discoveryError = Value(models, "discovery_error", "");
+                if (!string.IsNullOrWhiteSpace(discoveryError) && discoveryError != "—")
+                    modelText.AppendLine($"Ollama discovery: {discoveryError}");
                 ModelStatusText.Text = modelText.ToString();
             }
 
