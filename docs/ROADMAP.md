@@ -101,6 +101,7 @@ Development ownership and branch rules are defined in [Development Streams](DEVE
 - [ ] Held-out task families, tool-selection utility, latency/cost calibration and human-rated reasoning quality.
 
 ## M4 — Persistent memory and learning
+- [x] Preserve `updated_at >= created_at` when imported/source timestamps are ahead of the local clock; save/reload regression coverage added on 2026-10-12.
 - [x] Capture user-reported diagnostic outcomes: resolved, not resolved, not attempted.
 - [x] Typed local memory schema: working, episodic, semantic, procedural and prospective.
 - [x] Source-event provenance validation, sensitivity labels, TTL, correction/supersession and explicit deletion.
