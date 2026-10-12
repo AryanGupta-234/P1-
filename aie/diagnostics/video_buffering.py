@@ -6,6 +6,7 @@ control browsers, change network settings, or execute remediation.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import math
 from typing import Literal
 
 Severity = Literal["low", "medium", "high"]
@@ -25,16 +26,28 @@ class VideoMetrics:
     estimated_required_mbps: float | None = None
     rtt_ms: float | None = None
     packet_loss_pct: float | None = None
+    packet_loss_scope: str | None = None
     cpu_pct: float | None = None
     dropped_frames_pct: float | None = None
     buffered_ahead_seconds: float | None = None
     playback_progress_delta_seconds: float | None = None
 
     def __post_init__(self) -> None:
-        if self.stall_count < 0:
-            raise ValueError("stall_count cannot be negative")
-        if self.observation_window_seconds <= 0:
-            raise ValueError("observation_window_seconds must be positive")
+        if not isinstance(self.playback_stalled, bool):
+            raise ValueError("playback_stalled must be a boolean")
+        if isinstance(self.stall_count, bool) or not isinstance(self.stall_count, int) or self.stall_count < 0:
+            raise ValueError("stall_count must be a non-negative integer")
+        if (
+            isinstance(self.observation_window_seconds, bool)
+            or not isinstance(self.observation_window_seconds, (int, float))
+        ):
+            raise ValueError("observation_window_seconds must be a finite positive number")
+        try:
+            observation_window = float(self.observation_window_seconds)
+        except (OverflowError, ValueError) as exc:
+            raise ValueError("observation_window_seconds must be a finite positive number") from exc
+        if not math.isfinite(observation_window) or observation_window <= 0:
+            raise ValueError("observation_window_seconds must be a finite positive number")
         bounds = {
             "throughput_mbps": (0, None),
             "estimated_required_mbps": (0, None),
@@ -47,8 +60,27 @@ class VideoMetrics:
         }
         for name, (minimum, maximum) in bounds.items():
             value = getattr(self, name)
-            if value is not None and (value < minimum or (maximum is not None and value > maximum)):
-                raise ValueError(f"{name} must be between {minimum} and {maximum or 'unbounded'}")
+            if value is None:
+                continue
+            if isinstance(value, bool) or not isinstance(value, (int, float)):
+                upper = maximum if maximum is not None else "unbounded"
+                raise ValueError(f"{name} must be finite and between {minimum} and {upper}")
+            try:
+                numeric_value = float(value)
+            except (OverflowError, ValueError) as exc:
+                upper = maximum if maximum is not None else "unbounded"
+                raise ValueError(f"{name} must be finite and between {minimum} and {upper}") from exc
+            if (
+                not math.isfinite(numeric_value)
+                or numeric_value < minimum
+                or (maximum is not None and numeric_value > maximum)
+            ):
+                upper = maximum if maximum is not None else "unbounded"
+                raise ValueError(f"{name} must be finite and between {minimum} and {upper}")
+        if self.packet_loss_scope is not None and (
+            not isinstance(self.packet_loss_scope, str) or len(self.packet_loss_scope) > 64
+        ):
+            raise ValueError("packet_loss_scope must be text no longer than 64 characters")
 
 
 @dataclass(frozen=True, slots=True)
@@ -116,10 +148,14 @@ def diagnose_video_buffering(
         findings.append(DiagnosticFinding(
             "network_packet_loss", "high", 0.78,
             (
-                "Inspect Wi-Fi signal quality and compare packet loss against the local "
-                "gateway and an external endpoint."
+                "Packet loss was measured against the explicitly selected diagnostic targets. "
+                "Compare gateway and video-path targets separately; ICMP loss is not proof "
+                "that the streaming CDN dropped media packets."
             ),
-            (f"Measured packet loss: {metrics.packet_loss_pct:.2f}%",),
+            tuple(
+                [f"Measured packet loss: {metrics.packet_loss_pct:.2f}%"]
+                + ([f"Probe target labels: {metrics.packet_loss_scope}"] if metrics.packet_loss_scope else [])
+            ),
         ))
 
     if (

@@ -74,7 +74,14 @@ def test_native_host_persists_browser_event(tmp_path):
     store = EventStore(tmp_path / "events.sqlite3")
 
     assert run_host(incoming, outgoing, store) == 1
-    assert store.count() == 1
+    assert store.count() == 2
+    stored = store.recent(2)
+    assert {item.event_type for item in stored} == {
+        "browser.video.snapshot", "diagnostic.video_finding"
+    }
+    finding = next(item for item in stored if item.event_type == "diagnostic.video_finding")
+    assert finding.data["cause"] == "stream_buffer_starvation"
+    assert finding.data["action_executed"] is False
     response = list(iter_native_messages(io.BytesIO(outgoing.getvalue())))
     assert response[0]["ok"] is True
 

@@ -1,3 +1,13 @@
+## Desktop dashboard (Python + pywebview)
+
+The native Windows workspace is implemented in Python with a responsive HTML/CSS/JavaScript interface hosted by pywebview. It does not require the .NET SDK. From the repository root, run:
+
+```powershell
+.\scripts\start-dashboard.ps1
+```
+
+The bootstrap creates `.venv` when needed, installs the editable AIE package and desktop dependencies, checks for Microsoft Edge WebView2 Runtime, and launches the workspace. After setup, launch with `aie dashboard`. The dashboard refreshes local status and privacy-reviewed video telemetry every 15 seconds. It does not start observation or network probes automatically; use explicit controls when you want those activities.
+
 # Autonomous Intelligence Ecosystem (AIE)
 
 Windows-first, hybrid, persistent personal intelligence research platform. AGI is a research objective, not a capability claim.
@@ -93,7 +103,7 @@ Install optional Windows dependencies with `python -m pip install -e ".[dev,wind
 Use `aie pause` to pause all running observer loops for the current Windows user, `aie resume` to resume them, and `aie status` to inspect pause state and local event count. Pausing does not erase retained events. `aie prune --older-than-days 30` previews old records; add `--confirm` to delete only the expired local events.
 
 ## Browser playback observer
-The opt-in Chrome/Edge extension prototype is in `browser_extension/`. Load it unpacked, then register its Windows native host using `scripts/register-native-host.ps1`. See [Video Intelligence setup](docs/VIDEO_INTELLIGENCE.md). Monitoring defaults to off.
+The opt-in Chrome/Edge/Brave extension is in `browser_extension/`. Load it unpacked, then register its Windows native host using `scripts/register-native-host.ps1`. Monitoring defaults to off. Accepted playback snapshots are persisted locally and passed to the live video diagnostic monitor; findings are evidence-linked suggestions, never automatic fixes. See [Video Intelligence setup](docs/VIDEO_INTELLIGENCE.md).
 
 ## Structural screen observation (optional)
 To collect bounded UI Automation structure for selected apps, install the optional Windows extra with `python -m pip install -e ".[dev,windows]"`, then run `aie observe --duration 600 --ui-tree --ui-tree-apps msedge.exe,notepad.exe`. Only allowlisted foreground apps are sampled. It records control type, class, automation ID and geometry; it does not read UI text, values, passwords or screenshots. UI Automation is off by default. Inspect the latest structural sample with `aie screen`.
@@ -102,7 +112,21 @@ To collect bounded UI Automation structure for selected apps, install the option
 The observer emits foreground-window transition events using the Windows user32 API. Process name and window class are collected by default; window titles are omitted. Explicitly passing `--include-window-titles` collects them as sensitive data.
 
 ## Live diagnostic suggestions
-While `aie observe` is running, fresh browser video events are correlated with foreground-app and network telemetry. New diagnostic hypotheses are persisted and printed once per incident/cooldown, with evidence and a recommended next step. The observer does not apply fixes automatically.
+The native host now runs the deduplicating video diagnostic monitor after each accepted playback snapshot, correlating it with fresh same-host foreground-app and network evidence. New hypotheses are persisted once per active incident/cooldown with supporting event IDs and a recommended next step. The separate `aie observe` loop can also surface diagnostic suggestions. Neither path applies fixes automatically.
+
+## Video network probes and evaluation
+Network probes run only when explicitly requested; normal `aie observe` does not start them. Supply a test object and/or up to two packet targets:
+
+```powershell
+aie video-probe --packet-target gateway=192.168.1.1 --packet-target video_path=cdn.example.net
+aie video-probe --throughput-url https://speed-test.example.net/1m.bin --estimated-required-mbps 8
+aie context
+aie video-evaluate
+# After a consented local observation session, prepare anonymized candidates for manual labeling:
+aie video-trace-export --confirm --hours 24 --limit 100 --output .\video_field_trace_candidates.json
+```
+
+The HTTPS probe requires a user-selected public HTTPS endpoint, follows no redirects, reads at most 768 KiB by default, and stores only aggregate measurements—not the URL, hostname or response body. Packet probes send up to four ICMP requests per selected target and store labels/counts/percentage, not the hostnames/IPs. When two targets are selected, their packet-loss percentages are not combined into a single diagnostic signal. Results describe the selected test path, not necessarily the active streaming CDN. The bundled trace evaluator reports regression precision/recall/F1 and per-cause false positives/negatives on synthetic cases; it is not field-accuracy or confidence-calibration evidence. See [Video Intelligence](docs/VIDEO_INTELLIGENCE.md).
 
 ## Proposal review and policy audit
 Capability manifests are loaded only from `%LOCALAPPDATA%\AIE\capabilities\*.json`; the directory is user-managed and empty by default. See [Capability Manifest Guide](docs/CAPABILITY_MANIFESTS.md). `aie capabilities` lists manifests. `aie propose <CAPABILITY_ID> <SUMMARY> --parameters '{"name":"value"}'` records a bounded proposal, `aie proposals` lists review states, and `aie approve-proposal <ID>` / `aie reject-proposal <ID>` record your explicit decision. `aie proposal-audit <ID>` shows the audit trail and checks its hash chain and stored head checkpoint; `aie policy-audit-check` verifies the complete ledger. Approval only records policy authorization—nothing is executed.
@@ -126,7 +150,7 @@ A provider-neutral request/response contract and Ollama adapter are available un
 
 ## Latest CI validation
 
-Windows CI run [#1041](https://github.com/AryanGupta-234/P1-/actions/runs/38151881805) passed on Python 3.11 and 3.12 for the current orchestration branch. The matrix includes the `pip-audit` dependency vulnerability scan, .NET 8 WPF dashboard compilation, Ruff, Windows-only optional imports, PowerShell parsing, browser-extension JavaScript syntax checks, the full pytest suite, Python wheel and source-distribution builds, Twine metadata validation, and short-lived build artifact uploads. Hosted CI verifies compilation and tests; it does not replace interactive testing of the tray, dashboard, ETW elevation, browser native host, or UI Automation on the target desktop.
+Pywebview migration CI run [#1264](https://github.com/AryanGupta-234/P1-/actions/runs/38245145701) passed on Python 3.11 and 3.12, including `pip-audit`, Ruff, Windows-only imports, PowerShell parsing, browser JavaScript checks, the full pytest suite and wheel/source-distribution validation. Follow-up run [#1266](https://github.com/AryanGupta-234/P1-/actions/runs/38245413250) validates the final Windows dependency bootstrap. Hosted CI cannot replace interactive WebView2 validation on the target desktop.
 
 ## Local retention and permission review
 
@@ -158,16 +182,13 @@ Enabling a manifest cannot make an unregistered capability executable, remove ma
 
 ## Native Windows dashboard
 
-The WPF dashboard is a user-started desktop client over the installed `aie` CLI. Build it with the .NET 8 SDK after installing the Python CLI:
+The native desktop workspace uses Python + pywebview and does not require the .NET SDK. From the repository root, run:
 
 ```powershell
-pip install -e ".[windows]"
-dotnet build .\desktop\P1Dashboard\P1Dashboard.csproj --configuration Release
-.\desktop\P1Dashboard\bin\Release
-et8.0-windows\P1Dashboard.exe
+.\scripts\start-dashboard.ps1
 ```
 
-The dashboard reads local status, health, retention and task history; launches the bounded local `aie agent run` workflow; pauses/resumes an existing observer; and exposes emergency execution disable/kill controls. It does not start observation on launch, supply capability IDs, approve proposals or enable execution. The CLI must already be installed and available as `aie` on PATH.
+The bootstrap creates `.venv` when needed, installs the editable AIE package and Windows observer dependencies, installs/checks Microsoft Edge WebView2 Runtime when possible, and launches the app. After setup, use `aie dashboard`. The dashboard provides overview, video intelligence, evidence timeline, learning/model routing, tasks/memory and system-health views. It refreshes local data every 15 seconds. Opening the UI does not start observation or run network probes; those remain explicit user-controlled activities.
 
 ## Windows tray controls
 
@@ -191,7 +212,7 @@ aie notifications-disable
 The tray displays at most two generic playback-diagnostic notices per poll. It never places a process name, window title, URL, event payload or recommendation in the balloon. New events observed while notifications are disabled, the observer is paused, or quiet hours are active are not queued for later delivery.
 
 ## Current limitations
-Process lifecycle observation uses best-effort user-mode snapshots and may miss transient processes. Foreground process resource sampling is limited to the active application; it is not a systemwide per-process profiler. Video diagnostics analyze supplied metrics only. The project has a restricted Windows Settings URI adapter, but general autonomous remediation, OS-process sandboxing, rollback, automated recovery, evaluated learning and a full desktop assistant dashboard are not implemented.
+Process lifecycle observation uses best-effort user-mode snapshots and may miss transient processes. Foreground process resource sampling is limited to the active application; it is not a systemwide per-process profiler. Video diagnostics analyze supplied metrics only. The project has a restricted Windows Settings URI adapter, but general autonomous remediation, OS-process sandboxing, rollback, automated recovery, evaluated learning and a full ecosystem-wide desktop assistant dashboard spanning memory, task, policy and action history is not yet implemented; the dedicated video intelligence workspace is available.
 
 
 ## Planner and reasoning evaluation

@@ -1,7 +1,7 @@
-"""Chrome/Edge Native Messaging host for privacy-minimized playback events.
+"""Chrome/Edge/Brave Native Messaging host for privacy-minimized playback events.
 
-The host accepts only a strict video telemetry schema. It never accepts page text,
-URLs, cookies, credentials, arbitrary commands or action requests.
+The host accepts a strict video telemetry schema and a minimal bridge health-check.
+It never accepts page text, URLs, cookies, credentials, arbitrary commands or actions.
 """
 from __future__ import annotations
 
@@ -17,6 +17,7 @@ from typing import BinaryIO
 
 from aie.config import database_path
 from aie.contracts import AIEEvent, EntityRef
+from aie.diagnostics.monitor import VideoDiagnosticMonitor
 from aie.providers.windows import host_id
 from aie.store import EventStore
 
@@ -32,6 +33,8 @@ _ALLOWED_FIELDS = {
     "playback_progress_delta_seconds",
     "dropped_frames_pct",
 }
+_BRIDGE_PING = {"kind": "bridge_ping"}
+_BRIDGE_PONG = {"ok": True, "kind": "bridge_pong"}
 
 
 def _read_exact(stream: BinaryIO, size: int) -> bytes | None:
@@ -68,7 +71,7 @@ def iter_native_messages(stream: BinaryIO) -> Iterator[dict]:
 
 
 def write_native_message(stream: BinaryIO, payload: dict) -> None:
-    """Write one native messaging response without emitting any plain stdout text."""
+    """Write one native messaging response without emitting plain stdout text."""
     encoded = json.dumps(payload, separators=(",", ":"), ensure_ascii=True).encode("utf-8")
     if len(encoded) > MAX_MESSAGE_BYTES:
         raise ValueError("native messaging response exceeds size limit")
@@ -152,13 +155,41 @@ def event_from_browser_payload(payload: dict) -> AIEEvent:
     )
 
 
-def run_host(input_stream: BinaryIO, output_stream: BinaryIO, store: EventStore) -> int:
-    """Consume native messages, persist valid events and acknowledge each message."""
+def run_host(input_stream: BinaryIO, output_stream: BinaryIO, store: EventStore | None = None) -> int:
+    """Respond to health checks and persist valid telemetry events.
+
+    The event store is initialized lazily so a bridge health check has no database
+    side effects. Tests may inject a store to verify that health checks never append.
+    """
     accepted = 0
+    active_store = store
+    diagnostic_monitor: VideoDiagnosticMonitor | None = None
     for payload in iter_native_messages(input_stream):
+        if payload == _BRIDGE_PING:
+            write_native_message(output_stream, _BRIDGE_PONG)
+            continue
         try:
             event = event_from_browser_payload(payload)
-            store.append(event)
+            if active_store is None:
+                active_store = EventStore(database_path())
+            active_store.append(event)
+            if diagnostic_monitor is None:
+                diagnostic_monitor = VideoDiagnosticMonitor(active_store)
+            try:
+                findings = diagnostic_monitor.poll()
+                if findings:
+                    active_store.append_many(findings)
+                    for finding in findings:
+                        sys.stderr.write(
+                            "AIE video diagnostic suggestion created: "
+                            f"{finding.data.get('cause', 'unknown')}\\n"
+                        )
+            except Exception as exc:
+                # Telemetry persistence must remain reliable if optional diagnosis fails.
+                sys.stderr.write(
+                    "AIE video diagnostic monitor unavailable: "
+                    f"{type(exc).__name__}\\n"
+                )
             write_native_message(output_stream, {"ok": True, "event_id": event.event_id})
             accepted += 1
         except (TypeError, ValueError) as exc:
@@ -172,7 +203,7 @@ def main() -> int:
         sys.stderr.write("AIE browser native host supports Windows only.\n")
         return 2
     try:
-        run_host(sys.stdin.buffer, sys.stdout.buffer, EventStore(database_path()))
+        run_host(sys.stdin.buffer, sys.stdout.buffer)
     except (EOFError, OSError, ValueError, json.JSONDecodeError) as exc:
         sys.stderr.write(f"AIE browser native host stopped: {type(exc).__name__}\n")
         return 1

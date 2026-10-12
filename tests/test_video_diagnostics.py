@@ -81,3 +81,30 @@ def test_buffer_and_progress_ranges_are_validated():
         VideoMetrics(playback_stalled=True, buffered_ahead_seconds=-1)
     with pytest.raises(ValueError):
         VideoMetrics(playback_stalled=True, playback_progress_delta_seconds=301)
+
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {"playback_stalled": 1},
+        {"stall_count": True},
+        {"observation_window_seconds": float("nan")},
+        {"throughput_mbps": float("inf")},
+        {"packet_loss_pct": True},
+    ],
+)
+def test_rejects_non_boolean_non_finite_or_boolean_numeric_metrics(changes):
+    values = {
+        "playback_stalled": True,
+        "stall_count": 3,
+        "observation_window_seconds": 30.0,
+    }
+    values.update(changes)
+    with pytest.raises(ValueError):
+        VideoMetrics(**values)
+
+def test_rejects_integer_metrics_too_large_for_finite_float_conversion():
+    with pytest.raises(ValueError, match="finite"):
+        VideoMetrics(playback_stalled=True, throughput_mbps=10 ** 10000)
+    with pytest.raises(ValueError, match="finite"):
+        VideoMetrics(playback_stalled=True, observation_window_seconds=10 ** 10000)
+

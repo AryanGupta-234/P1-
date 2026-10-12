@@ -36,11 +36,12 @@ class VideoDiagnosticMonitor:
         self._last_alert_at: dict[str, datetime] = {}
         self._load_recent_alerts()
 
-    def _load_recent_alerts(self) -> None:
-        """Avoid replaying a just-issued alert when the observer process restarts."""
-        now = self.clock()
-        cutoff = now - timedelta(seconds=self.alert_cooldown_seconds)
-        for event in self.store.recent(1000):
+    def _load_recent_alerts(self, events=None, *, now: datetime | None = None) -> None:
+        """Avoid replaying a just-issued alert across observer/browser process restarts."""
+        current = now or self.clock()
+        cutoff = current - timedelta(seconds=self.alert_cooldown_seconds)
+        recent_events = events if events is not None else self.store.recent(1000)
+        for event in recent_events:
             if event.event_type != "diagnostic.video_finding":
                 continue
             cause = event.data.get("cause")
@@ -55,8 +56,11 @@ class VideoDiagnosticMonitor:
 
     def poll(self) -> list[AIEEvent]:
         """Return new finding events; caller persists them and presents notifications."""
-        events = self.store.recent(1000)
         now = self.clock()
+        # Refresh persisted cooldowns on every poll so independent browser native-host
+        # processes observe findings created by their siblings.
+        events = self.store.recent(1000)
+        self._load_recent_alerts(events, now=now)
         context = build_video_observation_context(
             events,
             now=now,

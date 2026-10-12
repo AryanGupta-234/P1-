@@ -1,7 +1,9 @@
 "use strict";
 
 const NATIVE_HOST = "com.aie.browser_bridge";
+const HANDSHAKE_TIMEOUT_MS = 5000;
 let nativePort = null;
+let pendingHandshake = null;
 
 function persistBridgeStatus(status) {
   chrome.storage.local.set({ bridgeStatus: status });
@@ -19,30 +21,77 @@ function isTrustedVideoSender(sender) {
   }
 }
 
+function settleHandshake(result) {
+  if (!pendingHandshake) return;
+  const pending = pendingHandshake;
+  pendingHandshake = null;
+  clearTimeout(pending.timeout);
+  if (result && result.bridgeStatus) persistBridgeStatus(result.bridgeStatus);
+  pending.respond(result);
+}
+
 function getNativePort() {
   if (nativePort) return nativePort;
 
-  nativePort = chrome.runtime.connectNative(NATIVE_HOST);
-  nativePort.onMessage.addListener((message) => {
+  const port = chrome.runtime.connectNative(NATIVE_HOST);
+  nativePort = port;
+
+  port.onMessage.addListener((message) => {
+    if (message && message.kind === "bridge_pong" && message.ok === true) {
+      persistBridgeStatus("connected");
+      settleHandshake({ ok: true, bridgeStatus: "connected" });
+      return;
+    }
+
     if (message && message.ok === true) {
       persistBridgeStatus("connected");
     } else {
-      persistBridgeStatus(
-        message && message.error
-          ? "rejected: " + message.error
-          : "host returned an invalid response"
-      );
+      const reason = message && message.error
+        ? "rejected: " + message.error
+        : "host returned an invalid response";
+      persistBridgeStatus(reason);
+      if (pendingHandshake) settleHandshake({ ok: false, bridgeStatus: reason });
     }
   });
-  nativePort.onDisconnect.addListener(() => {
+
+  port.onDisconnect.addListener(() => {
     const reason = chrome.runtime.lastError
       ? chrome.runtime.lastError.message
       : "native host disconnected";
     nativePort = null;
     persistBridgeStatus("disconnected: " + reason);
+    if (pendingHandshake) {
+      settleHandshake({ ok: false, bridgeStatus: "disconnected: " + reason });
+    }
   });
+
   persistBridgeStatus("connecting");
-  return nativePort;
+  return port;
+}
+
+function testNativeConnection(sendResponse) {
+  if (pendingHandshake) {
+    settleHandshake({ ok: false, bridgeStatus: "connection test superseded" });
+  }
+
+  let port;
+  try {
+    port = getNativePort();
+    const timeout = setTimeout(() => {
+      settleHandshake({ ok: false, bridgeStatus: "connection timed out" });
+    }, HANDSHAKE_TIMEOUT_MS);
+    pendingHandshake = {
+      timeout,
+      respond: sendResponse,
+    };
+    port.postMessage({ kind: "bridge_ping" });
+  } catch (error) {
+    nativePort = null;
+    const reason = error && error.message ? error.message : "native host unavailable";
+    const status = "disconnected: " + reason;
+    persistBridgeStatus(status);
+    sendResponse({ ok: false, bridgeStatus: status });
+  }
 }
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -51,6 +100,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       { enabled: false, bridgeStatus: "not connected yet" },
       (settings) => sendResponse(settings)
     );
+    return true;
+  }
+
+  if (message && message.kind === "AIE_CONNECT_TEST") {
+    testNativeConnection(sendResponse);
     return true;
   }
 
@@ -75,7 +129,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     } catch (error) {
       nativePort = null;
       const reason = error && error.message ? error.message : "native host unavailable";
-      persistBridgeStatus("error: " + reason);
+      persistBridgeStatus("disconnected: " + reason);
       sendResponse({ ok: false, reason });
     }
   });

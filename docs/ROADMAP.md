@@ -25,7 +25,7 @@ Development ownership and branch rules are defined in [Development Streams](DEVE
 - [x] Read-only inventory and process reconciliation.
 - [x] ARC Architecture Spotlight, roadmap and contribution guide.
 - [x] Hosted Windows CI on Python 3.11/3.12 with Ruff, optional Windows imports, PowerShell syntax, JS syntax and pytest.
-- [x] Hosted Windows CI also compiles the .NET 8 WPF dashboard; this verifies the build, not interactive behavior on the target desktop.
+- [x] Hosted Windows CI validates the Python/pywebview package, Python bridge tests, Windows bootstrap syntax and packaged UI assets; target WebView2 interaction still requires desktop verification.
 - [x] Event Log runtime integration, ETW lifecycle/loss accounting, systemwide process telemetry and privacy controls validated in hosted Windows CI run #581 (Python 3.11/3.12).
 - [x] Installed-dependency vulnerability audit in Windows CI with `pip-audit`; weekly Dependabot checks for Python and GitHub Actions updates.
 - [x] Windows CI builds wheel and source distributions, validates metadata with Twine, and uploads short-lived artifacts.
@@ -46,22 +46,31 @@ Development ownership and branch rules are defined in [Development Streams](DEVE
 - [x] Privacy-safe observer health telemetry with provider latency/error counters and event-loss hooks.
 - [x] `aie health` CLI view for provider errors, latency and event-loss counters.
 - [x] Explicit JSONL export and confirm-only delete-all controls; sensitive export requires an explicit opt-in.
-- [ ] Rich observer health desktop UI.
+- [x] Rich observer health desktop UI in the Python/pywebview workspace.
 - [ ] Validate ETW elevation, Event Log/UIA permissions and data collection on the target Windows desktop.
 
 ## M1.5 — Video intelligence
-- [x] Opt-in Chrome/Edge MV3 HTML-video observer, disabled by default.
+- [x] Opt-in Chrome/Edge/Brave MV3 HTML-video observer, disabled by default.
+- [x] Native-host PING/PONG health handshake, explicit popup connection test, side-effect-free health probe, and process-level validator coverage.
+- [x] Brave native-host registration corrected to the Google Chrome Chromium registry root observed in target-desktop ProcMon traces; Chrome/Brave share a manifest with a merged extension-origin allowlist, and the validator checks the same lookup path. User confirmed the Brave popup PING/PONG connection on the target desktop (2026-10-12); live playback-event ingestion and SQLite persistence remain to be verified.
 - [x] Strict Windows native-messaging host and local SQLite persistence.
 - [x] Stall, buffered-ahead, playback-progress and available dropped-frame telemetry.
 - [x] Correlate playback snapshots with same-host foreground-app and network evidence.
 - [x] Conservative hypotheses for buffer starvation, buffered-but-not-advancing playback and measured resource/network signals.
 - [x] Unknown throughput/packet-loss values remain unknown; TCP connect latency is not mislabeled packet RTT.
 - [x] Live deduplicated diagnostic suggestions with evidence IDs; no action execution.
+- [x] Native-host playback ingestion invokes the deduplicating video diagnostic monitor after persistence and writes evidence-linked findings automatically; the monitor never executes remediation.
+- [x] Python/pywebview AIE workspace with live overview, video intelligence, evidence timeline, feedback/model inventory, task/memory views and system health; WPF implementation retained as legacy reference only.
+- [x] Grounded local Ollama advisor explains deterministic findings with validated evidence IDs; routine/complex model tiers use the installed-model and RAM-aware router, with no cloud fallback or automatic model pulls.
 - [x] User-reported outcome feedback linked to diagnostic event IDs.
-- [ ] Validate browser extension/native-host installation and live player behavior on the target desktop.
-- [ ] Build trace corpus, evaluate false positives/negatives and calibrate confidence.
-- [ ] Add opt-in bounded sustained throughput and packet-loss measurements.
-- [ ] Validate diagnosis across different streaming players/CDNs.
+- [ ] Run the expanded read-only target-desktop validator, verify simultaneous Chrome/Edge/Brave native-host registration, and exercise live player behavior on the target desktop.
+- [x] Add versioned synthetic video trace corpus covering each diagnostic rule, mixed causes, unknown metrics and insufficient evidence.
+- [x] Add `aie video-evaluate` with exact-match rate and per-cause/micro precision, recall, F1 and TP/FP/FN/TN regression metrics.
+- [x] Add explicit, no-overwrite export of anonymized local playback trace candidates for manual ground-truth labeling.
+- [ ] Capture a consented, representative field corpus across browsers, players, networks and CDNs; evaluate false positives/negatives and confidence calibration on held-out traces.
+- [x] Add manually invoked, bounded HTTPS multi-sample throughput and ICMP packet-loss probes; keep probes off during default observation and persist only aggregate measurements/labels.
+- [ ] Validate probe repeatability against selected CDN/player paths on the target Windows desktop; characterize ICMP filtering and throughput-test endpoint variability.
+- [ ] Validate diagnosis across different streaming players/CDNs using target-desktop sessions and held-out field traces.
 
 ## M2 — Context intelligence
 - [x] Temporal correlator for browser video, foreground app and fresh same-host network evidence.
@@ -173,3 +182,12 @@ Development ownership and branch rules are defined in [Development Streams](DEVE
 | Noisy metrics cause false diagnosis | Repeated samples, multiple signals and evaluation | OPEN |
 | Memory retains sensitive data | Local-first, sensitivity labels, TTL and user deletion | CONTROLLED |
 | Agent performs unbounded actions | Capability scopes, budgets, kill switch, audit and verification | CONTROLLED |
+
+
+## Desktop workspace migration (2026-10-12)
+- [x] Replace the .NET/WPF launch requirement with Python + pywebview; dashboard launches through `aie dashboard`.
+- [x] Add a PowerShell bootstrap that creates `.venv`, installs the editable package and pywebview dependency, checks WebView2 and launches the workspace.
+- [x] Add responsive views for overview, video intelligence, evidence timeline, learning/model routing, tasks/memory and system health.
+- [x] Automatic 15-second read-only refresh; observation remains explicitly user-controlled.
+- [x] Expose only allow-listed AIE actions through the Python bridge; no arbitrary shell execution from JavaScript.
+- [ ] Verify renderer startup and interaction on the target Windows desktop; CI validates bridge logic and package assets but cannot prove local WebView2 health.

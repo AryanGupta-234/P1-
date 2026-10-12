@@ -277,6 +277,12 @@ public partial class MainWindow : Window
         ObserverOutput.Text = OutputBox.Text;
     }
 
+    private void VideoIntelligence_Click(object sender, RoutedEventArgs e)
+    {
+        var window = new VideoIntelligenceWindow { Owner = this };
+        window.Show();
+    }
+
     private void FocusAgent_Click(object sender, RoutedEventArgs e)
     {
         AgentCard.BringIntoView();

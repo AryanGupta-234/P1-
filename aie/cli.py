@@ -534,6 +534,21 @@ def show_context(
     table.add_row("Playback", context.playback_state)
     table.add_row("Stall count", str(context.metrics.stall_count))
     table.add_row(
+        "Measured throughput",
+        "unknown" if context.metrics.throughput_mbps is None
+        else f"{context.metrics.throughput_mbps:.3f} Mbps",
+    )
+    table.add_row(
+        "Measured packet loss",
+        "unknown" if context.metrics.packet_loss_pct is None
+        else f"{context.metrics.packet_loss_pct:.2f}%",
+    )
+    if context.metrics.estimated_required_mbps is not None:
+        table.add_row(
+            "Estimated stream requirement",
+            f"{context.metrics.estimated_required_mbps:.2f} Mbps",
+        )
+    table.add_row(
         "Observation window",
         f"{context.metrics.observation_window_seconds:.1f} seconds",
     )
@@ -572,7 +587,18 @@ def show_context(
         table.add_row("Window title collected", "yes (sensitive)" if app_context.window_title_collected else "no")
 
     for evidence in context.network_evidence:
-        if evidence.kind == "dns_probe":
+        if evidence.kind == "video_probe":
+            for label, loss_pct, sent, received in evidence.packet_loss_by_target:
+                table.add_row(
+                    f"Video probe: {label}",
+                    f"{loss_pct:.2f}% packet loss ({received}/{sent} replies)",
+                )
+            if evidence.throughput_mbps is not None:
+                table.add_row(
+                    "Video HTTPS probe",
+                    f"{evidence.throughput_mbps:.3f} Mbps (selected test object)",
+                )
+        elif evidence.kind == "dns_probe":
             value = (
                 "unresolved / unavailable"
                 if evidence.resolution_ms is None
@@ -608,6 +634,302 @@ def show_context(
         f"Evidence records: {len(context.evidence_event_ids)} · "
         f"Context age: {(context.generated_at - context.observed_at).total_seconds():.1f}s"
     )
+
+
+@app.command("dashboard")
+def dashboard() -> None:
+    """Launch the native Python/pywebview AIE desktop workspace."""
+    from aie.desktop.webview import DashboardError, launch_dashboard
+    try:
+        launch_dashboard()
+    except (DashboardError, OSError, RuntimeError) as exc:
+        console.print(f"[red]Dashboard unavailable:[/red] {exc}")
+        raise typer.Exit(2) from exc
+
+
+@app.command("video-dashboard")
+def video_dashboard(
+    lookback_hours: int = typer.Option(24, min=1, max=720),
+    limit: int = typer.Option(500, min=1, max=1000),
+    as_json: bool = typer.Option(False, "--json", help="Emit a versioned JSON snapshot for the desktop dashboard."),
+) -> None:
+    """Build a privacy-safe, read-only dashboard snapshot of local video intelligence."""
+    from aie.diagnostics.video_dashboard import build_video_dashboard_snapshot
+
+    try:
+        snapshot = build_video_dashboard_snapshot(
+            EventStore(database_path()),
+            lookback_hours=lookback_hours,
+            event_limit=limit,
+        )
+    except (OSError, RuntimeError, ValueError) as exc:
+        console.print(f"[red]Video dashboard unavailable:[/red] {type(exc).__name__}")
+        raise typer.Exit(2) from exc
+    if as_json:
+        typer.echo(json.dumps(snapshot, ensure_ascii=False, separators=(",", ":"), allow_nan=False))
+        return
+    overview = snapshot["overview"]
+    table = Table("Signal", "Value")
+    for key, value in overview.items():
+        if key != "event_types":
+            table.add_row(key.replace("_", " ").title(), str(value))
+    console.print(table)
+    if snapshot["live_context"] is None:
+        console.print("[yellow]No fresh playback context is currently available.[/yellow]")
+    else:
+        console.print_json(json.dumps(snapshot["live_context"], ensure_ascii=False))
+    console.print(f"Current deterministic hypotheses: {len(snapshot['live_hypotheses'])}")
+    console.print(snapshot["disclaimer"])
+
+
+@app.command("video-advice")
+def video_advice(
+    tier: Literal["routine", "complex"] = typer.Option(
+        "routine",
+        help="Use the lightweight Qwen 3B tier or request the hardware-guarded complex tier.",
+    ),
+) -> None:
+    """Explain current deterministic video findings with an installed local Ollama model."""
+    from aie.diagnostics.video_advisor import VideoAdvisorError, generate_video_advice
+
+    try:
+        result = generate_video_advice(EventStore(database_path()), tier=tier)
+    except (VideoAdvisorError, OSError, ValueError) as exc:
+        console.print(f"[red]Local video advisor unavailable:[/red] {exc}")
+        raise typer.Exit(2) from exc
+    typer.echo(json.dumps(result, ensure_ascii=False, separators=(",", ":"), allow_nan=False))
+
+
+@app.command("video-probe")
+def video_probe(
+    throughput_url: str | None = typer.Option(
+        None,
+        "--throughput-url",
+        help="User-selected public HTTPS test object; URL and response body are never stored.",
+    ),
+    packet_target: list[str] = typer.Option(
+        [],
+        "--packet-target",
+        help="Repeat as LABEL=HOST (for example gateway=192.168.1.1). Maximum two targets.",
+    ),
+    packets: int = typer.Option(4, min=1, max=4, help="One-shot pings per selected target."),
+    timeout_ms: int = typer.Option(750, min=100, max=1500, help="Per-packet ping timeout."),
+    estimated_required_mbps: float | None = typer.Option(
+        None,
+        "--estimated-required-mbps",
+        min=0.1,
+        max=10000.0,
+        help="Optional stream bitrate estimate from the selected playback quality.",
+    ),
+) -> None:
+    """Run explicitly requested, bounded throughput/packet-loss probes and save evidence."""
+    from aie.providers.windows import host_id
+    from aie.contracts import AIEEvent, EntityRef
+    from aie.diagnostics.video_probe import (
+        VideoProbeError,
+        run_video_network_probe,
+        validate_packet_target,
+    )
+
+    parsed_targets: list[tuple[str, str]] = []
+    try:
+        for raw in packet_target:
+            if "=" not in raw:
+                raise VideoProbeError("each --packet-target must use LABEL=HOST")
+            label, host = raw.split("=", 1)
+            parsed_targets.append(validate_packet_target(label, host))
+        result = run_video_network_probe(
+            packet_targets=tuple(parsed_targets),
+            throughput_url=throughput_url,
+            estimated_required_mbps=estimated_required_mbps,
+            packets=packets,
+            timeout_ms=timeout_ms,
+        )
+    except (VideoProbeError, OSError, ValueError) as exc:
+        console.print(f"[red]Video network probe refused or failed:[/red] {exc}")
+        raise typer.Exit(2) from exc
+
+    throughput = result.throughput
+    event = AIEEvent(
+        timestamp=datetime.now(timezone.utc),
+        host_id=host_id(),
+        source="aie.video.network_probe",
+        event_type="network.video_probe",
+        entity=EntityRef(type="video_network_probe", name="user_selected_targets"),
+        data={
+            "packet_target_labels": list(result.target_labels),
+            "packet_loss_by_target": [
+                {
+                    "label": item.label,
+                    "packets_sent": item.packets_sent,
+                    "packets_received": item.packets_received,
+                    "packet_loss_pct": item.packet_loss_pct,
+                }
+                for item in result.packet_results
+            ],
+            "packets_sent": result.packets_sent,
+            "packets_received": result.packets_received,
+            "packet_loss_pct": (
+                result.packet_results[0].packet_loss_pct
+                if len(result.packet_results) == 1
+                else None
+            ),
+            "throughput_mbps": throughput.throughput_mbps if throughput else None,
+            "throughput_bytes": throughput.bytes_received if throughput else None,
+            "throughput_duration_seconds": throughput.elapsed_seconds if throughput else None,
+            "throughput_samples_completed": throughput.samples_completed if throughput else 0,
+            "estimated_required_mbps": result.estimated_required_mbps,
+            "action_executed": False,
+        },
+        sensitivity="internal",
+        confidence=1.0,
+        evidence_kind="observed",
+    )
+    EventStore(database_path()).append(event)
+
+    table = Table("Measurement", "Result")
+    if result.packet_results:
+        for item in result.packet_results:
+            table.add_row(
+                f"Packet loss ({item.label})",
+                f"{item.packet_loss_pct:.2f}% ({item.packets_received}/{item.packets_sent} replies)",
+            )
+    if throughput is not None:
+        table.add_row("Bounded HTTPS throughput", f"{throughput.throughput_mbps:.3f} Mbps")
+        table.add_row(
+            "Download sample",
+            f"{throughput.bytes_received:,} bytes in {throughput.elapsed_seconds:.2f}s "
+            f"({throughput.samples_completed} request(s))",
+        )
+    if result.estimated_required_mbps is not None:
+        table.add_row("User-supplied stream requirement", f"{result.estimated_required_mbps:.2f} Mbps")
+    console.print(table)
+    console.print(f"[green]Probe evidence saved:[/green] {event.event_id}")
+    console.print(
+        "[dim]Probe results describe only the selected targets and test object; "
+        "they do not prove the current CDN or media stream has the same path or bitrate.[/dim]"
+    )
+
+
+@app.command("video-trace-export")
+def video_trace_export(
+    output: Path = typer.Option(
+        Path("video_field_trace_candidates.json"),
+        "--output",
+        help="New JSON file to create; existing files are never overwritten.",
+    ),
+    hours: int = typer.Option(24, min=1, max=720, help="Local observation window to review, in hours."),
+    limit: int = typer.Option(100, min=1, max=200, help="Maximum anonymized playback sessions to export."),
+    confirm: bool = typer.Option(
+        False,
+        "--confirm",
+        help="Confirm creation of an anonymized field-candidate export from local events.",
+    ),
+) -> None:
+    """Export anonymized local video trace candidates for independent human labeling."""
+    from aie.diagnostics.video_field_export import prepare_field_trace_candidates
+
+    if not confirm:
+        console.print(
+            "[yellow]No export written. Review the selected time window, then pass --confirm "
+            "to create a sanitized candidate file.[/yellow]"
+        )
+        raise typer.Exit(2)
+
+    now = datetime.now(timezone.utc)
+    store = EventStore(database_path())
+    try:
+        events = store.query_events(
+            since=now - timedelta(hours=hours),
+            until=now,
+            event_types=(
+                "browser.video.snapshot",
+                "network.video_probe",
+                "network.gateway_probe",
+                "network.external_probe",
+                "network.dns_probe",
+                "window.foreground_changed",
+                "process.foreground_resource_sample",
+            ),
+            limit=5000,
+        )
+        export = prepare_field_trace_candidates(events, now=now, limit=limit)
+    except (OSError, RuntimeError, ValueError) as exc:
+        console.print(f"[red]Video trace export failed:[/red] {type(exc).__name__}: {exc}")
+        raise typer.Exit(2) from exc
+
+    if not export["cases"]:
+        console.print("No browser video sessions found in the selected local time window.")
+        return
+
+    try:
+        output.parent.mkdir(parents=True, exist_ok=True)
+        with output.open("x", encoding="utf-8") as handle:
+            json.dump(export, handle, ensure_ascii=False, indent=2, allow_nan=False)
+            handle.write("\n")
+    except FileExistsError:
+        console.print(f"[red]Refusing to overwrite existing file:[/red] {output}")
+        raise typer.Exit(2)
+    except (OSError, TypeError, ValueError) as exc:
+        console.print(f"[red]Could not write field trace candidates:[/red] {type(exc).__name__}: {exc}")
+        raise typer.Exit(2) from exc
+
+    console.print(f"[green]Created {len(export['cases'])} anonymized candidate(s):[/green] {output}")
+    console.print(
+        "[yellow]These are unlabeled candidates, not field accuracy results. Review each case "
+        "against independent playback evidence, fill expected_causes, change dataset_kind "
+        "to field, then run aie video-evaluate --dataset <PATH>.[/yellow]"
+    )
+
+
+@app.command("video-evaluate")
+def video_evaluate(
+    dataset: Path = typer.Option(
+        Path(__file__).parent / "diagnostics" / "data" / "video_traces_v1.json",
+        "--dataset",
+        exists=True,
+        file_okay=True,
+        dir_okay=False,
+        readable=True,
+    ),
+) -> None:
+    """Evaluate video diagnostic causes against a versioned labelled trace corpus."""
+    from aie.diagnostics.video_evaluation import TraceDatasetError, evaluate_trace_dataset
+
+    try:
+        report = evaluate_trace_dataset(dataset)
+    except TraceDatasetError as exc:
+        console.print(f"[red]Video trace evaluation failed:[/red] {exc}")
+        raise typer.Exit(2) from exc
+
+    summary = Table("Metric", "Value")
+    summary.add_row("Dataset", report.dataset_name)
+    summary.add_row("Dataset type", report.dataset_kind)
+    summary.add_row("Traces", str(report.trace_count))
+    summary.add_row("Exact cause-set matches", f"{report.exact_match_count}/{report.trace_count}")
+    summary.add_row("Exact match rate", f"{report.exact_match_rate:.1%}")
+    summary.add_row("Micro precision", "n/a" if report.precision is None else f"{report.precision:.1%}")
+    summary.add_row("Micro recall", "n/a" if report.recall is None else f"{report.recall:.1%}")
+    summary.add_row("Micro F1", "n/a" if report.f1 is None else f"{report.f1:.1%}")
+    console.print(summary)
+
+    causes = Table("Cause", "TP", "FP", "FN", "Precision", "Recall", "F1")
+    for item in report.per_cause:
+        causes.add_row(
+            item.cause,
+            str(item.true_positive),
+            str(item.false_positive),
+            str(item.false_negative),
+            "n/a" if item.precision is None else f"{item.precision:.1%}",
+            "n/a" if item.recall is None else f"{item.recall:.1%}",
+            "n/a" if item.f1 is None else f"{item.f1:.1%}",
+        )
+    console.print(causes)
+    if report.dataset_kind == "synthetic":
+        console.print(
+            "[yellow]Synthetic regression results only. These metrics are not field accuracy, "
+            "confidence calibration, or evidence of production root-cause performance.[/yellow]"
+        )
 
 
 @app.command()

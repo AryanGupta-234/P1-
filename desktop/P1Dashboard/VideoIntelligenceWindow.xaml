@@ -1,0 +1,217 @@
+<Window x:Class="P1Dashboard.VideoIntelligenceWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="P1- | Video Intelligence" Width="1500" Height="960"
+        MinWidth="1180" MinHeight="760" WindowStartupLocation="CenterOwner"
+        Background="#FF101722" Foreground="#FFF1F5F9">
+    <Window.Resources>
+        <SolidColorBrush x:Key="Panel" Color="#FF1B2635"/>
+        <SolidColorBrush x:Key="Panel2" Color="#FF222F40"/>
+        <SolidColorBrush x:Key="Muted" Color="#FF9BAABD"/>
+        <SolidColorBrush x:Key="Accent" Color="#FF78B9FF"/>
+        <Style TargetType="Button">
+            <Setter Property="Foreground" Value="#FFF1F5F9"/>
+            <Setter Property="Background" Value="#FF26384D"/>
+            <Setter Property="BorderBrush" Value="#FF3B5876"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="13,9"/>
+            <Setter Property="Margin" Value="0,0,8,0"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Cursor" Value="Hand"/>
+        </Style>
+        <Style TargetType="DataGrid">
+            <Setter Property="Background" Value="#FF141D29"/>
+            <Setter Property="Foreground" Value="#FFE7EDF5"/>
+            <Setter Property="RowBackground" Value="#FF192433"/>
+            <Setter Property="AlternatingRowBackground" Value="#FF202D3D"/>
+            <Setter Property="BorderBrush" Value="#FF34465A"/>
+            <Setter Property="GridLinesVisibility" Value="Horizontal"/>
+            <Setter Property="HorizontalGridLinesBrush" Value="#FF2A394B"/>
+            <Setter Property="VerticalGridLinesBrush" Value="#FF2A394B"/>
+            <Setter Property="HeadersVisibility" Value="Column"/>
+            <Setter Property="CanUserAddRows" Value="False"/>
+            <Setter Property="IsReadOnly" Value="True"/>
+            <Setter Property="AutoGenerateColumns" Value="True"/>
+            <Setter Property="RowHeaderWidth" Value="0"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="ColumnHeaderHeight" Value="34"/>
+            <Setter Property="RowHeight" Value="31"/>
+        </Style>
+        <Style TargetType="TabItem">
+            <Setter Property="Padding" Value="18,11"/>
+            <Setter Property="Foreground" Value="#FFB9C8D9"/>
+            <Setter Property="Background" Value="#FF1B2635"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+        </Style>
+        <Style TargetType="TextBox">
+            <Setter Property="Background" Value="#FF121B27"/>
+            <Setter Property="Foreground" Value="#FFEAF1F8"/>
+            <Setter Property="BorderBrush" Value="#FF34465A"/>
+            <Setter Property="Padding" Value="12"/>
+            <Setter Property="TextWrapping" Value="Wrap"/>
+            <Setter Property="VerticalScrollBarVisibility" Value="Auto"/>
+        </Style>
+    </Window.Resources>
+    <Grid Margin="24">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+        <Grid Grid.Row="0" Margin="0,0,0,18">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+            <StackPanel>
+                <TextBlock Text="VIDEO INTELLIGENCE" FontSize="10" FontWeight="Bold" Foreground="{StaticResource Accent}"/>
+                <TextBlock Text="Playback observability &amp; diagnostic intelligence" FontSize="27" FontWeight="SemiBold" Margin="0,5,0,0"/>
+                <TextBlock Text="Evidence-first analysis · local Ollama reasoning · user-controlled recommendations · no autonomous remediation"
+                           FontSize="12" Foreground="{StaticResource Muted}" Margin="0,6,0,0"/>
+            </StackPanel>
+            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                <Button Content="↻ Refresh" Click="Refresh_Click"/>
+                <Button Content="✧ Explain with local AI" Background="#FF234B72" BorderBrush="#FF4E83B4" Click="Explain_Click"/>
+            </StackPanel>
+        </Grid>
+        <UniformGrid Grid.Row="1" Columns="5" Margin="0,0,0,16">
+            <Border Background="{StaticResource Panel}" CornerRadius="12" Padding="15" Margin="0,0,9,0">
+                <StackPanel><TextBlock Text="PLAYBACK SAMPLES" FontSize="9" Foreground="{StaticResource Muted}" FontWeight="Bold"/>
+                    <TextBlock x:Name="PlaybackCount" Text="—" FontSize="25" FontWeight="SemiBold" Margin="0,5,0,0"/>
+                    <TextBlock Text="Browser snapshots in selected window" FontSize="10" Foreground="{StaticResource Muted}"/></StackPanel>
+            </Border>
+            <Border Background="{StaticResource Panel}" CornerRadius="12" Padding="15" Margin="0,0,9,0">
+                <StackPanel><TextBlock Text="DIAGNOSTIC FINDINGS" FontSize="9" Foreground="{StaticResource Muted}" FontWeight="Bold"/>
+                    <TextBlock x:Name="FindingCount" Text="—" FontSize="25" FontWeight="SemiBold" Margin="0,5,0,0"/>
+                    <TextBlock Text="Persisted, deduplicated suggestions" FontSize="10" Foreground="{StaticResource Muted}"/></StackPanel>
+            </Border>
+            <Border Background="{StaticResource Panel}" CornerRadius="12" Padding="15" Margin="0,0,9,0">
+                <StackPanel><TextBlock Text="NETWORK PROBES" FontSize="9" Foreground="{StaticResource Muted}" FontWeight="Bold"/>
+                    <TextBlock x:Name="ProbeCount" Text="—" FontSize="25" FontWeight="SemiBold" Margin="0,5,0,0"/>
+                    <TextBlock Text="Explicit user-triggered measurements" FontSize="10" Foreground="{StaticResource Muted}"/></StackPanel>
+            </Border>
+            <Border Background="{StaticResource Panel}" CornerRadius="12" Padding="15" Margin="0,0,9,0">
+                <StackPanel><TextBlock Text="USER FEEDBACK" FontSize="9" Foreground="{StaticResource Muted}" FontWeight="Bold"/>
+                    <TextBlock x:Name="FeedbackCount" Text="—" FontSize="25" FontWeight="SemiBold" Margin="0,5,0,0"/>
+                    <TextBlock Text="Outcome reports linked to findings" FontSize="10" Foreground="{StaticResource Muted}"/></StackPanel>
+            </Border>
+            <Border Background="{StaticResource Panel}" CornerRadius="12" Padding="15">
+                <StackPanel><TextBlock Text="EVENT STORE" FontSize="9" Foreground="{StaticResource Muted}" FontWeight="Bold"/>
+                    <TextBlock x:Name="TotalEventCount" Text="—" FontSize="25" FontWeight="SemiBold" Margin="0,5,0,0"/>
+                    <TextBlock Text="All locally persisted event records" FontSize="10" Foreground="{StaticResource Muted}"/></StackPanel>
+            </Border>
+        </UniformGrid>
+        <TabControl Grid.Row="2" Background="#FF151F2D" BorderBrush="#FF34465A">
+            <TabItem Header="Live overview">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <Grid Margin="14">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="1.1*"/><ColumnDefinition Width="0.9*"/></Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" Margin="0,0,12,0">
+                            <Border Background="{StaticResource Panel}" CornerRadius="12" Padding="17" Margin="0,0,0,12">
+                                <StackPanel>
+                                    <TextBlock Text="CURRENT PLAYBACK CONTEXT" FontSize="11" FontWeight="Bold" Foreground="{StaticResource Accent}"/>
+                                    <TextBlock x:Name="LiveContextText" Text="No fresh playback context available." FontSize="12" Margin="0,10,0,0" TextWrapping="Wrap"/>
+                                </StackPanel>
+                            </Border>
+                            <Border Background="{StaticResource Panel}" CornerRadius="12" Padding="17">
+                                <StackPanel>
+                                    <TextBlock Text="DETERMINISTIC HYPOTHESES" FontSize="11" FontWeight="Bold" Foreground="{StaticResource Accent}"/>
+                                    <TextBlock Text="Rule-engine findings are the diagnosis source. Confidence values are heuristic rankings, not calibrated probabilities."
+                                               FontSize="10" Foreground="{StaticResource Muted}" Margin="0,5,0,10" TextWrapping="Wrap"/>
+                                    <DataGrid x:Name="LiveHypothesesGrid" Height="250"/>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                        <StackPanel Grid.Column="1">
+                            <Border Background="{StaticResource Panel}" CornerRadius="12" Padding="17" Margin="0,0,0,12">
+                                <StackPanel>
+                                    <TextBlock Text="LOCAL MODEL RUNTIME" FontSize="11" FontWeight="Bold" Foreground="{StaticResource Accent}"/>
+                                    <TextBlock x:Name="ModelStatusText" Text="Checking installed local models…" FontSize="11" Margin="0,10,0,0" TextWrapping="Wrap"/>
+                                </StackPanel>
+                            </Border>
+                            <Border Background="{StaticResource Panel}" CornerRadius="12" Padding="17">
+                                <StackPanel>
+                                    <TextBlock Text="EVENT TYPE DISTRIBUTION" FontSize="11" FontWeight="Bold" Foreground="{StaticResource Accent}"/>
+                                    <DataGrid x:Name="EventTypesGrid" Height="290" Margin="0,10,0,0"/>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </Grid>
+                </ScrollViewer>
+            </TabItem>
+            <TabItem Header="Findings &amp; feedback">
+                <Grid Margin="14">
+                    <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                    <DataGrid x:Name="FindingsGrid" SelectionMode="Single"/>
+                    <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,12,0,8">
+                        <TextBlock Text="Record outcome for selected finding:" Foreground="{StaticResource Muted}" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                        <ComboBox x:Name="FeedbackOutcome" Width="170" Height="32" SelectedIndex="0">
+                            <ComboBoxItem Content="resolved"/>
+                            <ComboBoxItem Content="not_resolved"/>
+                            <ComboBoxItem Content="not_attempted"/>
+                        </ComboBox>
+                        <Button Content="Save feedback" Click="SaveFeedback_Click" Margin="10,0,0,0"/>
+                    </StackPanel>
+                    <TextBlock Grid.Row="2" Text="Feedback is stored locally and linked to the selected finding. It is descriptive evidence, not automatic model retraining."
+                               FontSize="10" Foreground="{StaticResource Muted}"/>
+                </Grid>
+            </TabItem>
+            <TabItem Header="Network &amp; probes">
+                <Grid Margin="14">
+                    <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                    <DataGrid x:Name="ProbesGrid"/>
+                    <TextBlock Grid.Row="1" Text="Probes are never run by normal observation. Use the CLI to explicitly select packet targets or an HTTPS test object; these measurements do not prove the active CDN path."
+                               FontSize="10" Foreground="{StaticResource Muted}" Margin="0,10,0,0" TextWrapping="Wrap"/>
+                </Grid>
+            </TabItem>
+            <TabItem Header="Activity &amp; evidence">
+                <Grid Margin="14">
+                    <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                    <DataGrid x:Name="EventsGrid"/>
+                    <TextBlock Grid.Row="1" Text="The dashboard shows reviewed metadata only. Page URLs, page text, window-title contents, cookies and raw browser payloads are never displayed."
+                               FontSize="10" Foreground="{StaticResource Muted}" Margin="0,10,0,0" TextWrapping="Wrap"/>
+                </Grid>
+            </TabItem>
+            <TabItem Header="Learning &amp; evaluation">
+                <Grid Margin="14">
+                    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
+                        <Button Content="Run synthetic regression evaluation" Click="Evaluate_Click"/>
+                        <Button Content="Export field candidates…" Click="Export_Click"/>
+                    </StackPanel>
+                    <Grid Grid.Row="1">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" Margin="0,0,10,0">
+                            <TextBlock Text="USER-REPORTED OUTCOMES" FontWeight="Bold" Foreground="{StaticResource Accent}" Margin="0,0,0,8"/>
+                            <DataGrid x:Name="FeedbackSummaryGrid"/>
+                        </StackPanel>
+                        <StackPanel Grid.Column="1">
+                            <TextBlock Text="REGRESSION / EXPORT OUTPUT" FontWeight="Bold" Foreground="{StaticResource Accent}" Margin="0,0,0,8"/>
+                            <TextBox x:Name="EvaluationOutput" IsReadOnly="True" Height="360" FontFamily="Cascadia Mono" FontSize="10"/>
+                        </StackPanel>
+                    </Grid>
+                    <TextBlock Grid.Row="2" Text="Synthetic scores are regression checks only. Field candidates require independent human labels and a held-out evaluation set."
+                               FontSize="10" Foreground="{StaticResource Muted}" Margin="0,12,0,0"/>
+                </Grid>
+            </TabItem>
+            <TabItem Header="Local AI advisor">
+                <Grid Margin="14">
+                    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="Reasoning tier" Foreground="{StaticResource Muted}" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                        <ComboBox x:Name="AdvisorTier" Width="140" Height="32" SelectedIndex="0">
+                            <ComboBoxItem Content="routine (3B)"/>
+                            <ComboBoxItem Content="complex (7B)"/>
+                        </ComboBox>
+                        <Button Content="Generate grounded explanation" Click="Explain_Click" Margin="10,0,0,0"/>
+                    </StackPanel>
+                    <TextBox x:Name="AdvisorOutput" Grid.Row="1" IsReadOnly="True" Margin="0,12,0,0"
+                             FontFamily="Cascadia Mono" FontSize="11"/>
+                </Grid>
+            </TabItem>
+        </TabControl>
+        <Grid Grid.Row="3" Margin="0,12,0,0">
+            <TextBlock x:Name="FooterStatus" Text="Ready · dashboard reads local evidence only." Foreground="{StaticResource Muted}" FontSize="10"/>
+            <TextBlock Text="LOCAL-ONLY INFERENCE · NO AUTOMATIC REMEDIATION" HorizontalAlignment="Right"
+                       Foreground="#FF7890A8" FontSize="9"/>
+        </Grid>
+    </Grid>
+</Window>

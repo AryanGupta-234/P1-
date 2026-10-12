@@ -1,0 +1,80 @@
+{
+  "schema_version": 1,
+  "dataset_name": "video-diagnostics-synthetic-v1",
+  "dataset_kind": "synthetic",
+  "description": "Deterministic regression scenarios. Not a field corpus and not suitable for claims of real-world diagnostic accuracy or confidence calibration.",
+  "cases": [
+    {
+      "id": "healthy-playback",
+      "description": "No playback stall; healthy snapshots must not produce root-cause findings.",
+      "metrics": {"playback_stalled": false, "stall_count": 0, "observation_window_seconds": 60, "buffered_ahead_seconds": 18, "playback_progress_delta_seconds": 5},
+      "expected_causes": []
+    },
+    {
+      "id": "single-short-stall",
+      "description": "One short stall with a potentially alarming metric is insufficient evidence.",
+      "metrics": {"playback_stalled": true, "stall_count": 1, "observation_window_seconds": 5, "packet_loss_pct": 12},
+      "expected_causes": []
+    },
+    {
+      "id": "repeated-buffer-starvation",
+      "description": "Repeated stalls with very little buffered media.",
+      "metrics": {"playback_stalled": true, "stall_count": 4, "observation_window_seconds": 50, "buffered_ahead_seconds": 0.2, "playback_progress_delta_seconds": 0},
+      "expected_causes": ["stream_buffer_starvation"]
+    },
+    {
+      "id": "buffered-player-not-advancing",
+      "description": "Buffered media exists but playback position does not advance.",
+      "metrics": {"playback_stalled": true, "stall_count": 3, "observation_window_seconds": 40, "buffered_ahead_seconds": 14, "playback_progress_delta_seconds": 0},
+      "expected_causes": ["playback_pipeline_not_advancing_with_buffer"]
+    },
+    {
+      "id": "render-pressure",
+      "description": "High browser CPU and dropped-frame ratio coincide with repeated stalls.",
+      "metrics": {"playback_stalled": true, "stall_count": 5, "observation_window_seconds": 60, "cpu_pct": 96, "dropped_frames_pct": 12},
+      "expected_causes": ["local_decode_or_render_pressure"]
+    },
+    {
+      "id": "packet-loss",
+      "description": "Repeated stalls align with measured packet loss.",
+      "metrics": {"playback_stalled": true, "stall_count": 4, "observation_window_seconds": 45, "packet_loss_pct": 4},
+      "expected_causes": ["network_packet_loss"]
+    },
+    {
+      "id": "throughput-shortfall",
+      "description": "Measured path throughput is below the user-supplied stream requirement with headroom.",
+      "metrics": {"playback_stalled": true, "stall_count": 4, "observation_window_seconds": 45, "throughput_mbps": 4, "estimated_required_mbps": 8},
+      "expected_causes": ["insufficient_streaming_throughput"]
+    },
+    {
+      "id": "high-network-latency",
+      "description": "A measured packet round-trip value is above the conservative threshold.",
+      "metrics": {"playback_stalled": true, "stall_count": 3, "observation_window_seconds": 30, "rtt_ms": 240},
+      "expected_causes": ["high_network_latency"]
+    },
+    {
+      "id": "combined-network-and-render",
+      "description": "Multiple independent measurements can produce multiple hypotheses.",
+      "metrics": {"playback_stalled": true, "stall_count": 5, "observation_window_seconds": 55, "packet_loss_pct": 5, "cpu_pct": 95, "dropped_frames_pct": 10},
+      "expected_causes": ["network_packet_loss", "local_decode_or_render_pressure"]
+    },
+    {
+      "id": "combined-buffer-and-latency",
+      "description": "Low buffered-ahead and high RTT are separate observations.",
+      "metrics": {"playback_stalled": true, "stall_count": 4, "observation_window_seconds": 40, "buffered_ahead_seconds": 0.1, "rtt_ms": 260},
+      "expected_causes": ["stream_buffer_starvation", "high_network_latency"]
+    },
+    {
+      "id": "unknown-network-measurements",
+      "description": "Unavailable network measurements remain unknown rather than becoming zero.",
+      "metrics": {"playback_stalled": true, "stall_count": 3, "observation_window_seconds": 35},
+      "expected_causes": []
+    },
+    {
+      "id": "stall-window-too-short",
+      "description": "Repeated stall count without enough observation duration remains insufficient.",
+      "metrics": {"playback_stalled": true, "stall_count": 3, "observation_window_seconds": 8, "cpu_pct": 99, "dropped_frames_pct": 90},
+      "expected_causes": []
+    }
+  ]
+}
