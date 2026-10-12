@@ -323,7 +323,7 @@ def measure_https_throughput(
                 )
             content_range = response.getheader("Content-Range")
             range_match = (
-                re.fullmatch(r"bytes (\\d+)-(\\d+)/(?:\\d+|\\*)", content_range)
+                re.fullmatch(r"bytes (\d+)-(\d+)/(?:\d+|\*)", content_range)
                 if isinstance(content_range, str)
                 else None
             )
