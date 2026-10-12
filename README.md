@@ -93,7 +93,7 @@ Install optional Windows dependencies with `python -m pip install -e ".[dev,wind
 Use `aie pause` to pause all running observer loops for the current Windows user, `aie resume` to resume them, and `aie status` to inspect pause state and local event count. Pausing does not erase retained events. `aie prune --older-than-days 30` previews old records; add `--confirm` to delete only the expired local events.
 
 ## Browser playback observer
-The opt-in Chrome/Edge/Brave extension prototype is in `browser_extension/`. Load it unpacked, then register its Windows native host using `scripts/register-native-host.ps1`. See [Video Intelligence setup](docs/VIDEO_INTELLIGENCE.md). Monitoring defaults to off.
+The opt-in Chrome/Edge/Brave extension is in `browser_extension/`. Load it unpacked, then register its Windows native host using `scripts/register-native-host.ps1`. Monitoring defaults to off. Accepted playback snapshots are persisted locally and passed to the live video diagnostic monitor; findings are evidence-linked suggestions, never automatic fixes. See [Video Intelligence setup](docs/VIDEO_INTELLIGENCE.md).
 
 ## Structural screen observation (optional)
 To collect bounded UI Automation structure for selected apps, install the optional Windows extra with `python -m pip install -e ".[dev,windows]"`, then run `aie observe --duration 600 --ui-tree --ui-tree-apps msedge.exe,notepad.exe`. Only allowlisted foreground apps are sampled. It records control type, class, automation ID and geometry; it does not read UI text, values, passwords or screenshots. UI Automation is off by default. Inspect the latest structural sample with `aie screen`.
@@ -102,7 +102,7 @@ To collect bounded UI Automation structure for selected apps, install the option
 The observer emits foreground-window transition events using the Windows user32 API. Process name and window class are collected by default; window titles are omitted. Explicitly passing `--include-window-titles` collects them as sensitive data.
 
 ## Live diagnostic suggestions
-While `aie observe` is running, fresh browser video events are correlated with foreground-app and network telemetry. New diagnostic hypotheses are persisted and printed once per incident/cooldown, with evidence and a recommended next step. The observer does not apply fixes automatically.
+The native host now runs the deduplicating video diagnostic monitor after each accepted playback snapshot, correlating it with fresh same-host foreground-app and network evidence. New hypotheses are persisted once per active incident/cooldown with supporting event IDs and a recommended next step. The separate `aie observe` loop can also surface diagnostic suggestions. Neither path applies fixes automatically.
 
 ## Video network probes and evaluation
 Network probes run only when explicitly requested; normal `aie observe` does not start them. Supply a test object and/or up to two packet targets:
@@ -181,7 +181,7 @@ dotnet build .\desktop\P1Dashboard\P1Dashboard.csproj --configuration Release
 et8.0-windows\P1Dashboard.exe
 ```
 
-The dashboard reads local status, health, retention and task history; launches the bounded local `aie agent run` workflow; pauses/resumes an existing observer; and exposes emergency execution disable/kill controls. It does not start observation on launch, supply capability IDs, approve proposals or enable execution. The CLI must already be installed and available as `aie` on PATH.
+The main dashboard reads local status, health, retention and task history; launches the bounded local `aie agent run` workflow; pauses/resumes an existing observer; and exposes emergency execution disable/kill controls. Its **Video intelligence** workspace opens a detailed playback dashboard with correlated telemetry, hypotheses, findings, network probes, feedback, event history, local model inventory, synthetic evaluation and field-trace export. A local Ollama advisor explains deterministic findings using evidence IDs; routine/complex tiers are routed through the installed-model and RAM policy. Neither dashboard starts observation on launch, supplies capability IDs, approves proposals or enables execution. The CLI must already be installed and available as `aie` on PATH.
 
 ## Windows tray controls
 
@@ -205,7 +205,7 @@ aie notifications-disable
 The tray displays at most two generic playback-diagnostic notices per poll. It never places a process name, window title, URL, event payload or recommendation in the balloon. New events observed while notifications are disabled, the observer is paused, or quiet hours are active are not queued for later delivery.
 
 ## Current limitations
-Process lifecycle observation uses best-effort user-mode snapshots and may miss transient processes. Foreground process resource sampling is limited to the active application; it is not a systemwide per-process profiler. Video diagnostics analyze supplied metrics only. The project has a restricted Windows Settings URI adapter, but general autonomous remediation, OS-process sandboxing, rollback, automated recovery, evaluated learning and a full desktop assistant dashboard are not implemented.
+Process lifecycle observation uses best-effort user-mode snapshots and may miss transient processes. Foreground process resource sampling is limited to the active application; it is not a systemwide per-process profiler. Video diagnostics analyze supplied metrics only. The project has a restricted Windows Settings URI adapter, but general autonomous remediation, OS-process sandboxing, rollback, automated recovery, evaluated learning and a full ecosystem-wide desktop assistant dashboard spanning memory, task, policy and action history is not yet implemented; the dedicated video intelligence workspace is available.
 
 
 ## Planner and reasoning evaluation
