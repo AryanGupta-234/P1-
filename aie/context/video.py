@@ -31,6 +31,8 @@ class NetworkEvidence:
     throughput_mbps: float | None = None
     packet_loss_pct: float | None = None
     target_labels: tuple[str, ...] = ()
+    packet_loss_by_target: tuple[tuple[str, float, int, int], ...] = ()
+    estimated_required_mbps: float | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -143,6 +145,28 @@ def _network_evidence(event: AIEEvent, age_seconds: float) -> NetworkEvidence | 
             _number(data, "throughput_mbps", minimum=0),
             _number(data, "packet_loss_pct", minimum=0, maximum=100),
             safe_labels,
+            tuple(
+                (
+                    item["label"],
+                    float(item["packet_loss_pct"]),
+                    int(item["packets_sent"]),
+                    int(item["packets_received"]),
+                )
+                for item in data.get("packet_loss_by_target", [])
+                if isinstance(item, dict)
+                and isinstance(item.get("label"), str)
+                and 1 <= len(item["label"]) <= 24
+                and isinstance(item.get("packet_loss_pct"), (int, float))
+                and not isinstance(item.get("packet_loss_pct"), bool)
+                and 0 <= item["packet_loss_pct"] <= 100
+                and isinstance(item.get("packets_sent"), int)
+                and not isinstance(item.get("packets_sent"), bool)
+                and 1 <= item["packets_sent"] <= 4
+                and isinstance(item.get("packets_received"), int)
+                and not isinstance(item.get("packets_received"), bool)
+                and 0 <= item["packets_received"] <= item["packets_sent"]
+            )[:2],
+            _number(data, "estimated_required_mbps", minimum=0),
         )
     return None
 
@@ -335,6 +359,8 @@ def build_video_observation_context(
         estimated_required_mbps=(
             _number(data, "estimated_required_mbps", minimum=0)
             if _number(data, "estimated_required_mbps", minimum=0) is not None
+            else latest_video_probe.estimated_required_mbps
+            if latest_video_probe is not None
             else None
         ),
         packet_loss_pct=(
