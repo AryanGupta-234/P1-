@@ -3,7 +3,7 @@ param([switch]$SkipWebView2Install)
 $ErrorActionPreference = "Stop"
 $Root = Split-Path -Parent $PSScriptRoot
 Set-Location $Root
-if (Get-Command py -ErrorAction SilentlyContinue) { $Python = "py"; $PythonArgs = @("-3.11") }
+if (Get-Command py -ErrorAction SilentlyContinue) { $Python = "py"; $PythonArgs = @("-3") }
 elseif (Get-Command python -ErrorAction SilentlyContinue) { $Python = "python"; $PythonArgs = @() }
 else { throw "Python 3.11+ is required. Install from https://www.python.org/downloads/windows/" }
 $VenvPython = Join-Path $Root ".venv\Scripts\python.exe"
@@ -13,6 +13,8 @@ if (-not (Test-Path $VenvPython)) {
     & $Python @PythonArgs -m venv .venv
     if ($LASTEXITCODE -ne 0) { throw "Virtual environment creation failed." }
 }
+$Version = & $VenvPython -c "import sys; print(sys.version_info >= (3, 11))"
+if ($Version -ne "True") { throw "AIE requires Python 3.11 or newer." }
 Write-Host "[P1] Installing AIE and pywebview dependencies..." -ForegroundColor Cyan
 & $VenvPython -m pip install --disable-pip-version-check --upgrade pip
 if ($LASTEXITCODE -ne 0) { throw "pip bootstrap failed." }
