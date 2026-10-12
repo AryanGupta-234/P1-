@@ -181,12 +181,12 @@ def run_host(input_stream: BinaryIO, output_stream: BinaryIO, store: EventStore 
 def main() -> int:
     """Native host entry point; stdout is exclusively the binary protocol channel."""
     if os.name != "nt":
-        sys.stderr.write("AIE browser native host supports Windows only.\\n")
+        sys.stderr.write("AIE browser native host supports Windows only.\n")
         return 2
     try:
         run_host(sys.stdin.buffer, sys.stdout.buffer)
     except (EOFError, OSError, ValueError, json.JSONDecodeError) as exc:
-        sys.stderr.write(f"AIE browser native host stopped: {type(exc).__name__}\\n")
+        sys.stderr.write(f"AIE browser native host stopped: {type(exc).__name__}\n")
         return 1
     return 0
 
