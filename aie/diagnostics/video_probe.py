@@ -223,8 +223,8 @@ def _validate_public_https_url(url: str) -> tuple[str, str, str]:
     path = parsed.path or "/"
     if parsed.query:
         path += "?" + parsed.query
-    if any(ord(character) < 32 or ord(character) == 127 for character in path):
-        raise VideoProbeError("throughput URL path contains an invalid control character")
+    if any(character.isspace() or ord(character) < 32 or ord(character) == 127 for character in path):
+        raise VideoProbeError("throughput URL path contains whitespace or a control character")
     return host, path, addresses[0][0]
 
 
@@ -366,13 +366,16 @@ def run_video_network_probe(
         raise VideoProbeError("provide --packet-target and/or --throughput-url")
     if len(packet_targets) > 2:
         raise VideoProbeError("at most two packet targets are allowed")
-    if estimated_required_mbps is not None and (
-        isinstance(estimated_required_mbps, bool)
-        or not isinstance(estimated_required_mbps, (int, float))
-        or not math.isfinite(estimated_required_mbps)
-        or not 0 < estimated_required_mbps <= 10000
-    ):
-        raise VideoProbeError("estimated_required_mbps must be greater than 0 and no more than 10000")
+    if estimated_required_mbps is not None:
+        if isinstance(estimated_required_mbps, bool) or not isinstance(estimated_required_mbps, (int, float)):
+            raise VideoProbeError("estimated_required_mbps must be a finite number greater than 0 and no more than 10000")
+        try:
+            required_mbps = float(estimated_required_mbps)
+        except (OverflowError, ValueError) as exc:
+            raise VideoProbeError("estimated_required_mbps must be a finite number greater than 0 and no more than 10000") from exc
+        if not math.isfinite(required_mbps) or not 0 < required_mbps <= 10000:
+            raise VideoProbeError("estimated_required_mbps must be a finite number greater than 0 and no more than 10000")
+        estimated_required_mbps = required_mbps
 
     labels: set[str] = set()
     packet_results: list[PacketLossResult] = []
