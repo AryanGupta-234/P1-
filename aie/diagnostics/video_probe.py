@@ -268,9 +268,11 @@ def measure_https_throughput(
 
     host, path, connect_address = _validate_public_https_url(url)
     if connection_factory is None:
-        connection_factory = lambda host, port, **kwargs: _PinnedHTTPSConnection(
-            host, connect_address, port, **kwargs
-        )
+        def connection_factory(host, port, **kwargs):
+            return _PinnedHTTPSConnection(
+                host, connect_address, port, **kwargs
+            )
+
     started = clock()
     deadline = started + timeout_seconds
     total_bytes = 0
