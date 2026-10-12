@@ -21,6 +21,9 @@ aie-browser-host = "aie.browser.native_host:main"
 [tool.setuptools.packages.find]
 include = ["aie*"]
 
+[tool.setuptools.package-data]
+"aie.diagnostics" = ["data/*.json"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
