@@ -268,8 +268,8 @@ def test_correlates_opt_in_video_network_probe_without_retaining_endpoints():
     context = build_video_observation_context([browser, probe])
 
     assert context is not None
-    assert context.metrics.packet_loss_pct == 25.0
-    assert context.metrics.packet_loss_scope == "gateway, stream_endpoint"
+    assert context.metrics.packet_loss_pct is None
+    assert context.metrics.packet_loss_scope is None
     assert context.metrics.throughput_mbps == 7.25
     assert context.metrics.estimated_required_mbps == 8.0
     assert "video-probe-1" in context.evidence_event_ids
@@ -277,4 +277,36 @@ def test_correlates_opt_in_video_network_probe_without_retaining_endpoints():
     assert context.network_evidence[0].target == "user-selected diagnostic targets"
     assert len(context.network_evidence[0].packet_loss_by_target) == 2
     assert context.network_evidence[0].packet_loss_by_target[0] == ("gateway", 25.0, 4, 3)
+
+def test_single_probe_target_can_supply_a_scoped_packet_loss_hypothesis():
+    browser = make_event(
+        "browser.video.snapshot",
+        data={
+            "playback_state": "stalled",
+            "stall_count": 4,
+            "observation_window_seconds": 45,
+        },
+        event_id="browser-single-target-stall",
+    )
+    probe = make_event(
+        "network.video_probe",
+        seconds_ago=2,
+        data={
+            "packet_target_labels": ["gateway"],
+            "packet_loss_by_target": [
+                {"label": "gateway", "packets_sent": 4, "packets_received": 3, "packet_loss_pct": 25.0}
+            ],
+            "packets_sent": 4,
+            "packets_received": 3,
+            "packet_loss_pct": 25.0,
+        },
+        event_id="video-probe-single",
+    )
+
+    context = build_video_observation_context([browser, probe])
+
+    assert context is not None
+    assert context.metrics.packet_loss_pct == 25.0
+    assert context.metrics.packet_loss_scope == "gateway"
+    assert "video-probe-single" in context.evidence_event_ids
 
