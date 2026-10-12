@@ -36,7 +36,7 @@ aie video-probe --throughput-url https://speed-test.example.net/1m.bin --estimat
 aie context
 ```
 
-- Packet loss sends at most four individual ICMP echo requests to each of at most two user-supplied targets. Target labels, counts and percentages are stored; target hostnames/IPs are not.
+- Packet loss sends at most four individual ICMP echo requests to each of at most two user-supplied targets. Target labels, counts and percentages are stored; target hostnames/IPs are not. Results remain separate by target. When two targets are selected, AIE does not average their percentages into one root-cause signal; run a single-target probe when you specifically want that endpoint's packet-loss value considered by the diagnostic rule.
 - Throughput requires a user-supplied public HTTPS URL on port 443. The endpoint must resolve only to globally routable IPs. Credentials, fragments, redirects and private destinations are rejected. The client issues up to three range requests, reads at most 768 KiB by default (hard limit 1 MiB), and applies a short overall deadline. The URL, hostname and response bytes are never stored.
 - ICMP can be filtered or deprioritized. Packet loss to a selected host is corroborating path evidence, not proof that the streaming CDN dropped media packets.
 - HTTPS throughput measures the selected test object/path, not the active video CDN, stream bitrate or a guarantee of sustainable throughput. Supply `--estimated-required-mbps` only when you have an external estimate for the selected playback quality.
@@ -74,7 +74,7 @@ The bundled `video-diagnostics-synthetic-v1` corpus contains controlled scenario
 7. Inspect: `aie status`, `aie events`, and `aie context`.
 8. Stop data collection immediately with `aie pause`; use `aie resume` to resume.
 
-The registration helper writes a per-user native-messaging manifest under `%LOCALAPPDATA%\AIE` and registers it under HKCU. Use `scripts/unregister-native-host.ps1 -Browser Chrome` (or Edge) to remove the browser registration.
+The registration helper writes a per-user, browser-specific native-messaging manifest under `%LOCALAPPDATA%\AIE\native-host` and registers it under that browser's HKCU key. Chrome and Edge manifests are independent, so both browsers can be registered at the same time. Use `scripts/unregister-native-host.ps1 -Browser Chrome` (or Edge) to remove only that browser's registration and manifest.
 
 ## Recording diagnostic outcomes
 Use `aie events` to find a `diagnostic.video_finding` event ID, then run:
