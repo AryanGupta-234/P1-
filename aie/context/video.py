@@ -357,8 +357,9 @@ def build_video_observation_context(
     browser_throughput = _number(data, "throughput_mbps", minimum=0)
     browser_packet_loss = _number(data, "packet_loss_pct", minimum=0, maximum=100)
     packet_scope = (
-        ", ".join(latest_video_probe.target_labels)
-        if latest_video_probe is not None and latest_video_probe.target_labels
+        latest_video_probe.target_labels[0]
+        if latest_video_probe is not None
+        and len(latest_video_probe.packet_loss_by_target) == 1
         else None
     )
     browser_required_mbps = _number(data, "estimated_required_mbps", minimum=0)
