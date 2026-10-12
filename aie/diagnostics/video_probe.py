@@ -130,10 +130,6 @@ def _resolve_addresses_bounded(
 
 def validate_packet_target(label: str, host: str) -> tuple[str, str]:
     """Validate a user-supplied label and DNS name/IP without shell syntax."""
-    label = label.strip().casefold()
-    host = host.strip().rstrip(".")
-    if not isinstance(label, str) or not isinstance(host, str):
-        raise VideoProbeError("target label and host must be text")
     if not isinstance(label, str) or not isinstance(host, str):
         raise VideoProbeError("target label and host must be text")
     label = label.strip().casefold()
