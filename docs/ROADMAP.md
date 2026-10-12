@@ -51,6 +51,7 @@ Development ownership and branch rules are defined in [Development Streams](DEVE
 
 ## M1.5 — Video intelligence
 - [x] Opt-in Chrome/Edge/Brave MV3 HTML-video observer, disabled by default.
+- [x] Native-host PING/PONG health handshake, explicit popup connection test, side-effect-free health probe, and process-level validator coverage; target-desktop browser discovery still requires live verification.
 - [x] Strict Windows native-messaging host and local SQLite persistence.
 - [x] Stall, buffered-ahead, playback-progress and available dropped-frame telemetry.
 - [x] Correlate playback snapshots with same-host foreground-app and network evidence.
