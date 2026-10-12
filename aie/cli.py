@@ -705,7 +705,11 @@ def video_probe(
             ],
             "packets_sent": result.packets_sent,
             "packets_received": result.packets_received,
-            "packet_loss_pct": result.packet_loss_pct,
+            "packet_loss_pct": (
+                result.packet_results[0].packet_loss_pct
+                if len(result.packet_results) == 1
+                else None
+            ),
             "throughput_mbps": throughput.throughput_mbps if throughput else None,
             "throughput_bytes": throughput.bytes_received if throughput else None,
             "throughput_duration_seconds": throughput.elapsed_seconds if throughput else None,
