@@ -178,3 +178,55 @@ def test_throughput_never_follows_redirects(monkeypatch):
 def test_combined_probe_requires_at_least_one_explicit_target():
     with pytest.raises(video_probe.VideoProbeError):
         video_probe.run_video_network_probe()
+
+def test_target_dns_resolution_is_bounded_and_returns_a_pinned_ip(monkeypatch):
+    monkeypatch.setattr(
+        video_probe.socket,
+        "getaddrinfo",
+        lambda host, port, **kwargs: [
+            (socket.AF_INET6, socket.SOCK_STREAM, 6, "", ("2606:4700:4700::1111", port, 0, 0)),
+            (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("1.1.1.1", port)),
+        ],
+    )
+
+    assert video_probe._resolve_addresses_bounded("example.test", 443) == (
+        ("1.1.1.1", socket.AF_INET),
+        ("2606:4700:4700::1111", socket.AF_INET6),
+    )
+
+
+def test_target_dns_resolution_rejects_invalid_returned_addresses(monkeypatch):
+    monkeypatch.setattr(
+        video_probe.socket,
+        "getaddrinfo",
+        lambda *args, **kwargs: [
+            (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("not-an-ip", 443))
+        ],
+    )
+
+    with pytest.raises(video_probe.VideoProbeError, match="did not resolve"):
+        video_probe._resolve_addresses_bounded("example.test", 443)
+
+
+def test_packet_probe_uses_resolved_ip_not_original_hostname(monkeypatch):
+    monkeypatch.setattr(video_probe.os, "name", "nt")
+    monkeypatch.setattr(
+        video_probe.socket,
+        "getaddrinfo",
+        lambda *args, **kwargs: [
+            (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("1.1.1.1", 0))
+        ],
+    )
+    commands = []
+
+    def runner(command, **kwargs):
+        commands.append(command)
+        return SimpleNamespace(returncode=0)
+
+    result = video_probe.measure_packet_loss(
+        "gateway", "example.test", packets=1, runner=runner
+    )
+
+    assert result.packets_received == 1
+    assert commands[0][-1] == "1.1.1.1"
+
