@@ -10,7 +10,7 @@ $ErrorActionPreference = 'Stop'
 $results = [System.Collections.Generic.List[object]]::new()
 $repoRoot = Split-Path -Parent $PSScriptRoot
 
-# Read-only preflight: no registry, browser, security, execution or model changes.
+# Read-only browser/video preflight: no registry, browser, security or execution changes.
 function Add-Check {
     param(
         [string]$Name,
@@ -24,7 +24,7 @@ function Add-Check {
     })
 }
 
-Add-Check 'Windows' ($IsWindows -or $env:OS -eq 'Windows_NT') 'Windows host required.'
+Add-Check 'Windows' ($env:OS -eq 'Windows_NT') 'Windows host required.'
 
 try {
     $python = python --version 2>&1
@@ -34,10 +34,10 @@ try {
 }
 
 try {
-    python -c "import aie; import pywinauto; import win32evtlog; from aie.providers.uia import WindowsUIATreeProvider; from aie.providers.eventlog import WindowsEventLogProvider; from aie.providers.etw_process import WindowsETWProcessProvider; from aie.providers.process_resources import WindowsProcessResourceProvider; from aie.browser.native_host import event_from_browser_payload; from aie.diagnostics.video_probe import run_video_network_probe; from aie.diagnostics.video_evaluation import evaluate_trace_dataset"
-    Add-Check 'Provider and video imports' ($LASTEXITCODE -eq 0) 'Windows and browser/video diagnostic modules imported successfully.'
+    python -c "import aie; from aie.browser.native_host import event_from_browser_payload; from aie.diagnostics.video_probe import run_video_network_probe; from aie.diagnostics.video_evaluation import evaluate_trace_dataset; from aie.diagnostics.video_field_export import prepare_field_trace_candidates"
+    Add-Check 'Browser/video imports' ($LASTEXITCODE -eq 0) 'Native host, bounded network probes, trace evaluation and sanitized field export imported successfully.'
 } catch {
-    Add-Check 'Provider and video imports' $false 'One or more Windows/browser video imports failed.'
+    Add-Check 'Browser/video imports' $false 'One or more required browser/video modules failed to import.'
 }
 
 try {
@@ -46,20 +46,6 @@ try {
     Add-Check 'Video trace corpus' ($LASTEXITCODE -eq 0) ([string]$evaluation)
 } catch {
     Add-Check 'Video trace corpus' $false 'Synthetic video trace corpus could not be loaded.'
-}
-
-try {
-    $ollama = Invoke-RestMethod -Uri 'http://127.0.0.1:11434/api/tags' -Method Get -TimeoutSec 3
-    $names = @($ollama.models | ForEach-Object { $_.name })
-    $required = @('qwen2.5:3b-instruct', 'qwen2.5:7b-instruct', 'nomic-embed-text:latest')
-    $missing = @($required | Where-Object { $_ -notin $names })
-    if ($missing.Count -eq 0) {
-        Add-Check 'Local Ollama' $true 'Required local models are installed.'
-    } else {
-        Add-Check 'Local Ollama' $false ('Missing: ' + ($missing -join ', '))
-    }
-} catch {
-    Add-Check 'Local Ollama' $false 'Local Ollama endpoint was not reachable; no remote endpoint was attempted.'
 }
 
 $artifacts = @(
@@ -129,8 +115,8 @@ try {
 $failed = @($results | Where-Object { -not $_.Passed })
 
 Write-Host ''
-Write-Host 'AIE TARGET DESKTOP VALIDATION' -ForegroundColor Cyan
-Write-Host 'Read-only checks only; no security or execution settings were changed.' -ForegroundColor DarkGray
+Write-Host 'AIE BROWSER/VIDEO TARGET DESKTOP VALIDATION' -ForegroundColor Cyan
+Write-Host 'Read-only checks only; no security, registry, browser or execution settings were changed.' -ForegroundColor DarkGray
 Write-Host ''
 $results | Format-Table -AutoSize
 
