@@ -204,7 +204,7 @@ def test_target_dns_resolution_rejects_invalid_returned_addresses(monkeypatch):
         ],
     )
 
-    with pytest.raises(video_probe.VideoProbeError, match="did not resolve"):
+    with pytest.raises(video_probe.VideoProbeError, match="DNS resolution failed"):
         video_probe._resolve_addresses_bounded("example.test", 443)
 
 
@@ -229,4 +229,16 @@ def test_packet_probe_uses_resolved_ip_not_original_hostname(monkeypatch):
 
     assert result.packets_received == 1
     assert commands[0][-1] == "1.1.1.1"
+
+def test_throughput_rejects_invalid_port():
+    with pytest.raises(video_probe.VideoProbeError, match="invalid port"):
+        video_probe._validate_public_https_url("https://speed.example:99999/file")
+
+
+def test_probe_rejects_boolean_bitrate_estimate():
+    with pytest.raises(video_probe.VideoProbeError, match="estimated_required_mbps"):
+        video_probe.run_video_network_probe(
+            packet_targets=(("gateway", "192.168.1.1"),),
+            estimated_required_mbps=True,
+        )
 
