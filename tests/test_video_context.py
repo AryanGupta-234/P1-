@@ -233,3 +233,42 @@ def test_non_browser_foreground_process_does_not_supply_browser_cpu():
 
     assert context is not None
     assert context.metrics.cpu_pct is None
+
+def test_correlates_opt_in_video_network_probe_without_retaining_endpoints():
+    browser = make_event(
+        "browser.video.snapshot",
+        data={
+            "playback_state": "stalled",
+            "stall_count": 4,
+            "observation_window_seconds": 45,
+        },
+        event_id="browser-video-stall",
+    )
+    probe = make_event(
+        "network.video_probe",
+        seconds_ago=2,
+        data={
+            "packet_target_labels": ["gateway", "stream_endpoint"],
+            "packets_sent": 8,
+            "packets_received": 6,
+            "packet_loss_pct": 25.0,
+            "throughput_mbps": 7.25,
+            "throughput_bytes": 524288,
+            "throughput_duration_seconds": 0.58,
+            "estimated_required_mbps": 8.0,
+            "throughput_url": "https://private.example/signed-token",
+        },
+        event_id="video-probe-1",
+    )
+
+    context = build_video_observation_context([browser, probe])
+
+    assert context is not None
+    assert context.metrics.packet_loss_pct == 25.0
+    assert context.metrics.packet_loss_scope == "gateway, stream_endpoint"
+    assert context.metrics.throughput_mbps == 7.25
+    assert context.metrics.estimated_required_mbps == 8.0
+    assert "video-probe-1" in context.evidence_event_ids
+    assert "private.example" not in str(context.metrics)
+    assert context.network_evidence[0].target == "user-selected diagnostic targets"
+
