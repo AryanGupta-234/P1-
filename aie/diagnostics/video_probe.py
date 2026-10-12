@@ -92,7 +92,7 @@ def _resolve_addresses_bounded(
         raise VideoProbeError("DNS resolver is busy with an earlier timed-out lookup")
 
     result: list[tuple[str, int]] = []
-    errors: list[OSError] = []
+    errors: list[Exception] = []
     completed = threading.Event()
 
     def resolve() -> None:
@@ -106,7 +106,7 @@ def _resolve_addresses_bounded(
                 pair = (candidate, family)
                 if pair not in result:
                     result.append(pair)
-        except OSError as exc:
+        except (OSError, ValueError) as exc:
             errors.append(exc)
         finally:
             completed.set()
@@ -130,6 +130,12 @@ def _resolve_addresses_bounded(
 
 def validate_packet_target(label: str, host: str) -> tuple[str, str]:
     """Validate a user-supplied label and DNS name/IP without shell syntax."""
+    label = label.strip().casefold()
+    host = host.strip().rstrip(".")
+    if not isinstance(label, str) or not isinstance(host, str):
+        raise VideoProbeError("target label and host must be text")
+    if not isinstance(label, str) or not isinstance(host, str):
+        raise VideoProbeError("target label and host must be text")
     label = label.strip().casefold()
     host = host.strip().rstrip(".")
     if not _LABEL_RE.fullmatch(label):
@@ -160,9 +166,9 @@ def measure_packet_loss(
     if os.name != "nt":
         raise VideoProbeError("packet-loss measurement is supported only on native Windows")
     label, host = validate_packet_target(label, host)
-    if not 1 <= packets <= 4:
-        raise VideoProbeError("packets must be between 1 and 4")
-    if not 100 <= timeout_ms <= 1500:
+    if isinstance(packets, bool) or not isinstance(packets, int) or not 1 <= packets <= 4:
+        raise VideoProbeError("packets must be an integer between 1 and 4")
+    if isinstance(timeout_ms, bool) or not isinstance(timeout_ms, int) or not 100 <= timeout_ms <= 1500:
         raise VideoProbeError("timeout_ms must be between 100 and 1500")
 
     resolved_host = _resolve_addresses_bounded(host, 0)[0][0]
@@ -171,7 +177,7 @@ def measure_packet_loss(
 
     received = 0
     for _ in range(packets):
-        command = ["ping.exe", family, "-n", "1", "-w", str(timeout_ms), host]
+        command = ["ping.exe", family, "-n", "1", "-w", str(timeout_ms), resolved_host]
         try:
             completed = runner(
                 command,
@@ -197,12 +203,16 @@ def _validate_public_https_url(url: str) -> tuple[str, str, str]:
     if not isinstance(url, str) or len(url) > 2048:
         raise VideoProbeError("throughput URL must be a valid HTTPS URL no longer than 2048 characters")
     parsed = urlsplit(url)
+    try:
+        parsed_port = parsed.port
+    except ValueError as exc:
+        raise VideoProbeError("throughput URL has an invalid port") from exc
     if (
         parsed.scheme.casefold() != "https"
         or not parsed.hostname
         or parsed.username is not None
         or parsed.password is not None
-        or parsed.port not in (None, 443)
+        or parsed_port not in (None, 443)
         or parsed.fragment
     ):
         raise VideoProbeError("throughput URL must use public HTTPS on port 443 without embedded credentials or fragments")
@@ -218,7 +228,7 @@ def _validate_public_https_url(url: str) -> tuple[str, str, str]:
     path = parsed.path or "/"
     if parsed.query:
         path += "?" + parsed.query
-    if any(character in path for character in ("\\r", "\\n")):
+    if any(ord(character) < 32 or ord(character) == 127 for character in path):
         raise VideoProbeError("throughput URL path contains an invalid control character")
     return host, path, addresses[0][0]
 
@@ -284,7 +294,6 @@ def measure_https_throughput(
                 443,
                 timeout=min(2.0, remaining),
                 context=ssl.create_default_context(),
-                connect_address=connect_address,
             )
             start_byte = request_index * sample_bytes
             end_byte = start_byte + requested - 1
