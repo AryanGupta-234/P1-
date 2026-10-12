@@ -100,17 +100,25 @@ def _f1(precision: float | None, recall: float | None) -> float | None:
 def load_trace_dataset(path: Path) -> tuple[str, str, list[tuple[VideoMetrics, frozenset[str]]]]:
     """Load and strictly validate a versioned JSON trace corpus."""
     try:
+        if path.stat().st_size > 5 * 1024 * 1024:
+            raise TraceDatasetError("trace dataset exceeds the 5 MiB size limit")
         payload = json.loads(path.read_text(encoding="utf-8"))
+    except TraceDatasetError:
+        raise
     except (OSError, UnicodeError, json.JSONDecodeError) as exc:
         raise TraceDatasetError(f"could not read trace dataset: {type(exc).__name__}") from exc
-    if not isinstance(payload, dict) or payload.get("schema_version") != 1:
+    if (
+        not isinstance(payload, dict)
+        or isinstance(payload.get("schema_version"), bool)
+        or payload.get("schema_version") != 1
+    ):
         raise TraceDatasetError("trace dataset must be an object with schema_version=1")
     name = payload.get("dataset_name")
     kind = payload.get("dataset_kind")
     cases = payload.get("cases")
     if not isinstance(name, str) or not name.strip() or len(name) > 100:
         raise TraceDatasetError("dataset_name must be a non-empty string up to 100 characters")
-    if kind not in {"synthetic", "field"}:
+    if not isinstance(kind, str) or kind not in {"synthetic", "field"}:
         raise TraceDatasetError("dataset_kind must be 'synthetic' or 'field'")
     if not isinstance(cases, list) or not 1 <= len(cases) <= MAX_TRACE_CASES:
         raise TraceDatasetError(f"cases must contain between 1 and {MAX_TRACE_CASES} traces")
