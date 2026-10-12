@@ -15,7 +15,8 @@ $ErrorActionPreference = 'Stop'
 $resolvedHost = (Resolve-Path -LiteralPath $HostExecutable).Path
 $hostName = 'com.aie.browser_bridge'
 $manifestDirectory = Join-Path $env:LOCALAPPDATA 'AIE\native-host'
-$manifestPath = Join-Path $manifestDirectory ($hostName + '.json')
+$manifestFile = $hostName + '.' + $Browser.ToLowerInvariant() + '.json'
+$manifestPath = Join-Path $manifestDirectory $manifestFile
 
 New-Item -ItemType Directory -Path $manifestDirectory -Force | Out-Null
 
