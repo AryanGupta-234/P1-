@@ -131,7 +131,7 @@ def _network_evidence(event: AIEEvent, age_seconds: float) -> NetworkEvidence | 
     if event.event_type == "network.video_probe":
         labels = data.get("packet_target_labels")
         safe_labels = tuple(
-            item for item in labels
+            item for item in labels[:2]
             if isinstance(item, str) and 1 <= len(item) <= 24
         )[:2] if isinstance(labels, list) else ()
         target_rows = data.get("packet_loss_by_target")
@@ -155,7 +155,7 @@ def _network_evidence(event: AIEEvent, age_seconds: float) -> NetworkEvidence | 
                     int(item["packets_sent"]),
                     int(item["packets_received"]),
                 )
-                for item in target_rows
+                for item in target_rows[:2]
                 if isinstance(item, dict)
                 and isinstance(item.get("label"), str)
                 and 1 <= len(item["label"]) <= 24
