@@ -170,3 +170,20 @@ def test_memory_correction_removes_superseded_embedding(tmp_path):
     assert store.get(original.memory_id, include_superseded=True).status == "superseded"
     assert not store.has_embedding(original.memory_id, "nomic-embed-text:latest")
     assert store.get(corrected.memory_id) is not None
+
+def test_memory_save_preserves_timestamp_order_when_source_clock_is_ahead(tmp_path):
+    store = MemoryStore(tmp_path / "clock-skew.sqlite3")
+    future_created_at = datetime.now(timezone.utc) + timedelta(days=1)
+    record = MemoryRecord(
+        kind="working",
+        content="Clock-skew regression fixture.",
+        created_at=future_created_at,
+        updated_at=future_created_at,
+    )
+
+    saved = store.save(record)
+    loaded = store.get(saved.memory_id)
+
+    assert saved.updated_at >= saved.created_at
+    assert loaded is not None
+    assert loaded.memory.updated_at >= loaded.memory.created_at
