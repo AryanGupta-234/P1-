@@ -5,7 +5,7 @@ param(
     [string]$ExtensionId,
 
     [Parameter(Mandatory = $true)]
-    [ValidateSet('Chrome', 'Edge')]
+    [ValidateSet('Chrome', 'Edge', 'Brave')]
     [string]$Browser,
 
     [string]$HostExecutable = (Join-Path $PSScriptRoot '..\.venv\Scripts\aie-browser-host.exe')
@@ -32,10 +32,10 @@ $manifestJson = $manifest | ConvertTo-Json -Depth 5
 $utf8WithoutBom = [System.Text.UTF8Encoding]::new($false)
 [System.IO.File]::WriteAllText($manifestPath, $manifestJson, $utf8WithoutBom)
 
-$registryRoot = if ($Browser -eq 'Chrome') {
-    'HKCU:\Software\Google\Chrome\NativeMessagingHosts'
-} else {
-    'HKCU:\Software\Microsoft\Edge\NativeMessagingHosts'
+$registryRoot = switch ($Browser) {
+    'Chrome' { 'HKCU:\Software\Google\Chrome\NativeMessagingHosts' }
+    'Edge'   { 'HKCU:\Software\Microsoft\Edge\NativeMessagingHosts' }
+    'Brave'  { 'HKCU:\Software\BraveSoftware\Brave-Browser\NativeMessagingHosts' }
 }
 $registryKey = Join-Path $registryRoot $hostName
 New-Item -Path $registryKey -Force | Out-Null
