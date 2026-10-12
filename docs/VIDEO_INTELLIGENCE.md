@@ -27,7 +27,7 @@ The video subsystem is an assistive workstream inside the wider AIE ecosystem, n
 
 - Every accepted playback snapshot is persisted first, then passed to the deterministic `VideoDiagnosticMonitor`. When the evidence threshold is met, the monitor stores a deduplicated finding with severity, heuristic confidence, explanation, and source evidence IDs.
 - The optional tray notification path can surface a generic notice when the user has explicitly enabled notifications. It never places app identity, playback details or event payloads in the notification.
-- The WPF dashboard is opened from **Video intelligence** in the main P1- workspace. It refreshes a bounded, read-only 24-hour view every 20 seconds and exposes playback context, rule-engine hypotheses, findings and feedback, network probes, normalized activity events, event-type distribution, local model availability, and learning/evaluation views.
+- The Python/pywebview dashboard is opened from **Video intelligence** in the main P1- workspace. It refreshes a bounded, read-only 24-hour view every 20 seconds and exposes playback context, rule-engine hypotheses, findings and feedback, network probes, normalized activity events, event-type distribution, local model availability, and learning/evaluation views.
 - The dashboard's local AI advisor is an explanatory layer, not the diagnostic authority. The deterministic rule engine supplies findings; Ollama is asked to explain and prioritize safe next steps using only a bounded, privacy-reviewed evidence package. Every model observation and proposed step must cite event IDs from that package. Unknown measurements remain unknown.
 - The routine tier routes to the installed Qwen 3B model. The complex tier requests the Qwen 7B model only when the RAM-aware model policy allows it; otherwise the router can fall back to the eligible 3B model. `nomic-embed-text` remains the dedicated semantic-memory embedding model and is not used to manufacture video measurements or root causes.
 - No model is downloaded automatically, no video telemetry is sent to a cloud provider, and the model cannot create or execute capabilities. Feedback remains explicit user-reported evidence and does not retrain the model.
@@ -35,7 +35,7 @@ The video subsystem is an assistive workstream inside the wider AIE ecosystem, n
 Useful commands:
 
 ```powershell
-# Machine-readable dashboard snapshot (the WPF client uses this contract).
+# Machine-readable dashboard snapshot (the pywebview desktop client uses this contract).
 aie video-dashboard --json --lookback-hours 24 --limit 500
 
 # Grounded local explanation of current deterministic findings.
