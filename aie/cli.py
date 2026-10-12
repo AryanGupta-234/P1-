@@ -534,6 +534,21 @@ def show_context(
     table.add_row("Playback", context.playback_state)
     table.add_row("Stall count", str(context.metrics.stall_count))
     table.add_row(
+        "Measured throughput",
+        "unknown" if context.metrics.throughput_mbps is None
+        else f"{context.metrics.throughput_mbps:.3f} Mbps",
+    )
+    table.add_row(
+        "Measured packet loss",
+        "unknown" if context.metrics.packet_loss_pct is None
+        else f"{context.metrics.packet_loss_pct:.2f}%",
+    )
+    if context.metrics.estimated_required_mbps is not None:
+        table.add_row(
+            "Estimated stream requirement",
+            f"{context.metrics.estimated_required_mbps:.2f} Mbps",
+        )
+    table.add_row(
         "Observation window",
         f"{context.metrics.observation_window_seconds:.1f} seconds",
     )
@@ -572,7 +587,18 @@ def show_context(
         table.add_row("Window title collected", "yes (sensitive)" if app_context.window_title_collected else "no")
 
     for evidence in context.network_evidence:
-        if evidence.kind == "dns_probe":
+        if evidence.kind == "video_probe":
+            for label, loss_pct, sent, received in evidence.packet_loss_by_target:
+                table.add_row(
+                    f"Video probe: {label}",
+                    f"{loss_pct:.2f}% packet loss ({received}/{sent} replies)",
+                )
+            if evidence.throughput_mbps is not None:
+                table.add_row(
+                    "Video HTTPS probe",
+                    f"{evidence.throughput_mbps:.3f} Mbps (selected test object)",
+                )
+        elif evidence.kind == "dns_probe":
             value = (
                 "unresolved / unavailable"
                 if evidence.resolution_ms is None
@@ -668,6 +694,15 @@ def video_probe(
         entity=EntityRef(type="video_network_probe", name="user_selected_targets"),
         data={
             "packet_target_labels": list(result.target_labels),
+            "packet_loss_by_target": [
+                {
+                    "label": item.label,
+                    "packets_sent": item.packets_sent,
+                    "packets_received": item.packets_received,
+                    "packet_loss_pct": item.packet_loss_pct,
+                }
+                for item in result.packet_results
+            ],
             "packets_sent": result.packets_sent,
             "packets_received": result.packets_received,
             "packet_loss_pct": result.packet_loss_pct,
