@@ -280,6 +280,7 @@ def test_pinned_https_connection_uses_validated_ip_and_original_tls_hostname(mon
 
     class FakeContext:
         check_hostname = True
+        verify_mode = video_probe.ssl.CERT_REQUIRED
 
         def wrap_socket(self, sock, *, server_hostname):
             wrap_calls.append((sock, server_hostname))
