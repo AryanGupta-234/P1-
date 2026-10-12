@@ -123,3 +123,12 @@ def test_video_dashboard_validates_bounds_and_timezone(tmp_path):
         assert "timezone-aware" in str(exc)
     else:
         raise AssertionError("naive timestamp must be rejected")
+
+
+
+def test_video_dashboard_never_discovers_models_from_remote_ollama(tmp_path, monkeypatch):
+    monkeypatch.setenv("AIE_OLLAMA_URL", "https://ollama.example.invalid")
+    snapshot = build_video_dashboard_snapshot(EventStore(tmp_path / "events.sqlite3"))
+
+    assert snapshot["models"]["installed"] == []
+    assert "Remote Ollama is disabled" in snapshot["models"]["discovery_error"]
