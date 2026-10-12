@@ -79,14 +79,30 @@ The exporter makes field-corpus preparation repeatable; it does not create field
 
 ## Install for local development (Chrome or Edge)
 
-1. In PowerShell, install AIE into the Windows virtual environment: `python -m pip install -e .`.
+1. In PowerShell, create and activate the repository virtual environment:
+   ```powershell
+   py -3.11 -m venv .venv
+   .\.venv\Scripts\Activate.ps1
+   python -m pip install --upgrade pip
+   python -m pip install -e .
+   ```
 2. Open `chrome://extensions` or `edge://extensions`, enable Developer mode, and choose **Load unpacked**.
 3. Select the repository's `browser_extension` directory and copy its extension ID.
-4. Register the host: `scripts/register-native-host.ps1 -ExtensionId <ID> -Browser Chrome` (or `-Browser Edge`).
+4. Register the host for that browser:
+   ```powershell
+   .\scripts\register-native-host.ps1 -ExtensionId <ID> -Browser Chrome
+   # Or use -Browser Edge with that browser's extension ID.
+   ```
 5. Restart the browser, open the extension popup, and explicitly enable monitoring.
-6. Start AIE: `aie observe --duration 3600`.
+6. Start AIE in the activated virtual environment: `aie observe --duration 3600`.
 7. Inspect: `aie status`, `aie events`, and `aie context`.
-8. Stop data collection immediately with `aie pause`; use `aie resume` to resume.
+8. Run the read-only setup validator:
+   ```powershell
+   .\scripts\validate-target-desktop.ps1 -Browser Chrome,Edge
+   .\scripts\validate-target-desktop.ps1 -Browser Chrome,Edge -RequireBrowserRegistration
+   ```
+   The second command fails when either selected browser is not registered. It checks the native-host manifest, extension origin, executable, required Python imports and bundled trace corpus; it does not modify the registry or browser configuration.
+9. Stop data collection immediately with `aie pause`; use `aie resume` to resume.
 
 The registration helper writes a per-user, browser-specific native-messaging manifest under `%LOCALAPPDATA%\AIE\native-host` and registers it under that browser's HKCU key. Chrome and Edge manifests are independent, so both browsers can be registered at the same time. Use `scripts/unregister-native-host.ps1 -Browser Chrome` (or Edge) to remove only that browser's registration and manifest.
 
