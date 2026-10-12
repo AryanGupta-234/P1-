@@ -104,6 +104,18 @@ The observer emits foreground-window transition events using the Windows user32 
 ## Live diagnostic suggestions
 While `aie observe` is running, fresh browser video events are correlated with foreground-app and network telemetry. New diagnostic hypotheses are persisted and printed once per incident/cooldown, with evidence and a recommended next step. The observer does not apply fixes automatically.
 
+## Video network probes and evaluation
+Network probes run only when explicitly requested; normal `aie observe` does not start them. Supply a test object and/or up to two packet targets:
+
+```powershell
+aie video-probe --packet-target gateway=192.168.1.1 --packet-target video_path=cdn.example.net
+aie video-probe --throughput-url https://speed-test.example.net/1m.bin --estimated-required-mbps 8
+aie context
+aie video-evaluate
+```
+
+The HTTPS probe requires a user-selected public HTTPS endpoint, follows no redirects, reads at most 768 KiB by default, and stores only aggregate measurements—not the URL, hostname or response body. Packet probes send up to four ICMP requests per selected target and store labels/counts/percentage, not the hostnames/IPs. Results describe the selected test path, not necessarily the active streaming CDN. The bundled trace evaluator reports regression precision/recall/F1 and per-cause false positives/negatives on synthetic cases; it is not field-accuracy or confidence-calibration evidence. See [Video Intelligence](docs/VIDEO_INTELLIGENCE.md).
+
 ## Proposal review and policy audit
 Capability manifests are loaded only from `%LOCALAPPDATA%\AIE\capabilities\*.json`; the directory is user-managed and empty by default. See [Capability Manifest Guide](docs/CAPABILITY_MANIFESTS.md). `aie capabilities` lists manifests. `aie propose <CAPABILITY_ID> <SUMMARY> --parameters '{"name":"value"}'` records a bounded proposal, `aie proposals` lists review states, and `aie approve-proposal <ID>` / `aie reject-proposal <ID>` record your explicit decision. `aie proposal-audit <ID>` shows the audit trail and checks its hash chain and stored head checkpoint; `aie policy-audit-check` verifies the complete ledger. Approval only records policy authorization—nothing is executed.
 
