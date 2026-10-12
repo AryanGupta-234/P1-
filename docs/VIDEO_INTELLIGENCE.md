@@ -21,6 +21,39 @@ Available hypotheses include:
 
 Thresholds and confidence values are heuristics, not calibrated probabilities. Root-cause accuracy must be evaluated against representative traces before unattended remediation is enabled.
 
+## Explicit network probes
+
+Network probes are **never run by ordinary observation**. Start one manually while investigating a playback issue:
+
+```powershell
+# Probe packet loss to the local gateway and a user-selected video-path endpoint.
+aie video-probe --packet-target gateway=192.168.1.1 --packet-target video_path=cdn.example.net
+
+# Add an explicitly selected public HTTPS test object and a bitrate estimate for the chosen quality.
+aie video-probe --throughput-url https://speed-test.example.net/1m.bin --estimated-required-mbps 8
+
+# Show the latest correlated browser, foreground and network evidence.
+aie context
+```
+
+- Packet loss sends at most four individual ICMP echo requests to each of at most two user-supplied targets. Target labels, counts and percentages are stored; target hostnames/IPs are not.
+- Throughput requires a user-supplied public HTTPS URL on port 443. The endpoint must resolve only to globally routable IPs. Credentials, fragments, redirects and private destinations are rejected. The client issues up to three range requests, reads at most 768 KiB by default (hard limit 1 MiB), and applies a short overall deadline. The URL, hostname and response bytes are never stored.
+- ICMP can be filtered or deprioritized. Packet loss to a selected host is corroborating path evidence, not proof that the streaming CDN dropped media packets.
+- HTTPS throughput measures the selected test object/path, not the active video CDN, stream bitrate or a guarantee of sustainable throughput. Supply `--estimated-required-mbps` only when you have an external estimate for the selected playback quality.
+- A probe event is correlated only with fresh same-host video observations. Unknown values remain unknown.
+
+## Synthetic trace evaluation
+
+Run the bundled deterministic regression corpus:
+
+```powershell
+aie video-evaluate
+```
+
+The command reports exact cause-set match rate, micro precision/recall/F1 and per-cause TP/FP/FN/TN. A custom version-1 JSON corpus can be evaluated with `aie video-evaluate --dataset <PATH>`. Store numeric telemetry and labels only; do not include page URLs, media URLs, titles, cookies, account information or raw page content.
+
+The bundled `video-diagnostics-synthetic-v1` corpus contains controlled scenarios for all diagnostic rules, insufficient evidence, and unknown metrics. It is **synthetic regression data**. A perfect score means the current rules match those authored examples; it is not real-world accuracy, field validation or confidence calibration. A consented, representative corpus from different players, networks and CDNs is still required for those claims.
+
 ## Privacy and controls
 
 - Extension monitoring defaults to **off** and has an explicit popup toggle.
@@ -55,4 +88,4 @@ Supported outcomes are `resolved`, `not_resolved` and `not_attempted`. Feedback 
 
 ## Limitations and next validation
 
-The extension sees HTML video elements, not proprietary player internals. Some protected or embedded players may expose no useful metrics. The network sampler does not measure sustained streaming throughput or packet loss. Native host registration and end-to-end operation still need validation on the target Windows desktop. No autonomous remediation is implemented: the current system diagnoses and suggests only.
+The extension sees HTML video elements, not proprietary player internals. Some protected or embedded players may expose no useful metrics. The manual network probe measures a selected test object and ICMP targets, not the active CDN media connection. Native host registration, live player telemetry, browser restart/reconnect behavior and cross-player/CDN coverage still need validation on the target Windows desktop. A real field trace corpus and calibration study remain open. No autonomous remediation is implemented: the current system diagnoses and suggests only.
