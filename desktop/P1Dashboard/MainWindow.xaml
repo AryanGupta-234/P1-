@@ -27,6 +27,7 @@
 
                     <TextBlock Text="WORKSPACE" FontSize="10" FontWeight="Bold" Foreground="#FF718198" Margin="4,0,0,10"/>
                     <Button Content="◈   Overview" HorizontalContentAlignment="Left" Background="#FF1C2B3E" BorderBrush="#FF314D6B" Margin="0,0,0,7" Click="Refresh_Click"/>
+                    <Button Content="◉   Video intelligence" HorizontalContentAlignment="Left" Margin="0,0,0,7" Click="VideoIntelligence_Click"/>
                     <Button Content="⌘   Agent" HorizontalContentAlignment="Left" Margin="0,0,0,7" Click="FocusAgent_Click"/>
                     <Button Content="▤   Task runs" HorizontalContentAlignment="Left" Margin="0,0,0,7" Click="TaskHistory_Click"/>
                     <Button Content="◉   Memory &amp; learning" HorizontalContentAlignment="Left" Margin="0,0,0,7" Click="MemoryReview_Click"/>
