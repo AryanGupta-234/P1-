@@ -747,6 +747,77 @@ def video_probe(
     )
 
 
+@app.command("video-trace-export")
+def video_trace_export(
+    output: Path = typer.Option(
+        Path("video_field_trace_candidates.json"),
+        "--output",
+        help="New JSON file to create; existing files are never overwritten.",
+    ),
+    hours: int = typer.Option(24, min=1, max=720, help="Local observation window to review, in hours."),
+    limit: int = typer.Option(100, min=1, max=200, help="Maximum anonymized playback sessions to export."),
+    confirm: bool = typer.Option(
+        False,
+        "--confirm",
+        help="Confirm creation of an anonymized field-candidate export from local events.",
+    ),
+) -> None:
+    """Export anonymized local video trace candidates for independent human labeling."""
+    from aie.diagnostics.video_field_export import prepare_field_trace_candidates
+
+    if not confirm:
+        console.print(
+            "[yellow]No export written. Review the selected time window, then pass --confirm "
+            "to create a sanitized candidate file.[/yellow]"
+        )
+        raise typer.Exit(2)
+
+    now = datetime.now(timezone.utc)
+    store = EventStore(database_path())
+    try:
+        events = store.query_events(
+            since=now - timedelta(hours=hours),
+            until=now,
+            event_types=(
+                "browser.video.snapshot",
+                "network.video_probe",
+                "network.gateway_probe",
+                "network.external_probe",
+                "network.dns_probe",
+                "window.foreground_changed",
+                "process.foreground_resource_sample",
+            ),
+            limit=5000,
+        )
+        export = prepare_field_trace_candidates(events, now=now, limit=limit)
+    except (OSError, RuntimeError, ValueError) as exc:
+        console.print(f"[red]Video trace export failed:[/red] {type(exc).__name__}: {exc}")
+        raise typer.Exit(2) from exc
+
+    if not export["cases"]:
+        console.print("No browser video sessions found in the selected local time window.")
+        return
+
+    try:
+        output.parent.mkdir(parents=True, exist_ok=True)
+        with output.open("x", encoding="utf-8") as handle:
+            json.dump(export, handle, ensure_ascii=False, indent=2, allow_nan=False)
+            handle.write("\n")
+    except FileExistsError:
+        console.print(f"[red]Refusing to overwrite existing file:[/red] {output}")
+        raise typer.Exit(2)
+    except (OSError, TypeError, ValueError) as exc:
+        console.print(f"[red]Could not write field trace candidates:[/red] {type(exc).__name__}: {exc}")
+        raise typer.Exit(2) from exc
+
+    console.print(f"[green]Created {len(export['cases'])} anonymized candidate(s):[/green] {output}")
+    console.print(
+        "[yellow]These are unlabeled candidates, not field accuracy results. Review each case "
+        "against independent playback evidence, fill expected_causes, change dataset_kind "
+        "to field, then run aie video-evaluate --dataset <PATH>.[/yellow]"
+    )
+
+
 @app.command("video-evaluate")
 def video_evaluate(
     dataset: Path = typer.Option(
