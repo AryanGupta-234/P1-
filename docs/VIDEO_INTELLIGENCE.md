@@ -2,7 +2,7 @@
 
 ## Implemented pipeline
 
-1. **Browser observation:** the opt-in Chrome/Edge MV3 extension observes HTML video elements after the user enables monitoring. It reports playback state, a rolling stall count, buffered-ahead duration, playback-position delta and dropped-frame deltas when the browser exposes them.
+1. **Browser observation:** the opt-in Chrome/Edge/Brave MV3 extension observes HTML video elements after the user enables monitoring. It reports playback state, a rolling stall count, buffered-ahead duration, playback-position delta and dropped-frame deltas when the browser exposes them.
 2. **Local transport:** the extension sends a strict native-messaging payload to the Windows host. The host rejects unknown fields and stores normalized `browser.video.snapshot` events in the local SQLite store.
 3. **Windows telemetry:** a bounded read-only provider samples interface counters, TCP connection-establishment latency to a private gateway and two public endpoints, and DNS resolution timing.
 4. **Foreground context:** the Windows foreground observer records app/process transitions without reading window titles by default. It samples the active process CPU, RSS memory, thread count and process I/O counters on a bounded cadence.
@@ -77,7 +77,7 @@ The exporter makes field-corpus preparation repeatable; it does not create field
 - `aie pause` pauses all AIE observer loops for the current Windows user; `aie resume` resumes them. Pausing does not delete stored events.
 - The native host accepts only a strict, versioned metric allowlist. Browser content never becomes an action or a policy instruction.
 
-## Install for local development (Chrome or Edge)
+## Install for local development (Chrome, Edge or Brave)
 
 1. In PowerShell, create and activate the repository virtual environment:
    ```powershell
@@ -86,25 +86,25 @@ The exporter makes field-corpus preparation repeatable; it does not create field
    python -m pip install --upgrade pip
    python -m pip install -e .
    ```
-2. Open `chrome://extensions` or `edge://extensions`, enable Developer mode, and choose **Load unpacked**.
+2. Open `chrome://extensions`, `edge://extensions` or `brave://extensions`, enable Developer mode, and choose **Load unpacked**.
 3. Select the repository's `browser_extension` directory and copy its extension ID.
 4. Register the host for that browser:
    ```powershell
    .\scripts\register-native-host.ps1 -ExtensionId <ID> -Browser Chrome
-   # Or use -Browser Edge with that browser's extension ID.
+   # Or use -Browser Edge or -Browser Brave with that browser's extension ID.
    ```
 5. Restart the browser, open the extension popup, and explicitly enable monitoring.
 6. Start AIE in the activated virtual environment: `aie observe --duration 3600`.
 7. Inspect: `aie status`, `aie events`, and `aie context`.
 8. Run the read-only setup validator:
    ```powershell
-   .\scripts\validate-target-desktop.ps1 -Browser Chrome,Edge
-   .\scripts\validate-target-desktop.ps1 -Browser Chrome,Edge -RequireBrowserRegistration
+   .\scripts\validate-target-desktop.ps1 -Browser Chrome,Edge,Brave
+   .\scripts\validate-target-desktop.ps1 -Browser Chrome,Edge,Brave -RequireBrowserRegistration
    ```
-   The second command fails when either selected browser is not registered. It checks the native-host manifest, extension origin, executable, required Python imports and bundled trace corpus; it does not modify the registry or browser configuration.
+   The second command fails when any selected browser is not registered. It checks the native-host manifest, extension origin, executable, required Python imports and bundled trace corpus; it does not modify the registry or browser configuration.
 9. Stop data collection immediately with `aie pause`; use `aie resume` to resume.
 
-The registration helper writes a per-user, browser-specific native-messaging manifest under `%LOCALAPPDATA%\AIE\native-host` and registers it under that browser's HKCU key. Chrome and Edge manifests are independent, so both browsers can be registered at the same time. Use `scripts/unregister-native-host.ps1 -Browser Chrome` (or Edge) to remove only that browser's registration and manifest.
+The registration helper writes a per-user, browser-specific native-messaging manifest under `%LOCALAPPDATA%\AIE\native-host` and registers it under that browser's HKCU key. Chrome, Edge and Brave manifests are independent, so all three browsers can be registered at the same time. Brave uses the per-user `HKCU:\Software\BraveSoftware\Brave-Browser\NativeMessagingHosts` registry root. Use `scripts/unregister-native-host.ps1 -Browser Chrome` (or `Edge` or `Brave`) to remove only that browser's registration and manifest.
 
 ## Recording diagnostic outcomes
 Use `aie events` to find a `diagnostic.video_finding` event ID, then run:
