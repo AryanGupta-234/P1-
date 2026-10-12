@@ -150,8 +150,6 @@ def _network_evidence(event: AIEEvent, age_seconds: float) -> NetworkEvidence | 
                     or label in seen_labels
                     or isinstance(loss, bool)
                     or not isinstance(loss, (int, float))
-                    or not math.isfinite(float(loss))
-                    or not 0 <= loss <= 100
                     or isinstance(sent, bool)
                     or not isinstance(sent, int)
                     or not 1 <= sent <= 4
@@ -160,8 +158,14 @@ def _network_evidence(event: AIEEvent, age_seconds: float) -> NetworkEvidence | 
                     or not 0 <= received <= sent
                 ):
                     continue
+                try:
+                    loss_value = float(loss)
+                except (OverflowError, ValueError):
+                    continue
+                if not math.isfinite(loss_value) or not 0 <= loss_value <= 100:
+                    continue
                 seen_labels.add(label)
-                safe_rows.append((label, float(loss), sent, received))
+                safe_rows.append((label, loss_value, sent, received))
         safe_labels = tuple(item[0] for item in safe_rows)
         target_loss = safe_rows[0][1] if len(safe_rows) == 1 else None
         return NetworkEvidence(
