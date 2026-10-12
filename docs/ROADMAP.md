@@ -58,7 +58,7 @@ Development ownership and branch rules are defined in [Development Streams](DEVE
 - [x] Unknown throughput/packet-loss values remain unknown; TCP connect latency is not mislabeled packet RTT.
 - [x] Live deduplicated diagnostic suggestions with evidence IDs; no action execution.
 - [x] User-reported outcome feedback linked to diagnostic event IDs.
-- [ ] Validate browser extension/native-host installation and live player behavior on the target desktop.
+- [ ] Run the expanded read-only target-desktop validator, verify simultaneous Chrome/Edge native-host registration, and exercise live player behavior on the target desktop.
 - [x] Add versioned synthetic video trace corpus covering each diagnostic rule, mixed causes, unknown metrics and insufficient evidence.
 - [x] Add `aie video-evaluate` with exact-match rate and per-cause/micro precision, recall, F1 and TP/FP/FN/TN regression metrics.
 - [ ] Capture a consented, representative field corpus across browsers, players, networks and CDNs; evaluate false positives/negatives and confidence calibration on held-out traces.
