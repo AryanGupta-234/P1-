@@ -2,12 +2,17 @@
 
 Windows-first, hybrid, persistent personal intelligence research platform. AGI is a research objective, not a capability claim.
 
-## Development branch
-Use `dev` as the integration branch. Create scoped `feat/*`, `fix/*`, or `integrate/*` branches from the latest `dev`; validate changes and merge via pull request. Keep `main` stable.
+## Development streams
+The project has two active development tracks:
+- `dev` — the overall AGI ecosystem: cognitive core, planning, memory, learning, Windows perception, orchestration, policy, controlled execution and desktop experience.
+- `browser-video-intelligence` — the independent browser/video intelligence track: browser observer, native messaging, playback telemetry, video diagnostics, correlation and evaluation.
+
+`main` remains the stable release branch. Keep browser/video changes on `browser-video-intelligence` and broader ecosystem changes on `dev`. Integrate browser/video milestones into `dev` only through a reviewed pull request after validation. See [Development Streams](docs/DEVELOPMENT_STREAMS.md) for ownership and sync rules.
 
 ## Architecture spotlight
 - [Architecture Spotlight](docs/ARCHITECTURE_SPOTLIGHT.md)
 - [Roadmap and task tracker](docs/ROADMAP.md)
+- [Development Streams](docs/DEVELOPMENT_STREAMS.md)
 - [Video Intelligence](docs/VIDEO_INTELLIGENCE.md)
 - [Architecture](docs/ARCHITECTURE.md)
 - [Security and Privacy](docs/SECURITY_AND_PRIVACY.md)
@@ -52,14 +57,19 @@ python -m ruff check .
 Foundation works without models or internet. Local events are stored under `%LOCALAPPDATA%\AIE`.
 
 ## Development workflow
+
+Use only the two long-lived work branches for active development:
 ```powershell
+# Overall AGI ecosystem
 git switch dev
 git pull origin dev
-git switch -c feat/<short-scope>
-# implement, test, update ARC Spotlight + roadmap
-git push -u origin feat/<short-scope>
+
+# Independent browser/video intelligence
+git switch browser-video-intelligence
+git pull origin browser-video-intelligence
 ```
-Open PRs against `dev`, not `main`.
+
+Commit ecosystem work to `dev` and browser/video work to `browser-video-intelligence`. Keep the corresponding tests and roadmap entries with the work. When a browser/video milestone is ready, open a pull request from `browser-video-intelligence` into `dev`; do not merge incomplete video work or push development changes directly to `main`.
 
 ## Persistent local memory (explicit capture)
 Use `aie remember --kind semantic --tags windows,workflow` to enter a memory interactively (hidden input with `--sensitive`), or pass text as an argument. `aie recall "query"` uses local keyword/tag overlap by default. Run `aie memory-index --model nomic-embed-text:latest` after installing that model yourself, then use `aie recall "query" --semantic --embedding-model nomic-embed-text:latest` for cosine retrieval. `aie ask --with-memory --semantic-memory` can use the same local index. Sensitive records are excluded by default. `aie memories` lists records, `aie correct-memory <ID> "corrected text"` supersedes a record while retaining history, and `aie forget <ID> --confirm` deletes it. Optional `--ttl-days` sets expiry; `aie memory-prune --confirm` removes expired records. Memory is stored in local SQLite; the sensitivity flag is not encryption. Do not store credentials or tokens. Nothing is silently extracted from observations or model output.
