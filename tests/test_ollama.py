@@ -68,6 +68,7 @@ def test_local_chat_uses_only_installed_model(monkeypatch):
     assert sent["stream"] is False
     assert sent["model"] == "qwen2.5:3b-instruct"
     assert sent["options"]["num_predict"] == 128
+    assert "format" not in sent
 
 
 def test_chat_refuses_uninstalled_model_without_posting(monkeypatch):
@@ -183,3 +184,24 @@ def test_local_ollama_embeddings_reject_non_finite_vectors(monkeypatch):
     monkeypatch.setattr("aie.models.ollama.urlopen", fake_urlopen)
     with pytest.raises(OllamaUnavailable, match="non-finite"):
         OllamaClient().embed(["query"], model="embed:latest")
+
+
+
+def test_local_ollama_json_mode_uses_native_json_constraint(monkeypatch):
+    calls = []
+
+    def fake_urlopen(request, timeout):
+        calls.append((request.full_url, json.loads(request.data) if request.data else None))
+        if request.full_url.endswith("/api/tags"):
+            return FakeResponse(b'{"models":[{"name":"qwen2.5:3b-instruct"}]}')
+        return FakeResponse(b'{"message":{"content":"{\\"ok\\":true}"}}')
+
+    monkeypatch.setattr("aie.models.ollama.urlopen", fake_urlopen)
+    request = ModelRequest(
+        response_format="json",
+        messages=[ChatMessage(role="user", content="Return a JSON object.")],
+    )
+    response = OllamaClient().chat(request, model="qwen2.5:3b-instruct")
+
+    assert response.content == '{"ok":true}'
+    assert calls[1][1]["format"] == "json"

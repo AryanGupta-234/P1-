@@ -1,0 +1,11 @@
+{
+  "capability_id": "windows.settings.open",
+  "description": "Open one fixed Windows Settings page.",
+  "risk_tier": "low",
+  "enabled": false,
+  "allow_autonomous": false,
+  "approval_required": true,
+  "allowed_parameters": ["setting"],
+  "max_invocations_per_minute": 3,
+  "max_execution_seconds": 5
+}

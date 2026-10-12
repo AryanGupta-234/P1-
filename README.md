@@ -94,25 +94,258 @@ The observer emits foreground-window transition events using the Windows user32 
 ## Live diagnostic suggestions
 While `aie observe` is running, fresh browser video events are correlated with foreground-app and network telemetry. New diagnostic hypotheses are persisted and printed once per incident/cooldown, with evidence and a recommended next step. The observer does not apply fixes automatically.
 
-## Proposal review and policy audit (no executor yet)\nCapability manifests are loaded only from `%LOCALAPPDATA%\\AIE\\capabilities\\*.json`; the directory is user-managed and empty by default. `aie capabilities` lists them. `aie propose <CAPABILITY_ID> <SUMMARY> --parameters '{"name":"value"}'` records a bounded proposal, `aie proposals` lists review states, and `aie approve-proposal <ID>` / `aie reject-proposal <ID>` record your explicit decision. `aie proposal-audit <ID>` shows the append-only review trail. Proposal parameters are bounded flat scalar values; credential-like parameter names are rejected. Approval is policy authorization only—there is no action executor and nothing is executed.\n\n## Proposal review and policy audit (no executor yet)
+## Proposal review and policy audit
 Capability manifests are loaded only from `%LOCALAPPDATA%\AIE\capabilities\*.json`; the directory is user-managed and empty by default. See [Capability Manifest Guide](docs/CAPABILITY_MANIFESTS.md). `aie capabilities` lists manifests. `aie propose <CAPABILITY_ID> <SUMMARY> --parameters '{"name":"value"}'` records a bounded proposal, `aie proposals` lists review states, and `aie approve-proposal <ID>` / `aie reject-proposal <ID>` record your explicit decision. `aie proposal-audit <ID>` shows the audit trail and checks its hash chain and stored head checkpoint; `aie policy-audit-check` verifies the complete ledger. Approval only records policy authorization—nothing is executed.
 
 ## Action policy foundation
-The `aie.policy` module currently evaluates action proposals against explicit capability manifests. Unknown/disabled capabilities are denied, parameters are allowlisted, medium/high-risk proposals require approval, and critical-risk actions are blocked. This is an authorization prototype only; AIE does not yet execute operating-system actions.
+The `aie.policy` module evaluates action proposals against explicit capability manifests. Unknown/disabled capabilities are denied, parameters are allowlisted, medium/high-risk proposals require approval, and critical-risk actions are blocked. A restricted registry executor is now available for the fixed Windows Settings URI adapter only; it requires a separate enable marker and explicit per-proposal confirmation.
 
 ## Explicit task sessions
 Use `aie session-start "Build the ETW observer"`, `aie session-status`, `aie session-end`, and `aie sessions`. Sessions are explicit user labels; AIE does not infer or auto-create task intent. `aie ask --with-session` can attach the current session metadata, and remote models require `--confirm-session-egress`.
 
 ## Local model runtime
-`aie ask` does not attach memories or activity by default. Add `--with-activity` to attach a bounded recent activity summary. Remote/cloud inclusion requires `--confirm-activity-egress`; the activity package contains safe event summaries only, never window titles, Event Log message text, UIA control contents or feedback notes.\n\n`aie ask` does not attach memories by default. Add `--with-memory` to retrieve matching non-sensitive local records for that request. `--include-sensitive-memory` is available only for local inference. Attaching memory to a cloud or remote Ollama endpoint also requires `--confirm-memory-egress`; sensitive records are never attached to remote requests. The memory block is bounded JSON reference data marked untrusted, not instructions.
+`aie ask` does not attach memories or activity by default. Add `--with-activity` to attach a bounded recent activity summary. Remote/cloud inclusion requires `--confirm-activity-egress`; the activity package contains safe event summaries only, never window titles, Event Log message text, UIA control contents or feedback notes.
+
+`aie ask` does not attach memories by default. Add `--with-memory` to retrieve matching non-sensitive local records for that request. `--include-sensitive-memory` is available only for local inference. Attaching memory to a cloud or remote Ollama endpoint also requires `--confirm-memory-egress`; sensitive records are never attached to remote requests. The memory block is bounded JSON reference data marked untrusted, not instructions.
+
+
+
+Plan generation requests provider-enforced JSON mode (response_format=json): local Ollama uses its JSON response constraint and explicitly enabled OpenAI-compatible endpoints request a JSON object. The plan is still validated locally against the strict schema and capability allowlist; provider JSON mode is not treated as a safety boundary by itself. Streaming and cancellation remain unimplemented.
 
 A provider-neutral request/response contract and Ollama adapter are available under `aie/models/`. The router selects only installed local models using available RAM; it never pulls a model. `aie ask` is local-only by default. A remote Ollama endpoint requires an explicit `--allow-remote-ollama` flag and HTTPS.
 
 ## Latest CI validation
-The current integrated Windows build passed [GitHub Actions run #448](https://github.com/AryanGupta-234/P1-/actions/runs/38122160376) on Python 3.11 and 3.12. It includes lint, Windows-only optional imports, PowerShell parsing, browser JavaScript checks and the complete pytest suite, including Event Log runtime wiring, systemwide process telemetry, context packaging and audit integrity.
 
-## CI validation
-Windows CI passed on the current development baseline for Python 3.11 and 3.12, including Ruff, extension JavaScript syntax checks and pytest. See [run #206](https://github.com/AryanGupta-234/P1-/actions/runs/38118517008). This does not replace testing the browser extension/native host and UI Automation against your own Windows desktop.
+Windows CI run [#1041](https://github.com/AryanGupta-234/P1-/actions/runs/38151881805) passed on Python 3.11 and 3.12 for the current orchestration branch. The matrix includes the `pip-audit` dependency vulnerability scan, .NET 8 WPF dashboard compilation, Ruff, Windows-only optional imports, PowerShell parsing, browser-extension JavaScript syntax checks, the full pytest suite, Python wheel and source-distribution builds, Twine metadata validation, and short-lived build artifact uploads. Hosted CI verifies compilation and tests; it does not replace interactive testing of the tray, dashboard, ETW elevation, browser native host, or UI Automation on the target desktop.
+
+## Local retention and permission review
+
+Inspect local retention candidates and status counts without modifying any database:
+
+```powershell
+aie retention-status
+aie retention-status --event-retention-days 90
+```
+
+The report covers evidence older than the selected age, expired memories, active/total memory counts, and bounded task-run/policy-proposal state counts. It does not delete anything. Event retention and memory expiry use separate explicit operations:
+
+```powershell
+aie prune --older-than-days 30
+aie prune --older-than-days 30 --confirm
+aie memory-prune
+aie memory-prune --confirm
+```
+
+Inspect permission state and the registered adapter boundary:
+
+```powershell
+aie capability-permissions
+aie capability-enable windows.settings.open --confirm
+aie capability-disable windows.settings.open
+```
+
+Enabling a manifest cannot make an unregistered capability executable, remove mandatory approval or enable autonomous operation. The global execution marker and kill switch are independent gates.
+
+## Native Windows dashboard
+
+The WPF dashboard is a user-started desktop client over the installed `aie` CLI. Build it with the .NET 8 SDK after installing the Python CLI:
+
+```powershell
+pip install -e ".[windows]"
+dotnet build .\desktop\P1Dashboard\P1Dashboard.csproj --configuration Release
+.\desktop\P1Dashboard\bin\Release
+et8.0-windows\P1Dashboard.exe
+```
+
+The dashboard reads local status, health, retention and task history; launches the bounded local `aie agent run` workflow; pauses/resumes an existing observer; and exposes emergency execution disable/kill controls. It does not start observation on launch, supply capability IDs, approve proposals or enable execution. The CLI must already be installed and available as `aie` on PATH.
+
+## Windows tray controls
+
+Start the user-controlled notification-area controller with:
+
+```powershell
+aie tray
+```
+
+Right-click the P1- icon to pause/resume the existing observer or open the local status dialog. Double-click the icon to show status. The tray does not start observation, change provider settings, enable capabilities, or create an auto-start service. Exit closes only the tray process. Provider configuration and full diagnostics remain in the CLI.
+
+Generic local diagnostic balloons are disabled by default. Enable them explicitly and configure quiet hours:
+
+```powershell
+aie notifications-status
+aie notifications-enable --confirm
+aie notifications-quiet-hours 22:00 07:00
+aie notifications-disable
+```
+
+The tray displays at most two generic playback-diagnostic notices per poll. It never places a process name, window title, URL, event payload or recommendation in the balloon. New events observed while notifications are disabled, the observer is paused, or quiet hours are active are not queued for later delivery.
 
 ## Current limitations
-Process lifecycle observation uses best-effort user-mode snapshots and may miss transient processes. Foreground process resource sampling is limited to the active application; it is not a systemwide per-process profiler. Video diagnostics analyze supplied metrics only; live browser telemetry, screen perception, model gateway, persistent learning and autonomous remediation are not implemented.
+Process lifecycle observation uses best-effort user-mode snapshots and may miss transient processes. Foreground process resource sampling is limited to the active application; it is not a systemwide per-process profiler. Video diagnostics analyze supplied metrics only. The project has a restricted Windows Settings URI adapter, but general autonomous remediation, OS-process sandboxing, rollback, automated recovery, evaluated learning and a full desktop assistant dashboard are not implemented.
+
+
+## Planner and reasoning evaluation
+
+Planner evaluation uses a user-authored JSON set with expected step kinds and capability IDs:
+
+```json
+{
+  "dataset_id": "desktop-planner-v1",
+  "description": "Reviewed desktop workflow planning cases",
+  "cases": [
+    {
+      "case_id": "inspect-playback",
+      "goal": "Inspect desktop playback health",
+      "expected_step_kinds": ["observe", "reason", "verify"]
+    },
+    {
+      "case_id": "open-reviewed-display",
+      "goal": "Open a reviewed display settings page",
+      "allowed_capability_ids": ["windows.settings.open"],
+      "expected_step_kinds": ["observe", "propose_action", "verify"],
+      "expected_capability_ids": ["windows.settings.open"],
+      "forbidden_capability_ids": []
+    }
+  ]
+}
+```
+
+Run the benchmark with an already-installed local model:
+
+```powershell
+aie plan evaluate .\planner-eval.json --model qwen2.5:7b-instruct
+```
+
+The report measures valid plan rate, exact-goal preservation, expected step-kind coverage, capability precision/recall and the rate of explicitly forbidden capabilities. Invalid plans count against validity. The benchmark does not modify the model, create task runs or execute capabilities.
+
+## One-command local agent workflow
+
+Run the full bounded planning-to-task lifecycle with one explicit local model:
+
+```powershell
+aie agent run "Investigate why browser video playback is stuttering" --model qwen2.5:7b-instruct --max-steps 5
+```
+
+This drafts a declarative plan, validates it, persists a task run and advances up to the requested number of safe steps. No browser page content or ambient machine context is attached to the planner. Add `--with-memory` to explicitly retrieve local memory for reasoning; add `--semantic-memory` only when an embedding model is already installed. Add `--include-sensitive-memory` only after deciding sensitive memories are appropriate for this task.
+
+The planner cannot grant capabilities. It can reference an action capability only when its ID is explicitly supplied through `--capability-id`. Windows Settings page arguments are supplied separately with `--setting`; no action is executed by the agent command. A resulting action proposal still requires review, the positive execution-enable marker, an absent kill switch, current policy approval and an explicit `aie execute-proposal <ID> --confirm` command. Verification remains a separate task step.
+
+## Validated planning and task orchestration
+
+Plans are declarative data, not executable instructions. Draft one using an already-installed local Ollama model, validate a JSON plan, then create and advance a durable local run:
+
+```powershell
+aie plan draft "Inspect why a desktop application is slow" --model qwen2.5:7b-instruct --output task-plan.json
+aie plan validate task-plan.json
+aie task start task-plan.json
+aie task advance <RUN_ID> --max-steps 3
+aie task show <RUN_ID>
+aie task events <RUN_ID>
+aie task retry <RUN_ID> <STEP_ID> --confirm
+aie task recover <RUN_ID> --confirm --after-seconds 300
+aie task cancel <RUN_ID> --confirm
+```
+
+Plan drafting does not pull models, attach observations automatically or select a remote provider. Optional context must be supplied explicitly with `--context-file`. The local reasoning handler receives only the plan and bounded summaries from completed steps. If local inference is unavailable, the run pauses for explicit user input. Verification steps cannot complete without `aie task complete <RUN_ID> <STEP_ID> --summary "..." --verified`. Use `aie task pause`, `resume` and `cancel --confirm` for lifecycle controls. Cancellation revokes pending or approved-but-unexecuted proposals in the policy ledger; already-attempted actions remain in the audit history. Pause/cancel apply between handler invocations; an in-flight external handler is not force-killed. A stale interrupted step can be moved to manual review with `aie task recover --confirm`; this never replays the handler. A waiting observe/reason/inform step may be retried with `aie task retry --confirm` after correcting configuration. Action and verify steps cannot use that retry path.
+
+Action steps queue policy proposals. Review them with `aie approve-proposal <PROPOSAL_ID>`; approval alone never executes anything. A separate `aie execute-proposal` command is required and the execution gate is disabled by default.
+
+## Memory retrieval and conflict evaluation
+
+Create a small JSON benchmark whose expected memory IDs are reviewed by you:
+
+```json
+{
+  "dataset_id": "desktop-memory-v1",
+  "description": "Queries for explicitly reviewed desktop workflow memories",
+  "cases": [
+    {
+      "case_id": "browser-playback",
+      "query": "browser playback troubleshooting",
+      "relevant_memory_ids": ["<ACTIVE_MEMORY_ID>"]
+    }
+  ]
+}
+```
+
+Evaluate local lexical retrieval or an already-installed local embedding model:
+
+```powershell
+aie memory-evaluate .\memory-eval.json --k 5
+aie memory-evaluate .\memory-eval.json --k 5 --semantic-model nomic-embed-text:latest
+```
+
+The report includes mean Recall@k, Precision@k, Mean Reciprocal Rank and Hit Rate. It checks that every expected memory is active, unexpired and visible under the selected sensitivity policy. It does not change memories, embeddings or model weights. Use `--include-sensitive` only when the benchmark intentionally includes sensitive records.
+
+Review possible lexical polarity conflicts separately:
+
+```powershell
+aie memory-conflicts
+aie memory-conflicts --include-sensitive
+```
+
+These candidates are not semantic contradiction proofs. The tool flags a small, explicit list of opposing words with shared context and prints IDs/terms only; inspect the underlying records and timestamps before correcting anything.
+
+## Reviewed memory consolidation and verified procedural skills
+
+`aie memory-consolidate` identifies likely duplicate pairs but never changes memory. Review both records locally, then provide the resulting content explicitly to the separate merge command:
+
+```powershell
+aie memory-merge <MEMORY_ID_A> <MEMORY_ID_B> "User-reviewed combined procedure"
+# Preview only. To commit the merge:
+aie memory-merge <MEMORY_ID_A> <MEMORY_ID_B> "User-reviewed combined procedure" --confirm
+# Sensitive source records require a separate opt-in:
+aie memory-merge <MEMORY_ID_A> <MEMORY_ID_B> "User-reviewed combined procedure" --include-sensitive --confirm
+```
+
+A merge creates a new record and keeps both sources as superseded history. It retains both lineage links and provenance, will not reduce sensitivity, inflate confidence or extend expiry, and removes source embeddings so they cannot continue to appear as active memories. The resulting content is supplied by the user; the merge does not ask a model to invent a replacement.
+
+Completed task runs can be inspected for verified procedural-skill candidates:
+
+```powershell
+aie skill-candidate <RUN_ID>
+aie skill-save <RUN_ID> --confirm
+# Explicitly choose internal sensitivity instead of the sensitive default:
+aie skill-save <RUN_ID> --confirm --internal
+```
+
+Candidates require a completed run and at least one positive `verify` step. Action-bearing runs additionally require successful policy-ledger execution receipts and a verification step that depends on each action. The candidate is assembled deterministically from plan criteria and recorded step summaries. Saving creates a procedural memory linked to the originating task-run ID. It does not retrain a model or create an executable capability.
+
+## Restricted Windows Settings capability
+
+The only built-in action adapter opens one fixed Windows Settings page; it does not change a setting, run commands or launch arbitrary processes. To enable this adapter, create a user-managed manifest at `%LOCALAPPDATA%\AIE\capabilities\windows-settings-open.json` with:
+
+```json
+{
+  "capability_id": "windows.settings.open",
+  "description": "Open one fixed Windows Settings page.",
+  "risk_tier": "low",
+  "enabled": true,
+  "allow_autonomous": false,
+  "approval_required": true,
+  "allowed_parameters": ["setting"],
+  "max_invocations_per_minute": 3,
+  "max_execution_seconds": 5
+}
+```
+
+Only the keys `display`, `sound`, `bluetooth`, `network`, `windows_update`, `apps` and `privacy` are supported. The manifest must be explicitly enabled and each proposal separately approved.
+
+```powershell
+aie propose windows.settings.open "Open Display Settings" --parameters '{"setting":"display"}'
+aie proposals
+aie approve-proposal <PROPOSAL_ID>
+aie execution-enable --confirm
+aie execute-proposal <PROPOSAL_ID> --confirm
+# After inspecting the result, append a one-time human postcondition outcome:
+aie verify-proposal <PROPOSAL_ID> confirmed --evidence-code user_checked_settings_page --summary "Display Settings is visible" --confirm
+# Or record a negative outcome with: not-confirmed
+# Inspect the append-only review, execution and verification history:
+aie proposal-audit <PROPOSAL_ID>
+# Immediate stop for every registered adapter:
+aie execution-kill
+# Disable the positive execution marker:
+aie execution-disable
+```
+
+`aie execution-resume --confirm` clears the kill switch, but does not itself enable execution. Each proposal is single-attempt and receives an append-only execution receipt. A successful `ms-settings:` dispatch is not proof that the requested page reached a specific state. After inspecting the desktop, `aie verify-proposal` appends one explicit human outcome (confirmed or not-confirmed) to the hash-chained audit ledger; it cannot overwrite an earlier result and does not independently inspect Windows UI state. No shell, arbitrary executable, file-write, network or privileged adapter is included.

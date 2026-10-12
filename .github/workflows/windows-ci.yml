@@ -24,6 +24,17 @@ jobs:
           cache: pip
       - name: Install package and test dependencies
         run: python -m pip install -e ".[dev,windows]"
+      - name: Audit installed Python dependencies
+        run: |
+          python -m pip install --upgrade "setuptools>=83.0.0,<100"
+          python -m pip install --disable-pip-version-check pip-audit
+          python -m pip_audit --local
+      - name: Set up .NET SDK for WPF dashboard
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+      - name: Build Windows desktop dashboard
+        run: dotnet build desktop/P1Dashboard/P1Dashboard.csproj --configuration Release
       - name: Lint
         run: python -m ruff check .
       - name: Validate Windows-only optional imports
@@ -50,3 +61,17 @@ jobs:
           node --check browser_extension/popup.js
       - name: Run tests
         run: python -m pytest
+      - name: Build and validate Python distributions
+        run: |
+          python -m pip install --disable-pip-version-check build twine
+          python -m build --sdist --wheel
+          python -m twine check dist/*
+      - name: Upload Python distributions
+        uses: actions/upload-artifact@v4
+        with:
+          name: aie-python-${{ matrix.python-version }}
+          path: |
+            dist/*.whl
+            dist/*.tar.gz
+          if-no-files-found: error
+          retention-days: 7

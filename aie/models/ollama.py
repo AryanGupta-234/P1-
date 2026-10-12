@@ -206,6 +206,9 @@ class OllamaClient:
                 "num_predict": request.max_output_tokens,
             },
         }
+        if request.response_format == "json":
+            body["format"] = "json"
+
         if not self._inference_slot.acquire(timeout=request.timeout_seconds):
             raise OllamaUnavailable(
                 "Another local inference is still running; retry after it completes."

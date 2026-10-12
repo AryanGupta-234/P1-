@@ -54,6 +54,11 @@ def policy_audit_database_path() -> Path:
     return data_dir() / "policy-audit.sqlite3"
 
 
+def task_run_database_path() -> Path:
+    """Private local database for persistent orchestration task runs."""
+    return data_dir() / "task-runs.sqlite3"
+
+
 def task_session_database_path() -> Path:
     """Private local database for explicit user-controlled task sessions."""
     return data_dir() / "task-sessions.sqlite3"
@@ -62,6 +67,11 @@ def task_session_database_path() -> Path:
 def egress_audit_database_path() -> Path:
     """Private local audit database for remote model egress decisions."""
     return data_dir() / "egress-audit.sqlite3"
+
+
+def notification_preferences_path() -> Path:
+    """Private local JSON preferences for optional desktop notifications."""
+    return data_dir() / "notifications.json"
 
 
 def execution_enabled_path() -> Path:

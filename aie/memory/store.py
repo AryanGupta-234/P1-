@@ -58,6 +58,18 @@ class MemoryStore:
             db.execute(
                 "CREATE INDEX IF NOT EXISTS idx_memory_embeddings_model ON memory_embeddings(model)"
             )
+            db.execute(
+                """CREATE TABLE IF NOT EXISTS memory_lineage (
+                    memory_id TEXT NOT NULL,
+                    source_memory_id TEXT NOT NULL,
+                    relation TEXT NOT NULL CHECK(relation IN ('merged_from')),
+                    created_at TEXT NOT NULL,
+                    PRIMARY KEY(memory_id, source_memory_id)
+                )"""
+            )
+            db.execute(
+                "CREATE INDEX IF NOT EXISTS idx_memory_lineage_source ON memory_lineage(source_memory_id)"
+            )
 
     def _connect(self) -> sqlite3.Connection:
         db = sqlite3.connect(self.path, timeout=10)
@@ -76,6 +88,7 @@ class MemoryStore:
         memory: MemoryRecord,
         *,
         event_store: EventStore | None = None,
+        task_run_store=None,
     ) -> MemoryRecord:
         """Insert a memory and atomically supersede a prior version if requested."""
         if memory.source_event_ids:
@@ -87,6 +100,14 @@ class MemoryStore:
             ]
             if missing:
                 raise ValueError(f"source event not found: {missing[0]}")
+
+        if memory.source_task_run_ids:
+            if task_run_store is None or not callable(getattr(task_run_store, "get", None)):
+                raise ValueError("task_run_store is required when memory task-run provenance IDs are supplied")
+            for run_id in memory.source_task_run_ids:
+                source_run = task_run_store.get(run_id)
+                if source_run is None or source_run.status != "completed":
+                    raise ValueError("source task run must exist and be completed")
 
         now = datetime.now(timezone.utc)
         normalized = memory.model_copy(
@@ -356,6 +377,173 @@ class MemoryStore:
         hits.sort(key=lambda hit: (hit.score, hit.memory.updated_at), reverse=True)
         return hits[:limit]
 
+    def merge(
+        self,
+        source_memory_ids: tuple[str, str],
+        merged_memory: MemoryRecord,
+        *,
+        event_store: EventStore | None = None,
+        task_run_store=None,
+        now: datetime | None = None,
+    ) -> MemoryRecord:
+        """Atomically supersede two active memories and preserve their lineage.
+
+        The merged record must retain every source event reference, cannot reduce
+        sensitivity, cannot outlive either source's earliest expiry, and cannot claim
+        confidence higher than the least-confident source. The caller supplies the
+        merged content explicitly; no model-generated rewrite is accepted implicitly.
+        """
+        if (
+            not isinstance(source_memory_ids, tuple)
+            or len(source_memory_ids) != 2
+            or not all(isinstance(value, str) and value for value in source_memory_ids)
+        ):
+            raise ValueError("exactly two non-empty source memory IDs are required")
+        if source_memory_ids[0] == source_memory_ids[1]:
+            raise ValueError("a memory cannot be merged with itself")
+        if merged_memory.supersedes_id is not None:
+            raise ValueError("merge records use explicit two-parent lineage, not supersedes_id")
+        if merged_memory.memory_id in source_memory_ids:
+            raise ValueError("merged memory must have a new memory ID")
+
+        current = self._aware_utc(now or datetime.now(timezone.utc), "now")
+        if merged_memory.created_at.tzinfo is None:
+            raise ValueError("merged memory created_at must be timezone-aware")
+        if merged_memory.created_at.astimezone(timezone.utc) < current:
+            # The saved record is timestamped at commit time, not with an old draft time.
+            merged_memory = merged_memory.model_copy(update={"created_at": current})
+
+        required_event_ids: set[str] = set()
+        with self._connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            try:
+                placeholders = ",".join("?" for _ in source_memory_ids)
+                rows = db.execute(
+                    f"SELECT memory_id, status, payload FROM memories "
+                    f"WHERE memory_id IN ({placeholders})",
+                    source_memory_ids,
+                ).fetchall()
+                by_id = {row[0]: row for row in rows}
+                if set(by_id) != set(source_memory_ids):
+                    raise ValueError("one or more source memories were not found")
+                sources: list[MemoryRecord] = []
+                for memory_id in source_memory_ids:
+                    _, status, payload = by_id[memory_id]
+                    if status != "active":
+                        raise ValueError("only active memories can be merged")
+                    source = MemoryRecord.model_validate_json(payload)
+                    if source.expires_at is not None:
+                        if source.expires_at.astimezone(timezone.utc) <= current:
+                            raise ValueError("expired memories cannot be merged")
+                    sources.append(source)
+
+                if sources[0].kind != sources[1].kind:
+                    raise ValueError("source memories must have the same kind")
+                if merged_memory.kind != sources[0].kind:
+                    raise ValueError("merged memory must preserve the source memory kind")
+
+                sensitivity_order = {"public": 0, "internal": 1, "sensitive": 2}
+                required_sensitivity = max(
+                    (item.sensitivity for item in sources),
+                    key=sensitivity_order.__getitem__,
+                )
+                if sensitivity_order[merged_memory.sensitivity] < sensitivity_order[required_sensitivity]:
+                    raise ValueError("merged memory cannot reduce source sensitivity")
+
+                minimum_confidence = min(item.confidence for item in sources)
+                if merged_memory.confidence > minimum_confidence:
+                    raise ValueError("merged memory confidence cannot exceed the least-confident source")
+
+                for source in sources:
+                    required_event_ids.update(source.source_event_ids)
+                required_run_ids = {
+                    run_id for source in sources for run_id in source.source_task_run_ids
+                }
+                if not required_event_ids.issubset(set(merged_memory.source_event_ids)):
+                    raise ValueError("merged memory must retain all source event provenance")
+                if not required_run_ids.issubset(set(merged_memory.source_task_run_ids)):
+                    raise ValueError("merged memory must retain all source task-run provenance")
+
+                expiries = [
+                    item.expires_at.astimezone(timezone.utc)
+                    for item in sources if item.expires_at is not None
+                ]
+                if expiries:
+                    if merged_memory.expires_at is None:
+                        raise ValueError("merged memory must preserve the earliest source expiry")
+                    merged_expiry = merged_memory.expires_at.astimezone(timezone.utc)
+                    if merged_expiry > min(expiries):
+                        raise ValueError("merged memory cannot outlive its earliest-expiring source")
+
+                if required_event_ids:
+                    if event_store is None:
+                        raise ValueError("event_store is required to verify merged provenance")
+                    missing = [
+                        event_id for event_id in sorted(required_event_ids)
+                        if event_store.get(event_id) is None
+                    ]
+                    if missing:
+                        raise ValueError(f"source event not found: {missing[0]}")
+                if required_run_ids:
+                    if task_run_store is None or not callable(getattr(task_run_store, "get", None)):
+                        raise ValueError("task_run_store is required to verify merged task-run provenance")
+                    for run_id in sorted(required_run_ids):
+                        source_run = task_run_store.get(run_id)
+                        if source_run is None or source_run.status != "completed":
+                            raise ValueError("merged source task runs must exist and be completed")
+
+                normalized = merged_memory.model_copy(
+                    update={
+                        "created_at": current,
+                        "updated_at": current,
+                        "source_event_ids": sorted(set(merged_memory.source_event_ids)),
+                    }
+                )
+                db.execute(
+                    """INSERT INTO memories
+                    (memory_id, kind, sensitivity, status, created_at, expires_at, payload)
+                    VALUES (?, ?, ?, 'active', ?, ?, ?)""",
+                    (
+                        normalized.memory_id,
+                        normalized.kind,
+                        normalized.sensitivity,
+                        current.isoformat(),
+                        normalized.expires_at.isoformat() if normalized.expires_at else None,
+                        normalized.model_dump_json(),
+                    ),
+                )
+                db.executemany(
+                    "UPDATE memories SET status = 'superseded' WHERE memory_id = ?",
+                    [(memory_id,) for memory_id in source_memory_ids],
+                )
+                db.executemany(
+                    "DELETE FROM memory_embeddings WHERE memory_id = ?",
+                    [(memory_id,) for memory_id in source_memory_ids],
+                )
+                db.executemany(
+                    """INSERT INTO memory_lineage
+                    (memory_id, source_memory_id, relation, created_at)
+                    VALUES (?, ?, 'merged_from', ?)""",
+                    [(normalized.memory_id, memory_id, current.isoformat())
+                     for memory_id in source_memory_ids],
+                )
+                db.execute("COMMIT")
+            except Exception:
+                db.execute("ROLLBACK")
+                raise
+        return normalized
+
+    def lineage(self, memory_id: str) -> tuple[str, ...]:
+        """Return source IDs from which a reviewed merged memory was composed."""
+        with self._connect() as db:
+            rows = db.execute(
+                """SELECT source_memory_id FROM memory_lineage
+                WHERE memory_id = ? AND relation = 'merged_from'
+                ORDER BY source_memory_id ASC""",
+                (memory_id,),
+            ).fetchall()
+        return tuple(row[0] for row in rows)
+
     def delete(self, memory_id: str) -> bool:
         with self._connect() as db:
             db.execute("DELETE FROM memory_embeddings WHERE memory_id = ?", (memory_id,))
@@ -396,3 +584,15 @@ class MemoryStore:
         where = "" if include_superseded else " WHERE status = 'active'"
         with self._connect() as db:
             return int(db.execute("SELECT COUNT(*) FROM memories" + where).fetchone()[0])
+
+    def count_active(self, *, now: datetime | None = None) -> int:
+        """Count active, unexpired memories regardless of sensitivity visibility."""
+        current = self._aware_utc(now or datetime.now(timezone.utc), "now")
+        with self._connect() as db:
+            row = db.execute(
+                """SELECT COUNT(*) FROM memories
+                WHERE status = 'active'
+                AND (expires_at IS NULL OR expires_at > ?)""",
+                (current.isoformat(),),
+            ).fetchone()
+        return int(row[0])

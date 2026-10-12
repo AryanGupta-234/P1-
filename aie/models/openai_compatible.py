@@ -76,6 +76,8 @@ class OpenAICompatibleClient:
             "max_tokens": request.max_output_tokens,
             "stream": False,
         }
+        if request.response_format == "json":
+            body["response_format"] = {"type": "json_object"}
         encoded = json.dumps(body).encode("utf-8")
         http_request = Request(
             f"{self.base_url}/chat/completions",

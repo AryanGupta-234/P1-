@@ -79,6 +79,7 @@ def test_cloud_chat_sends_only_explicit_prompt_and_returns_usage(monkeypatch):
     assert calls[0][2]["messages"] == [
         {"role": "user", "content": "Explain this question."}
     ]
+    assert "response_format" not in calls[0][2]
 
 
 def test_cloud_api_key_is_never_required_in_url():
@@ -89,3 +90,30 @@ def test_cloud_api_key_is_never_required_in_url():
             api_key="test-key",
             model="test-model",
         )
+
+
+
+def test_cloud_json_mode_requests_json_object(monkeypatch):
+    captured = {}
+
+    def fake_urlopen(request, timeout):
+        captured.update(json.loads(request.data))
+        return FakeResponse(json.dumps({
+            "model": "example-model",
+            "choices": [{"message": {"content": '{"ok":true}'}}],
+        }).encode())
+
+    monkeypatch.setattr("aie.models.openai_compatible.urlopen", fake_urlopen)
+    client = OpenAICompatibleClient(
+        allow_cloud_egress=True,
+        base_url="https://api.example.com/v1",
+        api_key="test-key",
+        model="example-model",
+    )
+    response = client.chat(ModelRequest(
+        response_format="json",
+        messages=[ChatMessage(role="user", content="Return JSON.")],
+    ))
+
+    assert response.content == '{"ok":true}'
+    assert captured["response_format"] == {"type": "json_object"}

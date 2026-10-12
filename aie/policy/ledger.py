@@ -1,7 +1,7 @@
-"""Append-only local audit ledger for action proposal review.
+"""Append-only local audit ledger for action proposal review and execution.
 
-This component records proposals, initial policy decisions and human review outcomes.
-It intentionally has no action-execution API and exposes no update/delete operation.
+The ledger records proposals, review outcomes, execution reservations and receipts.
+Every transition is appended to the SHA-256 chain; history is never edited.
 """
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ from uuid import uuid4
 
 from aie.policy.models import ActionProposal, PolicyDecision
 
-ProposalStatus = Literal["pending_review", "approved", "rejected", "blocked"]
+ProposalStatus = Literal["pending_review", "approved", "rejected", "blocked", "revoked"]
 _GENESIS_HASH = "0" * 64
 
 
@@ -57,10 +57,13 @@ class ProposalSnapshot:
     reason: str
     reviewer: str | None = None
     action_executed: bool = False
+    execution_status: str | None = None
+    execution_verified: bool = False
+    execution_reserved: bool = False
 
 
 class PolicyLedger:
-    """Append-only SQLite audit trail for action proposals and review transitions."""
+    """Append-only SQLite audit trail for policy and execution transitions."""
 
     def __init__(self, path: Path) -> None:
         self.path = path
@@ -153,26 +156,13 @@ class PolicyLedger:
         timestamp_text = timestamp.astimezone(timezone.utc).isoformat()
         payload_text = json.dumps(payload, separators=(",", ":"), ensure_ascii=True)
         entry_hash = _audit_entry_hash(
-            previous_hash,
-            audit_id,
-            proposal_id,
-            event_type,
-            timestamp_text,
-            payload_text,
+            previous_hash, audit_id, proposal_id, event_type, timestamp_text, payload_text
         )
         db.execute(
             """INSERT INTO audit_events
             (audit_id, proposal_id, event_type, timestamp, payload, previous_hash, entry_hash)
             VALUES (?, ?, ?, ?, ?, ?, ?)""",
-            (
-                audit_id,
-                proposal_id,
-                event_type,
-                timestamp_text,
-                payload_text,
-                previous_hash,
-                entry_hash,
-            ),
+            (audit_id, proposal_id, event_type, timestamp_text, payload_text, previous_hash, entry_hash),
         )
         db.execute(
             """INSERT INTO audit_meta(key, value) VALUES ('head_hash', ?)
@@ -221,11 +211,8 @@ class PolicyLedger:
                 if existing is not None:
                     raise ValueError("proposal ID already exists in the audit ledger")
                 self._append_row(
-                    db,
-                    proposal_id=proposal.proposal_id,
-                    event_type="policy.proposal.created",
-                    timestamp=now,
-                    payload=payload,
+                    db, proposal_id=proposal.proposal_id,
+                    event_type="policy.proposal.created", timestamp=now, payload=payload,
                 )
                 db.execute("COMMIT")
             except Exception:
@@ -244,41 +231,87 @@ class PolicyLedger:
         if status not in {"approved", "rejected", "blocked"}:
             raise ValueError("invalid proposal review status")
         now = datetime.now(timezone.utc)
+        policy = self._decision_payload(decision) if decision else {
+            "allowed": False, "approval_required": False,
+            "reason": "Rejected by the local user.", "risk_tier": None,
+            "max_execution_seconds": None, "action_executed": False,
+        }
         payload = {
-            "schema_version": 1,
-            "status": status,
-            "reviewer": reviewer,
-            "policy": self._decision_payload(decision) if decision else {
-                "allowed": False,
-                "approval_required": False,
-                "reason": "Rejected by the local user.",
-                "risk_tier": None,
-                "max_execution_seconds": None,
-                "action_executed": False,
-            },
-            "action_executed": False,
+            "schema_version": 1, "status": status, "reviewer": reviewer,
+            "policy": policy, "action_executed": False,
         }
         with self._connect() as db:
             db.execute("BEGIN IMMEDIATE")
             try:
                 row = db.execute(
-                    """SELECT event_type, payload FROM audit_events
+                    """SELECT payload FROM audit_events
                     WHERE proposal_id = ? ORDER BY sequence DESC LIMIT 1""",
                     (proposal_id,),
                 ).fetchone()
                 if row is None:
                     raise ValueError("proposal was not found")
-                latest = json.loads(row[1])
+                latest = json.loads(row[0])
                 if latest.get("status") != "pending_review":
                     raise ValueError("proposal is no longer awaiting review")
                 if decision is not None and decision.proposal_id != proposal_id:
                     raise ValueError("policy decision does not match the proposal ID")
                 self._append_row(
-                    db,
-                    proposal_id=proposal_id,
-                    event_type="policy.proposal.reviewed",
-                    timestamp=now,
-                    payload=payload,
+                    db, proposal_id=proposal_id, event_type="policy.proposal.reviewed",
+                    timestamp=now, payload=payload,
+                )
+                db.execute("COMMIT")
+            except Exception:
+                db.execute("ROLLBACK")
+                raise
+        return self.get(proposal_id)  # type: ignore[return-value]
+
+    def append_revocation(
+        self,
+        proposal_id: str,
+        *,
+        reason: str,
+        reviewer: str = "local_user",
+    ) -> ProposalSnapshot:
+        """Revoke a pending or approved proposal only before execution is reserved."""
+        cleaned_reason = " ".join(reason.split())
+        if not cleaned_reason or len(cleaned_reason) > 300:
+            raise ValueError("revocation reason must contain 1 to 300 characters")
+        now = datetime.now(timezone.utc)
+        with self._connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            try:
+                rows = db.execute(
+                    """SELECT payload FROM audit_events
+                    WHERE proposal_id = ? ORDER BY sequence ASC""",
+                    (proposal_id,),
+                ).fetchall()
+                if not rows:
+                    raise ValueError("proposal was not found")
+                latest = json.loads(rows[-1][0])
+                if latest.get("status") not in {"pending_review", "approved"}:
+                    raise ValueError("only pending or approved proposals can be revoked")
+                if any(
+                    isinstance(json.loads(row[0]).get("execution"), dict)
+                    or json.loads(row[0]).get("execution_reserved") is True
+                    for row in rows
+                ):
+                    raise ValueError("an execution attempt cannot be revoked after it has been reserved")
+                policy = latest.get("policy") or {}
+                payload = {
+                    "schema_version": 1, "status": "revoked", "reviewer": reviewer,
+                    "revocation_reason": cleaned_reason,
+                    "policy": {
+                        "allowed": False, "approval_required": False,
+                        "reason": "Revoked by the local user: " + cleaned_reason,
+                        "risk_tier": policy.get("risk_tier"),
+                        "max_execution_seconds": policy.get("max_execution_seconds"),
+                        "action_executed": False,
+                    },
+                    "action_executed": False,
+                }
+                self._append_row(
+                    db, proposal_id=proposal_id, event_type="policy.proposal.revoked",
+                    timestamp=now, payload=payload,
                 )
                 db.execute("COMMIT")
             except Exception:
@@ -295,7 +328,6 @@ class PolicyLedger:
             ).fetchall()
         if not rows:
             return None
-
         created_payload = json.loads(rows[0][2])
         proposal = ActionProposal.model_validate(created_payload["proposal"])
         latest_payload = json.loads(rows[-1][2])
@@ -306,18 +338,25 @@ class PolicyLedger:
             updated_at = datetime.fromisoformat(rows[-1][1])
         except (KeyError, TypeError, ValueError) as exc:
             raise ValueError("proposal audit record is malformed") from exc
-
+        execution = next(
+            (json.loads(row[2]).get("execution") for row in reversed(rows)
+             if isinstance(json.loads(row[2]).get("execution"), dict)),
+            None,
+        )
+        reserved = any(
+            json.loads(row[2]).get("execution_reserved") is True for row in rows
+        )
         return ProposalSnapshot(
-            proposal=proposal,
-            status=status,
-            created_at=created_at,
-            updated_at=updated_at,
+            proposal=proposal, status=status, created_at=created_at, updated_at=updated_at,
             policy_allowed=policy.get("allowed") is True,
             approval_required=policy.get("approval_required") is True,
             risk_tier=policy.get("risk_tier"),
             reason=str(policy.get("reason", "No policy reason recorded.")),
             reviewer=latest_payload.get("reviewer"),
             action_executed=latest_payload.get("action_executed") is True,
+            execution_status=execution.get("status") if execution else None,
+            execution_verified=execution.get("verified") is True if execution else False,
+            execution_reserved=reserved,
         )
 
     def list(self, *, status: ProposalStatus | None = None, limit: int = 100) -> list[ProposalSnapshot]:
@@ -337,58 +376,247 @@ class PolicyLedger:
                 result.append(snapshot)
         return result
 
+    def reserve_execution(self, proposal_id: str) -> ProposalSnapshot:
+        """Atomically reserve a single execution attempt and append the audit event.
+
+        A reservation is a one-time claim. If the process crashes after the claim,
+        execution is intentionally blocked for manual inspection; the adapter is not
+        automatically retried because its side-effect state may be unknown. Revocation
+        and reservation serialize under BEGIN IMMEDIATE, so only one can win.
+        """
+        now = datetime.now(timezone.utc)
+        with self._connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            try:
+                rows = db.execute(
+                    """SELECT payload FROM audit_events
+                    WHERE proposal_id = ? ORDER BY sequence ASC""",
+                    (proposal_id,),
+                ).fetchall()
+                if not rows:
+                    raise ValueError("proposal was not found")
+                latest = json.loads(rows[-1][0])
+                if latest.get("status") != "approved":
+                    raise ValueError("only approved proposals may reserve execution")
+                if (latest.get("policy") or {}).get("allowed") is not True:
+                    raise ValueError("latest policy decision does not authorize execution")
+                if any(isinstance(json.loads(row[0]).get("execution"), dict) for row in rows):
+                    raise ValueError("proposal already has an execution receipt")
+                if any(json.loads(row[0]).get("execution_reserved") is True for row in rows):
+                    raise ValueError(
+                        "an execution attempt is already reserved; inspect its state before taking further action"
+                    )
+                if not any(json.loads(row[0]).get("execution_reserved") is True for row in rows):
+                    payload = {
+                        "schema_version": 1, "status": "approved",
+                        "reviewer": latest.get("reviewer"),
+                        "policy": latest.get("policy") or {},
+                        "action_executed": False,
+                        "execution_reserved": True,
+                    }
+                    self._append_row(
+                        db, proposal_id=proposal_id,
+                        event_type="policy.proposal.execution_reserved",
+                        timestamp=now, payload=payload,
+                    )
+                db.execute("COMMIT")
+            except Exception:
+                db.execute("ROLLBACK")
+                raise
+        return self.get(proposal_id)  # type: ignore[return-value]
+
+    def append_execution(
+        self,
+        proposal_id: str,
+        *,
+        status: Literal["succeeded", "failed"],
+        action_executed: bool,
+        verified: bool,
+        code: str,
+        summary: str,
+        elapsed_seconds: float,
+    ) -> ProposalSnapshot:
+        """Append one immutable receipt after the execution reservation exists."""
+        if status not in {"succeeded", "failed"}:
+            raise ValueError("invalid execution status")
+        if verified and not action_executed:
+            raise ValueError("an unexecuted action cannot be verified")
+        if status == "succeeded" and not action_executed:
+            raise ValueError("a successful execution receipt must confirm dispatch")
+        if not code or len(code) > 80:
+            raise ValueError("execution code must contain 1 to 80 characters")
+        if not summary or len(summary) > 300:
+            raise ValueError("execution summary must contain 1 to 300 characters")
+        if elapsed_seconds < 0:
+            raise ValueError("elapsed_seconds cannot be negative")
+        now = datetime.now(timezone.utc)
+        with self._connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            try:
+                rows = db.execute(
+                    """SELECT payload FROM audit_events
+                    WHERE proposal_id = ? ORDER BY sequence ASC""",
+                    (proposal_id,),
+                ).fetchall()
+                if not rows:
+                    raise ValueError("proposal was not found")
+                latest = json.loads(rows[-1][0])
+                if latest.get("status") != "approved":
+                    raise ValueError("only approved proposals may be executed")
+                if not any(json.loads(row[0]).get("execution_reserved") is True for row in rows):
+                    raise ValueError("execution must be reserved before a receipt is recorded")
+                if any(isinstance(json.loads(row[0]).get("execution"), dict) for row in rows):
+                    raise ValueError("proposal already has an execution receipt")
+                policy = latest.get("policy") or {}
+                if policy.get("allowed") is not True:
+                    raise ValueError("latest policy decision does not authorize execution")
+                payload = {
+                    "schema_version": 1, "status": "approved",
+                    "reviewer": latest.get("reviewer"), "policy": policy,
+                    "action_executed": bool(action_executed),
+                    "execution": {
+                        "status": status, "executed": bool(action_executed),
+                        "verified": bool(verified), "code": code, "summary": summary,
+                        "elapsed_seconds": round(elapsed_seconds, 3),
+                    },
+                }
+                self._append_row(
+                    db, proposal_id=proposal_id, event_type="policy.proposal.execution",
+                    timestamp=now, payload=payload,
+                )
+                db.execute("COMMIT")
+            except Exception:
+                db.execute("ROLLBACK")
+                raise
+        return self.get(proposal_id)  # type: ignore[return-value]
+
+    def append_postcondition_verification(
+        self,
+        proposal_id: str,
+        *,
+        confirmed: bool,
+        verifier: str,
+        evidence_code: str,
+        summary: str,
+    ) -> ProposalSnapshot:
+        """Append one explicit postcondition result; never infer success from dispatch.
+
+        A verification is accepted only after a successful, executed receipt. Both
+        positive and negative outcomes are terminal records so a later command cannot
+        silently overwrite an earlier verification decision.
+        """
+        if not isinstance(confirmed, bool):
+            raise ValueError("confirmed must be a boolean")
+        verifier = " ".join(verifier.split())
+        evidence_code = " ".join(evidence_code.split())
+        summary = " ".join(summary.split())
+        if not verifier or len(verifier) > 80:
+            raise ValueError("verifier must contain 1 to 80 characters")
+        if not evidence_code or len(evidence_code) > 80:
+            raise ValueError("evidence_code must contain 1 to 80 characters")
+        if not summary or len(summary) > 300:
+            raise ValueError("verification summary must contain 1 to 300 characters")
+
+        now = datetime.now(timezone.utc)
+        with self._connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            try:
+                rows = db.execute(
+                    """SELECT event_type, payload FROM audit_events
+                    WHERE proposal_id = ? ORDER BY sequence ASC""",
+                    (proposal_id,),
+                ).fetchall()
+                if not rows:
+                    raise ValueError("proposal was not found")
+                if any(
+                    event_type == "policy.proposal.postcondition_verified"
+                    for event_type, _ in rows
+                ):
+                    raise ValueError("postcondition verification is already recorded")
+                latest = json.loads(rows[-1][1])
+                execution = next(
+                    (
+                        json.loads(payload).get("execution")
+                        for _, payload in reversed(rows)
+                        if isinstance(json.loads(payload).get("execution"), dict)
+                    ),
+                    None,
+                )
+                if latest.get("status") != "approved":
+                    raise ValueError("only approved proposals can be verified")
+                if not isinstance(execution, dict):
+                    raise ValueError("an execution receipt is required before verification")
+                if execution.get("status") != "succeeded" or execution.get("executed") is not True:
+                    raise ValueError("only successfully dispatched actions can be verified")
+                updated_execution = dict(execution)
+                updated_execution["verified"] = confirmed
+                payload = {
+                    "schema_version": 1,
+                    "status": "approved",
+                    "reviewer": latest.get("reviewer"),
+                    "policy": latest.get("policy") or {},
+                    "action_executed": True,
+                    "execution": updated_execution,
+                    "verification": {
+                        "outcome": "confirmed" if confirmed else "not_confirmed",
+                        "verifier": verifier,
+                        "evidence_code": evidence_code,
+                        "summary": summary,
+                    },
+                }
+                self._append_row(
+                    db,
+                    proposal_id=proposal_id,
+                    event_type="policy.proposal.postcondition_verified",
+                    timestamp=now,
+                    payload=payload,
+                )
+                db.execute("COMMIT")
+            except Exception:
+                db.execute("ROLLBACK")
+                raise
+        return self.get(proposal_id)  # type: ignore[return-value]
+
     def verify_integrity(self) -> AuditIntegrityReport:
-        """Verify the global SHA-256 chain; any payload edit/deletion breaks a link."""
+        """Verify the global SHA-256 chain and its stored head checkpoint."""
         with self._connect() as db:
             rows = db.execute(
                 """SELECT sequence, audit_id, proposal_id, event_type, timestamp, payload,
                     previous_hash, entry_hash
                 FROM audit_events ORDER BY sequence ASC"""
             ).fetchall()
-
         previous = _GENESIS_HASH
         with self._connect() as db:
             stored_head_row = db.execute(
                 "SELECT value FROM audit_meta WHERE key = 'head_hash'"
             ).fetchone()
         stored_head = stored_head_row[0] if stored_head_row else _GENESIS_HASH
-
         for row in rows:
             sequence, audit_id, proposal_id, event_type, timestamp, payload, stored_previous, stored_hash = row
             if not hmac.compare_digest(stored_previous, previous):
                 return AuditIntegrityReport(
-                    valid=False,
-                    checked_entries=len(rows),
+                    valid=False, checked_entries=len(rows),
                     first_invalid_sequence=sequence,
                     reason="previous-hash link does not match",
                 )
-            expected = _audit_entry_hash(
-                previous,
-                audit_id,
-                proposal_id,
-                event_type,
-                timestamp,
-                payload,
-            )
+            expected = _audit_entry_hash(previous, audit_id, proposal_id, event_type, timestamp, payload)
             if not hmac.compare_digest(stored_hash, expected):
                 return AuditIntegrityReport(
-                    valid=False,
-                    checked_entries=len(rows),
+                    valid=False, checked_entries=len(rows),
                     first_invalid_sequence=sequence,
                     reason="entry hash does not match the stored payload",
                 )
             previous = stored_hash
         if not hmac.compare_digest(previous, stored_head):
             return AuditIntegrityReport(
-                valid=False,
-                checked_entries=len(rows),
+                valid=False, checked_entries=len(rows),
                 first_invalid_sequence=rows[-1][0] if rows else 0,
                 reason="stored head checkpoint does not match the ledger tail",
             )
         return AuditIntegrityReport(valid=True, checked_entries=len(rows))
 
     def audit_trail(self, proposal_id: str) -> list[dict[str, Any]]:
-        """Read the immutable event sequence for one proposal."""
+        """Read immutable events for one proposal."""
         with self._connect() as db:
             rows = db.execute(
                 """SELECT sequence, audit_id, event_type, timestamp, payload, previous_hash, entry_hash
@@ -397,13 +625,9 @@ class PolicyLedger:
             ).fetchall()
         return [
             {
-                "sequence": row[0],
-                "audit_id": row[1],
-                "event_type": row[2],
-                "timestamp": row[3],
-                "payload": json.loads(row[4]),
-                "previous_hash": row[5],
-                "entry_hash": row[6],
+                "sequence": row[0], "audit_id": row[1], "event_type": row[2],
+                "timestamp": row[3], "payload": json.loads(row[4]),
+                "previous_hash": row[5], "entry_hash": row[6],
             }
             for row in rows
         ]
@@ -417,18 +641,11 @@ class PolicyProposalQueue:
 
     def create(self, proposal: ActionProposal, broker) -> ProposalSnapshot:
         decision = broker.evaluate(proposal)
-        # Even a pre-authorized low-risk policy result waits for a user review in
-        # this phase. Authorization is not execution and no autonomous runner exists.
         status: ProposalStatus = (
-            "blocked"
-            if not decision.allowed and not decision.approval_required
+            "blocked" if not decision.allowed and not decision.approval_required
             else "pending_review"
         )
-        return self.ledger.append_created(
-            proposal,
-            decision,
-            initial_status=status,
-        )
+        return self.ledger.append_created(proposal, decision, initial_status=status)
 
     def review(
         self,
@@ -443,23 +660,14 @@ class PolicyProposalQueue:
             raise ValueError("proposal was not found")
         if current.status != "pending_review":
             raise ValueError("proposal is not awaiting review")
-
         if not approve:
             return self.ledger.append_review(
-                proposal_id,
-                status="rejected",
-                decision=None,
-                reviewer=reviewer,
+                proposal_id, status="rejected", decision=None, reviewer=reviewer
             )
-
         decision = broker.evaluate(current.proposal, user_approved=True)
-        if decision.allowed:
-            final_status: Literal["approved", "blocked"] = "approved"
-        else:
-            final_status = "blocked"
+        final_status: Literal["approved", "blocked"] = (
+            "approved" if decision.allowed else "blocked"
+        )
         return self.ledger.append_review(
-            proposal_id,
-            status=final_status,
-            decision=decision,
-            reviewer=reviewer,
+            proposal_id, status=final_status, decision=decision, reviewer=reviewer
         )

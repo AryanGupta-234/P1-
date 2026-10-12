@@ -17,18 +17,180 @@ from aie.config import (
     capability_manifest_dir,
     database_path,
     egress_audit_database_path,
+    execution_enabled_path,
+    execution_kill_switch_path,
     memory_database_path,
+    notification_preferences_path,
     observer_is_paused,
     policy_audit_database_path,
     set_observer_paused,
+    task_run_database_path,
     task_session_database_path,
 )
 from aie.hardware import runtime_profile
 from aie.model_policy import choose_local_model, discover_local_models
 from aie.store import EventStore
+from aie.orchestration.cli import plan_app as _plan_app, task_app as _task_app
 
 app = typer.Typer(no_args_is_help=True, help="AIE Windows-first environment observer.")
 console = Console()
+
+@app.command("tray")
+def run_observer_tray() -> None:
+    """Open the native Windows notification-area controls for observer pause/resume."""
+    from aie.desktop.tray import run_windows_tray
+
+    try:
+        run_windows_tray()
+    except RuntimeError as exc:
+        console.print(f"[red]Tray unavailable:[/red] {exc}")
+        raise typer.Exit(2) from exc
+    except OSError as exc:
+        console.print(f"[red]Tray startup failed:[/red] {type(exc).__name__}")
+        raise typer.Exit(2) from exc
+
+
+@app.command("notifications-status")
+def notifications_status() -> None:
+    """Show whether local diagnostic balloon notifications are enabled."""
+    from aie.desktop.notifications import NotificationPreferencesStore
+
+    try:
+        preferences = NotificationPreferencesStore(notification_preferences_path()).load()
+    except ValueError as exc:
+        console.print(f"[red]Notification preferences invalid:[/red] {exc}")
+        raise typer.Exit(2) from exc
+    state = "enabled" if preferences.enabled else "disabled"
+    quiet = (
+        "disabled" if preferences.quiet_start == preferences.quiet_end
+        else f"{preferences.quiet_start}-{preferences.quiet_end} local time"
+    )
+    console.print(f"Diagnostic notifications: {state}")
+    console.print(f"Quiet hours: {quiet}")
+    console.print(f"Observer paused: {observer_is_paused()}")
+    console.print("Delivery requires the user-started tray process: aie tray")
+
+
+@app.command("notifications-enable")
+def notifications_enable(
+    confirm: bool = typer.Option(False, "--confirm", help="Enable local diagnostic balloon notifications."),
+) -> None:
+    """Enable generic local diagnostic notices; they remain quiet during configured hours."""
+    from aie.desktop.notifications import NotificationPreferencesStore
+
+    if not confirm:
+        console.print("[yellow]Pass --confirm to enable notifications.[/yellow]")
+        raise typer.Exit(2)
+    store = NotificationPreferencesStore(notification_preferences_path())
+    try:
+        preferences = store.load().model_copy(update={"enabled": True})
+        store.save(preferences)
+    except ValueError as exc:
+        console.print(f"[red]Notification preferences rejected:[/red] {exc}")
+        raise typer.Exit(2) from exc
+    console.print("[green]Diagnostic notifications enabled.[/green] Start the tray with aie tray.")
+
+
+@app.command("notifications-disable")
+def notifications_disable() -> None:
+    """Disable diagnostic balloon notifications immediately."""
+    from aie.desktop.notifications import NotificationPreferencesStore
+
+    store = NotificationPreferencesStore(notification_preferences_path())
+    try:
+        store.save(store.load().model_copy(update={"enabled": False}))
+    except ValueError as exc:
+        console.print(f"[red]Notification preferences rejected:[/red] {exc}")
+        raise typer.Exit(2) from exc
+    console.print("[green]Diagnostic notifications disabled.[/green]")
+
+
+@app.command("notifications-quiet-hours")
+def notifications_quiet_hours(
+    quiet_start: str = typer.Argument(..., help="Local quiet-hour start in HH:MM."),
+    quiet_end: str = typer.Argument(..., help="Local quiet-hour end in HH:MM."),
+) -> None:
+    """Set local quiet hours; use equal start/end values to disable quiet hours."""
+    from aie.desktop.notifications import NotificationPreferences, NotificationPreferencesStore
+
+    store = NotificationPreferencesStore(notification_preferences_path())
+    try:
+        current = store.load()
+        updated = NotificationPreferences(
+            enabled=current.enabled,
+            quiet_start=quiet_start,
+            quiet_end=quiet_end,
+        )
+        store.save(updated)
+    except ValueError as exc:
+        console.print(f"[red]Quiet hours rejected:[/red] {exc}")
+        raise typer.Exit(2) from exc
+    quiet = "disabled" if quiet_start == quiet_end else f"{quiet_start}-{quiet_end}"
+    console.print(f"[green]Quiet hours saved:[/green] {quiet} local time")
+
+
+@app.command("retention-status")
+def retention_status(
+    event_retention_days: int = typer.Option(30, "--event-retention-days", min=1, max=3650),
+    sample_limit: int = typer.Option(1000, "--sample-limit", min=1, max=1000),
+) -> None:
+    """Inspect event, memory, task and policy retention counts without deleting data."""
+    from aie.config import task_run_database_path
+    from aie.memory.store import MemoryStore
+    from aie.orchestration.store import TaskRunStore
+    from aie.policy.ledger import PolicyLedger
+    from aie.retention import collect_retention_snapshot
+
+    try:
+        report = collect_retention_snapshot(
+            event_store=EventStore(database_path()),
+            memory_store=MemoryStore(memory_database_path()),
+            task_run_store=TaskRunStore(task_run_database_path()),
+            policy_ledger=PolicyLedger(policy_audit_database_path()),
+            event_retention_days=event_retention_days,
+            sample_limit=sample_limit,
+        )
+    except (ValueError, OSError, RuntimeError) as exc:
+        console.print(f"[red]Retention inventory unavailable:[/red] {type(exc).__name__}: {exc}")
+        raise typer.Exit(2) from exc
+
+    evidence = Table("Store", "Total / sample", "Eligible for expiry/deletion")
+    evidence.add_row(
+        "Events",
+        str(report.event_count),
+        f"{report.event_prune_candidates} older than {report.event_retention_days} days",
+    )
+    evidence.add_row(
+        "Memories",
+        f"{report.active_memory_count} active / {report.memory_count} total",
+        f"{report.expired_memory_count} expired",
+    )
+    console.print(evidence)
+
+    task_table = Table("Task run state", "Sampled count")
+    for state, count in sorted(report.task_run_status_counts.items()):
+        task_table.add_row(state, str(count))
+    console.print(task_table)
+
+    proposal_table = Table("Proposal state", "Sampled count")
+    for state, count in sorted(report.proposal_status_counts.items()):
+        proposal_table.add_row(state, str(count))
+    console.print(proposal_table)
+
+    if report.task_sample_truncated or report.proposal_sample_truncated:
+        console.print(
+            f"[yellow]Task/policy summaries are bounded samples (max {sample_limit}); "
+            "counts may be truncated.[/yellow]"
+        )
+    console.print(
+        f"[dim]Read-only inventory at {report.evaluated_at_utc}. "
+        "No event, memory, task run or policy record was modified.[/dim]"
+    )
+    console.print(
+        "[dim]For event expiry use aie prune --older-than-days N --confirm; "
+        "for memory expiry use aie memory-prune --confirm.[/dim]"
+    )
+
 
 @app.command("health")
 def observer_health() -> None:
@@ -1027,6 +1189,79 @@ def learning_report(
 
 
 
+@app.command("memory-evaluate")
+def memory_evaluate(
+    dataset: Path = typer.Argument(..., exists=True, dir_okay=False),
+    k: int = typer.Option(5, min=1, max=20),
+    semantic_model: str | None = typer.Option(
+        None,
+        "--semantic-model",
+        help="Use an already-installed local Ollama embedding model instead of lexical retrieval.",
+    ),
+    include_sensitive: bool = typer.Option(
+        False,
+        "--include-sensitive",
+        help="Explicitly include sensitive memories in this local evaluation.",
+    ),
+) -> None:
+    """Measure local memory retrieval using a user-authored query/relevance dataset."""
+    from aie.memory.evaluation import (
+        MemoryEvaluationError,
+        evaluate_memory_retrieval,
+        load_memory_evaluation_dataset,
+    )
+    from aie.memory.store import MemoryStore
+    from aie.models.ollama import OllamaClient
+
+    try:
+        benchmark = load_memory_evaluation_dataset(dataset)
+        embedding_provider = OllamaClient() if semantic_model else None
+        report = evaluate_memory_retrieval(
+            benchmark,
+            MemoryStore(memory_database_path()),
+            k=k,
+            include_sensitive=include_sensitive,
+            embedding_provider=embedding_provider,
+            embedding_model=semantic_model,
+        )
+    except (MemoryEvaluationError, OSError, ValueError, RuntimeError) as exc:
+        console.print(f"[red]Memory evaluation failed:[/red] {type(exc).__name__}: {exc}")
+        raise typer.Exit(2) from exc
+
+    console.print(
+        f"[bold]Memory retrieval evaluation[/bold] · Dataset: {report.dataset_id}\n"
+        f"Retriever: {report.retrieval}"
+        + (f" · Embedding model: {report.embedding_model}" if report.embedding_model else " · No embedding model")
+        + f" · k={report.k} · Cases={len(report.cases)}"
+    )
+    summary = Table("Metric", "Score")
+    summary.add_row("Mean recall@k", f"{report.mean_recall_at_k:.1%}")
+    summary.add_row("Mean precision@k", f"{report.mean_precision_at_k:.1%}")
+    summary.add_row("Mean reciprocal rank", f"{report.mean_reciprocal_rank:.3f}")
+    summary.add_row("Hit rate@k", f"{report.hit_rate_at_k:.1%}")
+    console.print(summary)
+
+    details = Table("Case", "Relevant", "Returned", "Recall@k", "Precision@k", "RR", "First rank")
+    for item in report.cases:
+        details.add_row(
+            item.case_id,
+            str(item.relevant_count),
+            str(item.returned_count),
+            f"{item.recall_at_k:.1%}",
+            f"{item.precision_at_k:.1%}",
+            f"{item.reciprocal_rank:.3f}",
+            str(item.first_relevant_rank or "-"),
+        )
+    console.print(details)
+    console.print(
+        f"[dim]Evaluated at {report.evaluated_at_utc}. "
+        "No memories, embeddings, prompts or model weights were modified. "
+        "Sensitive memories were "
+        + ("included by explicit opt-in." if include_sensitive else "excluded.")
+        + "[/dim]"
+    )
+
+
 @app.command("remember")
 def remember(
     content: str | None = typer.Argument(None, help="User-authored memory text; omit to enter it interactively."),
@@ -1167,6 +1402,7 @@ def correct_memory(
         sensitivity=previous.memory.sensitivity,
         confidence=previous.memory.confidence,
         source_event_ids=previous.memory.source_event_ids,
+        source_task_run_ids=previous.memory.source_task_run_ids,
         supersedes_id=memory_id,
         expires_at=expiry,
     )
@@ -1174,6 +1410,12 @@ def correct_memory(
         new_record = store.save(
             corrected,
             event_store=EventStore(database_path()) if corrected.source_event_ids else None,
+            task_run_store=(
+                __import__("aie.orchestration.store", fromlist=["TaskRunStore"])
+                .TaskRunStore(task_run_database_path())
+                if corrected.source_task_run_ids
+                else None
+            ),
         )
     except ValueError as exc:
         console.print(f"[red]Correction failed:[/red] {exc}")
@@ -1286,6 +1528,223 @@ def memory_consolidate(
     )
 
 
+@app.command("memory-conflicts")
+def memory_conflicts(
+    kind: Literal["working", "episodic", "semantic", "procedural", "prospective"] | None = typer.Option(None),
+    include_sensitive: bool = typer.Option(
+        False, "--include-sensitive", help="Explicitly include sensitive memories in review."
+    ),
+    max_proposals: int = typer.Option(20, min=1, max=100),
+) -> None:
+    """Find explicit lexical polarity conflicts for human review; changes no records."""
+    from aie.memory.conflicts import generate_conflict_proposals
+    from aie.memory.store import MemoryStore
+
+    proposals = generate_conflict_proposals(
+        MemoryStore(memory_database_path()),
+        kind=kind,
+        include_sensitive=include_sensitive,
+        max_proposals=max_proposals,
+    )
+    if not proposals:
+        console.print("No lexical conflict candidates found.")
+        return
+    table = Table("Kind", "Opposing terms", "Shared context", "Memory A", "Memory B")
+    for item in proposals:
+        table.add_row(
+            item.kind,
+            " ↔ ".join(item.opposing_terms),
+            ", ".join(item.shared_context_tokens[:8]),
+            item.memory_ids[0],
+            item.memory_ids[1],
+        )
+    console.print(table)
+    console.print(
+        "[dim]Lexical polarity candidate only, not a contradiction proof. "
+        "Inspect both records and their timestamps. No memory was changed.[/dim]"
+    )
+    if include_sensitive:
+        console.print(
+            "[yellow]Sensitive records were eligible for review by explicit opt-in; "
+            "source content was not printed.[/yellow]"
+        )
+
+
+@app.command("memory-merge")
+def memory_merge(
+    memory_a: str = typer.Argument(...),
+    memory_b: str = typer.Argument(...),
+    content: str = typer.Argument(..., help="User-authored merged memory content."),
+    confirm: bool = typer.Option(False, "--confirm", help="Confirm superseding both source memories."),
+    include_sensitive: bool = typer.Option(
+        False, "--include-sensitive", help="Explicitly permit merging sensitive source memories."
+    ),
+) -> None:
+    """Preview or explicitly merge two active memories while retaining both lineage links."""
+    from aie.memory.models import MemoryRecord
+    from aie.memory.store import MemoryStore
+
+    if memory_a == memory_b:
+        console.print("[red]Choose two different source memory IDs.[/red]")
+        raise typer.Exit(2)
+
+    store = MemoryStore(memory_database_path())
+    first = store.get(memory_a)
+    second = store.get(memory_b)
+    if first is None or second is None:
+        console.print("[red]Both source memories must exist and be active.[/red]")
+        raise typer.Exit(2)
+    sources = (first.memory, second.memory)
+    if sources[0].kind != sources[1].kind:
+        console.print("[red]Source memories must have the same kind.[/red]")
+        raise typer.Exit(2)
+    if any(item.sensitivity == "sensitive" for item in sources) and not include_sensitive:
+        console.print(
+            "[yellow]At least one source is sensitive. Re-run with --include-sensitive "
+            "after reviewing the local records.[/yellow]"
+        )
+        raise typer.Exit(2)
+
+    from datetime import datetime, timezone
+
+    expiry_values = [item.expires_at for item in sources if item.expires_at is not None]
+    expiry = min(expiry_values) if expiry_values else None
+    tags = list(dict.fromkeys(tag for item in sources for tag in item.tags))[:30]
+    provenance = list(dict.fromkeys(
+        event_id for item in sources for event_id in item.source_event_ids
+    ))
+    task_run_provenance = list(dict.fromkeys(
+        run_id for item in sources for run_id in item.source_task_run_ids
+    ))
+    if len(provenance) > 100:
+        console.print("[red]Combined provenance exceeds the memory schema limit.[/red]")
+        raise typer.Exit(2)
+    sensitivity_order = {"public": 0, "internal": 1, "sensitive": 2}
+    sensitivity = max(
+        (item.sensitivity for item in sources),
+        key=sensitivity_order.__getitem__,
+    )
+    merged = MemoryRecord(
+        kind=sources[0].kind,
+        content=content,
+        tags=tags,
+        sensitivity=sensitivity,
+        confidence=min(item.confidence for item in sources),
+        source_event_ids=provenance,
+        created_at=datetime.now(timezone.utc),
+        expires_at=expiry,
+    )
+
+    console.print(
+        f"Merge candidate: {memory_a} + {memory_b}\n"
+        f"Kind: {merged.kind} · Sensitivity: {merged.sensitivity}\n"
+        f"Tags retained: {len(merged.tags)} · Provenance IDs retained: {len(provenance)}\n"
+        "The merged content is user-supplied; both original records will remain as "
+        "superseded history, and their embeddings will be removed."
+    )
+    if not confirm:
+        console.print("[yellow]Nothing changed. Re-run with --confirm to commit this merge.[/yellow]")
+        return
+
+    try:
+        saved = store.merge(
+            (memory_a, memory_b),
+            merged,
+            event_store=EventStore(database_path()) if provenance else None,
+            task_run_store=(
+                __import__("aie.orchestration.store", fromlist=["TaskRunStore"])
+                .TaskRunStore(task_run_database_path())
+                if task_run_provenance
+                else None
+            ),
+        )
+    except (ValueError, OSError) as exc:
+        console.print(f"[red]Memory merge rejected:[/red] {exc}")
+        raise typer.Exit(2) from exc
+    console.print(f"[green]Reviewed memory merge saved.[/green] New ID: {saved.memory_id}")
+    console.print(f"Lineage: {', '.join(store.lineage(saved.memory_id))}")
+
+
+@app.command("skill-candidate")
+def skill_candidate(run_id: str = typer.Argument(...)) -> None:
+    """Preview a procedural-skill candidate from a completed, explicitly verified run."""
+    from aie.learning.skills import SkillInductionError, build_skill_candidate
+    from aie.orchestration.store import TaskRunStore
+    from aie.policy.ledger import PolicyLedger
+
+    try:
+        run = TaskRunStore(task_run_database_path()).get(run_id)
+        if run is None:
+            raise SkillInductionError("task run was not found")
+        candidate = build_skill_candidate(
+            run,
+            policy_ledger=PolicyLedger(policy_audit_database_path()),
+        )
+    except (SkillInductionError, ValueError) as exc:
+        console.print(f"[red]No skill candidate:[/red] {exc}")
+        raise typer.Exit(2) from exc
+
+    console.print(
+        f"[bold]Procedural skill candidate[/bold]\n"
+        f"Task run: {candidate.task_run_id}\n"
+        f"Plan: {candidate.plan_id}\n"
+        f"Verified steps: {', '.join(candidate.verified_step_ids)}\n"
+        f"Execution receipts: {len(candidate.proposal_ids)}"
+    )
+    console.print(candidate.content)
+    console.print(
+        "[dim]Preview only. Saving requires a separate explicit confirmation. "
+        "No model training occurs.[/dim]"
+    )
+
+
+@app.command("skill-save")
+def skill_save(
+    run_id: str = typer.Argument(...),
+    confirm: bool = typer.Option(False, "--confirm", help="Save the reviewed skill as procedural memory."),
+    internal: bool = typer.Option(
+        False, "--internal", help="Mark the saved skill internal instead of sensitive."
+    ),
+) -> None:
+    """Save a skill candidate only after explicit user review and confirmation."""
+    from aie.learning.skills import SkillInductionError, build_skill_candidate, save_skill_candidate
+    from aie.memory.store import MemoryStore
+    from aie.orchestration.store import TaskRunStore
+    from aie.policy.ledger import PolicyLedger
+
+    if not confirm:
+        console.print("[yellow]Preview with aie skill-candidate, then pass --confirm to save.[/yellow]")
+        raise typer.Exit(2)
+    try:
+        task_store = TaskRunStore(task_run_database_path())
+        run = task_store.get(run_id)
+        if run is None:
+            raise SkillInductionError("task run was not found")
+        ledger = PolicyLedger(policy_audit_database_path())
+        candidate = build_skill_candidate(
+            run,
+            policy_ledger=ledger,
+        )
+        memory = save_skill_candidate(
+            candidate,
+            memory_store=MemoryStore(memory_database_path()),
+            task_run_store=task_store,
+            policy_ledger=ledger,
+            sensitivity="internal" if internal else "sensitive",
+        )
+    except (SkillInductionError, ValueError, OSError) as exc:
+        console.print(f"[red]Skill not saved:[/red] {type(exc).__name__}: {exc}")
+        raise typer.Exit(2) from exc
+    console.print(
+        f"[green]Reviewed procedural skill saved.[/green] Memory ID: {memory.memory_id}"
+    )
+    console.print(
+        f"Task run provenance: {', '.join(memory.source_task_run_ids)} · "
+        f"Sensitivity: {memory.sensitivity}"
+    )
+    console.print("[dim]This stores a local procedure record; it does not retrain or modify any model.[/dim]")
+
+
 @app.command("memory-prune")
 def memory_prune(
     confirm: bool = typer.Option(False, "--confirm"),
@@ -1332,7 +1791,14 @@ def _render_proposal(snapshot) -> None:
         f"Approval required: {snapshot.approval_required}"
     )
     console.print(snapshot.reason)
-    console.print("[dim]Execution: not implemented; no action was performed.[/dim]")
+    if snapshot.execution_status is None:
+        console.print("[dim]Execution: not attempted. No action was performed; approval is not execution.[/dim]")
+    else:
+        console.print(
+            f"[dim]Execution: {snapshot.execution_status} · "
+            f"Executed: {snapshot.action_executed} · "
+            f"Verified: {snapshot.execution_verified}[/dim]"
+        )
 
 
 @app.command("capabilities")
@@ -1361,6 +1827,91 @@ def list_capabilities() -> None:
             ", ".join(sorted(manifest.allowed_parameters)),
         )
     console.print(table)
+
+
+@app.command("capability-permissions")
+def capability_permissions() -> None:
+    """Inspect the permission state and application registration of local capabilities."""
+    from aie.policy.capabilities import CapabilityRegistry
+    from aie.policy.manifests import CapabilityManifestLoadError
+
+    try:
+        _, manifests = _load_local_policy_broker()
+        registered = CapabilityRegistry.windows_safe_defaults()
+    except (ValueError, CapabilityManifestLoadError) as exc:
+        console.print(f"[red]Capability policy unavailable:[/red] {exc}")
+        raise typer.Exit(2) from exc
+
+    if not manifests:
+        console.print("No capability manifests are configured. Unknown capabilities remain denied.")
+        return
+    table = Table(
+        "Capability", "Risk", "Enabled", "Approval", "Autonomous",
+        "Registered adapter", "Parameters",
+    )
+    for item in manifests:
+        table.add_row(
+            item.capability_id,
+            item.risk_tier,
+            str(item.enabled),
+            str(item.approval_required),
+            str(item.allow_autonomous),
+            "yes" if registered.get(item.capability_id) else "no",
+            ", ".join(sorted(item.allowed_parameters)) or "-",
+        )
+    console.print(table)
+    console.print(
+        "[dim]Enabled does not mean executable. A proposal also needs review, "
+        "a current policy allow, the positive execution marker, no kill switch "
+        "and a registered adapter.[/dim]"
+    )
+
+
+@app.command("capability-enable")
+def capability_enable(
+    capability_id: str = typer.Argument(...),
+    confirm: bool = typer.Option(False, "--confirm", help="Confirm enabling this registered capability manifest."),
+) -> None:
+    """Enable one registered capability while retaining its approval requirements."""
+    from aie.policy.capabilities import CapabilityRegistry
+    from aie.policy.permissions import CapabilityPermissionError, set_capability_enabled
+
+    if not confirm:
+        console.print("[yellow]Pass --confirm to enable this capability manifest.[/yellow]")
+        raise typer.Exit(2)
+    try:
+        registry = CapabilityRegistry.windows_safe_defaults()
+        updated = set_capability_enabled(
+            capability_manifest_dir(),
+            capability_id,
+            enabled=True,
+            registered_capability_ids=registry.capability_ids,
+        )
+    except (CapabilityPermissionError, ValueError, OSError) as exc:
+        console.print(f"[red]Capability was not enabled:[/red] {exc}")
+        raise typer.Exit(2) from exc
+    console.print(
+        f"[green]Capability manifest enabled:[/green] {updated.capability_id}\n"
+        "Approval remains required. The global execution gate is unchanged."
+    )
+
+
+@app.command("capability-disable")
+def capability_disable(capability_id: str = typer.Argument(...)) -> None:
+    """Disable a capability manifest immediately; this does not modify audit history."""
+    from aie.policy.permissions import CapabilityPermissionError, set_capability_enabled
+
+    try:
+        updated = set_capability_enabled(
+            capability_manifest_dir(),
+            capability_id,
+            enabled=False,
+            registered_capability_ids=set(),
+        )
+    except (CapabilityPermissionError, ValueError, OSError) as exc:
+        console.print(f"[red]Capability was not disabled:[/red] {exc}")
+        raise typer.Exit(2) from exc
+    console.print(f"[green]Capability manifest disabled:[/green] {updated.capability_id}")
 
 
 @app.command("propose")
@@ -1468,16 +2019,27 @@ def proposal_audit(proposal_id: str = typer.Argument(...)) -> None:
     if not trail:
         console.print("Proposal not found.")
         return
-    table = Table("Sequence", "Event", "Timestamp", "Status", "Policy allowed", "Reason")
+    table = Table(
+        "Sequence", "Event", "Timestamp", "Status", "Policy allowed",
+        "Execution", "Reason"
+    )
     for event in trail:
         payload = event["payload"]
         policy = payload.get("policy", {})
+        execution = payload.get("execution", {})
+        execution_text = (
+            f"{execution.get('status')} / exec={execution.get('executed')} / "
+            f"verify={execution.get('verified')}"
+            if isinstance(execution, dict) and execution
+            else "-"
+        )
         table.add_row(
             str(event["sequence"]),
             event["event_type"],
             event["timestamp"],
             str(payload.get("status", "created")),
             str(policy.get("allowed", False)),
+            execution_text,
             str(policy.get("reason", ""))[:160],
         )
     console.print(table)
@@ -1487,9 +2049,48 @@ def proposal_audit(proposal_id: str = typer.Argument(...)) -> None:
         else f"FAILED at sequence {integrity.first_invalid_sequence}: {integrity.reason}"
     )
     console.print(f"Audit chain: {integrity_text}")
-    console.print("[dim]No execution records exist because the executor is not implemented.[/dim]")
+    console.print(
+        "[dim]The ledger includes review decisions, execution receipts and explicit postcondition records. "
+        "A human verification record is not independent OS-state inspection.[/dim]"
+    )
 
 
+
+
+@app.command("verify-proposal")
+def verify_proposal(
+    proposal_id: str = typer.Argument(...),
+    outcome: str = typer.Argument(..., help="Postcondition outcome: confirmed or not-confirmed."),
+    evidence_code: str = typer.Option(..., "--evidence-code", help="Short non-sensitive evidence category."),
+    summary: str = typer.Option(..., "--summary", help="Brief human verification note; do not include secrets."),
+    confirm: bool = typer.Option(False, "--confirm", help="Confirm appending this verification decision."),
+) -> None:
+    """Append a one-time human postcondition result after successful action dispatch."""
+    from aie.policy.ledger import PolicyLedger
+
+    if not confirm:
+        console.print("[yellow]Pass --confirm to append this verification decision.[/yellow]")
+        raise typer.Exit(2)
+    if outcome not in {"confirmed", "not-confirmed"}:
+        console.print("[red]Outcome must be confirmed or not-confirmed.[/red]")
+        raise typer.Exit(2)
+    try:
+        snapshot = PolicyLedger(policy_audit_database_path()).append_postcondition_verification(
+            proposal_id,
+            confirmed=outcome == "confirmed",
+            verifier="local_user",
+            evidence_code=evidence_code,
+            summary=summary,
+        )
+    except ValueError as exc:
+        console.print(f"[red]Verification rejected:[/red] {exc}")
+        raise typer.Exit(2) from exc
+
+    console.print(
+        f"[green]Verification recorded.[/green] "
+        f"Outcome: {outcome} · Execution verified: {snapshot.execution_verified}"
+    )
+    console.print("[dim]This records your explicit assessment; it does not independently inspect Windows UI state.[/dim]")
 
 
 @app.command("policy-audit-check")
@@ -1509,6 +2110,125 @@ def policy_audit_check() -> None:
         f"Sequence {report.first_invalid_sequence}: {report.reason}"
     )
     raise typer.Exit(1)
+
+
+
+@app.command("execution-enable")
+def execution_enable(
+    confirm: bool = typer.Option(False, "--confirm", help="Confirm enabling registered capability adapters."),
+) -> None:
+    """Enable the explicit execution gate; disabled by default."""
+    from aie.policy.execution_control import ExecutionControl
+
+    if not confirm:
+        console.print("[yellow]Pass --confirm to enable the execution gate.[/yellow]")
+        raise typer.Exit(2)
+    control = ExecutionControl(
+        enabled_path=execution_enabled_path(),
+        kill_switch_path=execution_kill_switch_path(),
+    )
+    control.set_enabled(True)
+    console.print("[green]Execution gate enabled.[/green] The global kill switch still overrides it.")
+
+
+@app.command("execution-disable")
+def execution_disable() -> None:
+    """Disable all capability execution through the local execution gate."""
+    from aie.policy.execution_control import ExecutionControl
+
+    control = ExecutionControl(
+        enabled_path=execution_enabled_path(),
+        kill_switch_path=execution_kill_switch_path(),
+    )
+    control.set_enabled(False)
+    console.print("[green]Execution gate disabled.[/green]")
+
+
+@app.command("execution-kill")
+def execution_kill() -> None:
+    """Activate the global execution kill switch immediately."""
+    from aie.policy.execution_control import ExecutionControl
+
+    control = ExecutionControl(
+        enabled_path=execution_enabled_path(),
+        kill_switch_path=execution_kill_switch_path(),
+    )
+    control.set_kill_switch(True)
+    console.print("[red]Global execution kill switch is active.[/red]")
+
+
+@app.command("execution-resume")
+def execution_resume(
+    confirm: bool = typer.Option(False, "--confirm", help="Confirm clearing the execution kill switch."),
+) -> None:
+    """Clear the kill switch; the positive execution-enable marker is still required."""
+    from aie.policy.execution_control import ExecutionControl
+
+    if not confirm:
+        console.print("[yellow]Pass --confirm to clear the kill switch.[/yellow]")
+        raise typer.Exit(2)
+    control = ExecutionControl(
+        enabled_path=execution_enabled_path(),
+        kill_switch_path=execution_kill_switch_path(),
+    )
+    control.set_kill_switch(False)
+    console.print("[green]Kill switch cleared.[/green] Execution remains disabled unless separately enabled.")
+
+
+@app.command("execute-proposal")
+def execute_approved_proposal(
+    proposal_id: str = typer.Argument(...),
+    confirm: bool = typer.Option(False, "--confirm", help="Confirm this specific approved action."),
+) -> None:
+    """Execute one approved proposal through a registered safe adapter."""
+    from aie.policy.capabilities import (
+        CapabilityRegistry,
+        PolicyControlledExecutor,
+    )
+    from aie.policy.broker import CapabilityPolicyBroker
+    from aie.policy.execution_control import ExecutionControl
+    from aie.policy.ledger import PolicyLedger
+    from aie.policy.manifests import (
+        CapabilityManifestLoadError,
+        load_capability_manifests,
+    )
+
+    if not confirm:
+        console.print("[yellow]Pass --confirm to execute this specific proposal.[/yellow]")
+        raise typer.Exit(2)
+    try:
+        manifests = load_capability_manifests(capability_manifest_dir())
+        executor = PolicyControlledExecutor(
+            broker=CapabilityPolicyBroker(manifests),
+            ledger=PolicyLedger(policy_audit_database_path()),
+            manifests=manifests,
+            registry=CapabilityRegistry.windows_safe_defaults(),
+            control=ExecutionControl(
+                enabled_path=execution_enabled_path(),
+                kill_switch_path=execution_kill_switch_path(),
+            ),
+        )
+        receipt = executor.execute(proposal_id)
+    except (ValueError, PermissionError, RuntimeError, CapabilityManifestLoadError) as exc:
+        console.print(f"[red]Execution denied:[/red] {type(exc).__name__}: {exc}")
+        raise typer.Exit(2) from exc
+
+    color = "green" if receipt.status == "succeeded" else "red"
+    console.print(
+        f"[{color}]{receipt.status}[/{color}] · "
+        f"Executed: {receipt.executed} · Verified: {receipt.verified}"
+    )
+    console.print(f"{receipt.capability_id}: {receipt.summary}")
+    console.print(
+        "[dim]The execution receipt was appended to the local policy audit ledger. "
+        "A successful dispatch is not proof of the target application's postcondition.[/dim]"
+    )
+    if receipt.status != "succeeded":
+        raise typer.Exit(1)
+
+
+app.add_typer(_plan_app, name="plan")
+app.add_typer(_task_app, name="task")
 
 
 if __name__ == "__main__":

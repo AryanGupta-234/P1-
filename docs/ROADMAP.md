@@ -2,7 +2,7 @@
 
 Statuses: DONE / IN_PROGRESS / BLOCKED / PLANNED. Mark DONE only with code, tests and validation evidence.
 
-**Last updated:** 2026-10-11 | **Integration branch:** `dev`
+**Last updated:** 2026-10-11 | **Target integration:** `dev` | **Current feature branch:** `feat/agent-orchestration-core` | **Current PR:** [#16](https://github.com/AryanGupta-234/P1-/pull/16) draft; Windows CI run [#1041](https://github.com/AryanGupta-234/P1-/actions/runs/38151881805) passed
 
 | ID | Workstream | Status | Exit criteria |
 |---|---|---|---|
@@ -23,8 +23,11 @@ Statuses: DONE / IN_PROGRESS / BLOCKED / PLANNED. Mark DONE only with code, test
 - [x] Read-only inventory and process reconciliation.
 - [x] ARC Architecture Spotlight, roadmap and contribution guide.
 - [x] Hosted Windows CI on Python 3.11/3.12 with Ruff, optional Windows imports, PowerShell syntax, JS syntax and pytest.
+- [x] Hosted Windows CI also compiles the .NET 8 WPF dashboard; this verifies the build, not interactive behavior on the target desktop.
 - [x] Event Log runtime integration, ETW lifecycle/loss accounting, systemwide process telemetry and privacy controls validated in hosted Windows CI run #581 (Python 3.11/3.12).
-- [ ] Dependency/security scanning and reproducible release packaging.
+- [x] Installed-dependency vulnerability audit in Windows CI with `pip-audit`; weekly Dependabot checks for Python and GitHub Actions updates.
+- [x] Windows CI builds wheel and source distributions, validates metadata with Twine, and uploads short-lived artifacts.
+- [ ] Pinned/hash-verified dependency lock and signed, reproducible release provenance.
 
 ## M1 — Windows perception
 - [x] Host/process snapshot inventory and best-effort process lifecycle observations.
@@ -83,11 +86,17 @@ Statuses: DONE / IN_PROGRESS / BLOCKED / PLANNED. Mark DONE only with code, test
 - [x] CLI to invoke local or explicitly enabled cloud inference.
 - [x] Explicit activity/memory/session context attachment controls, safe payload budgets and independent remote-egress confirmation.
 - [x] Central remote egress gateway for cloud/remote-Ollama requests with high-confidence credential redaction and metadata-only local audit.
-- [ ] Structured output modes, streaming and cancellation.
+- [x] Provider-level structured JSON generation for local Ollama and explicitly authorized OpenAI-compatible inference; plans are still validated locally against strict schema and capability allowlists.
+- [ ] Streaming responses, inference cancellation, and structured tool-result streaming.
 - [ ] Inference concurrency, memory/token budgets and latency metrics.
 - [x] Central remote-model egress gateway, high-confidence credential redaction and metadata-only audit.
-- [ ] Planner/state machine with deterministic fallback.
-- [ ] Reasoning and tool-selection evaluation harness.
+- [x] Bounded declarative task-plan contract with strict fields, typed steps, explicit dependencies, cycle rejection, deterministic topological ordering and readiness queries; no step execution. Validated by Windows CI run [#590](https://github.com/AryanGupta-234/P1-/actions/runs/38131262921) on Python 3.11 and 3.12.
+- [x] Optional local-Ollama plan drafting with strict schema, exact-goal preservation, capability allowlist validation and deterministic graph validation.
+- [x] SQLite task-run persistence with compare-and-swap versions, append-only lifecycle events, bounded step advancement, pause/resume/cancel and manual verification gates.
+- [x] Local-only model reasoning handler using bounded completed-step summaries; unavailable local inference falls back to explicit user input.
+- [x] Fail-closed recovery of interrupted in-flight handlers to manual review; automatic replay remains intentionally disabled and pending.
+- [x] Planner benchmark harness and deterministic metrics for user-authored cases; held-out task families, corpus quality and performance evaluation remain pending.
+- [ ] Held-out task families, tool-selection utility, latency/cost calibration and human-rated reasoning quality.
 
 ## M4 — Persistent memory and learning
 - [x] Capture user-reported diagnostic outcomes: resolved, not resolved, not attempted.
@@ -100,9 +109,10 @@ Statuses: DONE / IN_PROGRESS / BLOCKED / PLANNED. Mark DONE only with code, test
 - [x] CLI for memory indexing and semantic recall; sensitive indexing requires an explicit flag and warning.
 - [ ] Embedding retrieval quality evaluation and benchmark.
 - [x] Review-only duplicate/near-duplicate consolidation proposals; no automatic merge/rewrite.
-- [ ] Reviewed consolidation merge workflow and contradiction resolution.
-- [ ] Evaluated learning from verified outcomes; do not learn unverified fixes.
-- [ ] Reviewed and versioned reusable skill induction.
+- [x] Explicit two-source memory merge after review, with two-parent lineage, source provenance preservation, sensitivity monotonicity, conservative confidence and earliest-expiry enforcement.
+- [ ] Embedding retrieval quality evaluation and semantic contradiction resolution.
+- [x] Experimental deterministic skill-candidate generation from completed runs with positive verification and action-receipt checks; explicit user confirmation before save. Quality, transfer and end-to-end hosted CI validation remain pending.
+- [ ] Evaluated skill quality/transfer and learning from verified outcomes; no automatic model retraining or capability induction.
 - [ ] Forgetting, retention and regression evaluation.
 
 ## M5 — Controlled autonomy
@@ -112,33 +122,43 @@ Statuses: DONE / IN_PROGRESS / BLOCKED / PLANNED. Mark DONE only with code, test
 - [x] Policy broker integration with a reviewed proposal queue and separate append-only SQLite audit ledger (approval never executes).
 - [x] Typed non-mutating dry-run executor validates proposal/policy alignment without OS mutation.
 - [x] CLI dry-run path for reviewed proposals; it reports `executed=False`.
-- [x] Fail-closed execution gate and bounded execution-budget contract; no real executor consumes it yet.
-- [ ] Least-privilege real executor and restricted tool manifests.
-- [ ] Sandbox enforcement, command/tool resource controls and postcondition-aware runtime.
-- [ ] Rollback/recovery and postcondition verification.
+- [x] Fail-closed execution gate, kill switch and bounded execution-budget contract consumed by a registered adapter executor.
+- [x] Restricted in-process adapter registry with a single fixed Windows Settings URI opener; no shell, arbitrary process, filesystem-write or network adapter. This is not process sandboxing.
+- [x] Durable execution reservations and immutable execution receipts appended to the SHA-256 policy audit ledger; duplicate reservations/receipts are rejected and successful URI dispatch remains unverified until a separate postcondition check.
+- [x] Append-only, one-time postcondition verification records; only a successful dispatch can be verified, and both confirmed and not-confirmed outcomes are retained without overwriting history.
+- [ ] OS-process sandbox enforcement and isolated adapter execution; current built-in adapter is a narrow in-process URI dispatcher, not a sandbox.
+- [ ] Rollback and automatic recovery after an execution reservation.
+- [ ] Adapter-specific non-interactive postcondition verifiers; current verification is an explicit human-recorded outcome, not independent OS-state inspection.
 - [ ] Prompt-injection and tool-misuse red-team tests.
 - [ ] Enable any autonomous remediation only after end-to-end verification.
 
 ## M6 — Generalization research
-- [ ] Held-out task families and deterministic baselines.
-- [ ] Transfer to unseen task variations.
+- [x] User-authored retrieval benchmark with Recall@k, Precision@k, MRR and Hit Rate for lexical or local semantic search; sensitive records require explicit inclusion.
+- [x] Conservative lexical polarity-conflict proposals for manual review; no automatic rewrite or resolution.
+- [x] Planner contract benchmark reports deterministic schema/allowlist metrics over a user-authored dataset.
+- [ ] Held-out task families and deterministic baselines with curated ground truth.
+- [ ] Transfer to unseen task variations and evaluate procedural-skill quality.
 - [ ] Causal/temporal reasoning measured separately from retrieval.
 - [ ] Calibration, robustness, forgetting and recovery metrics.
 - [ ] Reproducible experiment manifests; no benchmark presented as proof of AGI.
 
 ## M7 — Personal assistant experience
-- [ ] Windows tray process and lifecycle controls.
-- [ ] Native notifications with user-configurable quiet/pause controls.
-- [ ] Permission and retention settings.
-- [ ] Diagnostics/action history and memory review.
-- [ ] Desktop UI after core telemetry and policy APIs stabilize.
+- [x] User-started Windows tray prototype with pause/resume and minimal local status dialog; target-desktop usability/runtime validation remains pending.
+- [x] Generic local notification prototype with explicit opt-in, quiet hours, pause suppression and no event details in the balloon. Target-desktop behavior and full notification categories remain pending.
+- [x] Capability permission inspection and enable/disable controls for registered adapters; enabling cannot remove required review or enable autonomy.
+- [x] Read-only retention inventory for evidence, memories, task runs and policy proposals, alongside explicit event/memory pruning commands.
+- [x] CLI diagnostics/action history and local memory review through events, proposals, memories, recall, conflict review, merge and verified-skill review.
+- [ ] Native desktop history and memory-review interface with pagination and user-controlled filters.
+- [ ] Full desktop dashboard and memory/action history UI after core telemetry and policy APIs stabilize.
+- [x] One-command local agent entry point combining local planning, validation, durable run creation and bounded advancement; policy/input gates stop progression.
 
 ## Immediate dev sprint
-1. Keep target-desktop validation for browser/native-host, UIA, Event Log and ETW elevation as the primary validation gate.
+1. Validate the native tray, balloon notification behavior, browser/native-host, UIA, Event Log and elevated ETW on the actual target desktop; hosted CI cannot validate interactive desktop behavior.
 2. Extend ETW from process lifecycle into explicitly selected thread/file/network categories with coverage reporting.
 3. Evaluate freshness/contradiction signals and add calibrated confidence metrics without treating heuristics as probabilities.
-4. Evaluate semantic memory retrieval and review consolidation proposals before any automatic merge/learning path.
-5. Continue the policy sandbox/audit path before any mutating executor work.
+4. Evaluate semantic memory retrieval, reviewed merges, retention and temporal contradiction handling on held-out queries.
+5. Add process isolation and adapter-specific postcondition verifiers before expanding the narrow Windows Settings adapter.
+6. Evaluate planner quality, skill quality/transfer and verified outcome utility without learning from unverified or model-generated success claims.
 
 ## Risk register
 | Risk | Mitigation | State |
@@ -146,7 +166,7 @@ Statuses: DONE / IN_PROGRESS / BLOCKED / PLANNED. Mark DONE only with code, test
 | Snapshot polling misses short-lived processes | ETW plus reconciliation and coverage reporting | OPEN |
 | Browser telemetry exposes private page data | Explicit opt-in; playback-only fields; strict native host | CONTROLLED |
 | Event Log access denied or logs roll over | Allowlisted classic channels, record cursors, bounded error events | OPEN |
-| Model hallucination causes harmful actions | Default-deny policy; no executor yet; approval/audit required | CONTROLLED |
+| Model hallucination causes harmful actions | Default-deny broker, audited approval, explicit execution gate and fixed adapter allowlist | CONTROLLED |
 | Noisy metrics cause false diagnosis | Repeated samples, multiple signals and evaluation | OPEN |
 | Memory retains sensitive data | Local-first, sensitivity labels, TTL and user deletion | CONTROLLED |
 | Agent performs unbounded actions | Capability scopes, budgets, kill switch, audit and verification | CONTROLLED |
