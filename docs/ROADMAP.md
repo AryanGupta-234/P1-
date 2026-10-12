@@ -61,6 +61,7 @@ Development ownership and branch rules are defined in [Development Streams](DEVE
 - [ ] Run the expanded read-only target-desktop validator, verify simultaneous Chrome/Edge native-host registration, and exercise live player behavior on the target desktop.
 - [x] Add versioned synthetic video trace corpus covering each diagnostic rule, mixed causes, unknown metrics and insufficient evidence.
 - [x] Add `aie video-evaluate` with exact-match rate and per-cause/micro precision, recall, F1 and TP/FP/FN/TN regression metrics.
+- [x] Add explicit, no-overwrite export of anonymized local playback trace candidates for manual ground-truth labeling.
 - [ ] Capture a consented, representative field corpus across browsers, players, networks and CDNs; evaluate false positives/negatives and confidence calibration on held-out traces.
 - [x] Add manually invoked, bounded HTTPS multi-sample throughput and ICMP packet-loss probes; keep probes off during default observation and persist only aggregate measurements/labels.
 - [ ] Validate probe repeatability against selected CDN/player paths on the target Windows desktop; characterize ICMP filtering and throughput-test endpoint variability.
