@@ -112,6 +112,8 @@ aie video-probe --packet-target gateway=192.168.1.1 --packet-target video_path=c
 aie video-probe --throughput-url https://speed-test.example.net/1m.bin --estimated-required-mbps 8
 aie context
 aie video-evaluate
+# After a consented local observation session, prepare anonymized candidates for manual labeling:
+aie video-trace-export --confirm --hours 24 --limit 100 --output .\video_field_trace_candidates.json
 ```
 
 The HTTPS probe requires a user-selected public HTTPS endpoint, follows no redirects, reads at most 768 KiB by default, and stores only aggregate measurements—not the URL, hostname or response body. Packet probes send up to four ICMP requests per selected target and store labels/counts/percentage, not the hostnames/IPs. When two targets are selected, their packet-loss percentages are not combined into a single diagnostic signal. Results describe the selected test path, not necessarily the active streaming CDN. The bundled trace evaluator reports regression precision/recall/F1 and per-cause false positives/negatives on synthetic cases; it is not field-accuracy or confidence-calibration evidence. See [Video Intelligence](docs/VIDEO_INTELLIGENCE.md).
