@@ -93,7 +93,7 @@ Install optional Windows dependencies with `python -m pip install -e ".[dev,wind
 Use `aie pause` to pause all running observer loops for the current Windows user, `aie resume` to resume them, and `aie status` to inspect pause state and local event count. Pausing does not erase retained events. `aie prune --older-than-days 30` previews old records; add `--confirm` to delete only the expired local events.
 
 ## Browser playback observer
-The opt-in Chrome/Edge extension prototype is in `browser_extension/`. Load it unpacked, then register its Windows native host using `scripts/register-native-host.ps1`. See [Video Intelligence setup](docs/VIDEO_INTELLIGENCE.md). Monitoring defaults to off.
+The opt-in Chrome/Edge/Brave extension prototype is in `browser_extension/`. Load it unpacked, then register its Windows native host using `scripts/register-native-host.ps1`. See [Video Intelligence setup](docs/VIDEO_INTELLIGENCE.md). Monitoring defaults to off.
 
 ## Structural screen observation (optional)
 To collect bounded UI Automation structure for selected apps, install the optional Windows extra with `python -m pip install -e ".[dev,windows]"`, then run `aie observe --duration 600 --ui-tree --ui-tree-apps msedge.exe,notepad.exe`. Only allowlisted foreground apps are sampled. It records control type, class, automation ID and geometry; it does not read UI text, values, passwords or screenshots. UI Automation is off by default. Inspect the latest structural sample with `aie screen`.
