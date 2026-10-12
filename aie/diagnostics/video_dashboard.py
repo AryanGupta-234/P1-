@@ -29,11 +29,12 @@ def _safe_event(event) -> dict[str, Any]:
         "timestamp": event.timestamp.isoformat(),
         "type": event.event_type,
         "source": event.source,
-        "entity": event.entity.name,
+        "entity": event.entity.type,
         "sensitivity": event.sensitivity,
         "evidence_kind": event.evidence_kind,
     }
     if event.event_type == "browser.video.snapshot":
+        item["entity"] = "video_playback"
         item.update({
             "playback_state": data.get("playback_state"),
             "stall_count": data.get("stall_count"),
@@ -42,6 +43,7 @@ def _safe_event(event) -> dict[str, Any]:
             "dropped_frames_pct": _number(data.get("dropped_frames_pct")),
         })
     elif event.event_type == "diagnostic.video_finding":
+        item["entity"] = data.get("cause", "diagnostic_finding")
         item.update({
             "cause": data.get("cause"),
             "severity": data.get("severity"),
@@ -58,6 +60,7 @@ def _safe_event(event) -> dict[str, Any]:
             "target_event_id": data.get("target_event_id"),
         })
     elif event.event_type == "network.video_probe":
+        item["entity"] = "user_selected_diagnostic_targets"
         item.update({
             "packet_loss_by_target": [
                 {
@@ -75,12 +78,14 @@ def _safe_event(event) -> dict[str, Any]:
             "action_executed": data.get("action_executed") is True,
         })
     elif event.event_type == "window.foreground_changed":
+        item["entity"] = "foreground_application"
         item.update({
             "process_name": data.get("process_name"),
             "pid": data.get("pid"),
             "window_title_collected": data.get("window_title_collected") is True,
         })
     elif event.event_type == "process.foreground_resource_sample":
+        item["entity"] = "foreground_process_resource_sample"
         item.update({
             "process_name": data.get("process_name"),
             "pid": data.get("pid"),
@@ -89,6 +94,7 @@ def _safe_event(event) -> dict[str, Any]:
             "thread_count": data.get("thread_count"),
         })
     elif event.event_type == "observer.health":
+        item["entity"] = "observer_provider_health"
         providers = data.get("providers", {})
         item["providers"] = {
             str(name): {
@@ -135,11 +141,12 @@ def build_video_dashboard_snapshot(
     )
     diagnosis = diagnose_video_buffering(context.metrics) if context else None
 
-    feedback_by_target = {
-        str(event.data.get("target_event_id")): event.data.get("outcome")
-        for event in feedback_events
-        if isinstance(event.data.get("target_event_id"), str)
-    }
+    feedback_by_target: dict[str, str] = {}
+    for feedback_event in feedback_events:
+        target_id = feedback_event.data.get("target_event_id")
+        outcome = feedback_event.data.get("outcome")
+        if isinstance(target_id, str) and isinstance(outcome, str):
+            feedback_by_target.setdefault(target_id, outcome)
     findings = []
     for event in finding_events[:100]:
         data = event.data
