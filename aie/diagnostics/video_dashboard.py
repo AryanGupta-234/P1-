@@ -239,7 +239,7 @@ def build_video_dashboard_snapshot(
     try:
         models = OllamaClient(default_timeout=2.0).list_models(timeout=2.0)
         model_discovery_error = None
-    except OllamaError as exc:
+    except (OllamaError, ValueError) as exc:
         models = []
         model_discovery_error = str(exc)
     profile = runtime_profile()
