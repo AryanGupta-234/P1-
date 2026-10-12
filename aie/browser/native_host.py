@@ -17,6 +17,7 @@ from typing import BinaryIO
 
 from aie.config import database_path
 from aie.contracts import AIEEvent, EntityRef
+from aie.diagnostics.monitor import VideoDiagnosticMonitor
 from aie.providers.windows import host_id
 from aie.store import EventStore
 
@@ -162,6 +163,7 @@ def run_host(input_stream: BinaryIO, output_stream: BinaryIO, store: EventStore 
     """
     accepted = 0
     active_store = store
+    diagnostic_monitor: VideoDiagnosticMonitor | None = None
     for payload in iter_native_messages(input_stream):
         if payload == _BRIDGE_PING:
             write_native_message(output_stream, _BRIDGE_PONG)
@@ -171,6 +173,23 @@ def run_host(input_stream: BinaryIO, output_stream: BinaryIO, store: EventStore 
             if active_store is None:
                 active_store = EventStore(database_path())
             active_store.append(event)
+            if diagnostic_monitor is None:
+                diagnostic_monitor = VideoDiagnosticMonitor(active_store)
+            try:
+                findings = diagnostic_monitor.poll()
+                if findings:
+                    active_store.append_many(findings)
+                    for finding in findings:
+                        sys.stderr.write(
+                            "AIE video diagnostic suggestion created: "
+                            f"{finding.data.get('cause', 'unknown')}\\n"
+                        )
+            except Exception as exc:
+                # Telemetry persistence must remain reliable if optional diagnosis fails.
+                sys.stderr.write(
+                    "AIE video diagnostic monitor unavailable: "
+                    f"{type(exc).__name__}\\n"
+                )
             write_native_message(output_stream, {"ok": True, "event_id": event.event_id})
             accepted += 1
         except (TypeError, ValueError) as exc:
