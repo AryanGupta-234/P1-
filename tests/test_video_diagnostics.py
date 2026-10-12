@@ -102,3 +102,9 @@ def test_rejects_non_boolean_non_finite_or_boolean_numeric_metrics(changes):
     with pytest.raises(ValueError):
         VideoMetrics(**values)
 
+def test_rejects_integer_metrics_too_large_for_finite_float_conversion():
+    with pytest.raises(ValueError, match="finite"):
+        VideoMetrics(playback_stalled=True, throughput_mbps=10 ** 10000)
+    with pytest.raises(ValueError, match="finite"):
+        VideoMetrics(playback_stalled=True, observation_window_seconds=10 ** 10000)
+
