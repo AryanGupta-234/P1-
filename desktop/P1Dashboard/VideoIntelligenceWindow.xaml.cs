@@ -1,4 +1,5 @@
 using System.Data;
+using System.IO;
 using System.Text;
 using System.Text.Json;
 using System.Windows;
@@ -18,10 +19,9 @@ public partial class VideoIntelligenceWindow : Window
     public VideoIntelligenceWindow()
     {
         InitializeComponent();
-        _refreshTimer = new DispatcherTimer
+        _refreshTimer = new DispatcherTimer(DispatcherPriority.Background)
         {
             Interval = TimeSpan.FromSeconds(20),
-            Priority = DispatcherPriority.Background,
         };
         _refreshTimer.Tick += async (_, _) => await RefreshAsync();
         Loaded += async (_, _) =>
