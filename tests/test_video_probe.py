@@ -264,10 +264,42 @@ def test_throughput_rejects_invalid_port():
         video_probe._validate_public_https_url("https://speed.example:99999/file")
 
 
-def test_probe_rejects_boolean_bitrate_estimate():
+@pytest.mark.parametrize("estimate", [True, 10 ** 10000])
+def test_probe_rejects_boolean_or_oversized_bitrate_estimate(estimate):
     with pytest.raises(video_probe.VideoProbeError, match="estimated_required_mbps"):
         video_probe.run_video_network_probe(
             packet_targets=(("gateway", "192.168.1.1"),),
-            estimated_required_mbps=True,
+            estimated_required_mbps=estimate,
         )
+
+def test_pinned_https_connection_uses_validated_ip_and_original_tls_hostname(monkeypatch):
+    raw_socket = object()
+    wrapped_socket = object()
+    connect_calls = []
+    wrap_calls = []
+
+    class FakeContext:
+        check_hostname = True
+
+        def wrap_socket(self, sock, *, server_hostname):
+            wrap_calls.append((sock, server_hostname))
+            return wrapped_socket
+
+    def create_connection(address, *, timeout, source_address):
+        connect_calls.append((address, timeout, source_address))
+        return raw_socket
+
+    monkeypatch.setattr(video_probe.socket, "create_connection", create_connection)
+    connection = video_probe._PinnedHTTPSConnection(
+        "speed.example",
+        "1.1.1.1",
+        443,
+        timeout=1.5,
+        context=FakeContext(),
+    )
+    connection.connect()
+
+    assert connect_calls == [(("1.1.1.1", 443), 1.5, None)]
+    assert wrap_calls == [(raw_socket, "speed.example")]
+    assert connection.sock is wrapped_socket
 
