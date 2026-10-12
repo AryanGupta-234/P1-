@@ -1,6 +1,5 @@
 from datetime import datetime, timezone
 
-from aie.context.video import build_video_observation_context
 from aie.contracts import AIEEvent, EntityRef
 from aie.diagnostics.monitor import VideoDiagnosticMonitor
 from aie.store import EventStore
