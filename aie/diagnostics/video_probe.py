@@ -51,11 +51,10 @@ class VideoProbeResult:
 
     @property
     def packet_loss_pct(self) -> float | None:
-        sent = sum(item.packets_sent for item in self.packet_results)
-        received = sum(item.packets_received for item in self.packet_results)
-        if not sent:
+        # Never average percentages from different destinations into a single path signal.
+        if len(self.packet_results) != 1:
             return None
-        return round(100.0 * (sent - received) / sent, 2)
+        return self.packet_results[0].packet_loss_pct
 
     @property
     def packets_sent(self) -> int:
@@ -291,6 +290,12 @@ def measure_https_throughput(
                 timeout=min(2.0, remaining),
                 context=ssl.create_default_context(),
             )
+            connection.connect()
+            remaining = deadline - clock()
+            if remaining <= 0:
+                break
+            if connection.sock is not None:
+                connection.sock.settimeout(min(1.0, remaining))
             start_byte = request_index * sample_bytes
             end_byte = start_byte + requested - 1
             connection.request(
@@ -304,6 +309,11 @@ def measure_https_throughput(
                     "User-Agent": "AIE-Video-Diagnostic/1.0",
                 },
             )
+            remaining = deadline - clock()
+            if remaining <= 0:
+                break
+            if connection.sock is not None:
+                connection.sock.settimeout(min(1.0, remaining))
             response = connection.getresponse()
             if response.status not in (200, 206):
                 raise VideoProbeError(
