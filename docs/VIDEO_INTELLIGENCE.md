@@ -3,7 +3,7 @@
 ## Implemented pipeline
 
 1. **Browser observation:** the opt-in Chrome/Edge/Brave MV3 extension observes HTML video elements after the user enables monitoring. It reports playback state, a rolling stall count, buffered-ahead duration, playback-position delta and dropped-frame deltas when the browser exposes them.
-2. **Local transport:** the extension sends a strict native-messaging payload to the Windows host. The host rejects unknown fields and stores normalized `browser.video.snapshot` events in the local SQLite store.
+2. **Local transport and live diagnosis:** the extension sends a strict native-messaging payload to the Windows host. The host rejects unknown fields, stores normalized `browser.video.snapshot` events in the local SQLite store, then polls `VideoDiagnosticMonitor`. New evidence-backed `diagnostic.video_finding` events are persisted automatically with their evidence IDs; duplicate causes are suppressed by active-state and cooldown checks. This is proactive suggestion generation, not action execution.
 3. **Windows telemetry:** a bounded read-only provider samples interface counters, TCP connection-establishment latency to a private gateway and two public endpoints, and DNS resolution timing.
 4. **Foreground context:** the Windows foreground observer records app/process transitions without reading window titles by default. It samples the active process CPU, RSS memory, thread count and process I/O counters on a bounded cadence.
 5. **Context assembly:** `aie.context.video` correlates fresh browser, same-host foreground-app and network observations. It never copies window-title text into the resulting context.
@@ -20,6 +20,30 @@ Available hypotheses include:
 - **Insufficient streaming throughput, packet loss or high packet RTT:** only evaluated when a source actually supplies those specific measurements. TCP connection-establishment time and aggregate interface bytes are not substituted for packet RTT, stream throughput or packet loss.
 
 Thresholds and confidence values are heuristics, not calibrated probabilities. Root-cause accuracy must be evaluated against representative traces before unattended remediation is enabled.
+
+## Intelligent assistance and desktop dashboard
+
+The video subsystem is an assistive workstream inside the wider AIE ecosystem, not a standalone metrics viewer:
+
+- Every accepted playback snapshot is persisted first, then passed to the deterministic `VideoDiagnosticMonitor`. When the evidence threshold is met, the monitor stores a deduplicated finding with severity, heuristic confidence, explanation, and source evidence IDs.
+- The optional tray notification path can surface a generic notice when the user has explicitly enabled notifications. It never places app identity, playback details or event payloads in the notification.
+- The WPF dashboard is opened from **Video intelligence** in the main P1- workspace. It refreshes a bounded, read-only 24-hour view every 20 seconds and exposes playback context, rule-engine hypotheses, findings and feedback, network probes, normalized activity events, event-type distribution, local model availability, and learning/evaluation views.
+- The dashboard's local AI advisor is an explanatory layer, not the diagnostic authority. The deterministic rule engine supplies findings; Ollama is asked to explain and prioritize safe next steps using only a bounded, privacy-reviewed evidence package. Every model observation and proposed step must cite event IDs from that package. Unknown measurements remain unknown.
+- The routine tier routes to the installed Qwen 3B model. The complex tier requests the Qwen 7B model only when the RAM-aware model policy allows it; otherwise the router can fall back to the eligible 3B model. `nomic-embed-text` remains the dedicated semantic-memory embedding model and is not used to manufacture video measurements or root causes.
+- No model is downloaded automatically, no video telemetry is sent to a cloud provider, and the model cannot create or execute capabilities. Feedback remains explicit user-reported evidence and does not retrain the model.
+
+Useful commands:
+
+```powershell
+# Machine-readable dashboard snapshot (the WPF client uses this contract).
+aie video-dashboard --json --lookback-hours 24 --limit 500
+
+# Grounded local explanation of current deterministic findings.
+aie video-advice --tier routine
+aie video-advice --tier complex
+```
+
+The desktop dashboard also provides explicit actions for recording a finding outcome, running the synthetic regression corpus, and exporting anonymized field candidates. The export remains no-overwrite and still requires independent human labels.
 
 ## Explicit network probes
 
