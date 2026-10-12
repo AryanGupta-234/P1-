@@ -249,6 +249,10 @@ def test_correlates_opt_in_video_network_probe_without_retaining_endpoints():
         seconds_ago=2,
         data={
             "packet_target_labels": ["gateway", "stream_endpoint"],
+            "packet_loss_by_target": [
+                {"label": "gateway", "packets_sent": 4, "packets_received": 3, "packet_loss_pct": 25.0},
+                {"label": "stream_endpoint", "packets_sent": 4, "packets_received": 3, "packet_loss_pct": 25.0},
+            ],
             "packets_sent": 8,
             "packets_received": 6,
             "packet_loss_pct": 25.0,
@@ -271,4 +275,6 @@ def test_correlates_opt_in_video_network_probe_without_retaining_endpoints():
     assert "video-probe-1" in context.evidence_event_ids
     assert "private.example" not in str(context.metrics)
     assert context.network_evidence[0].target == "user-selected diagnostic targets"
+    assert len(context.network_evidence[0].packet_loss_by_target) == 2
+    assert context.network_evidence[0].packet_loss_by_target[0] == ("gateway", 25.0, 4, 3)
 
