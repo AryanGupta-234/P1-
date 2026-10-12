@@ -55,8 +55,11 @@ class VideoDiagnosticMonitor:
 
     def poll(self) -> list[AIEEvent]:
         """Return new finding events; caller persists them and presents notifications."""
-        events = self.store.recent(1000)
         now = self.clock()
+        # Refresh persisted cooldowns on every poll so independent browser native-host
+        # processes observe findings created by their siblings.
+        self._load_recent_alerts()
+        events = self.store.recent(1000)
         context = build_video_observation_context(
             events,
             now=now,
