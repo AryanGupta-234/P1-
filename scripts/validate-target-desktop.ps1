@@ -66,7 +66,7 @@ foreach ($selectedBrowser in $Browser) {
     $registryRoot = switch ($selectedBrowser) {
         'Chrome' { 'HKCU:\Software\Google\Chrome\NativeMessagingHosts' }
         'Edge'   { 'HKCU:\Software\Microsoft\Edge\NativeMessagingHosts' }
-        'Brave'  { 'HKCU:\Software\BraveSoftware\Brave-Browser\NativeMessagingHosts' }
+        'Brave'  { 'HKCU:\Software\Google\Chrome\NativeMessagingHosts' }
     }
 
     $registryKey = Join-Path $registryRoot 'com.aie.browser_bridge'
