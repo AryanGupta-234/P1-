@@ -110,10 +110,11 @@ class MemoryStore:
                     raise ValueError("source task run must exist and be completed")
 
         now = datetime.now(timezone.utc)
+        created_at = self._aware_utc(memory.created_at, "created_at")
         normalized = memory.model_copy(
             update={
-                "created_at": self._aware_utc(memory.created_at, "created_at"),
-                "updated_at": now,
+                "created_at": created_at,
+                "updated_at": max(now, created_at),
                 "expires_at": (
                     self._aware_utc(memory.expires_at, "expires_at")
                     if memory.expires_at is not None
