@@ -8,7 +8,7 @@ Status vocabulary: DONE / IN_PROGRESS / BLOCKED / PLANNED. A task is DONE only w
 |---|---|---|---|
 | M0 | Architecture and foundation | IN_PROGRESS | Contracts, package, CLI, docs and Windows CI workflow; CI must execute successfully |
 | M1 | Windows environment observer | IN_PROGRESS | Host/process baseline, app/service/network/task inventory, SQLite and explicit retention API |
-| M2 | Context intelligence | PLANNED | Temporal correlation, state model, evidence-linked hypotheses |
+| M2 | Context intelligence | IN_PROGRESS | Conservative process-start evidence correlation exists as a tested library; store/CLI integration and broader context modeling remain |
 | M3 | Cognitive core | IN_PROGRESS | Local model discovery and routing policy exist; actual model adapters/planning remain |
 | M4 | Persistent intelligence | PLANNED | Provenance-aware memory, consolidation and retrieval evaluation |
 | M5 | Controlled autonomy | PLANNED | UIA/app adapters, capability broker, policy, sandbox, audit and recovery |
@@ -54,7 +54,9 @@ Status vocabulary: DONE / IN_PROGRESS / BLOCKED / PLANNED. A task is DONE only w
 - [ ] Measure CPU, memory, event latency and event loss on the target laptop; collector exception reporting is implemented but needs Windows validation.
 
 ## M2 — Context Intelligence
-- [ ] Temporal event correlation and environmental state snapshots.
+- [x] Add conservative ETW-to-snapshot process-start correlation using host, PID, normalized image name and process creation time; emit deterministic derived evidence with both source event IDs.
+- [ ] Integrate correlation with SQLite history queries and a CLI workflow; add stop-event correlation only when process-instance identity is sufficient.
+- [ ] Add environmental state snapshots.
 - [ ] Store observations separately from inferred hypotheses.
 - [ ] Evidence-backed relevance scoring and confidence calibration.
 - [ ] Privacy-safe project/session context.
