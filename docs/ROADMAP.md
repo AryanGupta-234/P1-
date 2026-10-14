@@ -42,7 +42,7 @@ Status vocabulary: DONE / IN_PROGRESS / BLOCKED / PLANNED. A task is DONE only w
 - [x] Sample low-frequency inventory every 30 seconds separately from process/resource polling.
 - [x] Detect service, network-interface, scheduled-task and application metadata changes through 30-second snapshot reconciliation.
 - [ ] Add native event-driven service/network/task subscriptions where supported.
-- [ ] Complete ETW process telemetry validation: opt-in bounded capture and streaming tracerpt-XML normalization for process start/stop are implemented; real Windows schema validation, trace-loss accounting and snapshot reconciliation are pending.
+- [ ] Complete ETW process telemetry validation: opt-in bounded capture, streaming tracerpt-XML normalization, deterministic event IDs and batched SQLite import are implemented; real Windows schema validation, trace-loss accounting and snapshot reconciliation are pending.
 - [ ] Allowlisted Windows Event Log subscriptions.
 - [ ] Executable path discovery and Authenticode publisher/signature inventory.
 - [x] Add cooperative pause/resume via an operator-controlled pause file; record pause/resume events.
