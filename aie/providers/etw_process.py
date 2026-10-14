@@ -87,17 +87,25 @@ class ETWProcessTrace:
             "-nb", str(self.min_buffers), str(self.max_buffers),
             "-max", str(self.max_file_mb),
         ]
-        self._run(args)
         self._started = True
+        try:
+            self._run(args)
+        except ETWSessionError as start_error:
+            try:
+                self._run(["logman.exe", "stop", self.session_name, "-ets"])
+            except ETWSessionError as cleanup_error:
+                raise ETWSessionError(
+                    "ETW start failed and cleanup could not confirm session stop"
+                ) from cleanup_error
+            self._started = False
+            raise start_error
         return self.output
 
     def stop(self) -> None:
         if not self._started:
             return
-        try:
-            self._run(["logman.exe", "stop", self.session_name, "-ets"])
-        finally:
-            self._started = False
+        self._run(["logman.exe", "stop", self.session_name, "-ets"])
+        self._started = False
 
     def __enter__(self) -> "ETWProcessTrace":
         self.start()
