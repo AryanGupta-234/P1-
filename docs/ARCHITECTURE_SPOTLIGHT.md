@@ -60,6 +60,7 @@ See [HARDWARE_PROFILE.md](HARDWARE_PROFILE.md) for the sanitized host baseline.
 - Generic in-memory snapshot delta engine with baseline, added, removed and changed evidence events; duplicate identities fail closed.
 - Synthetic unit and Windows-provider integration tests cover baseline creation and service-state transition emission.
 - Windows service, network interface, scheduled-task and installed-application state deltas; low-frequency inventory sampling is bounded to 30-second intervals, independently of process/resource polling.
+- Fixed Windows System Event Log allowlist: Service Control Manager 7036, Kernel-Power 42, and Kernel-General 12/13. Queries only the last 100 allowlisted events every 30 seconds, stores record IDs/timestamps and limited service state fields, and discards rendered messages. Deterministic IDs make repeated polling idempotent.
 - CLI retention command: `aie prune --older-than-days N` or `aie prune --keep-latest N`.
 - Complete chronological JSONL export: `aie export-events PATH`; live observation can also write JSONL with `aie observe --jsonl PATH`.
 - Cooperative pause/resume: `aie observe --pause-file PATH` pauses while the file exists; removing it resumes without consuming active observation duration.
@@ -73,7 +74,7 @@ See [HARDWARE_PROFILE.md](HARDWARE_PROFILE.md) for the sanitized host baseline.
 
 ## Not implemented yet
 - Real-capture validation of the ETW XML schema, trace-loss accounting and reconciliation against user-mode snapshots.
-- Windows Event Log allowlist and real-time subscriptions.
+- Real-time Windows Event Log subscriptions (current implementation is a bounded 30-second query of the fixed allowlist); validate the exact event payload schema on Windows.
 - Native event-driven service/network/task/application subscriptions (current implementation uses 30-second snapshot reconciliation, not native event subscriptions).
 - Dedicated end-to-end runtime tests and Windows-host validation for pause/resume, collector recovery, CPU overhead and event latency.
 - Executable path/signature discovery and application adapter registry.
