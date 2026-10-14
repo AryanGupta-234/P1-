@@ -43,16 +43,20 @@ def valid_plan(goal, *, capability=False):
 
 
 class SequenceProvider:
-    def __init__(self, payloads):
+    def __init__(self, payloads, metadata=None):
         self.payloads = list(payloads)
+        self.metadata = list(metadata or [])
 
     def chat(self, request, *, model):
+        metadata = self.metadata.pop(0) if self.metadata else {}
         return ModelResponse(
             model=model,
             content=json.dumps(self.payloads.pop(0)),
-            elapsed_seconds=0.01,
-            local_inference=True,
-            provider="fake-local",
+            elapsed_seconds=metadata.get("elapsed_seconds", 0.01),
+            prompt_tokens=metadata.get("prompt_tokens"),
+            completion_tokens=metadata.get("completion_tokens"),
+            local_inference=metadata.get("local_inference", True),
+            provider=metadata.get("provider", "fake-local"),
         )
 
 
@@ -161,3 +165,51 @@ def test_planner_dataset_rejects_expected_capabilities_outside_allowlist():
                 },
             ),
         )
+
+
+def test_planner_evaluation_reports_latency_and_only_provider_reported_tokens():
+    dataset = PlanEvaluationDataset(
+        dataset_id="telemetry",
+        cases=(
+            {"case_id": "valid", "goal": "Inspect desktop playback state"},
+            {"case_id": "invalid", "goal": "Inspect desktop playback state"},
+        ),
+    )
+    provider = SequenceProvider(
+        [
+            valid_plan("Inspect desktop playback state"),
+            valid_plan("A rewritten goal"),
+        ],
+        metadata=[
+            {
+                "elapsed_seconds": 0.25,
+                "prompt_tokens": 120,
+                "completion_tokens": 80,
+                "local_inference": True,
+                "provider": "ollama",
+            },
+            {
+                "elapsed_seconds": 0.75,
+                "completion_tokens": 60,
+                "local_inference": False,
+                "provider": "openai-compatible",
+            },
+        ],
+    )
+
+    report = evaluate_planner(dataset, provider=provider, model="evaluation-model")
+
+    assert report.valid_rate == 0.5
+    assert report.mean_latency_seconds == 0.5
+    assert report.p50_latency_seconds == 0.25
+    assert report.p95_latency_seconds == 0.75
+    assert report.prompt_tokens_total == 120
+    assert report.prompt_token_observations == 1
+    assert report.completion_tokens_total == 140
+    assert report.completion_token_observations == 2
+    assert report.local_inference_cases == 1
+    assert report.remote_inference_cases == 1
+    assert report.cases[0].provider == "ollama"
+    assert report.cases[1].valid is False
+    assert report.cases[1].elapsed_seconds == 0.75
+    assert report.cases[1].prompt_tokens is None
