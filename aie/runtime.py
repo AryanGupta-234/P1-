@@ -32,7 +32,7 @@ def observe(duration: int, interval: float, db_path: Path,
     store = EventStore(db_path)
     deadline = time.monotonic() + duration
     total = 0
-    failures = {"process_snapshot": 0, "state_snapshot": 0}
+    failures = {"process_snapshot": 0, "state_snapshot": 0, "eventlog": 0}
     paused = False
     if jsonl_path:
         jsonl_path.parent.mkdir(parents=True, exist_ok=True)
@@ -96,6 +96,11 @@ def observe(duration: int, interval: float, db_path: Path,
                     persist(recovered("state_snapshot"))
                 except Exception as exc:
                     persist([failed("state_snapshot", exc)])
+                try:
+                    persist(list(provider.collect_eventlog_events()))
+                    persist(recovered("eventlog"))
+                except Exception as exc:
+                    persist([failed("eventlog", exc)])
                 next_state_sample = now + STATE_SNAPSHOT_INTERVAL
 
             remaining = deadline - time.monotonic()
