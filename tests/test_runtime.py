@@ -345,3 +345,63 @@ def test_etw_loss_is_reflected_in_observer_health(tmp_path: Path, monkeypatch):
     health_events = EventStore(db_path).query_events(event_types=["observer.health"], limit=10)
     assert total == 2
     assert health_events[-1].data["providers"]["windows.etw.process"]["event_loss"] == 4
+
+
+def test_network_interface_state_delta_is_persisted(tmp_path: Path, monkeypatch):
+    from datetime import datetime, timezone
+
+    from aie.contracts import AIEEvent, EntityRef
+    from aie.store import EventStore
+
+    class FakeNetworkProvider:
+        name = "windows.network"
+
+        def __init__(self):
+            self.calls = 0
+
+        def collect_snapshot(self):
+            self.calls += 1
+            return [AIEEvent(
+                event_id=f"network-snapshot-{self.calls}",
+                timestamp=datetime.now(timezone.utc),
+                host_id="host-a",
+                source=self.name,
+                event_type="network.interface.snapshot",
+                entity=EntityRef(type="network_interface", name="Ethernet"),
+                data={
+                    "is_up": self.calls == 1,
+                    "speed_mbps": 1000,
+                    "mtu": 1500,
+                    "bytes_sent": self.calls * 100,
+                },
+            )]
+
+    network_provider = FakeNetworkProvider()
+    install_fake_clock(monkeypatch)
+    monkeypatch.setattr(runtime, "WindowsProvider", FakeWindowsProvider)
+    monkeypatch.setattr(runtime, "WindowsNetworkProvider", lambda: network_provider)
+    monkeypatch.setattr(runtime, "observer_is_paused", lambda: False)
+
+    db_path = tmp_path / "network-state-deltas.sqlite3"
+    total = runtime.observe(
+        duration=6,
+        interval=5,
+        db_path=db_path,
+        include_network=True,
+        network_interval=5,
+        include_foreground=False,
+        include_video_diagnostics=False,
+    )
+
+    stored = EventStore(db_path)
+    changes = stored.query_events(
+        event_types=["network.interface.state_changed"],
+        limit=10,
+    )
+    assert network_provider.calls == 2
+    assert len(changes) == 1
+    assert changes[0].data["evidence_event_id"] == "network-snapshot-2"
+    assert changes[0].data["changed_fields"] == {
+        "is_up": {"before": True, "after": False}
+    }
+    assert total >= 3
