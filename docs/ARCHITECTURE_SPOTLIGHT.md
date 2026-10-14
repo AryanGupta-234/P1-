@@ -2,7 +2,7 @@
 
 > Current project truth. Read before implementation and update with every milestone change.
 
-**Last updated:** 2026-10-11 | **Current feature branch:** `feat/agent-orchestration-core` | **Target integration:** `dev` | **Platform:** Windows 10/11 only
+**Last updated:** 2026-10-14 | **Current feature branch:** `feat/planner-cost-latency-metrics` | **Target integration:** `dev` | **Platform:** Windows 10/11 only
 
 ## North star
 Build persistent personal intelligence that observes explicitly permitted signals, models context, reasons about goals, learns reusable skills and executes scoped actions safely. AGI remains a research objective, not a capability claim.
@@ -78,6 +78,7 @@ Build persistent personal intelligence that observes explicitly permitted signal
 - Bounded declarative plans use typed steps, explicit success criteria and dependencies; model-backed drafting is optional, local-Ollama by default, exact-goal preserving, schema-validated and restricted to caller-allowlisted capability IDs.
 - `aie agent run` provides a single-command local path from the user's goal through plan validation, durable run creation and bounded step advancement. It stops at approval/input/verification gates and does not execute proposals.
 - A user-authored planner benchmark reports validity, goal preservation, required step-kind coverage and capability precision/recall, including an explicit forbidden-capability rate. It uses an already-selected local provider and does not update model weights or create task runs.
+- Planner evaluation also records provider-reported per-case latency, prompt/completion token counts when supplied, provider identity and local/remote inference class; aggregate mean/p50/p95 latency and token-observation coverage are reported. Missing token values stay unknown and no token prices are inferred.
 - Persisted task orchestration uses SQLite compare-and-swap versions and append-only lifecycle events. The engine advances dependency-ready steps through injected handlers, pauses for approval/input, and requires an explicit positive assertion for verify steps. Local model reasoning receives only the plan and bounded completed-step summaries; no tools are exposed to the model.
 
 **Context and memory**
@@ -101,7 +102,7 @@ Build persistent personal intelligence that observes explicitly permitted signal
 - Capability manifests can be inspected and enabled/disabled with dedicated CLI commands. Enabling is limited to an application-registered adapter and preserves mandatory approval/no-autonomy fields; the executor enable marker and kill switch remain separate.
 - A read-only retention inventory reports event-age deletion candidates, expired memories and bounded task/proposal status counts. It never deletes records. Pruning remains a separate explicit confirmation path.
 - Approval and execution are separate operations. The execution gate remains disabled by default; no autonomous remediation is enabled.
-- These orchestration/execution additions currently live on `feat/agent-orchestration-core`; they are not represented as merged into `dev` until the pull request is reviewed and integrated.
+- The bounded plan contract, local plan drafting, task orchestration and policy-mediated execution baseline are present on `dev`; this feature branch adds planner evaluation telemetry without changing action authority or execution policy.
 
 ## Pending validation and implementation
 - Windows CI run [#581](https://github.com/AryanGupta-234/P1-/actions/runs/38123875398) passed on Python 3.11 and 3.12, including the current observer-health, ETW lifecycle/loss, task-session, dry-run governance and privacy-control tests.
