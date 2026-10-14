@@ -130,14 +130,20 @@ def etw_decode(
     db: Path = typer.Option(database_path(), "--db", help="SQLite event store to import into."),
 ) -> None:
     """Normalize Kernel-Process events into JSONL and the local SQLite store."""
-    from aie.providers.etw_decode import decode_trace_xml
+    from aie.providers.etw_decode import decode_trace_xml, read_trace_stats
 
     try:
+        stats = read_trace_stats(source_xml)
         count = decode_trace_xml(source_xml, output, store=EventStore(db))
     except (OSError, ValueError, ET.ParseError) as exc:
         console.print(f"[red]ETW decode failed:[/red] {exc}")
         raise typer.Exit(2) from exc
     console.print(f"Decoded {count} process events to {output} and imported into {db}")
+    if stats.events_lost is not None:
+        style = "yellow" if stats.events_lost else "green"
+        console.print(f"[{style}]ETW events lost: {stats.events_lost}[/{style}]")
+    else:
+        console.print("ETW loss counters were not present in this tracerpt XML.")
 
 
 @app.command()
