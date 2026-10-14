@@ -116,3 +116,30 @@ def test_checkpoint_rejects_oversized_value(tmp_path):
     store = EventStore(tmp_path / "events.sqlite3")
     with pytest.raises(ValueError):
         store.set_checkpoint("collector", "x" * 4097)
+
+
+def test_events_since_returns_chronological_bounded_window(tmp_path):
+    store = EventStore(tmp_path / "events.sqlite3")
+    now = datetime.now(timezone.utc)
+    store.append_many([
+        event("later", now + timedelta(seconds=2)),
+        event("middle", now + timedelta(seconds=1)),
+        event("earlier", now),
+    ])
+
+    result = store.events_since(now, limit=2)
+    assert [item.event_id for item in result] == ["earlier", "middle"]
+
+
+@pytest.mark.parametrize(
+    "since,limit",
+    [
+        (datetime.now(), 10),
+        (datetime.now(timezone.utc), 0),
+        (datetime.now(timezone.utc), 10001),
+    ],
+)
+def test_events_since_rejects_invalid_window(since, limit, tmp_path):
+    store = EventStore(tmp_path / "events.sqlite3")
+    with pytest.raises(ValueError):
+        store.events_since(since, limit=limit)
