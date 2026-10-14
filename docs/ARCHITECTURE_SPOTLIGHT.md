@@ -105,7 +105,7 @@ Build persistent personal intelligence that observes explicitly permitted signal
 - Bounded planning, persisted task orchestration and fail-closed policy-gated execution are integrated into `dev`; the remaining gaps are process isolation, rollback and independent adapter postcondition verification.
 
 ## Pending validation and implementation
-- Network interface state-change tracker is implemented on `feat/network-interface-state-deltas`; six focused unit tests pass in an isolated local test run. Feature-branch Windows CI and target-desktop validation remain pending.
+- Network interface state-change tracker is implemented on `feat/network-interface-state-deltas`; six focused tracker tests and one runtime persistence integration test are covered by hosted Windows CI run [#1279](https://github.com/AryanGupta-234/P1-/actions/runs/38510694840), which passed on Python 3.11 and 3.12. Target-desktop validation remains pending.
 - Windows CI run [#581](https://github.com/AryanGupta-234/P1-/actions/runs/38123875398) passed on Python 3.11 and 3.12, including the current observer-health, ETW lifecycle/loss, task-session, dry-run governance and privacy-control tests.
 - Target-desktop Chrome/Edge extension/native-host installation and live playback validation.
 - Target-desktop UIA and Application/System Event Log permission/behavior validation.
