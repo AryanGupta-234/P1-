@@ -42,7 +42,7 @@ Status vocabulary: DONE / IN_PROGRESS / BLOCKED / PLANNED. A task is DONE only w
 - [x] Sample low-frequency inventory every 30 seconds separately from process/resource polling.
 - [x] Detect service, network-interface, scheduled-task and application metadata changes through 30-second snapshot reconciliation.
 - [ ] Add native event-driven service/network/task subscriptions where supported.
-- [ ] ETW process/thread/image telemetry provider with bounded buffers and explicit session lifecycle.
+- [ ] Complete ETW process telemetry ingestion: bounded opt-in trace-session lifecycle is implemented; ETL decoding, normalized process start/stop events, loss accounting and snapshot reconciliation are pending.
 - [ ] Allowlisted Windows Event Log subscriptions.
 - [ ] Executable path discovery and Authenticode publisher/signature inventory.
 - [x] Add cooperative pause/resume via an operator-controlled pause file; record pause/resume events.
@@ -101,7 +101,7 @@ Status vocabulary: DONE / IN_PROGRESS / BLOCKED / PLANNED. A task is DONE only w
 ## Current sprint — target hardware: Windows 11 x64, 16 GB RAM
 1. Confirm Windows CI; run `python -m pytest` and `ruff check .` locally.
 2. Validate pause/resume, collector recovery and export on the target Windows host.
-3. Implement ETW process lifecycle telemetry; retain snapshot reconciliation as fallback.
+3. Decode the opt-in ETW process trace into normalized lifecycle events, add loss accounting, and retain snapshot reconciliation as fallback.
 4. Add Event Log allowlist and process/driver-image correlation.
 5. Build UIA read-only inspector before any app-control actions.
 6. Implement actual local Ollama chat/embedding adapters with resource/cancellation guards.
