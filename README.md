@@ -12,7 +12,7 @@ Track status and next evidence in [docs/ARCHITECTURE_SPOTLIGHT.md](docs/ARCHITEC
 - High but bounded autonomy. All future execution is mediated by identity, capabilities, risk policy, budgets, approval and audit.
 - Model-independent, event-driven architecture.
 - Privacy by design: no keylogging, covert screenshots, microphone capture, credential collection or unrestricted content surveillance.
-- Deep telemetry uses supported Windows interfaces (ETW/Event Log). Kernel drivers are separate signed, reviewed work—not unrestricted access.
+- Deep telemetry uses supported Windows interfaces (ETW/Event Log) with a fixed System-log provider/event-ID allowlist. Kernel drivers are separate signed, reviewed work—not unrestricted access.
 
 ## Quick start (Windows)
 Python 3.11+:
