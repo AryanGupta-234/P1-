@@ -83,3 +83,10 @@ def test_export_jsonl_writes_all_events_in_chronological_order(tmp_path):
     assert store.export_jsonl(destination) == 2
     rows = [json.loads(line) for line in destination.read_text(encoding="utf-8").splitlines()]
     assert [row["event_id"] for row in rows] == ["earlier", "later"]
+
+
+def test_export_refuses_to_overwrite_sqlite_database(tmp_path):
+    store = EventStore(tmp_path / "events.sqlite3")
+    with pytest.raises(ValueError, match="must not be the SQLite database"):
+        store.export_jsonl(store.path)
+    assert store.count() == 0
