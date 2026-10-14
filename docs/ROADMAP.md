@@ -4,7 +4,7 @@ Statuses: DONE / IN_PROGRESS / BLOCKED / PLANNED. Mark DONE only with code, test
 
 Development ownership and branch rules are defined in [Development Streams](DEVELOPMENT_STREAMS.md). M1.5 browser/video work is tracked independently on `browser-video-intelligence`; ecosystem and shared-integration work remains on `dev`. The existing browser/video foundation is present in the integrated baseline, but new browser/video progress must stay isolated until a reviewed milestone is ready.
 
-**Last updated:** 2026-10-12 | **Ecosystem branch:** `dev` | **Browser/video branch:** `browser-video-intelligence` | **Stable release:** `main`
+**Last updated:** 2026-10-14 | **Ecosystem branch:** `dev` | **Browser/video branch:** `browser-video-intelligence` | **Stable release:** `main`
 
 | ID | Workstream | Status | Exit criteria |
 |---|---|---|---|
@@ -98,6 +98,7 @@ Development ownership and branch rules are defined in [Development Streams](DEVE
 - [x] Local-only model reasoning handler using bounded completed-step summaries; unavailable local inference falls back to explicit user input.
 - [x] Fail-closed recovery of interrupted in-flight handlers to manual review; automatic replay remains intentionally disabled and pending.
 - [x] Planner benchmark harness and deterministic metrics for user-authored cases; held-out task families, corpus quality and performance evaluation remain pending.
+- [x] Planner evaluation records provider-reported per-case latency, prompt/completion token counts when supplied, provider identity and local/remote inference class; missing token metrics remain unknown. No pricing is inferred.
 - [ ] Held-out task families, tool-selection utility, latency/cost calibration and human-rated reasoning quality.
 
 ## M4 — Persistent memory and learning
@@ -139,6 +140,7 @@ Development ownership and branch rules are defined in [Development Streams](DEVE
 - [x] User-authored retrieval benchmark with Recall@k, Precision@k, MRR and Hit Rate for lexical or local semantic search; sensitive records require explicit inclusion.
 - [x] Conservative lexical polarity-conflict proposals for manual review; no automatic rewrite or resolution.
 - [x] Planner contract benchmark reports deterministic schema/allowlist metrics over a user-authored dataset.
+- [x] Planner benchmark reports provider-reported latency percentiles and token-usage coverage alongside schema/goal/capability metrics; held-out task families and human-rated quality remain open.
 - [ ] Held-out task families and deterministic baselines with curated ground truth.
 - [ ] Transfer to unseen task variations and evaluate procedural-skill quality.
 - [ ] Causal/temporal reasoning measured separately from retrieval.
