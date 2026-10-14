@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from aie.providers.etw_decode import decode_trace_xml, iter_process_events
+from aie.store import EventStore
 
 
 def _write_xml(path: Path):
@@ -84,3 +85,12 @@ def test_etw_xml_decoder_rejects_malformed_xml(tmp_path):
         assert isinstance(exc, ET.ParseError)
     else:
         raise AssertionError("expected malformed XML to fail")
+
+
+def test_etw_import_is_idempotent_across_repeated_decodes(tmp_path):
+    source = tmp_path / "trace.xml"
+    _write_xml(source)
+    store = EventStore(tmp_path / "events.sqlite3")
+    decode_trace_xml(source, tmp_path / "first.jsonl", event_host_id="stable-host", store=store)
+    decode_trace_xml(source, tmp_path / "second.jsonl", event_host_id="stable-host", store=store)
+    assert store.count() == 2
