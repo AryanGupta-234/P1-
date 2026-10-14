@@ -46,9 +46,18 @@ def _integer(value: str | None) -> int | None:
 def iter_process_events(xml_path: Path, *, event_host_id: str | None = None) -> Iterator[AIEEvent]:
     """Yield only Kernel-Process start/stop records; command lines are never retained."""
     identity = event_host_id or host_id()
-    for _, element in ET.iterparse(xml_path, events=("end",)):
-        if element.tag != f"{_ETW_NS}Event":
+    root: ET.Element | None = None
+    context = ET.iterparse(xml_path, events=("start", "end"))
+    for action, element in context:
+        if root is None and action == "start":
+            root = element
+        if action != "end" or element.tag != f"{_ETW_NS}Event":
             continue
+
+        def discard_event() -> None:
+            element.clear()
+            if root is not None:
+                root.clear()
         system = _child(element, "System")
         if system is None:
             element.clear()
