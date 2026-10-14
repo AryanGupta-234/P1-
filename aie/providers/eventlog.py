@@ -112,26 +112,34 @@ def parse_system_events(output: str, *, event_host_id: str | None = None) -> lis
 
 
 class WindowsEventLogProvider:
-    """Queries a fixed System-log allowlist; no arbitrary channel/query is accepted."""
+    """Queries a fixed System-log allowlist and advances by event record ID."""
 
     def __init__(self, *, timeout: float = 10.0, runner=subprocess.run) -> None:
         if timeout <= 0:
             raise ValueError("timeout must be positive")
         self.timeout = timeout
         self._runner = runner
+        self._last_record_id: int | None = None
 
-    def collect_recent(self) -> list[AIEEvent]:
-        xpath = (
-            "*[System["
+    @staticmethod
+    def _xpath(after_record_id: int | None) -> str:
+        allowlist = (
             "(Provider[@Name='Service Control Manager'] and EventID=7036) or "
             "(Provider[@Name='Microsoft-Windows-Kernel-Power'] and EventID=42) or "
             "(Provider[@Name='Microsoft-Windows-Kernel-General'] and "
-            "(EventID=12 or EventID=13))]]"
+            "(EventID=12 or EventID=13))"
         )
+        if after_record_id is not None:
+            allowlist = f"({allowlist}) and EventRecordID > {after_record_id}"
+        return f"*[System[{allowlist}]]"
+
+    def _query(self, after_record_id: int | None, *, newest_first: bool) -> list[AIEEvent]:
+        direction = "true" if newest_first else "false"
         try:
             result = self._runner(
-                ["wevtutil.exe", "qe", "System", f"/q:{xpath}",
-                 "/f:xml", "/rd:true", f"/c:{_MAX_EVENTS}"],
+                ["wevtutil.exe", "qe", "System",
+                 f"/q:{self._xpath(after_record_id)}",
+                 "/f:xml", f"/rd:{direction}", f"/c:{_MAX_EVENTS}"],
                 capture_output=True, text=True, encoding="utf-8",
                 errors="replace", timeout=self.timeout, check=False,
                 creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
@@ -142,4 +150,39 @@ class WindowsEventLogProvider:
             ) from exc
         if result.returncode != 0:
             raise EventLogError(f"wevtutil returned exit code {result.returncode}")
-        return parse_system_events(result.stdout)
+        events = parse_system_events(result.stdout)
+        return sorted(events, key=lambda event: int(event.data["record_id"]))
+
+    def collect_recent(self) -> list[AIEEvent]:
+        """Seed from the newest 100 events, then page forward from the last record."""
+        if self._last_record_id is None:
+            initial = self._query(None, newest_first=True)
+            if initial:
+                self._last_record_id = max(int(event.data["record_id"]) for event in initial)
+            return initial
+
+        collected: list[AIEEvent] = []
+        for _ in range(5):
+            page = self._query(self._last_record_id, newest_first=False)
+            page = [
+                event for event in page
+                if int(event.data["record_id"]) > self._last_record_id
+            ]
+            if not page:
+                break
+            collected.extend(page)
+            self._last_record_id = max(int(event.data["record_id"]) for event in page)
+            if len(page) < _MAX_EVENTS:
+                break
+
+        if not collected:
+            latest = self._query(None, newest_first=True)
+            latest_id = max(
+                (int(event.data["record_id"]) for event in latest),
+                default=self._last_record_id,
+            )
+            if latest_id < self._last_record_id:
+                # The System log was cleared/recreated; establish a fresh cursor.
+                self._last_record_id = latest_id
+                return latest
+        return collected
