@@ -61,6 +61,8 @@ See [HARDWARE_PROFILE.md](HARDWARE_PROFILE.md) for the sanitized host baseline.
 - Synthetic unit and Windows-provider integration tests cover baseline creation and service-state transition emission.
 - Windows service, network interface, scheduled-task and installed-application state deltas; low-frequency inventory sampling is bounded to 30-second intervals, independently of process/resource polling.
 - CLI retention command: `aie prune --older-than-days N` or `aie prune --keep-latest N`.
+- Fault-isolated observer loop: process and low-frequency state collector failures are persisted as sanitized `observer.collector_error` events; a later successful sample emits `observer.collector_recovered`.
+- Cooperative pause/resume through `aie observe --pause-file PATH`: while the file exists sampling pauses; removing it resumes observation, and paused time does not consume the requested active duration.
 - Read-only ETW provider catalog discovery through `logman query providers` (catalog only; no trace session is started).
 - Hardware runtime probe and local loopback-only Ollama model discovery/model selection.
 - Windows CI workflow plus synthetic tests (CI execution still needs confirmation).
@@ -68,7 +70,8 @@ See [HARDWARE_PROFILE.md](HARDWARE_PROFILE.md) for the sanitized host baseline.
 ## Not implemented yet
 - ETW real-time subscriptions / higher-fidelity kernel-originated event ingestion (only provider catalog discovery exists).
 - Windows Event Log allowlist and real-time subscriptions.
-- Event-driven service/network/task/application subscriptions (current implementation uses 30-second snapshot reconciliation, not native event subscriptions).
+- Native event-driven service/network/task/application subscriptions (current implementation uses 30-second snapshot reconciliation, not native event subscriptions).
+- Dedicated end-to-end runtime tests and Windows-host validation for pause/resume, collector recovery, CPU overhead and event latency.
 - Executable path/signature discovery and application adapter registry.
 - UI Automation client, app-specific automation adapters and action execution.
 - Context reasoning, actual Ollama chat/embedding invocation, memory consolidation and cloud gateway.
@@ -90,7 +93,7 @@ See [HARDWARE_PROFILE.md](HARDWARE_PROFILE.md) for the sanitized host baseline.
 
 ## Next actions — priority order
 1. Run Windows CI and resolve every failure; confirm the new retention tests pass.
-2. Add service/network state deltas and retention controls to operator documentation.
+2. Complete event export/deletion controls and validate observer reliability on the target Windows host.
 3. Prototype opt-in ETW process telemetry with bounded buffers and explicit session lifecycle.
 4. Add allowlisted Windows Event Log providers.
 5. Add app compatibility discovery and UIA read-only tree inspection.
