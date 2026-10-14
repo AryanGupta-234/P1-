@@ -19,6 +19,9 @@ class EventStore:
                 event_id TEXT PRIMARY KEY, timestamp TEXT NOT NULL,
                 source TEXT NOT NULL, event_type TEXT NOT NULL, payload TEXT NOT NULL)""")
             db.execute("CREATE INDEX IF NOT EXISTS idx_events_timestamp ON events(timestamp)")
+            db.execute("""CREATE TABLE IF NOT EXISTS checkpoints (
+                checkpoint_key TEXT PRIMARY KEY, checkpoint_value TEXT NOT NULL,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)""")
 
     def _connect(self) -> sqlite3.Connection:
         db = sqlite3.connect(self.path, timeout=10)
@@ -46,6 +49,33 @@ class EventStore:
                 records,
             )
             return db.total_changes - before
+
+    def get_checkpoint(self, key: str) -> str | None:
+        """Read a small durable collector checkpoint by its namespaced key."""
+        if not key or len(key) > 128:
+            raise ValueError("checkpoint key must contain 1..128 characters")
+        with self._connect() as db:
+            row = db.execute(
+                "SELECT checkpoint_value FROM checkpoints WHERE checkpoint_key = ?",
+                (key,),
+            ).fetchone()
+        return str(row[0]) if row else None
+
+    def set_checkpoint(self, key: str, value: str) -> None:
+        """Atomically upsert a collector checkpoint; callers control commit timing."""
+        if not key or len(key) > 128:
+            raise ValueError("checkpoint key must contain 1..128 characters")
+        if not isinstance(value, str) or len(value) > 4096:
+            raise ValueError("checkpoint value must be a string of at most 4096 characters")
+        with self._connect() as db:
+            db.execute(
+                """INSERT INTO checkpoints(checkpoint_key, checkpoint_value, updated_at)
+                   VALUES(?, ?, CURRENT_TIMESTAMP)
+                   ON CONFLICT(checkpoint_key) DO UPDATE SET
+                   checkpoint_value=excluded.checkpoint_value,
+                   updated_at=CURRENT_TIMESTAMP""",
+                (key, value),
+            )
 
     def recent(self, limit: int = 50) -> list[AIEEvent]:
         if not 1 <= limit <= 1000:
