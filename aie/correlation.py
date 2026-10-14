@@ -26,7 +26,7 @@ def correlate_process_starts(
     materialized = list(events)
     snapshots: dict[tuple[str, int, str], list[AIEEvent]] = {}
     for event in materialized:
-        if event.event_type not in _SNAPSHOT_STARTS:
+        if event.event_type not in _SNAPSHOT_STARTS or not _aware(event.timestamp):
             continue
         pid = _pid(event)
         create_time = _create_time(event)
@@ -37,7 +37,7 @@ def correlate_process_starts(
 
     derived: list[AIEEvent] = []
     for etw in materialized:
-        if etw.event_type != _ETW_START:
+        if etw.event_type != _ETW_START or not _aware(etw.timestamp):
             continue
         pid = _pid(etw)
         image = _image(etw)
@@ -49,6 +49,8 @@ def correlate_process_starts(
 
         matches: list[tuple[float, AIEEvent]] = []
         for snapshot in candidates:
+            if not _aware(snapshot.timestamp):
+                continue
             create_time = _create_time(snapshot)
             if create_time is None:
                 continue
@@ -91,10 +93,16 @@ def correlate_process_starts(
     return derived
 
 
+def _aware(value) -> bool:
+    return value.tzinfo is not None and value.utcoffset() is not None
+
+
 def _pid(event: AIEEvent) -> int | None:
     value = event.data.get("pid")
     if value is None:
         value = event.entity.stable_id
+    if isinstance(value, bool):
+        return None
     try:
         pid = int(value)
     except (TypeError, ValueError):
