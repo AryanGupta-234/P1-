@@ -67,3 +67,19 @@ def test_prune_rejects_ambiguous_or_invalid_policy(tmp_path, kwargs):
     store = EventStore(tmp_path / "events.sqlite3")
     with pytest.raises(ValueError):
         store.prune(**kwargs)
+
+
+def test_export_jsonl_writes_all_events_in_chronological_order(tmp_path):
+    import json
+
+    store = EventStore(tmp_path / "events.sqlite3")
+    now = datetime.now(timezone.utc)
+    store.append_many([
+        event("later", now + timedelta(seconds=1)),
+        event("earlier", now),
+    ])
+    destination = tmp_path / "exports" / "events.jsonl"
+
+    assert store.export_jsonl(destination) == 2
+    rows = [json.loads(line) for line in destination.read_text(encoding="utf-8").splitlines()]
+    assert [row["event_id"] for row in rows] == ["earlier", "later"]
