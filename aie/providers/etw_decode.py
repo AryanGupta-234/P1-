@@ -58,22 +58,23 @@ def iter_process_events(xml_path: Path, *, event_host_id: str | None = None) -> 
             element.clear()
             if root is not None:
                 root.clear()
+
         system = _child(element, "System")
         if system is None:
-            element.clear()
+            discard_event()
             continue
         provider = _child(system, "Provider")
         event_id_element = _child(system, "EventID")
         time_created = _child(system, "TimeCreated")
         if provider is None or event_id_element is None or time_created is None:
-            element.clear()
+            discard_event()
             continue
         provider_guid = provider.attrib.get("Guid", "").casefold()
         provider_name = provider.attrib.get("Name", "").casefold()
         try:
             event_id = int(event_id_element.text or "")
         except ValueError:
-            element.clear()
+            discard_event()
             continue
         event_type = _PROCESS_EVENTS.get(event_id)
         known_provider = (
@@ -81,7 +82,7 @@ def iter_process_events(xml_path: Path, *, event_host_id: str | None = None) -> 
             or provider_name == "microsoft-windows-kernel-process"
         )
         if not known_provider or event_type is None:
-            element.clear()
+            discard_event()
             continue
         timestamp_text = time_created.attrib.get("SystemTime")
         try:
@@ -91,12 +92,12 @@ def iter_process_events(xml_path: Path, *, event_host_id: str | None = None) -> 
             if timestamp.tzinfo is None or timestamp.utcoffset() is None:
                 raise ValueError("ETW timestamp must be timezone-aware")
         except ValueError:
-            element.clear()
+            discard_event()
             continue
         fields = _data_fields(_child(element, "EventData"))
         pid = _integer(fields.get("processid"))
         if pid is None or pid < 0:
-            element.clear()
+            discard_event()
             continue
         parent_pid = _integer(fields.get("parentprocessid"))
         raw_image = fields.get("imagename") or fields.get("imagefilename")
@@ -122,7 +123,7 @@ def iter_process_events(xml_path: Path, *, event_host_id: str | None = None) -> 
             confidence=1.0,
             evidence_kind="observed",
         )
-        element.clear()
+        discard_event()
 
 
 def decode_trace_xml(
