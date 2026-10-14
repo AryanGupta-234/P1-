@@ -30,7 +30,8 @@ def test_etw_trace_uses_kernel_process_provider_and_bounded_buffers(tmp_path, mo
         "logman.exe", "start", trace.session_name, "-ets"
     ]
     assert "Microsoft-Windows-Kernel-Process" in start_args
-    assert start_args[-3:] == ["-nb", "16", "64"]
+    assert start_args[start_args.index("-nb"):start_args.index("-nb") + 3] == ["-nb", "16", "64"]
+    assert start_args[-2:] == ["-max", "256"]
     assert calls[1][0] == ["logman.exe", "stop", trace.session_name, "-ets"]
 
 
@@ -43,6 +44,9 @@ def test_etw_trace_refuses_overwrite_and_invalid_buffer_bounds(tmp_path, monkeyp
         trace.start()
     with pytest.raises(ValueError):
         ETWProcessTrace(tmp_path / "bad.etl", buffer_size_kb=8,
+                        runner=lambda *a, **k: _result())
+    with pytest.raises(ValueError):
+        ETWProcessTrace(tmp_path / "too-large.etl", max_file_mb=4096,
                         runner=lambda *a, **k: _result())
 
 
