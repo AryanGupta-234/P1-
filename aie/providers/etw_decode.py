@@ -110,7 +110,7 @@ def decode_trace_xml(xml_path: Path, jsonl_path: Path, *, event_host_id: str | N
         raise ValueError("JSONL output must not overwrite tracerpt XML input")
     jsonl_path.parent.mkdir(parents=True, exist_ok=True)
     count = 0
-    with jsonl_path.open("w", encoding="utf-8") as output:
+    with jsonl_path.open("x", encoding="utf-8") as output:
         for event in iter_process_events(xml_path, event_host_id=event_host_id):
             output.write(event.model_dump_json() + "\n")
             count += 1
