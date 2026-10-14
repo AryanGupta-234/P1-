@@ -96,9 +96,9 @@ See [HARDWARE_PROFILE.md](HARDWARE_PROFILE.md) for the sanitized host baseline.
 [Issue #3 — Windows Observer validation and ETW process telemetry](https://github.com/AryanGupta-234/P1-/issues/3)
 
 ## Next actions — priority order
-1. Run Windows CI and resolve every failure; confirm the new retention tests pass.
-2. Complete event export/deletion controls and validate observer reliability on the target Windows host.
-3. Validate ETW decoding against real Windows captures, add loss accounting and reconcile ETW events with snapshots.
+1. Run Windows CI and resolve every failure; execute the observer and ETW synthetic tests.
+2. Validate observer pause/resume, collector recovery, JSONL export and resource overhead on the target Windows host.
+3. Validate ETW decoding against real Windows captures; confirm trace-loss counters and reconcile ETW events with process snapshots.
 4. Add allowlisted Windows Event Log providers.
 5. Add app compatibility discovery and UIA read-only tree inspection.
 6. Only then begin user-approved application actions behind a policy broker.
