@@ -67,7 +67,7 @@ See [HARDWARE_PROFILE.md](HARDWARE_PROFILE.md) for the sanitized host baseline.
 - Fault-isolated observer loop: process and low-frequency state collector failures are persisted as sanitized `observer.collector_error` events; a later successful sample emits `observer.collector_recovered`.
 - Cooperative pause/resume through `aie observe --pause-file PATH`: while the file exists sampling pauses; removing it resumes observation, and paused time does not consume the requested active duration.
 - Read-only ETW provider catalog discovery through `logman query providers`.
-- Opt-in `aie etw-capture PATH.etl --duration N` starts a bounded `Microsoft-Windows-Kernel-Process` trace using Windows `logman`, refuses output overwrite, and always attempts to stop the named session on context exit. This currently produces raw ETL only; normalized event decoding/ingestion is not yet implemented.
+- Opt-in `aie etw-capture PATH.etl --duration N` starts a bounded `Microsoft-Windows-Kernel-Process` trace using Windows `logman`, refuses output overwrite, caps the ETL file at 256 MB by default, bounds ETW buffers (64 KB × 16–64 buffers by default), and always attempts to stop the named session on context exit. This currently produces raw ETL only; normalized event decoding/ingestion is not yet implemented.
 - Hardware runtime probe and local loopback-only Ollama model discovery/model selection.
 - Windows CI workflow plus synthetic tests (CI execution still needs confirmation).
 
