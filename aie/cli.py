@@ -122,6 +122,22 @@ def etw_capture(
     console.print(f"ETW trace saved to {output}")
 
 
+@app.command("etw-decode")
+def etw_decode(
+    source_xml: Path = typer.Argument(..., help="XML exported from the ETL file by tracerpt."),
+    output: Path = typer.Argument(..., help="Destination JSONL file."),
+) -> None:
+    """Normalize Kernel-Process start/stop events from tracerpt XML."""
+    from aie.providers.etw_decode import decode_trace_xml
+
+    try:
+        count = decode_trace_xml(source_xml, output)
+    except (OSError, ValueError) as exc:
+        console.print(f"[red]ETW decode failed:[/red] {exc}")
+        raise typer.Exit(2) from exc
+    console.print(f"Decoded {count} process events to {output}")
+
+
 @app.command()
 def inventory(output: Path | None = typer.Option(None, "--output", "-o")) -> None:
     """Generate a read-only host, process, app, service, network and task inventory."""
