@@ -87,6 +87,21 @@ class EventStore:
             ).fetchall()
         return [AIEEvent.model_validate(json.loads(row[0])) for row in rows]
 
+    def events_since(self, since: datetime, *, limit: int = 10000) -> list[AIEEvent]:
+        """Read a bounded chronological window for offline correlation and analysis."""
+        if since.tzinfo is None or since.utcoffset() is None:
+            raise ValueError("since must be timezone-aware")
+        if not 1 <= limit <= 10000:
+            raise ValueError("limit must be between 1 and 10000")
+        with self._connect() as db:
+            rows = db.execute(
+                """SELECT payload FROM events
+                   WHERE julianday(timestamp) >= julianday(?)
+                   ORDER BY timestamp ASC, event_id ASC LIMIT ?""",
+                (since.isoformat(), limit),
+            ).fetchall()
+        return [AIEEvent.model_validate(json.loads(row[0])) for row in rows]
+
     def count(self) -> int:
         with self._connect() as db:
             return int(db.execute("SELECT COUNT(*) FROM events").fetchone()[0])
