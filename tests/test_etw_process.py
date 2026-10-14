@@ -30,7 +30,7 @@ def test_etw_trace_uses_kernel_process_provider_and_bounded_buffers(tmp_path, mo
         "logman.exe", "start", trace.session_name, "-ets"
     ]
     assert "Microsoft-Windows-Kernel-Process" in start_args
-    assert start_args[-4:] == ["-nb", "16", "64"][-4:] if False else start_args[-3:] == ["-nb", "16", "64"]
+    assert start_args[-3:] == ["-nb", "16", "64"]
     assert calls[1][0] == ["logman.exe", "stop", trace.session_name, "-ets"]
 
 
