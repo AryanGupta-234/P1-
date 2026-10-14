@@ -32,6 +32,7 @@ class ETWProcessTrace:
         min_buffers: int = 16,
         max_buffers: int = 64,
         timeout: float = 15.0,
+        max_file_mb: int = 256,
         runner: Callable = subprocess.run,
     ) -> None:
         if os.name != "nt":
@@ -44,11 +45,14 @@ class ETWProcessTrace:
             raise ValueError("buffer counts must satisfy 4 <= min <= max <= 256")
         if timeout <= 0:
             raise ValueError("timeout must be positive")
+        if not 16 <= max_file_mb <= 2048:
+            raise ValueError("max_file_mb must be between 16 and 2048")
         self.output = output
         self.buffer_size_kb = buffer_size_kb
         self.min_buffers = min_buffers
         self.max_buffers = max_buffers
         self.timeout = timeout
+        self.max_file_mb = max_file_mb
         self._runner = runner
         self.session_name = f"AIE-Process-{uuid.uuid4().hex[:12]}"
         self._started = False
@@ -81,6 +85,7 @@ class ETWProcessTrace:
             "-o", str(self.output),
             "-bs", str(self.buffer_size_kb),
             "-nb", str(self.min_buffers), str(self.max_buffers),
+            "-max", str(self.max_file_mb),
         ]
         self._run(args)
         self._started = True
