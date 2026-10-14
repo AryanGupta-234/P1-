@@ -125,12 +125,13 @@ def observe(
     interval: float = typer.Option(2.0, min=0.5, max=60),
     db: Path = typer.Option(database_path()),
     jsonl: Path | None = typer.Option(None),
+    pause_file: Path | None = typer.Option(None, help="Pause while this file exists; remove it to resume."),
 ) -> None:
     """Observe selected Windows metadata (read-only)."""
     from aie.runtime import observe as run_observer
 
     try:
-        added = run_observer(duration, interval, db, jsonl)
+        added = run_observer(duration, interval, db, jsonl, pause_file)
     except OSError as exc:
         console.print(f"[red]Observer unavailable:[/red] {exc}")
         raise typer.Exit(2) from exc
