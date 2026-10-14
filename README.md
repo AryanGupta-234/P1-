@@ -25,7 +25,9 @@ aie hardware
 aie models
 aie inventory --output inventory.json
 aie etw-catalog --contains Kernel
-aie observe --duration 30
+aie observe --duration 30 --jsonl observations.jsonl
+# Create .\\aie-pause to pause; remove it to resume:
+aie observe --duration 300 --pause-file .\\aie-pause
 ```
 The first release is read-only, local-only and stores events under %LOCALAPPDATA%\AIE. No model or network is required.
 
