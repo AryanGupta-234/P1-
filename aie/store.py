@@ -63,6 +63,8 @@ class EventStore:
 
     def export_jsonl(self, destination: Path) -> int:
         """Export all stored event payloads in chronological order as JSONL."""
+        if destination.resolve() == self.path.resolve():
+            raise ValueError("export destination must not be the SQLite database")
         destination.parent.mkdir(parents=True, exist_ok=True)
         with self._connect() as db:
             rows = db.execute(
