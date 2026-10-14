@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import xml.etree.ElementTree as ET
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path, PureWindowsPath
 from typing import Iterator
@@ -14,6 +15,41 @@ from aie.providers.windows import host_id
 
 _ETW_NS = "{http://schemas.microsoft.com/win/2004/08/events/event}"
 _PROCESS_EVENTS = {1: "process.started_etw", 2: "process.stopped_etw"}
+
+
+@dataclass(frozen=True)
+class ETWTraceStats:
+    events_logged: int | None = None
+    events_lost: int | None = None
+    buffers_written: int | None = None
+    log_buffers_lost: int | None = None
+    realtime_buffers_lost: int | None = None
+
+
+def read_trace_stats(xml_path: Path) -> ETWTraceStats:
+    """Read optional tracerpt trace-header counters without loading the XML tree."""
+    names = {
+        "eventslogged": "events_logged",
+        "eventslost": "events_lost",
+        "bufferswritten": "buffers_written",
+        "logbufferslost": "log_buffers_lost",
+        "realtimebufferslost": "realtime_buffers_lost",
+    }
+    values: dict[str, int] = {}
+    in_header = False
+    for action, element in ET.iterparse(xml_path, events=("start", "end")):
+        local_name = element.tag.rsplit("}", 1)[-1].casefold()
+        if action == "start" and local_name == "header":
+            in_header = True
+        elif action == "end" and in_header and local_name in names and element.text:
+            try:
+                values[names[local_name]] = int(element.text.strip(), 10)
+            except ValueError:
+                pass
+        elif action == "end" and local_name == "header":
+            in_header = False
+            element.clear()
+    return ETWTraceStats(**values)
 
 
 def _child(element: ET.Element, name: str) -> ET.Element | None:
