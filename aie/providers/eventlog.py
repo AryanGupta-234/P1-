@@ -52,6 +52,21 @@ def _find_children(element: ET.Element, name: str) -> list[ET.Element]:
     ]
 
 
+def _record_metadata(output: str) -> tuple[int, int | None]:
+    root = _events_root(output)
+    elements = _find_children(root, "Event")
+    record_ids: list[int] = []
+    for element in elements:
+        system = _find_child(element, "System")
+        record = _find_child(system, "EventRecordID") if system is not None else None
+        try:
+            if record is not None and record.text:
+                record_ids.append(int(record.text, 10))
+        except ValueError:
+            continue
+    return len(elements), max(record_ids, default=None)
+
+
 def parse_system_events(output: str, *, event_host_id: str | None = None) -> list[AIEEvent]:
     """Parse only allowlisted provider/ID pairs; ignore rendered messages and other data."""
     if len(output) > _MAX_OUTPUT_CHARS:
@@ -146,7 +161,9 @@ class WindowsEventLogProvider:
             allowlist = f"({allowlist}) and EventRecordID > {after_record_id}"
         return f"*[System[{allowlist}]]"
 
-    def _query(self, after_record_id: int | None, *, newest_first: bool) -> list[AIEEvent]:
+    def _query(
+        self, after_record_id: int | None, *, newest_first: bool
+    ) -> tuple[list[AIEEvent], int | None, int]:
         direction = "true" if newest_first else "false"
         try:
             result = self._runner(
@@ -164,37 +181,35 @@ class WindowsEventLogProvider:
         if result.returncode != 0:
             raise EventLogError(f"wevtutil returned exit code {result.returncode}")
         events = parse_system_events(result.stdout)
-        return sorted(events, key=lambda event: int(event.data["record_id"]))
+        raw_count, latest_record_id = _record_metadata(result.stdout)
+        events.sort(key=lambda event: int(event.data["record_id"]))
+        return events, latest_record_id, raw_count
 
     def collect_recent(self) -> list[AIEEvent]:
         """Seed from the newest 100 events, then page forward from the last record."""
         if self._last_record_id is None:
-            initial = self._query(None, newest_first=True)
-            if initial:
-                self._last_record_id = max(int(event.data["record_id"]) for event in initial)
+            initial, latest_id, _ = self._query(None, newest_first=True)
+            self._last_record_id = latest_id
             return initial
 
         collected: list[AIEEvent] = []
         for _ in range(5):
-            page = self._query(self._last_record_id, newest_first=False)
-            page = [
+            page, latest_id, raw_count = self._query(
+                self._last_record_id, newest_first=False
+            )
+            if latest_id is None or latest_id <= self._last_record_id:
+                break
+            collected.extend(
                 event for event in page
                 if int(event.data["record_id"]) > self._last_record_id
-            ]
-            if not page:
-                break
-            collected.extend(page)
-            self._last_record_id = max(int(event.data["record_id"]) for event in page)
-            if len(page) < _MAX_EVENTS:
+            )
+            self._last_record_id = latest_id
+            if raw_count < _MAX_EVENTS:
                 break
 
         if not collected:
-            latest = self._query(None, newest_first=True)
-            latest_id = max(
-                (int(event.data["record_id"]) for event in latest),
-                default=self._last_record_id,
-            )
-            if latest_id < self._last_record_id:
+            latest, latest_id, _ = self._query(None, newest_first=True)
+            if latest_id is not None and latest_id < self._last_record_id:
                 # The System log was cleared/recreated; establish a fresh cursor.
                 self._last_record_id = latest_id
                 return latest
