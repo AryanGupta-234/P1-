@@ -2,12 +2,12 @@
 
 Status vocabulary: DONE / IN_PROGRESS / BLOCKED / PLANNED. A task is DONE only when code exists and its tests or documented validation support the claim.
 
-**Last updated:** 2026-10-11
+**Last updated:** 2026-10-14
 
 | ID | Milestone | Status | Current evidence / exit criteria |
 |---|---|---|---|
 | M0 | Architecture and foundation | IN_PROGRESS | Contracts, package, CLI, docs and Windows CI workflow; CI must execute successfully |
-| M1 | Windows environment observer | IN_PROGRESS | Host/process baseline, app/service/network/task inventory, SQLite |
+| M1 | Windows environment observer | IN_PROGRESS | Host/process baseline, app/service/network/task inventory, SQLite and explicit retention API |
 | M2 | Context intelligence | PLANNED | Temporal correlation, state model, evidence-linked hypotheses |
 | M3 | Cognitive core | IN_PROGRESS | Local model discovery and routing policy exist; actual model adapters/planning remain |
 | M4 | Persistent intelligence | PLANNED | Provenance-aware memory, consolidation and retrieval evaluation |
@@ -34,13 +34,14 @@ Status vocabulary: DONE / IN_PROGRESS / BLOCKED / PLANNED. A task is DONE only w
 - [x] Scheduled task name/status inventory using read-only query.
 - [x] Emit periodic CPU/memory/system-volume usage observations.
 - [x] Add read-only ETW provider catalog discovery (no session control).
+- [x] Add explicit SQLite event retention by age or newest-N count, with validation tests and CLI.
 - [ ] Monitor service state changes.
 - [ ] Monitor network interface/connectivity changes.
 - [ ] Monitor scheduled-task and application inventory changes.
 - [ ] ETW process/thread/image telemetry provider with bounded buffers and explicit session lifecycle.
 - [ ] Allowlisted Windows Event Log subscriptions.
 - [ ] Executable path discovery and Authenticode publisher/signature inventory.
-- [ ] Pause/resume, event retention, export and deletion controls.
+- [ ] Pause/resume, event export and deletion controls.
 - [ ] Measure CPU, memory, event latency, event loss and collector failures on the target laptop.
 
 ## M2 — Context Intelligence
@@ -92,7 +93,7 @@ Status vocabulary: DONE / IN_PROGRESS / BLOCKED / PLANNED. A task is DONE only w
 
 ## Current sprint — target hardware: Windows 11 x64, 16 GB RAM
 1. Confirm Windows CI; run `python -m pytest` and `ruff check .` locally.
-2. Add service/network state deltas and event retention controls.
+2. Add service/network state deltas and operator retention controls.
 3. Implement ETW process lifecycle telemetry; retain snapshot reconciliation as fallback.
 4. Add Event Log allowlist and process/driver-image correlation.
 5. Build UIA read-only inspector before any app-control actions.
