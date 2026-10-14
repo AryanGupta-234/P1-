@@ -61,6 +61,16 @@ class EventStore:
         with self._connect() as db:
             return int(db.execute("SELECT COUNT(*) FROM events").fetchone()[0])
 
+    def export_jsonl(self, destination: Path) -> int:
+        """Export all stored event payloads in chronological order as JSONL."""
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        with self._connect() as db:
+            rows = db.execute(
+                "SELECT payload FROM events ORDER BY timestamp ASC, event_id ASC"
+            ).fetchall()
+        destination.write_text("".join(row[0] + "\\n" for row in rows), encoding="utf-8")
+        return len(rows)
+
     def prune(
         self,
         *,
