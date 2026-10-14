@@ -13,6 +13,7 @@ from typing import Literal
 from uuid import uuid4
 
 from aie.planning.models import TaskPlan
+from aie.planning.validator import validate_plan
 
 StepStatus = Literal["pending", "running", "succeeded", "failed", "cancelled"]
 RunStatus = Literal["active", "completed", "failed", "cancelled"]
@@ -141,6 +142,7 @@ class PlanRunStore:
 
     def create(self, plan: TaskPlan, *, now: datetime | None = None) -> PlanRun:
         """Create a new run with all steps pending; plan IDs may be run more than once."""
+        validate_plan(plan)
         current = self._now(now)
         run_id = str(uuid4())
         db = self._connect()
