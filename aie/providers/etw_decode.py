@@ -1,12 +1,10 @@
 """Convert tracerpt XML for Kernel-Process ETW events into normalized evidence."""
 from __future__ import annotations
 
-import json
 import xml.etree.ElementTree as ET
 from datetime import datetime
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from typing import Iterator
-from pathlib import PureWindowsPath
 
 from aie.contracts import AIEEvent, EntityRef
 from aie.providers.etw_process import KERNEL_PROCESS_GUID
