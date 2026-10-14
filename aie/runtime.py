@@ -1,4 +1,4 @@
-"""Read-only observer runtime with a baseline followed by change detection."""
+"""Read-only observer runtime with baseline, deltas and bounded sampling cadence."""
 from __future__ import annotations
 
 import time
@@ -6,6 +6,10 @@ from pathlib import Path
 
 from aie.providers.windows import WindowsProvider
 from aie.store import EventStore
+
+# Full service/task/app/network enumeration is intentionally less frequent than
+# process/resource sampling to bound host overhead on 16 GB laptops.
+STATE_SNAPSHOT_INTERVAL = 30.0
 
 
 def observe(
@@ -27,10 +31,15 @@ def observe(
         jsonl_path.parent.mkdir(parents=True, exist_ok=True)
     output = jsonl_path.open("a", encoding="utf-8") if jsonl_path else None
     first_sample = True
+    next_state_sample = 0.0
     try:
         while time.monotonic() < deadline:
             events = list(provider.collect_snapshot(include_host=first_sample))
             first_sample = False
+            now = time.monotonic()
+            if now >= next_state_sample:
+                events.extend(provider.collect_state_deltas())
+                next_state_sample = now + STATE_SNAPSHOT_INTERVAL
             total += store.append_many(events)
             if output:
                 for event in events:
