@@ -29,6 +29,7 @@ aie etw-catalog --contains Kernel
 aie etw-capture .\\traces\\process.etl --duration 60
 tracerpt .\\traces\\process.etl -o .\\traces\\process.xml -of XML -y
 aie etw-decode .\\traces\\process.xml .\\traces\\process-events.jsonl  # imports into SQLite; reports loss counters if present
+aie correlate --since-minutes 1440  # correlate ETW starts with matching process snapshots
 aie observe --duration 30 --jsonl observations.jsonl
 aie export-events archived-events.jsonl
 # Create .\\aie-pause to pause; remove it to resume:
