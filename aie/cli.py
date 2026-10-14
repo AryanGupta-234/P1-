@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import os
 import platform
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import typer
@@ -146,6 +147,24 @@ def events(limit: int = typer.Option(20, min=1, max=1000)) -> None:
                       event.entity.name, event.source)
     console.print(table)
     console.print(f"Total stored: {store.count()}")
+
+
+@app.command()
+def prune(
+    older_than_days: int | None = typer.Option(None, min=1, help="Delete events older than this many days."),
+    keep_latest: int | None = typer.Option(None, min=0, help="Keep only the newest N events (0 deletes all)."),
+) -> None:
+    """Apply one explicit local event-retention policy."""
+    if (older_than_days is None) == (keep_latest is None):
+        console.print("[red]Choose exactly one: --older-than-days or --keep-latest.[/red]")
+        raise typer.Exit(2)
+    store = EventStore(database_path())
+    if older_than_days is not None:
+        cutoff = datetime.now(timezone.utc) - timedelta(days=older_than_days)
+        deleted = store.prune(older_than=cutoff)
+    else:
+        deleted = store.prune(keep_latest=keep_latest)
+    console.print(f"Deleted {deleted} events. Remaining: {store.count()}")
 
 
 if __name__ == "__main__":
