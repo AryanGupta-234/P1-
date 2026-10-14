@@ -35,6 +35,10 @@ Status vocabulary: DONE / IN_PROGRESS / BLOCKED / PLANNED. A task is DONE only w
 - [x] Emit periodic CPU/memory/system-volume usage observations.
 - [x] Add read-only ETW provider catalog discovery (no session control).
 - [x] Add explicit SQLite event retention by age or newest-N count, with validation tests and CLI.
+- [x] Detect service additions, removals and field changes from periodic snapshots.
+- [x] Detect network interface, scheduled-task and installed-application inventory deltas.
+- [x] Add deterministic snapshot reconciliation with synthetic add/remove/change tests and baseline semantics.
+- [x] Sample low-frequency inventory every 30 seconds separately from process/resource polling.
 - [ ] Monitor service state changes.
 - [ ] Monitor network interface/connectivity changes.
 - [ ] Monitor scheduled-task and application inventory changes.
@@ -93,7 +97,7 @@ Status vocabulary: DONE / IN_PROGRESS / BLOCKED / PLANNED. A task is DONE only w
 
 ## Current sprint — target hardware: Windows 11 x64, 16 GB RAM
 1. Confirm Windows CI; run `python -m pytest` and `ruff check .` locally.
-2. Add service/network state deltas and operator retention controls.
+2. Add robust collector failure reporting, pause/resume and retention/export/deletion controls.
 3. Implement ETW process lifecycle telemetry; retain snapshot reconciliation as fallback.
 4. Add Event Log allowlist and process/driver-image correlation.
 5. Build UIA read-only inspector before any app-control actions.
