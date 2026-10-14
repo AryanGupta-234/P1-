@@ -26,6 +26,7 @@ aie models
 aie inventory --output inventory.json
 aie etw-catalog --contains Kernel
 aie observe --duration 30 --jsonl observations.jsonl
+aie export-events archived-events.jsonl
 # Create .\\aie-pause to pause; remove it to resume:
 aie observe --duration 300 --pause-file .\\aie-pause
 ```
