@@ -292,7 +292,7 @@ class WindowsProvider(ObserverProvider):
 
     def collect_eventlog_events(self) -> Iterator[AIEEvent]:
         """Read a strict System-log allowlist; no rendered messages are retained."""
-        if self._eventlog_provider is None:
+        if getattr(self, "_eventlog_provider", None) is None:
             from aie.providers.eventlog import WindowsEventLogProvider
 
             self._eventlog_provider = WindowsEventLogProvider()
