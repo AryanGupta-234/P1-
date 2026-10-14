@@ -102,8 +102,10 @@ def observe(duration: int, interval: float, db_path: Path,
                     provider.commit_eventlog_cursor(store)
                     persist(recovered("eventlog"))
                 except Exception as exc:
-                    if hasattr(provider, "_eventlog_provider") and provider._eventlog_provider is not None:
-                        provider._eventlog_provider.discard_pending_cursor()
+                    eventlog_provider = getattr(provider, "_eventlog_provider", None)
+                    discard_cursor = getattr(eventlog_provider, "discard_pending_cursor", None)
+                    if callable(discard_cursor):
+                        discard_cursor()
                     persist([failed("eventlog", exc)])
                 next_state_sample = now + STATE_SNAPSHOT_INTERVAL
 
