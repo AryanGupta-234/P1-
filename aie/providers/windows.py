@@ -12,6 +12,7 @@ from collections.abc import Iterator
 import psutil
 
 from aie.contracts import AIEEvent, EntityRef
+from aie.delta import SnapshotDeltaTracker
 from aie.providers.base import ObserverProvider
 
 
@@ -31,6 +32,7 @@ class WindowsProvider(ObserverProvider):
             raise OSError("AIE currently supports native Windows only.")
         self._known: dict[int, tuple[str, float | None]] = {}
         self._initialized = False
+        self._state_deltas = SnapshotDeltaTracker()
 
     def collect_snapshot(self, *, include_host: bool = True) -> Iterator[AIEEvent]:
         if include_host:
@@ -123,6 +125,45 @@ class WindowsProvider(ObserverProvider):
                     sensitivity="internal", confidence=0.85, evidence_kind="derived",
                 )
         self._known = current
+
+    def collect_state_deltas(self) -> Iterator[AIEEvent]:
+        """Reconcile low-frequency service/network/task/app metadata snapshots."""
+        identity = host_id()
+        source = self.name
+        services = self._services()
+        networks = self._network_interfaces()
+        task_result = self._scheduled_tasks()
+        tasks = task_result.get("tasks", []) if task_result.get("available") else []
+        # Keep only stable, non-secret application metadata in change events.
+        applications = [
+            {
+                "identity": f"{item.get('name', '')}|{item.get('version') or ''}",
+                "name": item.get("name"),
+                "version": item.get("version"),
+                "publisher": item.get("publisher"),
+            }
+            for item in self._installed_applications()
+        ]
+        for event in self._state_deltas.update(
+            collection="services", items=services, identity_field="name",
+            entity_type="service", source=source, host_id=identity,
+        ):
+            yield event
+        for event in self._state_deltas.update(
+            collection="network_interfaces", items=networks, identity_field="name",
+            entity_type="network_interface", source=source, host_id=identity,
+        ):
+            yield event
+        for event in self._state_deltas.update(
+            collection="scheduled_tasks", items=tasks, identity_field="task_name",
+            entity_type="scheduled_task", source=source, host_id=identity,
+        ):
+            yield event
+        for event in self._state_deltas.update(
+            collection="applications", items=applications, identity_field="identity",
+            entity_type="application", source=source, host_id=identity,
+        ):
+            yield event
 
     @staticmethod
     def _installed_applications() -> list[dict]:
