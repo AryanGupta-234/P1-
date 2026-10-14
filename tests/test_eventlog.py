@@ -1,0 +1,75 @@
+import subprocess
+
+import pytest
+
+from aie.providers.eventlog import (
+    EventLogError,
+    WindowsEventLogProvider,
+    parse_system_events,
+)
+
+
+XML = """<Events xmlns="http://schemas.microsoft.com/win/2004/08/events/event">
+<Event><System><Provider Name="Service Control Manager"/><EventID>7036</EventID>
+<TimeCreated SystemTime="2026-10-14T10:00:00.000Z"/><EventRecordID>77</EventRecordID>
+</System><EventData><Data Name="param1">Windows Update</Data>
+<Data Name="param2">running</Data></EventData>
+<RenderingInfo><Message>Do not persist this rendered message.</Message></RenderingInfo></Event>
+<Event><System><Provider Name="Microsoft-Windows-Kernel-Power"/><EventID>42</EventID>
+<TimeCreated SystemTime="2026-10-14T10:01:00.000Z"/><EventRecordID>78</EventRecordID>
+</System></Event>
+<Event><System><Provider Name="Other"/><EventID>1</EventID>
+<TimeCreated SystemTime="2026-10-14T10:02:00.000Z"/><EventRecordID>79</EventRecordID>
+</System></Event>
+</Events>"""
+
+
+def test_event_log_parser_enforces_allowlist_and_minimal_fields():
+    events = parse_system_events(XML, event_host_id="host-test")
+    assert [event.event_type for event in events] == [
+        "windows.service.state_changed", "windows.power.sleep"
+    ]
+    assert events[0].entity.name == "Windows Update"
+    assert events[0].data == {
+        "record_id": 77, "event_id": 7036,
+        "service": "Windows Update", "state": "running",
+    }
+    assert "Do not persist" not in str(events[0].data)
+    assert all(event.host_id == "host-test" for event in events)
+
+
+def test_event_log_event_ids_are_deterministic():
+    first = parse_system_events(XML, event_host_id="host-test")
+    second = parse_system_events(XML, event_host_id="host-test")
+    assert [event.event_id for event in first] == [event.event_id for event in second]
+
+
+def test_event_log_parser_rejects_oversized_and_malformed_xml():
+    with pytest.raises(EventLogError, match="output limit"):
+        parse_system_events("x" * 2_000_001)
+    with pytest.raises(EventLogError, match="malformed"):
+        parse_system_events("<Events>")
+
+
+def test_event_log_provider_uses_fixed_system_allowlist():
+    calls = []
+
+    def runner(args, **kwargs):
+        calls.append((args, kwargs))
+        return subprocess.CompletedProcess(args, 0, XML, "")
+
+    events = WindowsEventLogProvider(runner=runner).collect_recent()
+    args = calls[0][0]
+    assert args[:3] == ["wevtutil.exe", "qe", "System"]
+    assert "/f:xml" in args
+    assert "/c:100" in args
+    assert "Security" not in " ".join(args)
+    assert len(events) == 2
+
+
+def test_event_log_provider_reports_command_failure():
+    provider = WindowsEventLogProvider(
+        runner=lambda args, **kwargs: subprocess.CompletedProcess(args, 1, "", "denied")
+    )
+    with pytest.raises(EventLogError):
+        provider.collect_recent()
