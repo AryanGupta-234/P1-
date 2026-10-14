@@ -58,3 +58,29 @@ def test_etw_xml_decoder_refuses_input_overwrite(tmp_path):
         assert "must not overwrite" in str(exc)
     else:
         raise AssertionError("expected output/input collision to be rejected")
+
+
+def test_etw_xml_decoder_refuses_to_overwrite_existing_output(tmp_path):
+    source = tmp_path / "trace.xml"
+    output = tmp_path / "events.jsonl"
+    _write_xml(source)
+    output.write_text("keep", encoding="utf-8")
+    try:
+        decode_trace_xml(source, output)
+    except FileExistsError:
+        pass
+    else:
+        raise AssertionError("expected existing output to be protected")
+    assert output.read_text(encoding="utf-8") == "keep"
+
+
+def test_etw_xml_decoder_rejects_malformed_xml(tmp_path):
+    source = tmp_path / "broken.xml"
+    source.write_text("<Events><Event>", encoding="utf-8")
+    try:
+        list(iter_process_events(source, event_host_id="test"))
+    except Exception as exc:
+        import xml.etree.ElementTree as ET
+        assert isinstance(exc, ET.ParseError)
+    else:
+        raise AssertionError("expected malformed XML to fail")
