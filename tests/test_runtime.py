@@ -42,6 +42,9 @@ def test_observer_continues_after_collector_exception(monkeypatch, tmp_path):
         def collect_state_deltas(self):
             return []
 
+        def collect_eventlog_events(self):
+            return []
+
     monkeypatch.setattr(runtime, "WindowsProvider", Provider)
     monkeypatch.setattr(runtime, "host_id", lambda: "test")
     path = tmp_path / "observer.sqlite3"
