@@ -27,6 +27,8 @@ aie inventory --output inventory.json
 aie etw-catalog --contains Kernel
 # Optional, bounded ETW process trace (writes a new .etl file):
 aie etw-capture .\\traces\\process.etl --duration 60
+tracerpt .\\traces\\process.etl -o .\\traces\\process.xml -of XML -y
+aie etw-decode .\\traces\\process.xml .\\traces\\process-events.jsonl
 aie observe --duration 30 --jsonl observations.jsonl
 aie export-events archived-events.jsonl
 # Create .\\aie-pause to pause; remove it to resume:
@@ -40,6 +42,6 @@ The first release is read-only, local-only and stores events under %LOCALAPPDATA
 - `tests/`: deterministic synthetic tests.
 
 ## Current limitations
-Default process lifecycle monitoring uses periodic user-mode snapshots and may miss short-lived processes. An opt-in bounded ETW capture command is now available and writes a raw .etl trace; normalized ETW event decoding and ingestion are still pending. A driver requires a separate threat model, signing, review, installation consent and removal plan.
+Default process lifecycle monitoring uses periodic user-mode snapshots and may miss short-lived processes. An opt-in bounded ETW capture command is now available and writes a raw .etl trace; an offline `aie etw-decode` path now converts tracerpt XML process start/stop records into normalized JSONL. Validate the XML schema and event coverage against real Windows ETL captures before relying on it operationally. A driver requires a separate threat model, signing, review, installation consent and removal plan.
 
 Run tests with `python -m pytest`. The Windows CI workflow runs tests and Ruff on pushes and pull requests.
