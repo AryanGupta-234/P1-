@@ -90,3 +90,29 @@ def test_export_refuses_to_overwrite_sqlite_database(tmp_path):
     with pytest.raises(ValueError, match="must not be the SQLite database"):
         store.export_jsonl(store.path)
     assert store.count() == 0
+
+
+
+def test_checkpoint_round_trip_survives_store_reopen(tmp_path):
+    path = tmp_path / "events.sqlite3"
+    store = EventStore(path)
+    assert store.get_checkpoint("windows.eventlog.system.record_id") is None
+    store.set_checkpoint("windows.eventlog.system.record_id", "1234")
+
+    reopened = EventStore(path)
+    assert reopened.get_checkpoint("windows.eventlog.system.record_id") == "1234"
+    reopened.set_checkpoint("windows.eventlog.system.record_id", "1235")
+    assert EventStore(path).get_checkpoint("windows.eventlog.system.record_id") == "1235"
+
+
+@pytest.mark.parametrize("key", ["", "x" * 129])
+def test_checkpoint_rejects_invalid_key(tmp_path, key):
+    store = EventStore(tmp_path / "events.sqlite3")
+    with pytest.raises(ValueError):
+        store.get_checkpoint(key)
+
+
+def test_checkpoint_rejects_oversized_value(tmp_path):
+    store = EventStore(tmp_path / "events.sqlite3")
+    with pytest.raises(ValueError):
+        store.set_checkpoint("collector", "x" * 4097)
