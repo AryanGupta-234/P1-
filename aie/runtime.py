@@ -1,4 +1,4 @@
-"""Fault-isolated, read-only observer runtime with cooperative pause/resume."""
+"""Fault-isolated observer runtime with cooperative pause/resume."""
 from __future__ import annotations
 
 import time
@@ -8,8 +8,6 @@ from aie.contracts import AIEEvent, EntityRef
 from aie.providers.windows import WindowsProvider, host_id
 from aie.store import EventStore
 
-# Full service/task/app/network enumeration is intentionally less frequent than
-# process/resource sampling to bound host overhead on 16 GB laptops.
 STATE_SNAPSHOT_INTERVAL = 30.0
 
 
@@ -21,14 +19,10 @@ def _health_event(event_type: str, collector: str, data: dict) -> AIEEvent:
     )
 
 
-def observe(
-    duration: int,
-    interval: float,
-    db_path: Path,
-    jsonl_path: Path | None = None,
-    pause_file: Path | None = None,
-) -> int:
-    """Observe for *active* duration; presence of pause_file suspends sampling."""
+def observe(duration: int, interval: float, db_path: Path,
+            jsonl_path: Path | None = None,
+            pause_file: Path | None = None) -> int:
+    """Observe for active duration; a present pause file suspends sampling."""
     if duration < 1:
         raise ValueError("duration must be at least 1 second")
     if not 0.5 <= interval <= 60:
@@ -52,26 +46,23 @@ def observe(
         total += store.append_many(events)
         if output:
             for event in events:
-                output.write(event.model_dump_json() + "\\n")
+                output.write(event.model_dump_json() + "\n")
             output.flush()
 
-    def recovered(collector: str) -> list[AIEEvent]:
-        previous = failures[collector]
-        failures[collector] = 0
-        if previous:
-            return [_health_event(
-                "observer.collector_recovered", collector,
-                {"previous_consecutive_failures": previous},
-            )]
+    def recovered(name: str) -> list[AIEEvent]:
+        count = failures[name]
+        failures[name] = 0
+        if count:
+            return [_health_event("observer.collector_recovered", name,
+                                  {"previous_consecutive_failures": count})]
         return []
 
-    def failed(collector: str, exc: Exception) -> AIEEvent:
-        failures[collector] += 1
-        # Exclude exception messages: they may contain paths or host-specific data.
+    def failed(name: str, exc: Exception) -> AIEEvent:
+        failures[name] += 1
         return _health_event(
-            "observer.collector_error", collector,
+            "observer.collector_error", name,
             {"exception_type": type(exc).__name__,
-             "consecutive_failures": failures[collector]},
+             "consecutive_failures": failures[name]},
         )
 
     first_sample = True
@@ -79,11 +70,9 @@ def observe(
     try:
         while time.monotonic() < deadline:
             now = time.monotonic()
-            should_pause = bool(pause_file and pause_file.exists())
-            if should_pause:
+            if pause_file is not None and pause_file.exists():
                 if not paused:
-                    paused = True
-                    pause_started = now
+                    paused, pause_started = True, now
                     persist([_health_event("observer.paused", "runtime", {})])
                 time.sleep(interval)
                 continue
