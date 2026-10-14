@@ -123,3 +123,21 @@ def test_event_log_parser_accepts_unqualified_xml():
     events = parse_system_events(unqualified, event_host_id="host-test")
     assert len(events) == 2
     assert events[0].data["record_id"] == 77
+
+
+def test_event_log_parser_accepts_only_allowlisted_kernel_general_ids():
+    xml = """<Events>
+    <Event><System><Provider Name="Microsoft-Windows-Kernel-General"/>
+    <EventID>12</EventID><TimeCreated SystemTime="2026-10-14T10:00:00Z"/>
+    <EventRecordID>101</EventRecordID></System></Event>
+    <Event><System><Provider Name="Microsoft-Windows-Kernel-General"/>
+    <EventID>13</EventID><TimeCreated SystemTime="2026-10-14T10:01:00Z"/>
+    <EventRecordID>102</EventRecordID></System></Event>
+    <Event><System><Provider Name="Microsoft-Windows-Kernel-General"/>
+    <EventID>14</EventID><TimeCreated SystemTime="2026-10-14T10:02:00Z"/>
+    <EventRecordID>103</EventRecordID></System></Event>
+    </Events>"""
+    events = parse_system_events(xml, event_host_id="host-test")
+    assert [event.event_type for event in events] == [
+        "windows.system.started", "windows.system.stopped"
+    ]
