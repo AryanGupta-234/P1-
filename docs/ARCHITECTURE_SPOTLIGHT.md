@@ -58,6 +58,7 @@ See [HARDWARE_PROFILE.md](HARDWARE_PROFILE.md) for the sanitized host baseline.
 - Periodic CPU, memory and system-volume resource observations; batch SQLite writes and JSONL export.
 - Explicit SQLite retention APIs: delete events older than a timezone-aware cutoff or retain only the newest N events; deterministic ordering and validation tests.
 - Generic in-memory snapshot delta engine with baseline, added, removed and changed evidence events; duplicate identities fail closed.
+- Synthetic unit and Windows-provider integration tests cover baseline creation and service-state transition emission.
 - Windows service, network interface, scheduled-task and installed-application state deltas; low-frequency inventory sampling is bounded to 30-second intervals, independently of process/resource polling.
 - CLI retention command: `aie prune --older-than-days N` or `aie prune --keep-latest N`.
 - Read-only ETW provider catalog discovery through `logman query providers` (catalog only; no trace session is started).
