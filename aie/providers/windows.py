@@ -290,13 +290,31 @@ class WindowsProvider(ObserverProvider):
             })
         return {"available": True, "tasks": tasks}
 
-    def collect_eventlog_events(self) -> Iterator[AIEEvent]:
+    def collect_eventlog_events(self, store=None) -> Iterator[AIEEvent]:
         """Read a strict System-log allowlist; no rendered messages are retained."""
         if getattr(self, "_eventlog_provider", None) is None:
             from aie.providers.eventlog import WindowsEventLogProvider
 
-            self._eventlog_provider = WindowsEventLogProvider()
+            checkpoint = store.get_checkpoint("windows.eventlog.system.record_id") if store else None
+            try:
+                last_record_id = int(checkpoint) if checkpoint is not None else None
+            except ValueError:
+                last_record_id = None
+            self._eventlog_provider = WindowsEventLogProvider(
+                last_record_id=last_record_id
+            )
         yield from self._eventlog_provider.collect_recent()
+
+    def commit_eventlog_cursor(self, store) -> int | None:
+        """Persist the Event Log cursor after the event batch has been stored."""
+        provider = getattr(self, "_eventlog_provider", None)
+        if provider is None:
+            return None
+        return provider.commit_cursor(
+            lambda record_id: store.set_checkpoint(
+                "windows.eventlog.system.record_id", str(record_id)
+            )
+        )
 
     def inventory(self) -> dict:
         processes = []
