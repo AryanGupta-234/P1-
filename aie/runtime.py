@@ -97,9 +97,13 @@ def observe(duration: int, interval: float, db_path: Path,
                 except Exception as exc:
                     persist([failed("state_snapshot", exc)])
                 try:
-                    persist(list(provider.collect_eventlog_events()))
+                    eventlog_events = list(provider.collect_eventlog_events(store))
+                    persist(eventlog_events)
+                    provider.commit_eventlog_cursor(store)
                     persist(recovered("eventlog"))
                 except Exception as exc:
+                    if hasattr(provider, "_eventlog_provider") and provider._eventlog_provider is not None:
+                        provider._eventlog_provider.discard_pending_cursor()
                     persist([failed("eventlog", exc)])
                 next_state_sample = now + STATE_SNAPSHOT_INTERVAL
 
