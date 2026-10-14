@@ -68,7 +68,7 @@ class EventStore:
             rows = db.execute(
                 "SELECT payload FROM events ORDER BY timestamp ASC, event_id ASC"
             ).fetchall()
-        destination.write_text("".join(row[0] + "\\n" for row in rows), encoding="utf-8")
+        destination.write_text("".join(row[0] + "\n" for row in rows), encoding="utf-8")
         return len(rows)
 
     def prune(
