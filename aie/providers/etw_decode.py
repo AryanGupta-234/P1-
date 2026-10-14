@@ -60,13 +60,18 @@ def iter_process_events(xml_path: Path, *, event_host_id: str | None = None) -> 
             element.clear()
             continue
         provider_guid = provider.attrib.get("Guid", "").casefold()
+        provider_name = provider.attrib.get("Name", "").casefold()
         try:
             event_id = int(event_id_element.text or "")
         except ValueError:
             element.clear()
             continue
         event_type = _PROCESS_EVENTS.get(event_id)
-        if provider_guid != KERNEL_PROCESS_GUID.casefold() or event_type is None:
+        known_provider = (
+            provider_guid == KERNEL_PROCESS_GUID.casefold()
+            or provider_name == "microsoft-windows-kernel-process"
+        )
+        if not known_provider or event_type is None:
             element.clear()
             continue
         timestamp_text = time_created.attrib.get("SystemTime")
