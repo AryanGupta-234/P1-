@@ -34,7 +34,7 @@ aie export-events archived-events.jsonl
 # Create .\\aie-pause to pause; remove it to resume:
 aie observe --duration 300 --pause-file .\\aie-pause
 ```
-The first release is read-only, local-only and stores events under %LOCALAPPDATA%\AIE. No model or network is required.
+The first release is read-only, local-only and stores events under %LOCALAPPDATA%\AIE. The fixed System Event Log cursor is checkpointed in SQLite after each event batch is persisted, so observer restarts replay safely instead of skipping an uncommitted page. No model or network is required.
 
 ## Layout
 - `aie/`: contracts, observer, SQLite store and CLI.
