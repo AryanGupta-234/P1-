@@ -1,8 +1,9 @@
-"""Durable local SQLite event store."""
+"""Durable local SQLite event store with explicit retention controls."""
 from __future__ import annotations
 
 import json
 import sqlite3
+from datetime import datetime
 from pathlib import Path
 from typing import Iterable
 
@@ -51,10 +52,46 @@ class EventStore:
             raise ValueError("limit must be between 1 and 1000")
         with self._connect() as db:
             rows = db.execute(
-                "SELECT payload FROM events ORDER BY timestamp DESC LIMIT ?", (limit,)
+                "SELECT payload FROM events ORDER BY timestamp DESC, event_id DESC LIMIT ?",
+                (limit,),
             ).fetchall()
         return [AIEEvent.model_validate(json.loads(row[0])) for row in rows]
 
     def count(self) -> int:
         with self._connect() as db:
             return int(db.execute("SELECT COUNT(*) FROM events").fetchone()[0])
+
+    def prune(
+        self,
+        *,
+        older_than: datetime | None = None,
+        keep_latest: int | None = None,
+    ) -> int:
+        """Delete old events or cap the store, requiring exactly one explicit policy."""
+        if (older_than is None) == (keep_latest is None):
+            raise ValueError("provide exactly one of older_than or keep_latest")
+        if older_than is not None:
+            if older_than.tzinfo is None or older_than.utcoffset() is None:
+                raise ValueError("older_than must be timezone-aware")
+            cutoff = older_than.isoformat()
+            with self._connect() as db:
+                before = db.total_changes
+                db.execute(
+                    "DELETE FROM events WHERE julianday(timestamp) < julianday(?)",
+                    (cutoff,),
+                )
+                return db.total_changes - before
+
+        if keep_latest is None or keep_latest < 0:
+            raise ValueError("keep_latest must be zero or greater")
+        with self._connect() as db:
+            before = db.total_changes
+            db.execute(
+                """DELETE FROM events
+                   WHERE event_id NOT IN (
+                       SELECT event_id FROM events
+                       ORDER BY timestamp DESC, event_id DESC LIMIT ?
+                   )""",
+                (keep_latest,),
+            )
+            return db.total_changes - before
