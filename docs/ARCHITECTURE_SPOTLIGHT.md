@@ -66,12 +66,13 @@ See [HARDWARE_PROFILE.md](HARDWARE_PROFILE.md) for the sanitized host baseline.
 - Collector failures are isolated and persisted as sanitized health events; recovery is recorded after a later successful sample.
 - Fault-isolated observer loop: process and low-frequency state collector failures are persisted as sanitized `observer.collector_error` events; a later successful sample emits `observer.collector_recovered`.
 - Cooperative pause/resume through `aie observe --pause-file PATH`: while the file exists sampling pauses; removing it resumes observation, and paused time does not consume the requested active duration.
-- Read-only ETW provider catalog discovery through `logman query providers` (catalog only; no trace session is started).
+- Read-only ETW provider catalog discovery through `logman query providers`.
+- Opt-in `aie etw-capture PATH.etl --duration N` starts a bounded `Microsoft-Windows-Kernel-Process` trace using Windows `logman`, refuses output overwrite, and always attempts to stop the named session on context exit. This currently produces raw ETL only; normalized event decoding/ingestion is not yet implemented.
 - Hardware runtime probe and local loopback-only Ollama model discovery/model selection.
 - Windows CI workflow plus synthetic tests (CI execution still needs confirmation).
 
 ## Not implemented yet
-- ETW real-time subscriptions / higher-fidelity kernel-originated event ingestion (only provider catalog discovery exists).
+- ETL decoding, normalized process lifecycle event ingestion, trace-loss accounting and reconciliation against user-mode snapshots.
 - Windows Event Log allowlist and real-time subscriptions.
 - Native event-driven service/network/task/application subscriptions (current implementation uses 30-second snapshot reconciliation, not native event subscriptions).
 - Dedicated end-to-end runtime tests and Windows-host validation for pause/resume, collector recovery, CPU overhead and event latency.
@@ -97,7 +98,7 @@ See [HARDWARE_PROFILE.md](HARDWARE_PROFILE.md) for the sanitized host baseline.
 ## Next actions — priority order
 1. Run Windows CI and resolve every failure; confirm the new retention tests pass.
 2. Complete event export/deletion controls and validate observer reliability on the target Windows host.
-3. Prototype opt-in ETW process telemetry with bounded buffers and explicit session lifecycle.
+3. Decode and validate the new opt-in bounded ETW capture into normalized process lifecycle events.
 4. Add allowlisted Windows Event Log providers.
 5. Add app compatibility discovery and UIA read-only tree inspection.
 6. Only then begin user-approved application actions behind a policy broker.
