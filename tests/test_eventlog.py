@@ -114,3 +114,12 @@ def test_windows_provider_reuses_eventlog_cursor(monkeypatch):
     assert list(provider.collect_eventlog_events()) == []
     assert len(instances) == 1
     assert instances[0].calls == 2
+
+
+def test_event_log_parser_accepts_unqualified_xml():
+    unqualified = XML.replace(
+        ' xmlns="http://schemas.microsoft.com/win/2004/08/events/event"', ""
+    )
+    events = parse_system_events(unqualified, event_host_id="host-test")
+    assert len(events) == 2
+    assert events[0].data["record_id"] == 77
