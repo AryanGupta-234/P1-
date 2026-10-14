@@ -102,8 +102,8 @@ Status vocabulary: DONE / IN_PROGRESS / BLOCKED / PLANNED. A task is DONE only w
 ## Current sprint — target hardware: Windows 11 x64, 16 GB RAM
 1. Confirm Windows CI; run `python -m pytest` and `ruff check .` locally.
 2. Validate pause/resume, collector recovery and export on the target Windows host.
-3. Validate the ETW decoder against real Windows traces, add trace-loss accounting and correlate ETW events with snapshot reconciliation.
-4. Add Event Log allowlist and process/driver-image correlation.
+3. Validate the ETW decoder against real Windows traces, confirm available loss counters and correlate ETW events with snapshot reconciliation.
+4. Validate the fixed Event Log allowlist on Windows, then add real-time subscriptions and process/image correlation.
 5. Build UIA read-only inspector before any app-control actions.
 6. Implement actual local Ollama chat/embedding adapters with resource/cancellation guards.
 
