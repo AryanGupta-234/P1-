@@ -169,3 +169,39 @@ def test_event_log_cursor_can_resume_from_persisted_record_id():
     events = provider.collect_recent()
     assert [event.data["record_id"] for event in events] == [80, 81]
     assert "EventRecordID > 78" in calls[0][3]
+
+
+
+def test_windows_provider_persists_cursor_after_event_batch(tmp_path, monkeypatch):
+    from aie.providers import eventlog
+    from aie.providers.windows import WindowsProvider
+    from aie.store import EventStore
+
+    created = []
+
+    class FakeEventLogProvider:
+        def __init__(self, last_record_id=None):
+            self.last_record_id = last_record_id
+            self.committed = False
+            created.append(self)
+
+        def collect_recent(self):
+            return []
+
+        def commit_cursor(self, save_checkpoint):
+            save_checkpoint(456)
+            self.committed = True
+            return 456
+
+        def discard_pending_cursor(self):
+            pass
+
+    monkeypatch.setattr(eventlog, "WindowsEventLogProvider", FakeEventLogProvider)
+    store = EventStore(tmp_path / "observer.sqlite3")
+    store.set_checkpoint("windows.eventlog.system.record_id", "123")
+
+    provider = WindowsProvider.__new__(WindowsProvider)
+    assert list(provider.collect_eventlog_events(store)) == []
+    assert created[0].last_record_id == 123
+    assert provider.commit_eventlog_cursor(store) == 456
+    assert store.get_checkpoint("windows.eventlog.system.record_id") == "456"
