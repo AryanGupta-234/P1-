@@ -40,14 +40,15 @@ Status vocabulary: DONE / IN_PROGRESS / BLOCKED / PLANNED. A task is DONE only w
 - [x] Add deterministic snapshot reconciliation with synthetic add/remove/change tests and baseline semantics.
 - [x] Add provider integration tests for four inventory baselines and service-state transition emission.
 - [x] Sample low-frequency inventory every 30 seconds separately from process/resource polling.
-- [ ] Monitor service state changes.
-- [ ] Monitor network interface/connectivity changes.
-- [ ] Monitor scheduled-task and application inventory changes.
+- [x] Detect service, network-interface, scheduled-task and application metadata changes through 30-second snapshot reconciliation.
+- [ ] Add native event-driven service/network/task subscriptions where supported.
 - [ ] ETW process/thread/image telemetry provider with bounded buffers and explicit session lifecycle.
 - [ ] Allowlisted Windows Event Log subscriptions.
 - [ ] Executable path discovery and Authenticode publisher/signature inventory.
-- [ ] Pause/resume, event export and deletion controls.
-- [ ] Measure CPU, memory, event latency, event loss and collector failures on the target laptop.
+- [x] Add cooperative pause/resume via an operator-controlled pause file; record pause/resume events.
+- [x] Isolate process/state collector exceptions and persist sanitized error/recovery events.
+- [ ] Add explicit event export and deletion controls.
+- [ ] Measure CPU, memory, event latency and event loss on the target laptop; collector exception reporting is implemented but needs Windows validation.
 
 ## M2 — Context Intelligence
 - [ ] Temporal event correlation and environmental state snapshots.
@@ -98,7 +99,7 @@ Status vocabulary: DONE / IN_PROGRESS / BLOCKED / PLANNED. A task is DONE only w
 
 ## Current sprint — target hardware: Windows 11 x64, 16 GB RAM
 1. Confirm Windows CI; run `python -m pytest` and `ruff check .` locally.
-2. Add robust collector failure reporting, pause/resume and retention/export/deletion controls.
+2. Finish event export/deletion controls and validate pause/resume plus collector recovery on Windows.
 3. Implement ETW process lifecycle telemetry; retain snapshot reconciliation as fallback.
 4. Add Event Log allowlist and process/driver-image correlation.
 5. Build UIA read-only inspector before any app-control actions.
