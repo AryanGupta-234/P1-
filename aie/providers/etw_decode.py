@@ -37,7 +37,10 @@ def read_trace_stats(xml_path: Path) -> ETWTraceStats:
     }
     values: dict[str, int] = {}
     in_header = False
+    root: ET.Element | None = None
     for action, element in ET.iterparse(xml_path, events=("start", "end")):
+        if root is None and action == "start":
+            root = element
         local_name = element.tag.rsplit("}", 1)[-1].casefold()
         if action == "start" and local_name == "header":
             in_header = True
@@ -47,8 +50,12 @@ def read_trace_stats(xml_path: Path) -> ETWTraceStats:
             except ValueError:
                 pass
         elif action == "end" and local_name == "header":
-            in_header = False
             element.clear()
+            break
+        elif action == "end" and local_name == "event":
+            element.clear()
+            if root is not None:
+                root.clear()
     return ETWTraceStats(**values)
 
 
