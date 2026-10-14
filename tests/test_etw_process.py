@@ -50,16 +50,33 @@ def test_etw_trace_refuses_overwrite_and_invalid_buffer_bounds(tmp_path, monkeyp
                         runner=lambda *a, **k: _result())
 
 
-def test_etw_trace_marks_session_stopped_even_if_stop_command_fails(tmp_path, monkeypatch):
+def test_etw_trace_keeps_failed_stop_retryable(tmp_path, monkeypatch):
     monkeypatch.setattr(os, "name", "nt")
     calls = [0]
 
     def runner(args, **kwargs):
         calls[0] += 1
-        return _result(0 if calls[0] == 1 else 1)
+        return _result(1 if calls[0] == 2 else 0)
 
     trace = ETWProcessTrace(tmp_path / "trace.etl", runner=runner)
     trace.start()
     with pytest.raises(ETWSessionError):
         trace.stop()
+    assert trace._started is True
+    trace.stop()
+    assert trace._started is False
+
+
+def test_etw_trace_attempts_cleanup_when_start_fails(tmp_path, monkeypatch):
+    monkeypatch.setattr(os, "name", "nt")
+    calls = [0]
+
+    def runner(args, **kwargs):
+        calls[0] += 1
+        return _result(1 if calls[0] == 1 else 0)
+
+    trace = ETWProcessTrace(tmp_path / "failed.etl", runner=runner)
+    with pytest.raises(ETWSessionError):
+        trace.start()
+    assert calls[0] == 2
     assert trace._started is False
