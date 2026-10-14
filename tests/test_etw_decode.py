@@ -94,3 +94,17 @@ def test_etw_import_is_idempotent_across_repeated_decodes(tmp_path):
     decode_trace_xml(source, tmp_path / "first.jsonl", event_host_id="stable-host", store=store)
     decode_trace_xml(source, tmp_path / "second.jsonl", event_host_id="stable-host", store=store)
     assert store.count() == 2
+
+
+def test_etw_decode_removes_partial_output_after_parse_failure(tmp_path):
+    source = tmp_path / "broken.xml"
+    output = tmp_path / "partial.jsonl"
+    source.write_text("<Events><Event>", encoding="utf-8")
+    import xml.etree.ElementTree as ET
+    try:
+        decode_trace_xml(source, output)
+    except ET.ParseError:
+        pass
+    else:
+        raise AssertionError("expected malformed XML to fail")
+    assert not output.exists()
