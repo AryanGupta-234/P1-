@@ -69,7 +69,7 @@ See [HARDWARE_PROFILE.md](HARDWARE_PROFILE.md) for the sanitized host baseline.
 - Cooperative pause/resume through `aie observe --pause-file PATH`: while the file exists sampling pauses; removing it resumes observation, and paused time does not consume the requested active duration.
 - Read-only ETW provider catalog discovery through `logman query providers`.
 - Opt-in `aie etw-capture PATH.etl --duration N` starts a bounded `Microsoft-Windows-Kernel-Process` trace using Windows `logman`, refuses output overwrite, caps the ETL file at 256 MB by default, bounds ETW buffers (64 KB × 16–64 buffers by default), and always attempts to stop the named session on context exit. `tracerpt` XML can then be normalized with `aie etw-decode INPUT.xml OUTPUT.jsonl`; the streaming decoder clears parsed XML nodes to bound memory, accepts only Kernel-Process event IDs 1/2, records PID/parent PID and image basename, and deliberately discards command lines. Decoded events are assigned deterministic IDs and batch-imported into SQLite, so reprocessing the same trace is idempotent. `aie etw-decode` also reports `EventsLost` and buffer-loss counters when the tracerpt XML header exposes them; confirm those fields on real Windows traces. Schema validation and snapshot reconciliation remain pending.
-- Conservative ETW process-start correlation library: matches only same-host, same-PID, same-image observations whose process creation time is within a bounded tolerance of the ETW start timestamp; emits deterministic derived evidence with both source event IDs. PID-only stop correlation is deliberately excluded because PID reuse makes it ambiguous. SQLite/CLI integration remains pending.
+- Conservative ETW process-start correlation: `aie correlate --since-minutes N` reads a bounded chronological SQLite history window, matches only same-host, same-PID, same-image observations whose process creation time is within a bounded tolerance of the ETW start timestamp, and persists deterministic derived evidence with both source event IDs. Re-running is idempotent. PID-only stop correlation is deliberately excluded because PID reuse makes it ambiguous.
 - Hardware runtime probe and local loopback-only Ollama model discovery/model selection.
 - Windows CI workflow plus synthetic tests (CI execution still needs confirmation).
 
@@ -81,7 +81,7 @@ See [HARDWARE_PROFILE.md](HARDWARE_PROFILE.md) for the sanitized host baseline.
 - Dedicated end-to-end runtime tests and Windows-host validation for pause/resume, collector recovery, CPU overhead and event latency.
 - Executable path/signature discovery and application adapter registry.
 - UI Automation client, app-specific automation adapters and action execution.
-- SQLite-backed correlation query/CLI integration, broader environmental state model and contextual reasoning.
+- Broader environmental state model and contextual reasoning; process-start correlation is integrated but not yet validated against real Windows ETW traces.
 - Actual Ollama chat/embedding invocation, memory consolidation and cloud gateway.
 - Policy broker, sandboxed actions and autonomous workflows.
 - Custom kernel driver (not an initial milestone; separate signed-driver research only if ETW cannot meet a demonstrated need).
