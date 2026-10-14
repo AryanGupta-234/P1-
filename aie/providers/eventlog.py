@@ -25,7 +25,7 @@ class EventLogError(RuntimeError):
 
 
 def _events_root(output: str) -> ET.Element:
-    text = output.lstrip()
+    text = output.lstrip("\\ufeff \\r\\n\\t")
     if text.startswith("<?xml"):
         _, _, text = text.partition("?>")
         text = text.lstrip()
