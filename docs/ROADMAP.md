@@ -36,7 +36,7 @@ Development ownership and branch rules are defined in [Development Streams](DEVE
 - [x] Read-only installed application, service and scheduled-task inventory.
 - [x] Foreground app transitions and throttled active-process CPU, RSS, thread and I/O samples.
 - [x] Bounded network interface counters, TCP connection-establishment latency and DNS resolution timing.
-- [x] Evidence-linked network interface state-change events for connectivity, link speed and MTU; traffic counters are excluded from state comparisons (six focused unit tests; feature-branch Windows CI pending).
+- [x] Evidence-linked network interface state-change events for connectivity, link speed and MTU; traffic counters are excluded from state comparisons (six focused tracker tests plus a runtime persistence integration test; hosted Windows CI run [#1279](https://github.com/AryanGupta-234/P1-/actions/runs/38510694840) passed on Python 3.11/3.12; target-desktop validation remains pending).
 - [x] Opt-in metadata-only Application/System Event Log provider; startup backlog skipped, message text/XML/Security excluded.
 - [x] Event Log provider wired into observer runtime with bounded polling and per-pass record cap.
 - [x] Opt-in allowlisted UI Automation structural tree sampler with node/depth/time bounds.
@@ -49,7 +49,8 @@ Development ownership and branch rules are defined in [Development Streams](DEVE
 - [x] Explicit JSONL export and confirm-only delete-all controls; sensitive export requires an explicit opt-in.
 - [ ] Rich observer health desktop UI.
 - [ ] Validate ETW elevation, Event Log/UIA permissions and data collection on the target Windows desktop.
-- [ ] Validate network interface state-delta integration on the hosted Windows CI matrix and target desktop.
+- [x] Validate network interface state-delta integration on hosted Windows CI run [#1279](https://github.com/AryanGupta-234/P1-/actions/runs/38510694840) (Python 3.11/3.12).
+- [ ] Validate network interface state-delta behavior on the target desktop.
 
 ## M1.5 — Video intelligence
 - [x] Opt-in Chrome/Edge MV3 HTML-video observer, disabled by default.
