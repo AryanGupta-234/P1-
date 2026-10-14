@@ -42,8 +42,11 @@ def test_observer_continues_after_collector_exception(monkeypatch, tmp_path):
         def collect_state_deltas(self):
             return []
 
-        def collect_eventlog_events(self):
+        def collect_eventlog_events(self, store=None):
             return []
+
+        def commit_eventlog_cursor(self, store):
+            return None
 
     monkeypatch.setattr(runtime, "WindowsProvider", Provider)
     monkeypatch.setattr(runtime, "host_id", lambda: "test")
@@ -80,8 +83,11 @@ def test_eventlog_failure_isolated_from_process_observation(monkeypatch, tmp_pat
         def collect_state_deltas(self):
             return []
 
-        def collect_eventlog_events(self):
+        def collect_eventlog_events(self, store=None):
             raise PermissionError("event log access denied")
+
+        def commit_eventlog_cursor(self, store):
+            return None
 
     monkeypatch.setattr(runtime, "WindowsProvider", Provider)
     monkeypatch.setattr(runtime, "host_id", lambda: "test")
