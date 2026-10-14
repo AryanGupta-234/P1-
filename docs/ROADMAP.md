@@ -44,7 +44,8 @@ Status vocabulary: DONE / IN_PROGRESS / BLOCKED / PLANNED. A task is DONE only w
 - [ ] Add native event-driven service/network/task subscriptions where supported.
 - [ ] Complete ETW process telemetry validation: opt-in bounded capture, streaming tracerpt-XML normalization, deterministic event IDs and batched SQLite import are implemented; real Windows schema validation, confirmation of available loss counters, and snapshot reconciliation are pending.
 - [x] Add a fixed, read-only System Event Log allowlist for service state changes, sleep transitions and OS start/stop; sample it every 30 seconds with collector fault isolation.
-- [ ] Add real-time Event Log subscriptions and validate event coverage/permissions on Windows.
+- [x] Persist the System Event Log record-ID cursor in SQLite; commit it only after the event batch is stored, allowing deterministic replay after interruption.
+- [ ] Add real-time Event Log subscriptions and validate event coverage/permissions on Windows; validate persisted-cursor recovery on the target host.
 - [ ] Executable path discovery and Authenticode publisher/signature inventory.
 - [x] Add cooperative pause/resume via an operator-controlled pause file; record pause/resume events.
 - [x] Isolate process/state collector exceptions and persist sanitized error/recovery events.
@@ -103,7 +104,7 @@ Status vocabulary: DONE / IN_PROGRESS / BLOCKED / PLANNED. A task is DONE only w
 1. Confirm Windows CI; run `python -m pytest` and `ruff check .` locally.
 2. Validate pause/resume, collector recovery and export on the target Windows host.
 3. Validate the ETW decoder against real Windows traces, confirm available loss counters and correlate ETW events with snapshot reconciliation.
-4. Validate the fixed Event Log allowlist on Windows, then add real-time subscriptions and process/image correlation.
+4. Validate the fixed Event Log allowlist and persisted-cursor recovery on Windows, then add real-time subscriptions and process/image correlation.
 5. Build UIA read-only inspector before any app-control actions.
 6. Implement actual local Ollama chat/embedding adapters with resource/cancellation guards.
 
