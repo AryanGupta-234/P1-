@@ -55,7 +55,8 @@ Status vocabulary: DONE / IN_PROGRESS / BLOCKED / PLANNED. A task is DONE only w
 
 ## M2 — Context Intelligence
 - [x] Add conservative ETW-to-snapshot process-start correlation using host, PID, normalized image name and process creation time; emit deterministic derived evidence with both source event IDs.
-- [ ] Integrate correlation with SQLite history queries and a CLI workflow; add stop-event correlation only when process-instance identity is sufficient.
+- [x] Add bounded chronological SQLite history queries and an idempotent `aie correlate --since-minutes N` CLI workflow for derived process-start confirmations.
+- [ ] Add stop-event correlation only when process-instance identity is sufficient.
 - [ ] Add environmental state snapshots.
 - [ ] Store observations separately from inferred hypotheses.
 - [ ] Evidence-backed relevance scoring and confidence calibration.
