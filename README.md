@@ -28,7 +28,7 @@ aie etw-catalog --contains Kernel
 # Optional, bounded ETW process trace (writes a new .etl file):
 aie etw-capture .\\traces\\process.etl --duration 60
 tracerpt .\\traces\\process.etl -o .\\traces\\process.xml -of XML -y
-aie etw-decode .\\traces\\process.xml .\\traces\\process-events.jsonl  # imports into local SQLite too
+aie etw-decode .\\traces\\process.xml .\\traces\\process-events.jsonl  # imports into SQLite; reports loss counters if present
 aie observe --duration 30 --jsonl observations.jsonl
 aie export-events archived-events.jsonl
 # Create .\\aie-pause to pause; remove it to resume:
