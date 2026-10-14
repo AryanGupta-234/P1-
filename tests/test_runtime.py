@@ -53,3 +53,44 @@ def test_observer_continues_after_collector_exception(monkeypatch, tmp_path):
     assert any(item.event_type == "observer.collector_error" for item in stored)
     assert any(item.event_type == "observer.collector_recovered" for item in stored)
     assert any(item.event_type == "process.sample" for item in stored)
+
+
+def test_eventlog_failure_isolated_from_process_observation(monkeypatch, tmp_path):
+    import aie.runtime as runtime
+    from aie.contracts import AIEEvent, EntityRef
+    from aie.store import EventStore
+
+    clock = [0.0]
+    monkeypatch.setattr(runtime.time, "monotonic", lambda: clock[0])
+    monkeypatch.setattr(
+        runtime.time, "sleep",
+        lambda seconds: clock.__setitem__(0, clock[0] + seconds),
+    )
+
+    class Provider:
+        def __init__(self):
+            pass
+
+        def collect_snapshot(self, include_host=True):
+            return [AIEEvent(
+                host_id="test", source="test", event_type="process.sample",
+                entity=EntityRef(type="process", name="sample"),
+            )]
+
+        def collect_state_deltas(self):
+            return []
+
+        def collect_eventlog_events(self):
+            raise PermissionError("event log access denied")
+
+    monkeypatch.setattr(runtime, "WindowsProvider", Provider)
+    monkeypatch.setattr(runtime, "host_id", lambda: "test")
+    path = tmp_path / "eventlog-failure.sqlite3"
+    runtime.observe(1, 0.5, path)
+    stored = EventStore(path).recent(20)
+    assert any(
+        item.event_type == "observer.collector_error"
+        and item.entity.name == "eventlog"
+        for item in stored
+    )
+    assert any(item.event_type == "process.sample" for item in stored)
