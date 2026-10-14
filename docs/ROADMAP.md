@@ -47,7 +47,8 @@ Status vocabulary: DONE / IN_PROGRESS / BLOCKED / PLANNED. A task is DONE only w
 - [ ] Executable path discovery and Authenticode publisher/signature inventory.
 - [x] Add cooperative pause/resume via an operator-controlled pause file; record pause/resume events.
 - [x] Isolate process/state collector exceptions and persist sanitized error/recovery events.
-- [ ] Add explicit event export and deletion controls.
+- [x] Add chronological JSONL event export API and `aie export-events PATH` CLI command.
+- [x] Retain explicit event-retention controls through the `aie prune` CLI.
 - [ ] Measure CPU, memory, event latency and event loss on the target laptop; collector exception reporting is implemented but needs Windows validation.
 
 ## M2 — Context Intelligence
@@ -99,7 +100,7 @@ Status vocabulary: DONE / IN_PROGRESS / BLOCKED / PLANNED. A task is DONE only w
 
 ## Current sprint — target hardware: Windows 11 x64, 16 GB RAM
 1. Confirm Windows CI; run `python -m pytest` and `ruff check .` locally.
-2. Finish event export/deletion controls and validate pause/resume plus collector recovery on Windows.
+2. Validate pause/resume, collector recovery and export on the target Windows host.
 3. Implement ETW process lifecycle telemetry; retain snapshot reconciliation as fallback.
 4. Add Event Log allowlist and process/driver-image correlation.
 5. Build UIA read-only inspector before any app-control actions.
