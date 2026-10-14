@@ -4,6 +4,7 @@ import pytest
 
 from aie.contracts import AIEEvent, EntityRef
 from aie.correlation import correlate_process_starts
+from aie.store import EventStore
 
 
 def _event(event_id, event_type, timestamp, *, source, entity_name, pid, data):
@@ -93,3 +94,17 @@ def test_process_stop_events_are_not_correlated_by_pid_only():
 def test_process_start_correlation_rejects_invalid_tolerance(tolerance):
     with pytest.raises(ValueError):
         correlate_process_starts([], tolerance_seconds=tolerance)
+
+
+def test_correlations_persist_idempotently_from_sqlite_history(tmp_path):
+    etw, snapshot = _pair()
+    store = EventStore(tmp_path / "events.sqlite3")
+    store.append_many([etw, snapshot])
+
+    since = datetime.fromtimestamp(999, tz=timezone.utc)
+    derived = correlate_process_starts(store.events_since(since))
+    assert len(derived) == 1
+    assert store.append_many(derived) == 1
+    replayed = correlate_process_starts(store.events_since(since))
+    assert store.append_many(replayed) == 0
+    assert store.count() == 3
