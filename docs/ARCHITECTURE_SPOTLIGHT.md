@@ -57,6 +57,8 @@ See [HARDWARE_PROFILE.md](HARDWARE_PROFILE.md) for the sanitized host baseline.
 - Scheduled-task names/status through read-only `schtasks /query`.
 - Periodic CPU, memory and system-volume resource observations; batch SQLite writes and JSONL export.
 - Explicit SQLite retention APIs: delete events older than a timezone-aware cutoff or retain only the newest N events; deterministic ordering and validation tests.
+- Generic in-memory snapshot delta engine with baseline, added, removed and changed evidence events; duplicate identities fail closed.
+- Windows service, network interface, scheduled-task and installed-application state deltas; low-frequency inventory sampling is bounded to 30-second intervals, independently of process/resource polling.
 - CLI retention command: `aie prune --older-than-days N` or `aie prune --keep-latest N`.
 - Read-only ETW provider catalog discovery through `logman query providers` (catalog only; no trace session is started).
 - Hardware runtime probe and local loopback-only Ollama model discovery/model selection.
@@ -65,7 +67,7 @@ See [HARDWARE_PROFILE.md](HARDWARE_PROFILE.md) for the sanitized host baseline.
 ## Not implemented yet
 - ETW real-time subscriptions / higher-fidelity kernel-originated event ingestion (only provider catalog discovery exists).
 - Windows Event Log allowlist and real-time subscriptions.
-- Continuous service/network/task/application change events.
+- Event-driven service/network/task/application subscriptions (current implementation uses 30-second snapshot reconciliation, not native event subscriptions).
 - Executable path/signature discovery and application adapter registry.
 - UI Automation client, app-specific automation adapters and action execution.
 - Context reasoning, actual Ollama chat/embedding invocation, memory consolidation and cloud gateway.
