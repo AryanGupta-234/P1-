@@ -142,12 +142,33 @@ def parse_system_events(output: str, *, event_host_id: str | None = None) -> lis
 class WindowsEventLogProvider:
     """Queries a fixed System-log allowlist and advances by event record ID."""
 
-    def __init__(self, *, timeout: float = 10.0, runner=subprocess.run) -> None:
+    def __init__(
+        self, *, timeout: float = 10.0, runner=subprocess.run,
+        last_record_id: int | None = None,
+    ) -> None:
         if timeout <= 0:
             raise ValueError("timeout must be positive")
+        if last_record_id is not None and last_record_id < 0:
+            raise ValueError("last_record_id must be non-negative")
         self.timeout = timeout
         self._runner = runner
-        self._last_record_id: int | None = None
+        self._last_record_id = last_record_id
+        self._pending_record_id: int | None = None
+
+    def commit_cursor(self, save_checkpoint=None) -> int | None:
+        """Commit the sampled cursor after its events have been durably persisted."""
+        if self._pending_record_id is None:
+            return self._last_record_id
+        candidate = self._pending_record_id
+        if save_checkpoint is not None:
+            save_checkpoint(candidate)
+        self._last_record_id = candidate
+        self._pending_record_id = None
+        return self._last_record_id
+
+    def discard_pending_cursor(self) -> None:
+        """Allow the same page to be sampled again after a persistence failure."""
+        self._pending_record_id = None
 
     @staticmethod
     def _xpath(after_record_id: int | None) -> str:
@@ -186,31 +207,39 @@ class WindowsEventLogProvider:
         return events, latest_record_id, raw_count
 
     def collect_recent(self) -> list[AIEEvent]:
-        """Seed from the newest 100 events, then page forward from the last record."""
-        if self._last_record_id is None:
+        """Read a bounded page without advancing the durable cursor prematurely."""
+        if self._pending_record_id is not None:
+            raise RuntimeError("event-log cursor has an uncommitted page")
+
+        cursor = self._last_record_id
+        if cursor is None:
             initial, latest_id, _ = self._query(None, newest_first=True)
-            self._last_record_id = latest_id
+            self._pending_record_id = latest_id
             return initial
 
         collected: list[AIEEvent] = []
+        candidate = cursor
         for _ in range(5):
             page, latest_id, raw_count = self._query(
-                self._last_record_id, newest_first=False
+                candidate, newest_first=False
             )
-            if latest_id is None or latest_id <= self._last_record_id:
+            if latest_id is None or latest_id <= candidate:
                 break
             collected.extend(
                 event for event in page
-                if int(event.data["record_id"]) > self._last_record_id
+                if int(event.data["record_id"]) > candidate
             )
-            self._last_record_id = latest_id
+            candidate = latest_id
             if raw_count < _MAX_EVENTS:
                 break
 
-        if not collected:
+        if candidate == cursor and not collected:
             latest, latest_id, _ = self._query(None, newest_first=True)
-            if latest_id is not None and latest_id < self._last_record_id:
+            if latest_id is not None and latest_id < cursor:
                 # The System log was cleared/recreated; establish a fresh cursor.
-                self._last_record_id = latest_id
-                return latest
+                candidate = latest_id
+                collected = latest
+
+        if candidate != cursor:
+            self._pending_record_id = candidate
         return collected
