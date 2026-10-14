@@ -33,6 +33,7 @@ class WindowsProvider(ObserverProvider):
         self._known: dict[int, tuple[str, float | None]] = {}
         self._initialized = False
         self._state_deltas = SnapshotDeltaTracker()
+        self._eventlog_provider = None
 
     def collect_snapshot(self, *, include_host: bool = True) -> Iterator[AIEEvent]:
         if include_host:
@@ -291,9 +292,11 @@ class WindowsProvider(ObserverProvider):
 
     def collect_eventlog_events(self) -> Iterator[AIEEvent]:
         """Read a strict System-log allowlist; no rendered messages are retained."""
-        from aie.providers.eventlog import WindowsEventLogProvider
+        if self._eventlog_provider is None:
+            from aie.providers.eventlog import WindowsEventLogProvider
 
-        yield from WindowsEventLogProvider().collect_recent()
+            self._eventlog_provider = WindowsEventLogProvider()
+        yield from self._eventlog_provider.collect_recent()
 
     def inventory(self) -> dict:
         processes = []
