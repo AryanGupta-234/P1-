@@ -2,7 +2,7 @@
 
 > Always-current project orientation. Read before coding and update in the same change as milestone progress.
 
-**Last updated:** 2026-10-11  
+**Last updated:** 2026-10-14  
 **Active phase:** Windows Environment Intelligence  
 **Active milestone:** M1 — Environment Observer (user-mode inventory + event pipeline)  
 **Platform:** Windows 11 x64 only  
@@ -56,6 +56,8 @@ See [HARDWARE_PROFILE.md](HARDWARE_PROFILE.md) for the sanitized host baseline.
 - Network interface state inventory without IP/MAC collection.
 - Scheduled-task names/status through read-only `schtasks /query`.
 - Periodic CPU, memory and system-volume resource observations; batch SQLite writes and JSONL export.
+- Explicit SQLite retention APIs: delete events older than a timezone-aware cutoff or retain only the newest N events; deterministic ordering and validation tests.
+- CLI retention command: `aie prune --older-than-days N` or `aie prune --keep-latest N`.
 - Read-only ETW provider catalog discovery through `logman query providers` (catalog only; no trace session is started).
 - Hardware runtime probe and local loopback-only Ollama model discovery/model selection.
 - Windows CI workflow plus synthetic tests (CI execution still needs confirmation).
@@ -84,8 +86,8 @@ See [HARDWARE_PROFILE.md](HARDWARE_PROFILE.md) for the sanitized host baseline.
 [Issue #3 — Windows Observer validation and ETW process telemetry](https://github.com/AryanGupta-234/P1-/issues/3)
 
 ## Next actions — priority order
-1. Run Windows CI and resolve every failure.
-2. Add service/network state deltas and retention controls.
+1. Run Windows CI and resolve every failure; confirm the new retention tests pass.
+2. Add service/network state deltas and retention controls to operator documentation.
 3. Prototype opt-in ETW process telemetry with bounded buffers and explicit session lifecycle.
 4. Add allowlisted Windows Event Log providers.
 5. Add app compatibility discovery and UIA read-only tree inspection.
