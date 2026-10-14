@@ -39,6 +39,20 @@ def _events_root(output: str) -> ET.Element:
     )
 
 
+def _find_child(element: ET.Element, name: str) -> ET.Element | None:
+    return next(
+        (child for child in element if child.tag.rsplit("}", 1)[-1] == name),
+        None,
+    )
+
+
+def _find_children(element: ET.Element, name: str) -> list[ET.Element]:
+    return [
+        child for child in element
+        if child.tag.rsplit("}", 1)[-1] == name
+    ]
+
+
 def parse_system_events(output: str, *, event_host_id: str | None = None) -> list[AIEEvent]:
     """Parse only allowlisted provider/ID pairs; ignore rendered messages and other data."""
     if len(output) > _MAX_OUTPUT_CHARS:
@@ -50,14 +64,14 @@ def parse_system_events(output: str, *, event_host_id: str | None = None) -> lis
         raise EventLogError("event-log XML was malformed") from exc
 
     events: list[AIEEvent] = []
-    for element in root.findall(f"{_EVENT_NS}Event"):
-        system = element.find(f"{_EVENT_NS}System")
+    for element in _find_children(root, "Event"):
+        system = _find_child(element, "System")
         if system is None:
             continue
-        provider = system.find(f"{_EVENT_NS}Provider")
-        event_id_element = system.find(f"{_EVENT_NS}EventID")
-        created = system.find(f"{_EVENT_NS}TimeCreated")
-        record = system.find(f"{_EVENT_NS}EventRecordID")
+        provider = _find_child(system, "Provider")
+        event_id_element = _find_child(system, "EventID")
+        created = _find_child(system, "TimeCreated")
+        record = _find_child(system, "EventRecordID")
         if provider is None or event_id_element is None or created is None or record is None:
             continue
         provider_name = provider.attrib.get("Name", "")
@@ -79,10 +93,10 @@ def parse_system_events(output: str, *, event_host_id: str | None = None) -> lis
         entity_type = "system"
         entity_name = provider_name
         if event_id == 7036:
-            event_data = element.find(f"{_EVENT_NS}EventData")
+            event_data = _find_child(element, "EventData")
             fields = {
                 item.attrib.get("Name", "").casefold(): (item.text or "").strip()
-                for item in (event_data.findall(f"{_EVENT_NS}Data") if event_data is not None else [])
+                for item in (_find_children(event_data, "Data") if event_data is not None else [])
             }
             service = fields.get("param1", "")[:128]
             state = fields.get("param2", "")[:32]
