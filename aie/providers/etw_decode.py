@@ -1,0 +1,119 @@
+"""Convert tracerpt XML for Kernel-Process ETW events into normalized evidence."""
+from __future__ import annotations
+
+import json
+import xml.etree.ElementTree as ET
+from datetime import datetime
+from pathlib import Path
+from typing import Iterator
+from pathlib import PureWindowsPath
+
+from aie.contracts import AIEEvent, EntityRef
+from aie.providers.etw_process import KERNEL_PROCESS_GUID
+from aie.providers.windows import host_id
+
+_ETW_NS = "{http://schemas.microsoft.com/win/2004/08/events/event}"
+_PROCESS_EVENTS = {1: "process.started_etw", 2: "process.stopped_etw"}
+
+
+def _child(element: ET.Element, name: str) -> ET.Element | None:
+    return element.find(f"{_ETW_NS}{name}")
+
+
+def _data_fields(event_data: ET.Element | None) -> dict[str, str]:
+    fields: dict[str, str] = {}
+    if event_data is None:
+        return fields
+    for item in event_data.findall(f"{_ETW_NS}Data"):
+        name = item.attrib.get("Name", "").casefold().replace("_", "")
+        if name and item.text:
+            fields[name] = item.text.strip()
+    return fields
+
+
+def _integer(value: str | None) -> int | None:
+    if not value:
+        return None
+    try:
+        return int(value, 10)
+    except ValueError:
+        try:
+            return int(value, 0)
+        except ValueError:
+            return None
+
+
+def iter_process_events(xml_path: Path, *, event_host_id: str | None = None) -> Iterator[AIEEvent]:
+    """Yield only Kernel-Process start/stop records; command lines are never retained."""
+    identity = event_host_id or host_id()
+    for _, element in ET.iterparse(xml_path, events=("end",)):
+        if element.tag != f"{_ETW_NS}Event":
+            continue
+        system = _child(element, "System")
+        if system is None:
+            element.clear()
+            continue
+        provider = _child(system, "Provider")
+        event_id_element = _child(system, "EventID")
+        time_created = _child(system, "TimeCreated")
+        if provider is None or event_id_element is None or time_created is None:
+            element.clear()
+            continue
+        provider_guid = provider.attrib.get("Guid", "").casefold()
+        try:
+            event_id = int(event_id_element.text or "")
+        except ValueError:
+            element.clear()
+            continue
+        event_type = _PROCESS_EVENTS.get(event_id)
+        if provider_guid != KERNEL_PROCESS_GUID.casefold() or event_type is None:
+            element.clear()
+            continue
+        timestamp_text = time_created.attrib.get("SystemTime")
+        try:
+            timestamp = datetime.fromisoformat(
+                (timestamp_text or "").replace("Z", "+00:00")
+            )
+            if timestamp.tzinfo is None or timestamp.utcoffset() is None:
+                raise ValueError("ETW timestamp must be timezone-aware")
+        except ValueError:
+            element.clear()
+            continue
+        fields = _data_fields(_child(element, "EventData"))
+        pid = _integer(fields.get("processid"))
+        if pid is None or pid < 0:
+            element.clear()
+            continue
+        parent_pid = _integer(fields.get("parentprocessid"))
+        raw_image = fields.get("imagename") or fields.get("imagefilename")
+        image_name = PureWindowsPath(raw_image).name if raw_image else f"pid:{pid}"
+        data: dict[str, int | str] = {"pid": pid}
+        if parent_pid is not None and parent_pid >= 0:
+            data["parent_pid"] = parent_pid
+        if image_name and not image_name.startswith("pid:"):
+            data["image_name"] = image_name
+        yield AIEEvent(
+            timestamp=timestamp,
+            host_id=identity,
+            source="windows.etw.kernel_process",
+            event_type=event_type,
+            entity=EntityRef(type="process", name=image_name, stable_id=str(pid)),
+            data=data,
+            sensitivity="internal",
+            confidence=1.0,
+            evidence_kind="observed",
+        )
+        element.clear()
+
+
+def decode_trace_xml(xml_path: Path, jsonl_path: Path, *, event_host_id: str | None = None) -> int:
+    """Stream normalized process events from tracerpt XML into a JSONL file."""
+    if jsonl_path.resolve() in {xml_path.resolve()}:
+        raise ValueError("JSONL output must not overwrite tracerpt XML input")
+    jsonl_path.parent.mkdir(parents=True, exist_ok=True)
+    count = 0
+    with jsonl_path.open("w", encoding="utf-8") as output:
+        for event in iter_process_events(xml_path, event_host_id=event_host_id):
+            output.write(event.model_dump_json() + "\n")
+            count += 1
+    return count
