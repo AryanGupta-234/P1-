@@ -100,7 +100,7 @@ See [HARDWARE_PROFILE.md](HARDWARE_PROFILE.md) for the sanitized host baseline.
 1. Run Windows CI and resolve every failure; execute the observer and ETW synthetic tests.
 2. Validate observer pause/resume, collector recovery, JSONL export and resource overhead on the target Windows host.
 3. Validate ETW decoding against real Windows captures; confirm trace-loss counters and reconcile ETW events with process snapshots.
-4. Add allowlisted Windows Event Log providers.
+4. Validate the fixed Event Log allowlist on Windows, then add real-time subscriptions and process/image correlation.
 5. Add app compatibility discovery and UIA read-only tree inspection.
 6. Only then begin user-approved application actions behind a policy broker.
 
