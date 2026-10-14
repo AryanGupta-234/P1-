@@ -289,6 +289,12 @@ class WindowsProvider(ObserverProvider):
             })
         return {"available": True, "tasks": tasks}
 
+    def collect_eventlog_events(self) -> Iterator[AIEEvent]:
+        """Read a strict System-log allowlist; no rendered messages are retained."""
+        from aie.providers.eventlog import WindowsEventLogProvider
+
+        yield from WindowsEventLogProvider().collect_recent()
+
     def inventory(self) -> dict:
         processes = []
         for proc in psutil.process_iter(attrs=["pid", "name", "create_time"]):
