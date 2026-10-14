@@ -5,8 +5,10 @@ import xml.etree.ElementTree as ET
 from datetime import datetime
 from pathlib import Path, PureWindowsPath
 from typing import Iterator
+from uuid import NAMESPACE_URL, uuid5
 
 from aie.contracts import AIEEvent, EntityRef
+from aie.store import EventStore
 from aie.providers.etw_process import KERNEL_PROCESS_GUID
 from aie.providers.windows import host_id
 
@@ -90,7 +92,12 @@ def iter_process_events(xml_path: Path, *, event_host_id: str | None = None) -> 
             data["parent_pid"] = parent_pid
         if image_name and not image_name.startswith("pid:"):
             data["image_name"] = image_name
+        event_id = str(uuid5(
+            NAMESPACE_URL,
+            f"{identity}|{timestamp.isoformat()}|{event_type}|{pid}|{image_name}",
+        ))
         yield AIEEvent(
+            event_id=event_id,
             timestamp=timestamp,
             host_id=identity,
             source="windows.etw.kernel_process",
@@ -104,14 +111,31 @@ def iter_process_events(xml_path: Path, *, event_host_id: str | None = None) -> 
         element.clear()
 
 
-def decode_trace_xml(xml_path: Path, jsonl_path: Path, *, event_host_id: str | None = None) -> int:
-    """Stream normalized process events from tracerpt XML into a JSONL file."""
-    if jsonl_path.resolve() in {xml_path.resolve()}:
+def decode_trace_xml(
+    xml_path: Path,
+    jsonl_path: Path,
+    *,
+    event_host_id: str | None = None,
+    store: EventStore | None = None,
+    batch_size: int = 250,
+) -> int:
+    """Stream normalized events to JSONL and optionally batch-import into SQLite."""
+    if jsonl_path.resolve() == xml_path.resolve():
         raise ValueError("JSONL output must not overwrite tracerpt XML input")
+    if batch_size < 1:
+        raise ValueError("batch_size must be positive")
     jsonl_path.parent.mkdir(parents=True, exist_ok=True)
     count = 0
+    batch: list[AIEEvent] = []
     with jsonl_path.open("x", encoding="utf-8") as output:
         for event in iter_process_events(xml_path, event_host_id=event_host_id):
             output.write(event.model_dump_json() + "\n")
             count += 1
+            if store is not None:
+                batch.append(event)
+                if len(batch) >= batch_size:
+                    store.append_many(batch)
+                    batch.clear()
+        if store is not None and batch:
+            store.append_many(batch)
     return count
