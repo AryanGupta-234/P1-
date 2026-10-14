@@ -38,6 +38,7 @@ Status vocabulary: DONE / IN_PROGRESS / BLOCKED / PLANNED. A task is DONE only w
 - [x] Detect service additions, removals and field changes from periodic snapshots.
 - [x] Detect network interface, scheduled-task and installed-application inventory deltas.
 - [x] Add deterministic snapshot reconciliation with synthetic add/remove/change tests and baseline semantics.
+- [x] Add provider integration tests for four inventory baselines and service-state transition emission.
 - [x] Sample low-frequency inventory every 30 seconds separately from process/resource polling.
 - [ ] Monitor service state changes.
 - [ ] Monitor network interface/connectivity changes.
