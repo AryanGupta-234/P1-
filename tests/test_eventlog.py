@@ -91,3 +91,26 @@ def test_event_log_provider_advances_record_cursor():
     assert [event.data["record_id"] for event in second] == [80, 81]
     assert "EventRecordID > 78" in calls[1][3]
     assert "/rd:false" in calls[1]
+
+
+def test_windows_provider_reuses_eventlog_cursor(monkeypatch):
+    from aie.providers import eventlog
+    from aie.providers.windows import WindowsProvider
+
+    instances = []
+
+    class FakeEventLogProvider:
+        def __init__(self):
+            self.calls = 0
+            instances.append(self)
+
+        def collect_recent(self):
+            self.calls += 1
+            return []
+
+    monkeypatch.setattr(eventlog, "WindowsEventLogProvider", FakeEventLogProvider)
+    provider = WindowsProvider.__new__(WindowsProvider)
+    assert list(provider.collect_eventlog_events()) == []
+    assert list(provider.collect_eventlog_events()) == []
+    assert len(instances) == 1
+    assert instances[0].calls == 2
