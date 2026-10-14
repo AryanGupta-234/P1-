@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import os
 import platform
+import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -98,6 +99,27 @@ def etw_catalog(
             table.add_row(provider["name"], provider["guid"])
         console.print(table)
     console.print(f"Providers found: {len(providers)}")
+
+
+@app.command("etw-capture")
+def etw_capture(
+    output: Path = typer.Argument(..., help="New .etl output path; existing files are never overwritten."),
+    duration: int = typer.Option(60, min=1, max=3600, help="Maximum trace duration in seconds."),
+) -> None:
+    """Opt in to a bounded ETW kernel-process trace; Ctrl+C stops the session."""
+    from aie.providers.etw_process import ETWProcessTrace, ETWSessionError
+
+    try:
+        with ETWProcessTrace(output) as trace:
+            console.print(
+                f"ETW session {trace.session_name} active for up to {duration}s. "
+                "Press Ctrl+C to stop."
+            )
+            time.sleep(duration)
+    except (ETWSessionError, OSError, ValueError) as exc:
+        console.print(f"[red]ETW capture unavailable:[/red] {exc}")
+        raise typer.Exit(2) from exc
+    console.print(f"ETW trace saved to {output}")
 
 
 @app.command()
