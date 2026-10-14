@@ -34,7 +34,6 @@ def observe(duration: int, interval: float, db_path: Path,
     total = 0
     failures = {"process_snapshot": 0, "state_snapshot": 0}
     paused = False
-    pause_started = 0.0
     if jsonl_path:
         jsonl_path.parent.mkdir(parents=True, exist_ok=True)
     output = jsonl_path.open("a", encoding="utf-8") if jsonl_path else None
@@ -72,13 +71,14 @@ def observe(duration: int, interval: float, db_path: Path,
             now = time.monotonic()
             if pause_file is not None and pause_file.exists():
                 if not paused:
-                    paused, pause_started = True, now
+                    paused = True
                     persist([_health_event("observer.paused", "runtime", {})])
                 time.sleep(interval)
+                # Extend on every paused wait so a pause can outlast the original deadline.
+                deadline += max(0.0, time.monotonic() - now)
                 continue
             if paused:
                 paused = False
-                deadline += max(0.0, now - pause_started)
                 persist([_health_event("observer.resumed", "runtime", {})])
 
             try:
