@@ -1,4 +1,7 @@
+import xml.etree.ElementTree as ET
 from pathlib import Path
+
+import pytest
 
 from aie.providers.etw_decode import decode_trace_xml, iter_process_events
 from aie.store import EventStore
@@ -53,12 +56,8 @@ def test_etw_xml_decoder_streams_jsonl(tmp_path):
 def test_etw_xml_decoder_refuses_input_overwrite(tmp_path):
     source = tmp_path / "trace.xml"
     _write_xml(source)
-    try:
+    with pytest.raises(ValueError, match="must not overwrite"):
         decode_trace_xml(source, source)
-    except ValueError as exc:
-        assert "must not overwrite" in str(exc)
-    else:
-        raise AssertionError("expected output/input collision to be rejected")
 
 
 def test_etw_xml_decoder_refuses_to_overwrite_existing_output(tmp_path):
@@ -66,25 +65,16 @@ def test_etw_xml_decoder_refuses_to_overwrite_existing_output(tmp_path):
     output = tmp_path / "events.jsonl"
     _write_xml(source)
     output.write_text("keep", encoding="utf-8")
-    try:
+    with pytest.raises(FileExistsError):
         decode_trace_xml(source, output)
-    except FileExistsError:
-        pass
-    else:
-        raise AssertionError("expected existing output to be protected")
     assert output.read_text(encoding="utf-8") == "keep"
 
 
 def test_etw_xml_decoder_rejects_malformed_xml(tmp_path):
     source = tmp_path / "broken.xml"
     source.write_text("<Events><Event>", encoding="utf-8")
-    try:
+    with pytest.raises(ET.ParseError):
         list(iter_process_events(source, event_host_id="test"))
-    except Exception as exc:
-        import xml.etree.ElementTree as ET
-        assert isinstance(exc, ET.ParseError)
-    else:
-        raise AssertionError("expected malformed XML to fail")
 
 
 def test_etw_import_is_idempotent_across_repeated_decodes(tmp_path):
@@ -101,10 +91,6 @@ def test_etw_decode_removes_partial_output_after_parse_failure(tmp_path):
     output = tmp_path / "partial.jsonl"
     source.write_text("<Events><Event>", encoding="utf-8")
     import xml.etree.ElementTree as ET
-    try:
+    with pytest.raises(ET.ParseError):
         decode_trace_xml(source, output)
-    except ET.ParseError:
-        pass
-    else:
-        raise AssertionError("expected malformed XML to fail")
     assert not output.exists()
