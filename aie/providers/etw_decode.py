@@ -42,14 +42,14 @@ def read_trace_stats(xml_path: Path) -> ETWTraceStats:
         if root is None and action == "start":
             root = element
         local_name = element.tag.rsplit("}", 1)[-1].casefold()
-        if action == "start" and local_name == "header":
+        if action == "start" and local_name in {"header", "traceheader"}:
             in_header = True
         elif action == "end" and in_header and local_name in names and element.text:
             try:
                 values[names[local_name]] = int(element.text.strip(), 10)
             except ValueError:
                 pass
-        elif action == "end" and local_name == "header":
+        elif action == "end" and local_name in {"header", "traceheader"}:
             element.clear()
             break
         elif action == "end" and local_name == "event":
