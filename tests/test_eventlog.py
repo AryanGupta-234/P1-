@@ -85,6 +85,7 @@ def test_event_log_provider_advances_record_cursor():
 
     provider = WindowsEventLogProvider(runner=runner)
     first = provider.collect_recent()
+    provider.commit_cursor()
     second = provider.collect_recent()
 
     assert [event.data["record_id"] for event in first] == [77, 78]
@@ -100,7 +101,7 @@ def test_windows_provider_reuses_eventlog_cursor(monkeypatch):
     instances = []
 
     class FakeEventLogProvider:
-        def __init__(self):
+        def __init__(self, last_record_id=None):
             self.calls = 0
             instances.append(self)
 
@@ -141,3 +142,30 @@ def test_event_log_parser_accepts_only_allowlisted_kernel_general_ids():
     assert [event.event_type for event in events] == [
         "windows.system.started", "windows.system.stopped"
     ]
+
+
+
+def test_event_log_cursor_is_not_advanced_until_commit():
+    provider = WindowsEventLogProvider(
+        runner=lambda args, **kwargs: subprocess.CompletedProcess(args, 0, XML, "")
+    )
+    provider.collect_recent()
+    assert provider._last_record_id is None
+    with pytest.raises(RuntimeError, match="uncommitted"):
+        provider.collect_recent()
+    provider.commit_cursor()
+    assert provider._last_record_id == 79
+
+
+def test_event_log_cursor_can_resume_from_persisted_record_id():
+    responses = [XML.replace(">77<", ">80<").replace(">78<", ">81<")]
+    calls = []
+
+    def runner(args, **kwargs):
+        calls.append(args)
+        return subprocess.CompletedProcess(args, 0, responses.pop(0), "")
+
+    provider = WindowsEventLogProvider(runner=runner, last_record_id=78)
+    events = provider.collect_recent()
+    assert [event.data["record_id"] for event in events] == [80, 81]
+    assert "EventRecordID > 78" in calls[0][3]
