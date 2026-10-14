@@ -5,6 +5,7 @@ import json
 import os
 import platform
 import time
+import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -132,7 +133,7 @@ def etw_decode(
 
     try:
         count = decode_trace_xml(source_xml, output)
-    except (OSError, ValueError) as exc:
+    except (OSError, ValueError, ET.ParseError) as exc:
         console.print(f"[red]ETW decode failed:[/red] {exc}")
         raise typer.Exit(2) from exc
     console.print(f"Decoded {count} process events to {output}")
