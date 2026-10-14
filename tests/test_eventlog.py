@@ -73,3 +73,21 @@ def test_event_log_provider_reports_command_failure():
     )
     with pytest.raises(EventLogError):
         provider.collect_recent()
+
+
+def test_event_log_provider_advances_record_cursor():
+    responses = [XML, XML.replace(">77<", ">80<").replace(">78<", ">81<")]
+    calls = []
+
+    def runner(args, **kwargs):
+        calls.append(args)
+        return subprocess.CompletedProcess(args, 0, responses.pop(0), "")
+
+    provider = WindowsEventLogProvider(runner=runner)
+    first = provider.collect_recent()
+    second = provider.collect_recent()
+
+    assert [event.data["record_id"] for event in first] == [77, 78]
+    assert [event.data["record_id"] for event in second] == [80, 81]
+    assert "EventRecordID > 78" in calls[1][3]
+    assert "/rd:false" in calls[1]
