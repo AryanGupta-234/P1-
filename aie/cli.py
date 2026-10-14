@@ -199,6 +199,27 @@ def events(limit: int = typer.Option(20, min=1, max=1000)) -> None:
 
 
 @app.command()
+def correlate(
+    since_minutes: int = typer.Option(1440, min=1, max=10080, help="Look back up to seven days."),
+    limit: int = typer.Option(10000, min=1, max=10000, help="Maximum source events to inspect."),
+    db: Path = typer.Option(database_path(), "--db", help="SQLite event store."),
+) -> None:
+    """Correlate ETW process starts with matching user-mode process snapshots."""
+    from aie.correlation import correlate_process_starts
+
+    store = EventStore(db)
+    cutoff = datetime.now(timezone.utc) - timedelta(minutes=since_minutes)
+    source_events = store.events_since(cutoff, limit=limit)
+    derived = correlate_process_starts(source_events)
+    inserted = store.append_many(derived)
+    console.print(
+        f"Inspected {len(source_events)} source events; "
+        f"derived {len(derived)} process-start confirmations; "
+        f"stored {inserted} new events."
+    )
+
+
+@app.command()
 def export_events(output: Path = typer.Argument(...)) -> None:
     """Write the complete event store to a chronological JSONL file."""
     count = EventStore(database_path()).export_jsonl(output)
