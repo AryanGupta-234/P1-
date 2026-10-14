@@ -126,17 +126,18 @@ def etw_capture(
 @app.command("etw-decode")
 def etw_decode(
     source_xml: Path = typer.Argument(..., help="XML exported from the ETL file by tracerpt."),
-    output: Path = typer.Argument(..., help="Destination JSONL file."),
+    output: Path = typer.Argument(..., help="New destination JSONL file."),
+    db: Path = typer.Option(database_path(), "--db", help="SQLite event store to import into."),
 ) -> None:
-    """Normalize Kernel-Process start/stop events from tracerpt XML."""
+    """Normalize Kernel-Process events into JSONL and the local SQLite store."""
     from aie.providers.etw_decode import decode_trace_xml
 
     try:
-        count = decode_trace_xml(source_xml, output)
+        count = decode_trace_xml(source_xml, output, store=EventStore(db))
     except (OSError, ValueError, ET.ParseError) as exc:
         console.print(f"[red]ETW decode failed:[/red] {exc}")
         raise typer.Exit(2) from exc
-    console.print(f"Decoded {count} process events to {output}")
+    console.print(f"Decoded {count} process events to {output} and imported into {db}")
 
 
 @app.command()
