@@ -2,7 +2,7 @@
 
 > Current project truth. Read before implementation and update with every milestone change.
 
-**Last updated:** 2026-10-11 | **Integration branch:** `dev` | **Active focus:** Windows perception, live diagnostics and cognitive core | **Platform:** Windows 10/11 only
+**Last updated:** 2026-10-14 | **Integration branch:** `dev` | **Active focus:** Windows perception, live diagnostics and cognitive core | **Platform:** Windows 10/11 only
 
 ## North star
 Build persistent personal intelligence that observes explicitly permitted signals, models context, reasons about goals, learns reusable skills and executes scoped actions safely. AGI remains a research objective, not a capability claim.
@@ -75,7 +75,7 @@ Build persistent personal intelligence that observes explicitly permitted signal
 - Local Ollama client and hardware-aware selection of already-installed models; no implicit model pulls.
 - Optional OpenAI-compatible HTTPS provider requiring explicit `--provider cloud --allow-cloud-egress`.
 - Cloud/remote-Ollama requests pass through a centralized local egress gateway. Only explicitly selected context is attached; activity, memory and session context require separate confirmation, sensitive memory is blocked, high-confidence credential patterns are redacted, payload size is bounded, and a metadata-only local audit record is written. Observer telemetry is never automatically attached.
-- Bounded declarative plans use typed steps, explicit success criteria and dependencies; a deterministic topological validator exposes readiness without starting work. Action steps can reference a capability ID but cannot embed arbitrary commands or tool arguments. The implementation and full test suite passed Windows CI run [#590](https://github.com/AryanGupta-234/P1-/actions/runs/38131262921) on Python 3.11 and 3.12.
+- Bounded declarative plans use typed steps, explicit success criteria and dependencies; a deterministic topological validator exposes readiness without starting work. Action steps can reference a capability ID but cannot embed arbitrary commands or tool arguments. The implementation and full test suite passed Windows CI run [#590](https://github.com/AryanGupta-234/P1-/actions/runs/38131262921) on Python 3.11 and 3.12.\n- SQLite plan runs persist immutable plan definitions and step state. Atomic transitions enforce successful prerequisites; terminal outcomes require evidence IDs; cancellations are recorded; transition history is append-only. This is workflow bookkeeping only: it does not execute steps, authenticate actor labels or independently verify evidence IDs.
 
 **Context and memory**
 - A bounded synchronous unified event bus fans normalized observations to the durable SQLite store and optional JSONL sink before downstream diagnostics/correlation.
@@ -106,7 +106,7 @@ Build persistent personal intelligence that observes explicitly permitted signal
 - Evaluated learning from user-confirmed feedback; no automatic model retraining yet.
 - Cloud egress gateway/redaction policy and model request budgets.
 - Sandboxed OS executor, rollback, postcondition verification and actual autonomous remediation.
-- Model-backed plan generation, persisted plan state transitions, cancellation/recovery, tool selection and plan-quality evaluation; the current plan contract is validation/readiness only.
+- Model-backed plan generation, tool selection and plan-quality evaluation; generated plans must remain schema-validated and non-executable until they pass policy review.
 - Windows tray/desktop assistant UI.
 
 ## Immediate engineering sequence
