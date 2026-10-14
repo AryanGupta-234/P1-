@@ -9,7 +9,6 @@ from uuid import NAMESPACE_URL, uuid5
 from aie.contracts import AIEEvent, EntityRef
 from aie.providers.windows import host_id
 
-_EVENT_NS = "{http://schemas.microsoft.com/win/2004/08/events/event}"
 _ALLOWED = {
     ("Service Control Manager", 7036): "windows.service.state_changed",
     ("Microsoft-Windows-Kernel-Power", 42): "windows.power.sleep",
