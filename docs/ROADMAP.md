@@ -43,7 +43,8 @@ Status vocabulary: DONE / IN_PROGRESS / BLOCKED / PLANNED. A task is DONE only w
 - [x] Detect service, network-interface, scheduled-task and application metadata changes through 30-second snapshot reconciliation.
 - [ ] Add native event-driven service/network/task subscriptions where supported.
 - [ ] Complete ETW process telemetry validation: opt-in bounded capture, streaming tracerpt-XML normalization, deterministic event IDs and batched SQLite import are implemented; real Windows schema validation, confirmation of available loss counters, and snapshot reconciliation are pending.
-- [ ] Allowlisted Windows Event Log subscriptions.
+- [x] Add a fixed, read-only System Event Log allowlist for service state changes, sleep transitions and OS start/stop; sample it every 30 seconds with collector fault isolation.
+- [ ] Add real-time Event Log subscriptions and validate event coverage/permissions on Windows.
 - [ ] Executable path discovery and Authenticode publisher/signature inventory.
 - [x] Add cooperative pause/resume via an operator-controlled pause file; record pause/resume events.
 - [x] Isolate process/state collector exceptions and persist sanitized error/recovery events.
