@@ -2,7 +2,7 @@
 
 > Current project truth. Read before implementation and update with every milestone change.
 
-**Last updated:** 2026-10-11 | **Current feature branch:** `feat/agent-orchestration-core` | **Target integration:** `dev` | **Platform:** Windows 10/11 only
+**Last updated:** 2026-10-14 | **Current feature branch:** `feat/network-interface-state-deltas` | **Target integration:** `dev` | **Platform:** Windows 10/11 only
 
 ## North star
 Build persistent personal intelligence that observes explicitly permitted signals, models context, reasons about goals, learns reusable skills and executes scoped actions safely. AGI remains a research objective, not a capability claim.
@@ -55,6 +55,7 @@ Build persistent personal intelligence that observes explicitly permitted signal
 - Opt-in bounded systemwide process CPU/RSS/thread/I/O snapshots, reporting top consumers only.
 - Opt-in kernel ETW process start/stop/rundown observer with bounded queue and explicit elevated-token requirement.
 - Bounded network interface counters, TCP connection-establishment latency and DNS resolution timing.
+- Evidence-linked derived events for network-interface connectivity, link-speed and MTU transitions; traffic counters are deliberately excluded from state comparisons.
 - Opt-in metadata-only Application/System Event Log reader, wired into the observer runtime. It skips historical backlog on startup and excludes message text, XML and Security logs.
 - Privacy-safe observer health telemetry with per-provider latency, success/error, consecutive-failure and event-loss accounting; health records exclude exception text and provider payloads.
 - User-controlled privacy controls: `aie health` inspection, JSONL export with sensitive-data opt-in, and confirm-only delete-all after observation pause.
@@ -101,20 +102,21 @@ Build persistent personal intelligence that observes explicitly permitted signal
 - Capability manifests can be inspected and enabled/disabled with dedicated CLI commands. Enabling is limited to an application-registered adapter and preserves mandatory approval/no-autonomy fields; the executor enable marker and kill switch remain separate.
 - A read-only retention inventory reports event-age deletion candidates, expired memories and bounded task/proposal status counts. It never deletes records. Pruning remains a separate explicit confirmation path.
 - Approval and execution are separate operations. The execution gate remains disabled by default; no autonomous remediation is enabled.
-- These orchestration/execution additions currently live on `feat/agent-orchestration-core`; they are not represented as merged into `dev` until the pull request is reviewed and integrated.
+- Bounded planning, persisted task orchestration and fail-closed policy-gated execution are integrated into `dev`; the remaining gaps are process isolation, rollback and independent adapter postcondition verification.
 
 ## Pending validation and implementation
+- Network interface state-change tracker is implemented on `feat/network-interface-state-deltas`; six focused tracker tests and one runtime persistence integration test are covered by hosted Windows CI run [#1279](https://github.com/AryanGupta-234/P1-/actions/runs/38510694840), which passed on Python 3.11 and 3.12. Target-desktop validation remains pending.
 - Windows CI run [#581](https://github.com/AryanGupta-234/P1-/actions/runs/38123875398) passed on Python 3.11 and 3.12, including the current observer-health, ETW lifecycle/loss, task-session, dry-run governance and privacy-control tests.
 - Target-desktop Chrome/Edge extension/native-host installation and live playback validation.
 - Target-desktop UIA and Application/System Event Log permission/behavior validation.
 - Higher-fidelity ETW telemetry beyond process lifecycle events (optional thread/file/network categories and provider-specific coverage reporting).
 - Windows Graphics Capture (screenshots), still intentionally separate from UIA structure.
-- Unified event bus and semantic task/session interpretation.
+- Semantic task/session interpretation beyond the current explicit event and temporal-correlation rules.
 - A user-authored retrieval benchmark reports Recall@k, Precision@k, Mean Reciprocal Rank and Hit Rate for lexical and local semantic retrieval without modifying memory or model weights. Sensitive target memories require explicit inclusion.
 - A conservative polarity-conflict review queue flags explicit opposing lexical markers only when records share context; it does not prove semantic contradiction or modify records.
 - Remaining evaluation: held-out task families, semantic retrieval quality, temporal contradiction resolution and forgetting/regression.
 - Evaluation of procedural-skill quality and transfer; skill induction currently creates reviewed local records only and never retrains a model.
-- Cloud egress gateway/redaction policy and model request budgets.
+- Inference concurrency, model request budgets and latency/cost metrics.
 - OS-process sandboxing, rollback and automatic recovery for interrupted handlers.
 - Postcondition verification beyond explicit human checks; the fixed Settings URI adapter reports dispatch, not verified application state.
 - Tool-selection/plan-quality evaluation and held-out task-family benchmarks.

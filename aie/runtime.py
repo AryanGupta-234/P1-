@@ -6,6 +6,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 from aie.config import observer_is_paused
+from aie.context.network_state import NetworkInterfaceStateTracker
 from aie.contracts import AIEEvent
 from aie.diagnostics.monitor import VideoDiagnosticMonitor
 from aie.event_bus import EventBus
@@ -79,6 +80,7 @@ def observe(
 
     provider = WindowsProvider()
     network_provider = WindowsNetworkProvider() if include_network else None
+    network_state_tracker = NetworkInterfaceStateTracker() if include_network else None
     foreground_provider = (
         WindowsForegroundProvider(
             include_window_titles=include_window_titles,
@@ -215,10 +217,13 @@ def observe(
 
             now = time.monotonic()
             if network_provider is not None and now >= next_network:
-                events.extend(collect(
+                network_events = collect(
                     network_provider.name,
                     network_provider.collect_snapshot,
-                ))
+                )
+                events.extend(network_events)
+                if network_state_tracker is not None:
+                    events.extend(network_state_tracker.observe(network_events))
                 next_network = now + network_interval
             if event_log_provider is not None and now >= next_event_log:
                 events.extend(collect(
