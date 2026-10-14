@@ -100,3 +100,52 @@ def test_eventlog_failure_isolated_from_process_observation(monkeypatch, tmp_pat
         for item in stored
     )
     assert any(item.event_type == "process.sample" for item in stored)
+
+
+
+def test_eventlog_checkpoint_commits_only_after_event_batch(tmp_path, monkeypatch):
+    import aie.runtime as runtime
+    from aie.contracts import AIEEvent, EntityRef
+    from aie.store import EventStore
+
+    clock = [0.0]
+    monkeypatch.setattr(runtime.time, "monotonic", lambda: clock[0])
+    monkeypatch.setattr(
+        runtime.time, "sleep",
+        lambda seconds: clock.__setitem__(0, clock[0] + seconds),
+    )
+
+    observed = AIEEvent(
+        event_id="eventlog-before-checkpoint",
+        host_id="test",
+        source="windows.eventlog.system",
+        event_type="windows.power.sleep",
+        entity=EntityRef(type="system", name="Kernel-Power"),
+    )
+
+    class Provider:
+        def __init__(self):
+            pass
+
+        def collect_snapshot(self, include_host=True):
+            return []
+
+        def collect_state_deltas(self):
+            return []
+
+        def collect_eventlog_events(self, store=None):
+            return [observed]
+
+        def commit_eventlog_cursor(self, store):
+            assert any(
+                item.event_id == observed.event_id for item in store.recent(20)
+            )
+            store.set_checkpoint("windows.eventlog.system.record_id", "999")
+
+    monkeypatch.setattr(runtime, "WindowsProvider", Provider)
+    path = tmp_path / "cursor-order.sqlite3"
+    runtime.observe(1, 0.5, path)
+
+    reopened = EventStore(path)
+    assert reopened.get_checkpoint("windows.eventlog.system.record_id") == "999"
+    assert any(item.event_id == observed.event_id for item in reopened.recent(20))
