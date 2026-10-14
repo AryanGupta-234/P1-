@@ -151,6 +151,13 @@ def events(limit: int = typer.Option(20, min=1, max=1000)) -> None:
 
 
 @app.command()
+def export_events(output: Path = typer.Argument(...)) -> None:
+    """Write the complete event store to a chronological JSONL file."""
+    count = EventStore(database_path()).export_jsonl(output)
+    console.print(f"Exported {count} events to {output}")
+
+
+@app.command()
 def prune(
     older_than_days: int | None = typer.Option(None, min=1, help="Delete events older than this many days."),
     keep_latest: int | None = typer.Option(None, min=0, help="Keep only the newest N events (0 deletes all)."),
