@@ -3,13 +3,18 @@ from pathlib import Path
 
 import pytest
 
-from aie.providers.etw_decode import decode_trace_xml, iter_process_events
+from aie.providers.etw_decode import (
+    decode_trace_xml,
+    iter_process_events,
+    read_trace_stats,
+)
 from aie.store import EventStore
 
 
 def _write_xml(path: Path):
     path.write_text("""<?xml version="1.0"?>
 <Events xmlns="http://schemas.microsoft.com/win/2004/08/events/event">
+  <Header><EventsLogged>12</EventsLogged><EventsLost>3</EventsLost><BuffersWritten>5</BuffersWritten><LogBuffersLost>1</LogBuffersLost></Header>
   <Event><System>
     <Provider Name="Microsoft-Windows-Kernel-Process" Guid="{22FB2CD6-0E7B-422B-A0C7-2FAD1FD0E716}"/>
     <EventID>1</EventID><TimeCreated SystemTime="2026-10-14T10:00:00.000Z"/>
@@ -94,3 +99,13 @@ def test_etw_decode_removes_partial_output_after_parse_failure(tmp_path):
     with pytest.raises(ET.ParseError):
         decode_trace_xml(source, output)
     assert not output.exists()
+
+
+def test_etw_trace_stats_reads_loss_counters_from_header(tmp_path):
+    source = tmp_path / "trace.xml"
+    _write_xml(source)
+    stats = read_trace_stats(source)
+    assert stats.events_logged == 12
+    assert stats.events_lost == 3
+    assert stats.buffers_written == 5
+    assert stats.log_buffers_lost == 1
