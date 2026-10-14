@@ -142,15 +142,19 @@ def decode_trace_xml(
     jsonl_path.parent.mkdir(parents=True, exist_ok=True)
     count = 0
     batch: list[AIEEvent] = []
-    with jsonl_path.open("x", encoding="utf-8") as output:
-        for event in iter_process_events(xml_path, event_host_id=event_host_id):
-            output.write(event.model_dump_json() + "\n")
-            count += 1
-            if store is not None:
-                batch.append(event)
-                if len(batch) >= batch_size:
-                    store.append_many(batch)
-                    batch.clear()
-        if store is not None and batch:
-            store.append_many(batch)
+    try:
+        with jsonl_path.open("x", encoding="utf-8") as output:
+            for event in iter_process_events(xml_path, event_host_id=event_host_id):
+                output.write(event.model_dump_json() + "\n")
+                count += 1
+                if store is not None:
+                    batch.append(event)
+                    if len(batch) >= batch_size:
+                        store.append_many(batch)
+                        batch.clear()
+            if store is not None and batch:
+                store.append_many(batch)
+    except Exception:
+        jsonl_path.unlink(missing_ok=True)
+        raise
     return count
