@@ -61,6 +61,9 @@ See [HARDWARE_PROFILE.md](HARDWARE_PROFILE.md) for the sanitized host baseline.
 - Synthetic unit and Windows-provider integration tests cover baseline creation and service-state transition emission.
 - Windows service, network interface, scheduled-task and installed-application state deltas; low-frequency inventory sampling is bounded to 30-second intervals, independently of process/resource polling.
 - CLI retention command: `aie prune --older-than-days N` or `aie prune --keep-latest N`.
+- Complete chronological JSONL export: `aie export-events PATH`; live observation can also write JSONL with `aie observe --jsonl PATH`.
+- Cooperative pause/resume: `aie observe --pause-file PATH` pauses while the file exists; removing it resumes without consuming active observation duration.
+- Collector failures are isolated and persisted as sanitized health events; recovery is recorded after a later successful sample.
 - Fault-isolated observer loop: process and low-frequency state collector failures are persisted as sanitized `observer.collector_error` events; a later successful sample emits `observer.collector_recovered`.
 - Cooperative pause/resume through `aie observe --pause-file PATH`: while the file exists sampling pauses; removing it resumes observation, and paused time does not consume the requested active duration.
 - Read-only ETW provider catalog discovery through `logman query providers` (catalog only; no trace session is started).
