@@ -126,7 +126,7 @@ A provider-neutral request/response contract and Ollama adapter are available un
 
 ## Latest CI validation
 
-Windows CI run [#1041](https://github.com/AryanGupta-234/P1-/actions/runs/38151881805) passed on Python 3.11 and 3.12 for the current orchestration branch. The matrix includes the `pip-audit` dependency vulnerability scan, .NET 8 WPF dashboard compilation, Ruff, Windows-only optional imports, PowerShell parsing, browser-extension JavaScript syntax checks, the full pytest suite, Python wheel and source-distribution builds, Twine metadata validation, and short-lived build artifact uploads. Hosted CI verifies compilation and tests; it does not replace interactive testing of the tray, dashboard, ETW elevation, browser native host, or UI Automation on the target desktop.
+Windows CI run [#1279](https://github.com/AryanGupta-234/P1-/actions/runs/38510694840) passed on Python 3.11 and 3.12 for the network interface state-change feature branch. The integrated `dev` baseline also passed run [#1063](https://github.com/AryanGupta-234/P1-/actions/runs/38204882093). The matrix includes the `pip-audit` dependency vulnerability scan, .NET 8 WPF dashboard compilation, Ruff, Windows-only optional imports, PowerShell parsing, browser-extension JavaScript syntax checks, the full pytest suite, Python wheel and source-distribution builds, Twine metadata validation, and short-lived build artifact uploads. Hosted CI verifies compilation and tests; it does not replace interactive testing of the tray, dashboard, ETW elevation, browser native host, or UI Automation on the target desktop.
 
 ## Local retention and permission review
 
