@@ -2,7 +2,7 @@
 
 Statuses: DONE / IN_PROGRESS / BLOCKED / PLANNED. Mark DONE only with code, tests and validation evidence.
 
-**Last updated:** 2026-10-11 | **Integration branch:** `dev`
+**Last updated:** 2026-10-14 | **Integration branch:** `dev`
 
 | ID | Workstream | Status | Exit criteria |
 |---|---|---|---|
@@ -87,7 +87,7 @@ Statuses: DONE / IN_PROGRESS / BLOCKED / PLANNED. Mark DONE only with code, test
 - [ ] Inference concurrency, memory/token budgets and latency metrics.
 - [x] Central remote-model egress gateway, high-confidence credential redaction and metadata-only audit.
 - [x] Bounded declarative task-plan contract with strict fields, typed steps, explicit dependencies, cycle rejection, deterministic topological ordering and readiness queries; no step execution. Validated by Windows CI run [#590](https://github.com/AryanGupta-234/P1-/actions/runs/38131262921) on Python 3.11 and 3.12.
-- [ ] Model-backed plan generation, persisted state transitions, cancellation/recovery and tool-selection evaluation.
+- [ ] Model-backed plan generation, tool-selection evaluation and plan-quality evaluation.\n- [x] SQLite plan-run persistence with atomic dependency checks, explicit state transitions, cancellation and append-only outcome provenance; no step execution. Awaiting hosted CI.
 - [ ] Reasoning and tool-selection evaluation harness.
 
 ## M4 — Persistent memory and learning
@@ -140,7 +140,7 @@ Statuses: DONE / IN_PROGRESS / BLOCKED / PLANNED. Mark DONE only with code, test
 3. Evaluate freshness/contradiction signals and add calibrated confidence metrics without treating heuristics as probabilities.
 4. Evaluate semantic memory retrieval and review consolidation proposals before any automatic merge/learning path.
 5. Continue the policy sandbox/audit path before any mutating executor work.
-6. Extend the declarative plan contract into a persisted, cancellable state machine only after step outcomes and policy hand-offs have explicit provenance.
+6. Add model-backed plan proposal generation with schema validation and deterministic fallback; keep all generated plans non-executable until policy-reviewed.
 
 ## Risk register
 | Risk | Mitigation | State |
