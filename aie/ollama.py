@@ -46,8 +46,8 @@ class OllamaClient:
 
     def __init__(self, *, base_url: str | None = None, timeout: float = 60.0,
                  opener=None) -> None:
-        if not math.isfinite(timeout) or timeout <= 0:
-            raise ValueError("timeout must be finite and positive")
+        if isinstance(timeout, bool) or not math.isfinite(timeout) or not 0 < timeout <= 600:
+            raise ValueError("timeout must be finite and between 0 and 600 seconds")
         self.base_url = (base_url or ollama_base_url()).rstrip("/")
         parsed = urlparse(self.base_url)
         if (
@@ -116,9 +116,16 @@ class OllamaClient:
     ) -> EmbeddingResult:
         if not model or not model.strip():
             raise ValueError("model must be non-empty")
-        texts = [inputs] if isinstance(inputs, str) else inputs
+        if isinstance(inputs, str):
+            texts = [inputs]
+        elif isinstance(inputs, list):
+            texts = inputs
+        else:
+            raise ValueError("embedding input must be a string or list of strings")
         if not texts or any(not isinstance(item, str) or not item for item in texts):
             raise ValueError("embedding input must contain non-empty strings")
+        if isinstance(expected_dimensions, bool):
+            raise ValueError("expected_dimensions must be a positive integer")
         if expected_dimensions is not None and expected_dimensions < 1:
             raise ValueError("expected_dimensions must be positive")
         result = self._post(
