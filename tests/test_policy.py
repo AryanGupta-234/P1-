@@ -63,3 +63,17 @@ def test_unrelated_grant_cannot_authorize_a_different_action():
     item = proposal("file.delete", "C:/temp/x", {}, ("system.inspect",))
     context = PolicyContext(frozenset({"system.inspect"}), target_verified=True, sandbox_available=True)
     assert evaluate_proposal(item, context).reason_code == "INVALID_CAPABILITY"
+
+
+
+def test_expired_exact_approval_is_denied():
+    item = proposal("file.delete", "C:/temp/file", {}, ("file.delete",))
+    now = datetime.now(timezone.utc)
+    context = PolicyContext(
+        frozenset({"file.delete"}), target_verified=True, sandbox_available=True,
+        approved_proposal_digest=proposal_digest(item),
+        approval_expires_at=now - timedelta(seconds=1),
+    )
+    decision = evaluate_proposal(item, context, now=now)
+    assert decision.status == "DENY"
+    assert decision.reason_code == "APPROVAL_EXPIRED"
