@@ -280,9 +280,9 @@ class MemoryStore:
                 args,
             ).fetchall()
         destination.parent.mkdir(parents=True, exist_ok=True)
-        with destination.open("x", encoding="utf-8", newline="\\n") as handle:
+        with destination.open("x", encoding="utf-8", newline="\n") as handle:
             for row in rows:
-                handle.write(json.dumps(_decode(row), ensure_ascii=False, allow_nan=False) + "\\n")
+                handle.write(json.dumps(_decode(row), ensure_ascii=False, allow_nan=False) + "\n")
         return len(rows)
 
     def delete(self, memory_id: str) -> bool:
