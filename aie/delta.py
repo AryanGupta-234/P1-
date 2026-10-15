@@ -61,9 +61,20 @@ class SnapshotDeltaTracker:
                     host_id=host_id, source=source,
                     event_type=f"inventory.{collection}.baseline",
                     entity=EntityRef(type=entity_type, name=collection),
-                    data={"item_count": len(current)},
+                    data={"item_count": len(current), "coverage": "count_only"},
                     sensitivity="internal",
-                )
+                ),
+                *[
+                    AIEEvent(
+                        host_id=host_id, source=source,
+                        event_type=f"inventory.{collection}.present_observed",
+                        entity=EntityRef(type=entity_type, name=key, stable_id=key),
+                        data={"current": item, "baseline": True},
+                        sensitivity="internal", confidence=1.0,
+                        evidence_kind="observed",
+                    )
+                    for key, item in sorted(current.items())
+                ],
             ]
 
         events: list[AIEEvent] = []
