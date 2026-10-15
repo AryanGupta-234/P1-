@@ -8,7 +8,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Iterable
+from typing import Iterable, Any
 
 from aie.contracts import AIEEvent
 
@@ -47,6 +47,49 @@ class EnvironmentProjection:
     coverage: dict[str, str]
     ignored_events: int = 0
 
+    def to_dict(self) -> dict[str, Any]:
+        def stamp(value: datetime) -> str:
+            return value.isoformat()
+
+        return {
+            "processes": [
+                {**vars(item), "first_observed": stamp(item.first_observed),
+                 "last_observed": stamp(item.last_observed)}
+                for _, item in sorted(self.processes.items())
+            ],
+            "entities": [
+                {**vars(item), "first_observed": stamp(item.first_observed),
+                 "last_observed": stamp(item.last_observed)}
+                for _, item in sorted(self.entities.items())
+            ],
+            "coverage": dict(self.coverage),
+            "ignored_events": self.ignored_events,
+        }
+
+    @classmethod
+    def from_dict(cls, payload: dict[str, Any]) -> "EnvironmentProjection":
+        if not isinstance(payload, dict):
+            raise ValueError("projection snapshot must be an object")
+        processes = {}
+        for raw in payload.get("processes", []):
+            item = dict(raw)
+            item["first_observed"] = datetime.fromisoformat(item["first_observed"])
+            item["last_observed"] = datetime.fromisoformat(item["last_observed"])
+            instance = ProcessInstance(**item)
+            processes[(instance.host_id, instance.pid, instance.create_time)] = instance
+        entities = {}
+        for raw in payload.get("entities", []):
+            item = dict(raw)
+            item["first_observed"] = datetime.fromisoformat(item["first_observed"])
+            item["last_observed"] = datetime.fromisoformat(item["last_observed"])
+            entity = EntityState(**item)
+            entities[(entity.host_id, entity.collection, entity.identity)] = entity
+        coverage = payload.get("coverage", {})
+        ignored = payload.get("ignored_events", 0)
+        if not isinstance(coverage, dict) or isinstance(ignored, bool) or not isinstance(ignored, int):
+            raise ValueError("projection snapshot metadata is invalid")
+        return cls(processes, entities, dict(coverage), ignored)
+
 
 def _pid(event: AIEEvent):
     value = event.data.get("pid")
@@ -84,18 +127,21 @@ def _append_evidence(ids: list[str], event_id: str) -> None:
         ids.append(event_id)
 
 
-def project_environment_state(events: Iterable[AIEEvent]) -> EnvironmentProjection:
-    """Replay events chronologically and preserve exact process-instance identity."""
-    processes: dict[tuple[str, int, float], ProcessInstance] = {}
-    entities: dict[tuple[str, str, str], EntityState] = {}
-    coverage: dict[str, str] = {
+def project_environment_state(
+    events: Iterable[AIEEvent],
+    initial: EnvironmentProjection | None = None,
+) -> EnvironmentProjection:
+    """Replay events chronologically, optionally extending a persisted projection."""
+    processes = initial.processes if initial is not None else {}
+    entities = initial.entities if initial is not None else {}
+    coverage: dict[str, str] = dict(initial.coverage) if initial is not None else {
         "processes": "partial: initial process baseline stores only a count",
         "services": "unknown until an entity-level baseline or delta is observed",
         "network_interfaces": "unknown until an entity-level baseline or delta is observed",
         "scheduled_tasks": "unknown until an entity-level baseline or delta is observed",
         "applications": "unknown until an entity-level baseline or delta is observed",
     }
-    ignored = 0
+    ignored = initial.ignored_events if initial is not None else 0
 
     ordered = sorted(
         events,
