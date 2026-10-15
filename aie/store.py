@@ -82,7 +82,7 @@ class EventStore:
             raise ValueError("limit must be between 1 and 1000")
         with self._connect() as db:
             rows = db.execute(
-                "SELECT payload FROM events ORDER BY timestamp DESC, event_id DESC LIMIT ?",
+                "SELECT payload FROM events ORDER BY julianday(timestamp) DESC, event_id DESC LIMIT ?",
                 (limit,),
             ).fetchall()
         return [AIEEvent.model_validate(json.loads(row[0])) for row in rows]
@@ -97,7 +97,7 @@ class EventStore:
             rows = db.execute(
                 """SELECT payload FROM events
                    WHERE julianday(timestamp) >= julianday(?)
-                   ORDER BY timestamp ASC, event_id ASC LIMIT ?""",
+                   ORDER BY julianday(timestamp) ASC, event_id ASC LIMIT ?""",
                 (since.isoformat(), limit),
             ).fetchall()
         return [AIEEvent.model_validate(json.loads(row[0])) for row in rows]
@@ -113,7 +113,7 @@ class EventStore:
         destination.parent.mkdir(parents=True, exist_ok=True)
         with self._connect() as db:
             rows = db.execute(
-                "SELECT payload FROM events ORDER BY timestamp ASC, event_id ASC"
+                "SELECT payload FROM events ORDER BY julianday(timestamp) ASC, event_id ASC"
             ).fetchall()
         destination.write_text("".join(row[0] + "\n" for row in rows), encoding="utf-8")
         return len(rows)
@@ -147,7 +147,7 @@ class EventStore:
                 """DELETE FROM events
                    WHERE event_id NOT IN (
                        SELECT event_id FROM events
-                       ORDER BY timestamp DESC, event_id DESC LIMIT ?
+                       ORDER BY julianday(timestamp) DESC, event_id DESC LIMIT ?
                    )""",
                 (keep_latest,),
             )
