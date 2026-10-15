@@ -84,7 +84,7 @@ See [HARDWARE_PROFILE.md](HARDWARE_PROFILE.md) for the sanitized host baseline.
 - Dedicated end-to-end runtime tests and Windows-host validation for pause/resume, collector recovery, CPU overhead and event latency.
 - Executable path/signature discovery and application adapter registry.
 - UI Automation client, app-specific automation adapters and action execution.
-- Snapshot compaction/size policy, broader environmental state semantics, contextual reasoning and synthetic projection evaluation. `aie state` persists a versioned projection and resumes by monotonic SQLite ingestion sequence (including late imports); initial process baseline coverage remains count-only.
+- Snapshot compaction/size policy, broader environmental state semantics, relationship modeling and synthetic projection evaluation. `aie state` persists a versioned projection and resumes by monotonic SQLite ingestion sequence; `aie context` emits bounded facts with provenance but does not reason over them. Initial process baseline coverage remains count-only.
 - End-to-end local Ollama invocation against the target installation, Nomic live dimension confirmation, memory consolidation and cloud gateway.
 - Policy broker, sandboxed actions and autonomous workflows.
 - Custom kernel driver (not an initial milestone; separate signed-driver research only if ETW cannot meet a demonstrated need).
