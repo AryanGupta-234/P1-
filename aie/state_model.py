@@ -230,7 +230,7 @@ def project_environment_state(
             instance = processes[key]
             instance.etw_confirmed = True
             instance.last_observed = max(instance.last_observed, event.timestamp)
-            _append_evidence(instance.evidence_ids, event.event_id)
+            _append_evidence(instance, event.event_id)
             continue
 
         if kind.startswith("inventory.") and kind.endswith(".baseline"):
@@ -271,7 +271,7 @@ def project_environment_state(
                     existing.status = status
                     existing.current = current
                     existing.last_observed = event.timestamp
-                _append_evidence(existing.evidence_ids, event.event_id)
+                _append_evidence(existing, event.event_id)
             coverage[collection] = (
                 "partial: observed entities only; failed or unobserved snapshots remain unknown"
             )
@@ -300,7 +300,7 @@ def project_environment_state(
                     existing.current = current
                     existing.status = "present"
                     existing.last_observed = event.timestamp
-                _append_evidence(existing.evidence_ids, event.event_id)
+                _append_evidence(existing, event.event_id)
             coverage["services"] = "partial: Event Log transitions and sampled inventory evidence"
             continue
 
