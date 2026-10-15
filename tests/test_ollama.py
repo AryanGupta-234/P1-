@@ -89,7 +89,7 @@ def test_embeddings_validate_count_finiteness_and_dimensions():
 
 @pytest.mark.parametrize("vectors", [
     [],
-    [[0.1]],
+    [[]],
     [[0.1], [0.2, 0.3]],
     [[float("nan")]],
     [[True]],
