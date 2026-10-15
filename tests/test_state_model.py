@@ -116,3 +116,22 @@ def test_projection_serialization_round_trip_and_incremental_update():
     instance = resumed.processes[("host-a", 42, 10.0)]
     assert instance.status == "stopped"
     assert instance.evidence_ids == ["start", "stop"]
+
+
+def test_late_historical_inventory_event_does_not_regress_current_state():
+    current = event(
+        "current", "inventory.services.changed", 20,
+        entity_type="service", name="Spooler", stable="Spooler",
+        data={"current": {"name": "Spooler", "status": "stopped"}},
+    )
+    projection = project_environment_state([current])
+    late = event(
+        "late", "inventory.services.changed", 10,
+        entity_type="service", name="Spooler", stable="Spooler",
+        data={"current": {"name": "Spooler", "status": "running"}},
+    )
+    resumed = project_environment_state([late], initial=projection)
+    service = resumed.entities[("host-a", "services", "Spooler")]
+    assert service.current["status"] == "stopped"
+    assert service.last_observed == current.timestamp
+    assert service.evidence_ids == ["current", "late"]
