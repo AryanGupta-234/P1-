@@ -103,6 +103,8 @@ def _pid(event: AIEEvent) -> int | None:
         value = event.entity.stable_id
     if isinstance(value, bool):
         return None
+    if isinstance(value, float) and not value.is_integer():
+        return None
     try:
         pid = int(value)
     except (TypeError, ValueError):
@@ -115,7 +117,9 @@ def _image(event: AIEEvent) -> str | None:
     if not isinstance(value, str) or not value.strip():
         return None
     name = PureWindowsPath(value).name.casefold()
-    return name or None
+    if not name or name.startswith("pid:"):
+        return None
+    return name
 
 
 def _create_time(event: AIEEvent) -> float | None:
