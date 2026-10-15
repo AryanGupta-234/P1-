@@ -8,12 +8,24 @@ from dataclasses import dataclass
 from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlparse
-from urllib.request import Request, urlopen
+from urllib.request import (
+    HTTPRedirectHandler,
+    ProxyHandler,
+    Request,
+    build_opener,
+)
 
 from aie.model_policy import ollama_base_url
 
 _MAX_RESPONSE_BYTES = 4 * 1024 * 1024
 _ALLOWED_ROLES = {"system", "user", "assistant"}
+
+
+class _NoRedirectHandler(HTTPRedirectHandler):
+    """Prevent a local inference request from redirecting prompts to another host."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
 
 
 class OllamaError(RuntimeError):
@@ -50,6 +62,10 @@ class OllamaClient:
             raise ValueError("timeout must be finite and between 0 and 600 seconds")
         self.base_url = (base_url or ollama_base_url()).rstrip("/")
         parsed = urlparse(self.base_url)
+        try:
+            port = parsed.port
+        except ValueError as exc:
+            raise ValueError("Ollama URL contains an invalid port") from exc
         if (
             parsed.scheme not in {"http", "https"}
             or parsed.hostname not in {"127.0.0.1", "localhost", "::1"}
@@ -57,10 +73,14 @@ class OllamaClient:
             or parsed.password is not None
             or parsed.query
             or parsed.fragment
+            or parsed.path not in {"", "/"}
+            or (port is not None and not 1 <= port <= 65535)
         ):
             raise ValueError("Ollama adapter requires a loopback URL without credentials")
         self.timeout = timeout
-        self._opener = opener or urlopen
+        self._opener = opener or build_opener(
+            ProxyHandler({}), _NoRedirectHandler()
+        ).open
 
     def chat(
         self,
