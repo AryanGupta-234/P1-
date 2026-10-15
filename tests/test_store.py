@@ -189,3 +189,17 @@ def test_state_snapshot_round_trip_and_rebuild_delete(tmp_path):
     )
     store.delete_state_snapshot("aie.environment.v1")
     assert store.load_state_snapshot("aie.environment.v1") is None
+
+
+
+def test_oversized_state_snapshot_is_rejected_without_replacing_last_good_copy(tmp_path):
+    from aie.store import MAX_STATE_SNAPSHOT_BYTES
+
+    store = EventStore(tmp_path / "events.sqlite3")
+    store.save_state_snapshot("aie.environment.v1", 12, '{"stable":true}')
+    oversized = "x" * (MAX_STATE_SNAPSHOT_BYTES + 1)
+    with pytest.raises(ValueError, match="previous snapshot was left unchanged"):
+        store.save_state_snapshot("aie.environment.v1", 99, oversized)
+    assert store.load_state_snapshot("aie.environment.v1") == (
+        1, 12, '{"stable":true}'
+    )
