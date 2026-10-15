@@ -10,7 +10,7 @@ Status vocabulary: DONE / IN_PROGRESS / BLOCKED / PLANNED. A task is DONE only w
 | M1 | Windows environment observer | IN_PROGRESS | Host/process baseline, app/service/network/task inventory, SQLite and explicit retention API |
 | M2 | Context intelligence | IN_PROGRESS | Process correlation, durable incremental state projection and bounded factual context packets and per-entity evidence-reference caps are implemented; Windows validation, state-aware compaction/recovery and evaluation remain |
 | M3 | Cognitive core | IN_PROGRESS | Hardware-aware model discovery, bounded local Ollama chat/embedding, and `aie think` context integration; planning and evaluation remain |
-| M4 | Persistent intelligence | PLANNED | Provenance-aware memory, consolidation and retrieval evaluation |
+| M4 | Persistent intelligence | IN_PROGRESS | Explicit SQLite memory records, provenance/confidence/sensitivity/verification/TTL metadata and bounded keyword retrieval; consolidation and evaluation remain |
 | M5 | Controlled autonomy | PLANNED | UIA/app adapters, capability broker, policy, sandbox, audit and recovery |
 | M6 | Generalization research | PLANNED | Held-out transfer and novel-task benchmarks |
 
@@ -85,10 +85,12 @@ Status vocabulary: DONE / IN_PROGRESS / BLOCKED / PLANNED. A task is DONE only w
 - [ ] Add goal/planning state machine; models cannot change security policy.
 
 ## M4 — Persistent Intelligence
-- [ ] Working, episodic, semantic, procedural and prospective memory schemas.
-- [ ] Provenance, confidence, sensitivity, TTL and verification state.
+- [x] Add explicit working, episodic, semantic, procedural and prospective memory record kinds in local SQLite.
+- [x] Persist provenance IDs, confidence, sensitivity, verification state, tags, access count and optional TTL; exclude sensitive records from retrieval by default.
+- [x] Add explicit memory add/search/delete/expired-prune CLI workflows; memory is never generated or consolidated automatically.
+- [x] Provenance, confidence, sensitivity, TTL and verification state.
 - [ ] Retrieval benchmark, contradiction handling and memory decay.
-- [ ] User review, correction, export and deletion controls.
+- [ ] User review, correction, export and deletion controls (explicit delete is implemented; correction/export UI remains).
 - [ ] Experience consolidation with regression tests.
 
 ## M5 — Windows application automation and controlled autonomy
