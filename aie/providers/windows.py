@@ -109,10 +109,13 @@ class WindowsProvider(ObserverProvider):
                 event_type = "process.replaced_observed"  # PID reuse
             else:
                 continue
+            lifecycle_data = {"pid": pid, "create_time": created}
+            if event_type == "process.replaced_observed" and previous is not None:
+                lifecycle_data["previous_create_time"] = previous[1]
             yield AIEEvent(
                 host_id=host_id(), source=self.name, event_type=event_type,
                 entity=EntityRef(type="process", name=name, stable_id=str(pid)),
-                data={"pid": pid, "create_time": created},
+                data=lifecycle_data,
                 sensitivity="internal", confidence=0.85, evidence_kind="derived",
             )
 
