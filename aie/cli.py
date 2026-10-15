@@ -277,6 +277,24 @@ def correlate(
 
 
 @app.command()
+@app.command()
+def context(db: Path = typer.Option(database_path(), "--db")) -> None:
+    """Show a bounded factual context packet from the latest saved projection."""
+    from aie.context import build_environment_context
+    from aie.state_model import EnvironmentProjection
+
+    saved = EventStore(db).load_state_snapshot("aie.environment.v1")
+    if saved is None:
+        console.print("No saved projection. Run aie state first.")
+        raise typer.Exit(2)
+    version, _, payload = saved
+    if version != 1:
+        raise typer.Exit(2)
+    projection = EnvironmentProjection.from_dict(json.loads(payload))
+    packet = build_environment_context(projection)
+    console.print_json(json.dumps(packet, default=str))
+
+
 def state(
     limit: int = typer.Option(
         10000, min=1, max=10000, help="Maximum new events to process per invocation."
