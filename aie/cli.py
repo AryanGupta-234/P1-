@@ -587,5 +587,46 @@ def memory_prune(
     console.print(f"Expired memory records deleted: {deleted}")
 
 
+@app.command("memory-correct")
+def memory_correct(
+    memory_id: str = typer.Argument(...),
+    content: str | None = typer.Option(None, help="Replacement content."),
+    confidence: float | None = typer.Option(None, min=0.0, max=1.0),
+    verification: str | None = typer.Option(None),
+    tags: str | None = typer.Option(None, help="Replacement comma-separated tags."),
+    db: Path = typer.Option(database_path(), "--db", help="Local SQLite database."),
+) -> None:
+    """Explicitly correct a memory while preserving its provenance and identity."""
+    from aie.memory import MemoryStore
+
+    try:
+        changed = MemoryStore(db).revise(
+            memory_id, content=content, confidence=confidence,
+            verification=verification,
+            tags=None if tags is None else [item.strip() for item in tags.split(",") if item.strip()],
+        )
+    except ValueError as exc:
+        console.print(f"[red]Memory correction failed:[/red] {exc}")
+        raise typer.Exit(2) from exc
+    console.print("Updated." if changed else "No matching memory record.")
+
+
+@app.command("memory-export")
+def memory_export(
+    output: Path = typer.Argument(...),
+    include_sensitive: bool = typer.Option(False, "--include-sensitive"),
+    db: Path = typer.Option(database_path(), "--db", help="Local SQLite database."),
+) -> None:
+    """Export unexpired memories to a new JSONL file; sensitive export is opt-in."""
+    from aie.memory import MemoryStore
+
+    try:
+        count = MemoryStore(db).export_jsonl(output, include_sensitive=include_sensitive)
+    except (OSError, ValueError) as exc:
+        console.print(f"[red]Memory export failed:[/red] {exc}")
+        raise typer.Exit(2) from exc
+    console.print(f"Exported {count} memory records to {output}")
+
+
 if __name__ == "__main__":
     app()
