@@ -40,14 +40,19 @@ def test_recency_decays_and_terminal_records_rank_below_active_records():
                    data={"pid": 1, "create_time": now.timestamp()}, name="active.exe")
     old = event("old", "process.started_observed", now - timedelta(days=3),
                 data={"pid": 2, "create_time": created}, name="old.exe")
+    stopped_start = event("stopped-start", "process.started_observed",
+                          now - timedelta(minutes=2),
+                          data={"pid": 3, "create_time": (now - timedelta(minutes=2)).timestamp()},
+                          name="stopped.exe")
     stopped = event("stop", "process.stopped_observed", now,
-                    data={"pid": 1, "create_time": now.timestamp()}, name="active.exe")
-    projection = project_environment_state([active, old, stopped])
+                    data={"pid": 3, "create_time": (now - timedelta(minutes=2)).timestamp()},
+                    name="stopped.exe")
+    projection = project_environment_state([active, old, stopped_start, stopped])
     ranked = rank_environment_state(projection, now=now)
-    assert ranked[0]["name"] == "old.exe" or ranked[0]["status"] == "running"
     by_name = {row["name"]: row for row in ranked}
-    assert by_name["active.exe"]["status"] == "stopped"
-    assert by_name["active.exe"]["score"] < 0.9
+    assert by_name["active.exe"]["status"] == "running"
+    assert by_name["stopped.exe"]["status"] == "stopped"
+    assert by_name["active.exe"]["score"] > by_name["stopped.exe"]["score"]
 
 
 def test_ranking_limits_and_time_parameters_are_validated():
