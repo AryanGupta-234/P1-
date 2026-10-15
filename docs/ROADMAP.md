@@ -2,13 +2,13 @@
 
 Status vocabulary: DONE / IN_PROGRESS / BLOCKED / PLANNED. A task is DONE only when code exists and its tests or documented validation support the claim.
 
-**Last updated:** 2026-10-15
+**Last updated:** 2026-10-16
 
 | ID | Milestone | Status | Current evidence / exit criteria |
 |---|---|---|---|
 | M0 | Architecture and foundation | IN_PROGRESS | Contracts, package, CLI, docs and Windows CI workflow; CI must execute successfully |
 | M1 | Windows environment observer | IN_PROGRESS | Host/process baseline, app/service/network/task inventory, SQLite and explicit retention API |
-| M2 | Context intelligence | IN_PROGRESS | Process correlation, durable incremental state projection and bounded factual context packets are implemented; Windows validation, compaction policy and evaluation remain |
+| M2 | Context intelligence | IN_PROGRESS | Process correlation, durable incremental state projection and bounded factual context packets and per-entity evidence-reference caps are implemented; Windows validation, total snapshot-size policy and evaluation remain |
 | M3 | Cognitive core | IN_PROGRESS | Hardware-aware model discovery plus bounded local Ollama chat/embedding adapters and `aie ask`; planning and evaluation remain |
 | M4 | Persistent intelligence | PLANNED | Provenance-aware memory, consolidation and retrieval evaluation |
 | M5 | Controlled autonomy | PLANNED | UIA/app adapters, capability broker, policy, sandbox, audit and recovery |
@@ -61,7 +61,8 @@ Status vocabulary: DONE / IN_PROGRESS / BLOCKED / PLANNED. A task is DONE only w
 - [x] Add an event-sourced environment projector for process instances and inventory entities, with exact host+PID+creation-time process identity, ETW evidence attachment, explicit removals and coverage/unknown-state reporting.
 - [x] Expose incremental retained-evidence projections through `aie state`; absence from the evidence stream never implies removal.
 - [x] Persist versioned compact environment projections separately from raw observations; incremental replay uses a monotonic SQLite ingestion sequence so late-imported ETW/derived events are not skipped.
-- [ ] Add snapshot compaction/size policy and recovery evaluation for corrupted or pruned histories.
+- [x] Bound per-process/per-entity evidence references to the latest 64 unique IDs and mark truncation in persisted state/context; legacy snapshots default the marker to false.
+- [ ] Add total snapshot byte-size policy, compaction and recovery evaluation for corrupted or pruned histories.
 - [x] Add bounded deterministic context packets with explicit coverage, observation timestamps and evidence references; no inferred facts or implicit absence-as-removal semantics.
 - [ ] Evidence-backed relevance scoring and confidence calibration.
 - [ ] Privacy-safe project/session context.
