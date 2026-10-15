@@ -2,7 +2,7 @@
 
 > Always-current project orientation. Read before coding and update in the same change as milestone progress.
 
-**Last updated:** 2026-10-14  
+**Last updated:** 2026-10-15  
 **Active phase:** Windows Environment Intelligence  
 **Active milestone:** M1 — Environment Observer (user-mode inventory + event pipeline)  
 **Platform:** Windows 11 x64 only  
