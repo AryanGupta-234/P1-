@@ -306,6 +306,9 @@ def state(
     rebuild: bool = typer.Option(
         False, "--rebuild", help="Replay all currently retained events from the beginning."
     ),
+    recover: bool = typer.Option(
+        False, "--recover", help="Restore the previous verified snapshot before replaying new events."
+    ),
     db: Path = typer.Option(database_path(), "--db", help="SQLite event store."),
 ) -> None:
     """Update and display the durable evidence-backed environment projection."""
@@ -313,14 +316,33 @@ def state(
     from aie.state_model import EnvironmentProjection, project_environment_state
 
     store = EventStore(db)
+    if rebuild and recover:
+        raise typer.BadParameter("--rebuild and --recover cannot be used together")
     try:
         snapshot = None if rebuild else store.load_state_snapshot("aie.environment.v1")
     except ValueError as exc:
-        console.print(
-            f"[red]Saved projection failed integrity verification:[/red] {exc} "
-            "Run aie state --rebuild if retained events are sufficient."
-        )
-        raise typer.Exit(2) from exc
+        if not recover:
+            console.print(
+                f"[red]Saved projection failed integrity verification:[/red] {exc} "
+                "Use --recover to restore the previous verified snapshot, or --rebuild."
+            )
+            raise typer.Exit(2) from exc
+        try:
+            snapshot = store.restore_state_snapshot_backup("aie.environment.v1")
+        except ValueError as backup_exc:
+            console.print(f"[red]Snapshot backup is also invalid:[/red] {backup_exc}")
+            raise typer.Exit(2) from backup_exc
+        if snapshot is None:
+            console.print("[red]No previous verified snapshot is available to recover.[/red]")
+            raise typer.Exit(2)
+        console.print("[yellow]Restored previous verified snapshot; replaying later events.[/yellow]")
+    else:
+        if recover and snapshot is None:
+            snapshot = store.restore_state_snapshot_backup("aie.environment.v1")
+            if snapshot is None:
+                console.print("[red]No previous verified snapshot is available to recover.[/red]")
+                raise typer.Exit(2)
+            console.print("[yellow]Restored previous verified snapshot; replaying later events.[/yellow]")
     if snapshot is None:
         projection = None
         watermark = 0
