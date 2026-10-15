@@ -117,7 +117,7 @@ At each implementation increment: update this file, update [ROADMAP.md](ROADMAP.
 ## Additional foundations implemented — 2026-10-16
 
 - **Context ranking:** `aie prioritize` ranks projected state with deterministic recency, active/present and ETW-confirmation features. The score is retrieval priority, not calibrated confidence or truth.
-- **Read-only cognition:** `aie think` assembles a bounded JSON evidence packet and calls only an eligible loopback Ollama model. Observed strings are untrusted data; there is no tool/action channel.
+- **Read-only cognition:** `aie think` assembles a bounded JSON evidence packet and calls only an eligible loopback Ollama model. `--include-memory` optionally adds matching non-sensitive user-created memories, explicitly distinguished from live observations. All packet strings are untrusted data; there is no tool/action channel.
 - **Persistent memory:** explicit working/episodic/semantic/procedural/prospective records in SQLite, with provenance IDs, confidence, sensitivity, verification, tags, access count and optional TTL. Search excludes sensitive records by default. Corrections preserve immutable previous versions; JSONL export is explicit and sensitive export requires opt-in. TTL cleanup removes revision history too.
 - **Policy foundation:** `aie.policy` is a non-executing evaluator. It requires exact action capabilities, verified targets, sandbox availability for writes, bounded action budgets and expiring approvals bound to the exact proposal digest. No UIA or OS action executor exists.
 
