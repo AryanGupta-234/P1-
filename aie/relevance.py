@@ -24,9 +24,9 @@ def rank_environment_state(
         now = datetime.now(timezone.utc)
     if now.tzinfo is None or now.utcoffset() is None:
         raise ValueError("now must be timezone-aware")
-    if isinstance(limit, bool) or not 1 <= limit <= 1000:
+    if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 1000:
         raise ValueError("limit must be between 1 and 1000")
-    if not math.isfinite(half_life_hours) or half_life_hours <= 0:
+    if isinstance(half_life_hours, bool) or not isinstance(half_life_hours, (int, float)) or not math.isfinite(half_life_hours) or half_life_hours <= 0:
         raise ValueError("half_life_hours must be finite and positive")
 
     ranked: list[dict[str, Any]] = []
