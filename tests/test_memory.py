@@ -64,3 +64,34 @@ def test_memory_search_is_bounded_and_kind_filterable(tmp_path):
     assert len(store.search("launch", kind="episodic", limit=1)) == 1
     with pytest.raises(ValueError):
         store.search("x", limit=101)
+
+
+
+def test_memory_correction_preserves_identity_and_provenance(tmp_path):
+    store = MemoryStore(tmp_path / "memory.sqlite3")
+    original = store.add(
+        "old wording", provenance_ids=["source-1"], confidence=0.4
+    )
+    assert store.revise(
+        original["memory_id"], content="corrected wording",
+        confidence=0.9, verification="verified",
+    )
+    revised = store.get(original["memory_id"])
+    assert revised["content"] == "corrected wording"
+    assert revised["confidence"] == 0.9
+    assert revised["verification"] == "verified"
+    assert revised["provenance_ids"] == ["source-1"]
+
+
+def test_memory_export_is_new_file_and_sensitive_is_opt_in(tmp_path):
+    store = MemoryStore(tmp_path / "memory.sqlite3")
+    store.add("ordinary note")
+    store.add("sensitive note", sensitivity="sensitive")
+    output = tmp_path / "exports" / "memory.jsonl"
+    assert store.export_jsonl(output) == 1
+    assert "ordinary note" in output.read_text(encoding="utf-8")
+    assert "sensitive note" not in output.read_text(encoding="utf-8")
+    with pytest.raises(FileExistsError):
+        store.export_jsonl(output)
+    full = tmp_path / "exports" / "all-memory.jsonl"
+    assert store.export_jsonl(full, include_sensitive=True) == 2
