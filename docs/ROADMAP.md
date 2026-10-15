@@ -59,7 +59,7 @@ Status vocabulary: DONE / IN_PROGRESS / BLOCKED / PLANNED. A task is DONE only w
 - [ ] Add stop-event correlation only when process-instance identity is sufficient.
 - [x] Emit entity-level `present_observed` evidence for service/network/task/application inventory baselines (collection baseline counts remain explicitly count-only).
 - [x] Add an event-sourced environment projector for process instances and inventory entities, with exact host+PID+creation-time process identity, ETW evidence attachment, explicit removals and coverage/unknown-state reporting.
-- [x] Expose bounded retained-evidence projections through `aie state --since-minutes N`; absence from a query window never implies removal.
+- [x] Expose incremental retained-evidence projections through `aie state`; absence from the evidence stream never implies removal.
 - [x] Persist versioned compact environment projections separately from raw observations; incremental replay uses a monotonic SQLite ingestion sequence so late-imported ETW/derived events are not skipped.
 - [ ] Add snapshot compaction/size policy and recovery evaluation for corrupted or pruned histories.
 - [ ] Evidence-backed relevance scoring and confidence calibration.
