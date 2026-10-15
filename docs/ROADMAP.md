@@ -9,7 +9,7 @@ Status vocabulary: DONE / IN_PROGRESS / BLOCKED / PLANNED. A task is DONE only w
 | M0 | Architecture and foundation | IN_PROGRESS | Contracts, package, CLI, docs and Windows CI workflow; CI must execute successfully |
 | M1 | Windows environment observer | IN_PROGRESS | Host/process baseline, app/service/network/task inventory, SQLite and explicit retention API |
 | M2 | Context intelligence | IN_PROGRESS | Process correlation, durable incremental state projection and bounded factual context packets and per-entity evidence-reference caps are implemented; Windows validation, state-aware compaction/recovery and evaluation remain |
-| M3 | Cognitive core | IN_PROGRESS | Hardware-aware model discovery plus bounded local Ollama chat/embedding adapters and `aie ask`; planning and evaluation remain |
+| M3 | Cognitive core | IN_PROGRESS | Hardware-aware model discovery, bounded local Ollama chat/embedding, and `aie think` context integration; planning and evaluation remain |
 | M4 | Persistent intelligence | PLANNED | Provenance-aware memory, consolidation and retrieval evaluation |
 | M5 | Controlled autonomy | PLANNED | UIA/app adapters, capability broker, policy, sandbox, audit and recovery |
 | M6 | Generalization research | PLANNED | Held-out transfer and novel-task benchmarks |
@@ -78,6 +78,7 @@ Status vocabulary: DONE / IN_PROGRESS / BLOCKED / PLANNED. A task is DONE only w
 - [x] Never automatically pull models; reject non-loopback Ollama endpoints.
 - [x] Add local-only Ollama chat and embedding adapters with non-streaming structured-output support, bounded responses, timeouts, cooperative cancellation checks, redirect/proxy isolation and dimension validation; expose `aie ask` and `aie embed`.
 - [x] Add a local-only Ollama embedding adapter with finite-vector, batch-count and caller-specified dimension validation; Nomic live-dimension confirmation remains pending.
+- [x] Add a bounded read-only cognitive context bridge: `aie think` passes provenance-bearing observed facts to local Ollama, treats observation strings as untrusted data, bounds context/question/output and does not expose tools or actions.
 - [ ] Add task complexity classification and model selection evaluation.
 - [ ] Add optional cloud adapter behind an explicit per-task data-egress policy.
 - [ ] Add context budgets, latency/cost metrics and deterministic fallback.
@@ -119,6 +120,7 @@ Status vocabulary: DONE / IN_PROGRESS / BLOCKED / PLANNED. A task is DONE only w
 5. Build UIA read-only inspector before any app-control actions.
 6. Validate incremental `aie state` checkpoints against real observer history; design explicit state-aware compaction and a synthetic environmental-state evaluation corpus.
 7. Evaluate `aie prioritize` against labeled retrieval scenarios; calibrate weights only from measured results.
+8. Validate `aie think` against prompt-injection fixtures and target-host Ollama latency, memory and output quality.
 
 ## Hardware/model constraints
 - Routine: `qwen2.5:3b-instruct`.
