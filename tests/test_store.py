@@ -162,3 +162,29 @@ def test_events_since_orders_mixed_timezone_offsets_by_instant(tmp_path):
     assert [item.event_id for item in result] == [
         "earlier-plus-two", "later-utc"
     ]
+
+
+def test_ingest_sequence_is_monotonic_across_pruning_and_late_imports(tmp_path):
+    store = EventStore(tmp_path / "events.sqlite3")
+    now = datetime.now(timezone.utc)
+    store.append_many([event("first", now), event("second", now + timedelta(seconds=1))])
+    first_batch = store.events_after_sequence(0, limit=10)
+    assert [item.event_id for _, item in first_batch] == ["first", "second"]
+    first_watermark = first_batch[-1][0]
+
+    store.prune(keep_latest=0)
+    store.append(event("late-import", now - timedelta(days=2)))
+    next_batch = store.events_after_sequence(first_watermark, limit=10)
+    assert len(next_batch) == 1
+    assert next_batch[0][1].event_id == "late-import"
+    assert next_batch[0][0] > first_watermark
+
+
+def test_state_snapshot_round_trip_and_rebuild_delete(tmp_path):
+    store = EventStore(tmp_path / "events.sqlite3")
+    store.save_state_snapshot("aie.environment.v1", 42, '{"coverage":{}}')
+    assert store.load_state_snapshot("aie.environment.v1") == (
+        1, 42, '{"coverage":{}}'
+    )
+    store.delete_state_snapshot("aie.environment.v1")
+    assert store.load_state_snapshot("aie.environment.v1") is None
