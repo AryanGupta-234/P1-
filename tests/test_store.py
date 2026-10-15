@@ -203,3 +203,48 @@ def test_oversized_state_snapshot_is_rejected_without_replacing_last_good_copy(t
     assert store.load_state_snapshot("aie.environment.v1") == (
         1, 12, '{"stable":true}'
     )
+
+
+
+def test_state_snapshot_detects_payload_corruption(tmp_path):
+    import sqlite3
+
+    store = EventStore(tmp_path / "events.sqlite3")
+    store.save_state_snapshot("aie.environment.v1", 12, '{"stable":true}')
+    with sqlite3.connect(store.path) as db:
+        db.execute(
+            "UPDATE state_snapshots_v2 SET payload = ? WHERE snapshot_key = ?",
+            ('{"stable":false}', "aie.environment.v1"),
+        )
+    with pytest.raises(ValueError, match="SHA-256 integrity verification"):
+        store.load_state_snapshot("aie.environment.v1")
+
+
+def test_legacy_snapshot_without_integrity_metadata_remains_readable(tmp_path):
+    import sqlite3
+
+    store = EventStore(tmp_path / "events.sqlite3")
+    with sqlite3.connect(store.path) as db:
+        db.execute(
+            """INSERT INTO state_snapshots_v2(
+                snapshot_key, schema_version, last_event_sequence, payload
+            ) VALUES(?, ?, ?, ?)""",
+            ("aie.environment.v1", 1, 7, '{"legacy":true}'),
+        )
+    assert store.load_state_snapshot("aie.environment.v1") == (
+        1, 7, '{"legacy":true}'
+    )
+
+
+def test_deleting_snapshot_also_deletes_integrity_metadata(tmp_path):
+    import sqlite3
+
+    store = EventStore(tmp_path / "events.sqlite3")
+    store.save_state_snapshot("aie.environment.v1", 1, '{}')
+    store.delete_state_snapshot("aie.environment.v1")
+    with sqlite3.connect(store.path) as db:
+        row = db.execute(
+            "SELECT payload_sha256 FROM state_snapshot_integrity WHERE snapshot_key = ?",
+            ("aie.environment.v1",),
+        ).fetchone()
+    assert row is None
