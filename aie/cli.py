@@ -277,7 +277,6 @@ def correlate(
 
 
 @app.command()
-@app.command()
 def context(db: Path = typer.Option(database_path(), "--db")) -> None:
     """Show a bounded factual context packet from the latest saved projection."""
     from aie.context import build_environment_context
@@ -295,6 +294,7 @@ def context(db: Path = typer.Option(database_path(), "--db")) -> None:
     console.print_json(json.dumps(packet, default=str))
 
 
+@app.command()
 def state(
     limit: int = typer.Option(
         10000, min=1, max=10000, help="Maximum new events to process per invocation."
