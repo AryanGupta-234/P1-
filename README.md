@@ -58,7 +58,7 @@ Run tests with `python -m pytest`. The Windows CI workflow runs tests and Ruff o
 
 ## Cognitive, memory and policy foundations
 
-- `aie think "Why is memory usage high?"` builds a bounded provenance-bearing context packet and sends it only to an eligible loopback Ollama model. Observations are treated as untrusted data; no tools or OS actions are exposed.
+- `aie think "Why is memory usage high?"` builds a bounded provenance-bearing context packet and sends it only to an eligible loopback Ollama model. Add `--include-memory` to retrieve matching non-sensitive user-created memories; stored memories are distinguished from live observations. No tools or OS actions are exposed.
 - `aie memory-add "A manually reviewed fact" --kind semantic --provenance EVENT_ID` creates an explicit local memory record.
 - `aie memory-search "reviewed fact"` searches unexpired records; sensitive records are excluded by default.
 - `aie memory-correct MEMORY_ID --verification verified` revises a record while preserving its prior version and provenance.
