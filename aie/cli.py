@@ -506,5 +506,86 @@ def think(
     )
 
 
+@app.command("memory-add")
+def memory_add(
+    content: str = typer.Argument(..., help="Explicit memory text; never generated automatically."),
+    kind: str = typer.Option("episodic", help="working, episodic, semantic, procedural or prospective."),
+    confidence: float = typer.Option(0.5, min=0.0, max=1.0),
+    sensitivity: str = typer.Option("internal", help="public, internal or sensitive."),
+    verification: str = typer.Option("unverified", help="unverified, supported, disputed or verified."),
+    tags: str = typer.Option("", help="Comma-separated tags."),
+    provenance: str = typer.Option("", help="Comma-separated source/event IDs."),
+    ttl_days: int | None = typer.Option(None, min=1, max=36500),
+    db: Path = typer.Option(database_path(), "--db", help="Local SQLite database."),
+) -> None:
+    """Add a user-supplied memory record with explicit provenance and retention metadata."""
+    from aie.memory import MemoryStore
+
+    try:
+        record = MemoryStore(db).add(
+            content, kind=kind, confidence=confidence, sensitivity=sensitivity,
+            verification=verification,
+            tags=[item.strip() for item in tags.split(",") if item.strip()],
+            provenance_ids=[item.strip() for item in provenance.split(",") if item.strip()],
+            ttl_days=ttl_days,
+        )
+    except ValueError as exc:
+        console.print(f"[red]Memory was not saved:[/red] {exc}")
+        raise typer.Exit(2) from exc
+    console.print_json(json.dumps({
+        "memory_id": record["memory_id"], "kind": record["kind"],
+        "sensitivity": record["sensitivity"], "verification": record["verification"],
+        "expires_at": record["expires_at"],
+    }))
+
+
+@app.command("memory-search")
+def memory_search(
+    query: str = typer.Argument(""),
+    kind: str | None = typer.Option(None),
+    include_sensitive: bool = typer.Option(False, "--include-sensitive"),
+    limit: int = typer.Option(20, min=1, max=100),
+    db: Path = typer.Option(database_path(), "--db", help="Local SQLite database."),
+) -> None:
+    """Search unexpired local memories; sensitive records are excluded by default."""
+    from aie.memory import MemoryStore
+
+    try:
+        records = MemoryStore(db).search(
+            query, kind=kind, include_sensitive=include_sensitive, limit=limit
+        )
+    except ValueError as exc:
+        console.print(f"[red]Memory search failed:[/red] {exc}")
+        raise typer.Exit(2) from exc
+    console.print_json(json.dumps(records, indent=2))
+
+
+@app.command("memory-delete")
+def memory_delete(
+    memory_id: str = typer.Argument(...),
+    db: Path = typer.Option(database_path(), "--db", help="Local SQLite database."),
+) -> None:
+    """Explicitly delete one memory record by ID."""
+    from aie.memory import MemoryStore
+
+    try:
+        deleted = MemoryStore(db).delete(memory_id)
+    except ValueError as exc:
+        console.print(f"[red]Memory deletion failed:[/red] {exc}")
+        raise typer.Exit(2) from exc
+    console.print("Deleted." if deleted else "No matching memory record.")
+
+
+@app.command("memory-prune")
+def memory_prune(
+    db: Path = typer.Option(database_path(), "--db", help="Local SQLite database."),
+) -> None:
+    """Explicitly remove expired memory records."""
+    from aie.memory import MemoryStore
+
+    deleted = MemoryStore(db).prune_expired()
+    console.print(f"Expired memory records deleted: {deleted}")
+
+
 if __name__ == "__main__":
     app()
