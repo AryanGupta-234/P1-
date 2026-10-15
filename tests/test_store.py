@@ -248,3 +248,40 @@ def test_deleting_snapshot_also_deletes_integrity_metadata(tmp_path):
             ("aie.environment.v1",),
         ).fetchone()
     assert row is None
+
+
+
+def test_snapshot_backup_restores_previous_verified_generation(tmp_path):
+    import sqlite3
+
+    store = EventStore(tmp_path / "events.sqlite3")
+    store.save_state_snapshot("aie.environment.v1", 10, '{"generation":1}')
+    store.save_state_snapshot("aie.environment.v1", 20, '{"generation":2}')
+    with sqlite3.connect(store.path) as db:
+        db.execute(
+            "UPDATE state_snapshots_v2 SET payload = ? WHERE snapshot_key = ?",
+            ('{"corrupt":true}', "aie.environment.v1"),
+        )
+    with pytest.raises(ValueError, match="SHA-256 integrity verification"):
+        store.load_state_snapshot("aie.environment.v1")
+    restored = store.restore_state_snapshot_backup("aie.environment.v1")
+    assert restored == (1, 10, '{"generation":1}')
+    assert store.load_state_snapshot("aie.environment.v1") == restored
+
+
+def test_snapshot_backup_is_not_replaced_by_corrupt_current_generation(tmp_path):
+    import sqlite3
+
+    store = EventStore(tmp_path / "events.sqlite3")
+    store.save_state_snapshot("aie.environment.v1", 10, '{"generation":1}')
+    store.save_state_snapshot("aie.environment.v1", 20, '{"generation":2}')
+    with sqlite3.connect(store.path) as db:
+        db.execute(
+            "UPDATE state_snapshots_v2 SET payload = ? WHERE snapshot_key = ?",
+            ('{"corrupt":true}', "aie.environment.v1"),
+        )
+    store.save_state_snapshot("aie.environment.v1", 30, '{"generation":3}')
+    # The corrupted current generation is never promoted over the verified backup.
+    assert store.restore_state_snapshot_backup("aie.environment.v1") == (
+        1, 10, '{"generation":1}'
+    )
