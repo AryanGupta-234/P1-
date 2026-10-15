@@ -79,6 +79,7 @@ Status vocabulary: DONE / IN_PROGRESS / BLOCKED / PLANNED. A task is DONE only w
 - [x] Add local-only Ollama chat and embedding adapters with non-streaming structured-output support, bounded responses, timeouts, cooperative cancellation checks, redirect/proxy isolation and dimension validation; expose `aie ask` and `aie embed`.
 - [x] Add a local-only Ollama embedding adapter with finite-vector, batch-count and caller-specified dimension validation; Nomic live-dimension confirmation remains pending.
 - [x] Add a bounded read-only cognitive context bridge: `aie think` passes provenance-bearing observed facts to local Ollama, treats observation strings as untrusted data, bounds context/question/output and does not expose tools or actions.
+- [x] Add opt-in retrieval of matching non-sensitive user-created memories into `aie think`; prompt contract distinguishes observed facts from stored, potentially stale/unverified memory.
 - [ ] Add task complexity classification and model selection evaluation.
 - [ ] Add optional cloud adapter behind an explicit per-task data-egress policy.
 - [ ] Add context budgets, latency/cost metrics and deterministic fallback.
