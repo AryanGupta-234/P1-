@@ -1,6 +1,7 @@
 """Durable local SQLite event store with explicit retention controls."""
 from __future__ import annotations
 
+import hashlib
 import json
 import sqlite3
 from datetime import datetime
@@ -32,6 +33,9 @@ class EventStore:
             db.execute("""CREATE TABLE IF NOT EXISTS event_ingest_seq (
                 ingest_seq INTEGER PRIMARY KEY AUTOINCREMENT,
                 event_id TEXT NOT NULL UNIQUE)""")
+            db.execute("""CREATE TABLE IF NOT EXISTS state_snapshot_integrity (
+                snapshot_key TEXT PRIMARY KEY, payload_sha256 TEXT NOT NULL,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)""")
             db.execute(
                 """INSERT OR IGNORE INTO event_ingest_seq(event_id)
                    SELECT event_id FROM events ORDER BY rowid ASC"""
@@ -138,6 +142,7 @@ class EventStore:
         if not 1 <= schema_version <= 1000:
             raise ValueError("schema_version must be between 1 and 1000")
         with self._connect() as db:
+            digest = hashlib.sha256(payload.encode("utf-8")).hexdigest()
             db.execute(
                 """INSERT INTO state_snapshots_v2(
                     snapshot_key, schema_version, last_event_sequence, payload, updated_at
@@ -149,6 +154,13 @@ class EventStore:
                     updated_at=CURRENT_TIMESTAMP""",
                 (key, schema_version, last_event_sequence, payload),
             )
+            db.execute(
+                """INSERT INTO state_snapshot_integrity(snapshot_key, payload_sha256, updated_at)
+                   VALUES(?, ?, CURRENT_TIMESTAMP)
+                   ON CONFLICT(snapshot_key) DO UPDATE SET
+                   payload_sha256=excluded.payload_sha256, updated_at=CURRENT_TIMESTAMP""",
+                (key, digest),
+            )
 
     def load_state_snapshot(self, key: str) -> tuple[int, int, str] | None:
         """Return (schema version, ingestion watermark, JSON payload)."""
@@ -156,17 +168,32 @@ class EventStore:
             raise ValueError("snapshot key must contain 1..128 characters")
         with self._connect() as db:
             row = db.execute(
-                """SELECT schema_version, last_event_sequence, payload
-                   FROM state_snapshots_v2 WHERE snapshot_key = ?""",
+                """SELECT snapshot.schema_version, snapshot.last_event_sequence,
+                          snapshot.payload, integrity.payload_sha256
+                   FROM state_snapshots_v2 AS snapshot
+                   LEFT JOIN state_snapshot_integrity AS integrity
+                     ON integrity.snapshot_key = snapshot.snapshot_key
+                   WHERE snapshot.snapshot_key = ?""",
                 (key,),
             ).fetchone()
-        return (int(row[0]), int(row[1]), str(row[2])) if row else None
+        if row is None:
+            return None
+        payload = str(row[2])
+        if row[3] is not None:
+            actual = hashlib.sha256(payload.encode("utf-8")).hexdigest()
+            if actual != row[3]:
+                raise ValueError(
+                    f"snapshot '{key}' failed SHA-256 integrity verification; "
+                    "use --rebuild if retained events are sufficient"
+                )
+        return int(row[0]), int(row[1]), payload
 
     def delete_state_snapshot(self, key: str) -> None:
         if not key or len(key) > 128:
             raise ValueError("snapshot key must contain 1..128 characters")
         with self._connect() as db:
             db.execute("DELETE FROM state_snapshots_v2 WHERE snapshot_key = ?", (key,))
+            db.execute("DELETE FROM state_snapshot_integrity WHERE snapshot_key = ?", (key,))
 
     def recent(self, limit: int = 50) -> list[AIEEvent]:
         if not 1 <= limit <= 1000:
