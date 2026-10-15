@@ -35,6 +35,7 @@ aie etw-decode .\\traces\\process.xml .\\traces\\process-events.jsonl  # imports
 aie correlate --since-minutes 1440  # correlate ETW starts with matching process snapshots
 aie state                            # update durable environment projection
 aie context                          # emit bounded facts with evidence references
+aie prioritize                       # rank observed state with explainable heuristics
 aie observe --duration 30 --jsonl observations.jsonl
 aie export-events archived-events.jsonl
 # Create .\\aie-pause to pause; remove it to resume:
@@ -47,7 +48,7 @@ The observer is read-only and stores events under %LOCALAPPDATA%\AIE. Event coll
 - `docs/`: architecture spotlight, roadmap, hardware profile, Windows automation strategy and security.
 - `tests/`: deterministic synthetic tests.
 
-`aie state` incrementally updates a durable partial process/inventory projection; use `aie state --rebuild` to replay currently retained events. The first process baseline records only a count, so pre-existing process instances remain unknown until a lifecycle event is observed. Missing entities in a query window are never treated as removals. Each state record retains at most 64 evidence references and reports when older references were truncated; persisted projection writes are capped at 16 MiB and fail without overwriting the last valid snapshot. New snapshots carry SHA-256 integrity metadata and are verified when loaded; corrupted snapshots fail closed; `aie state --recover` restores the previous verified snapshot and replays later retained events, while `aie state --rebuild` replays all currently retained events.
+`aie state` incrementally updates a durable partial process/inventory projection; use `aie state --rebuild` to replay currently retained events. The first process baseline records only a count, so pre-existing process instances remain unknown until a lifecycle event is observed. Missing entities in a query window are never treated as removals. `aie prioritize` ranks projected records using transparent recency, active-state and ETW-confirmation features; its score is retrieval priority, not truth or calibrated confidence. Each state record retains at most 64 evidence references and reports when older references were truncated; persisted projection writes are capped at 16 MiB and fail without overwriting the last valid snapshot. New snapshots carry SHA-256 integrity metadata and are verified when loaded; corrupted snapshots fail closed; `aie state --recover` restores the previous verified snapshot and replays later retained events, while `aie state --rebuild` replays all currently retained events.
 
 ## Current limitations
 Default process lifecycle monitoring uses periodic user-mode snapshots and may miss short-lived processes. An opt-in bounded ETW capture command is now available and writes a raw .etl trace; an offline `aie etw-decode` path now converts tracerpt XML process start/stop records into normalized JSONL. Validate the XML schema and event coverage against real Windows ETL captures before relying on it operationally. A driver requires a separate threat model, signing, review, installation consent and removal plan.
