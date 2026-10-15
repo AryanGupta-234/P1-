@@ -66,7 +66,8 @@ Status vocabulary: DONE / IN_PROGRESS / BLOCKED / PLANNED. A task is DONE only w
 - [x] Add SHA-256 integrity metadata, one verified previous generation and explicit `aie state --recover`; corruption fails closed, recovery replays later events, and pre-integrity legacy snapshots remain readable.
 - [ ] Add state-aware compaction and recovery evaluation for corrupted or pruned histories.
 - [x] Add bounded deterministic context packets with explicit coverage, observation timestamps and evidence references; no inferred facts or implicit absence-as-removal semantics.
-- [ ] Evidence-backed relevance scoring and confidence calibration.
+- [x] Deterministic, explainable state relevance ranking using recency, active/present status and ETW confirmation; `aie prioritize` exposes ranked records and reason strings. Scores are retrieval priority, not calibrated confidence.
+- [ ] Calibrate ranking weights against a labeled retrieval/evaluation corpus and measure ranking quality.
 - [ ] Privacy-safe project/session context.
 - [ ] Synthetic evaluation corpus and false-positive/negative metrics.
 - [ ] Predictive state-change evaluation.
@@ -116,7 +117,8 @@ Status vocabulary: DONE / IN_PROGRESS / BLOCKED / PLANNED. A task is DONE only w
 3. Validate the ETW decoder against real Windows traces, confirm available loss counters and correlate ETW events with snapshot reconciliation.
 4. Validate the fixed Event Log allowlist and persisted-cursor recovery on Windows, then add real-time subscriptions and process/image correlation.
 5. Build UIA read-only inspector before any app-control actions.
-6. Validate incremental `aie state` checkpoints against real observer history; add snapshot compaction and a synthetic environmental-state evaluation corpus.
+6. Validate incremental `aie state` checkpoints against real observer history; design explicit state-aware compaction and a synthetic environmental-state evaluation corpus.
+7. Evaluate `aie prioritize` against labeled retrieval scenarios; calibrate weights only from measured results.
 
 ## Hardware/model constraints
 - Routine: `qwen2.5:3b-instruct`.
