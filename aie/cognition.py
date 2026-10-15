@@ -24,7 +24,7 @@ def build_cognitive_messages(
         raise ValueError(
             f"question exceeds {MAX_COGNITIVE_QUESTION_CHARS} characters"
         )
-    if isinstance(max_context_bytes, bool) or not 1 <= max_context_bytes <= 256 * 1024:
+    if isinstance(max_context_bytes, bool) or not isinstance(max_context_bytes, int) or not 1 <= max_context_bytes <= 256 * 1024:
         raise ValueError("max_context_bytes must be between 1 and 262144")
     try:
         serialized = json.dumps(
