@@ -10,6 +10,9 @@ from typing import Iterable
 from aie.contracts import AIEEvent
 
 
+MAX_STATE_SNAPSHOT_BYTES = 16 * 1024 * 1024
+
+
 class EventStore:
     def __init__(self, path: Path):
         self.path = path
@@ -126,6 +129,12 @@ class EventStore:
             raise ValueError("last_event_sequence must be zero or greater")
         if not isinstance(payload, str):
             raise ValueError("snapshot payload must be a string")
+        payload_size = len(payload.encode("utf-8"))
+        if payload_size > MAX_STATE_SNAPSHOT_BYTES:
+            raise ValueError(
+                f"snapshot is {payload_size} bytes; limit is {MAX_STATE_SNAPSHOT_BYTES}. "
+                "The previous snapshot was left unchanged."
+            )
         if not 1 <= schema_version <= 1000:
             raise ValueError("schema_version must be between 1 and 1000")
         with self._connect() as db:
