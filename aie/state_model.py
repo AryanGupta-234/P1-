@@ -117,6 +117,22 @@ def project_environment_state(events: Iterable[AIEEvent]) -> EnvironmentProjecti
             )
             continue
         if kind in {"process.started_observed", "process.replaced_observed"}:
+            if kind == "process.replaced_observed":
+                old_created = event.data.get("previous_create_time")
+                if old_created is not None:
+                    try:
+                        old_created = float(old_created)
+                    except (TypeError, ValueError):
+                        old_created = None
+                    if old_created is not None and math.isfinite(old_created) and old_created >= 0:
+                        old_key = (event.host_id, _pid(event), old_created)
+                        old_instance = processes.get(old_key)
+                        if old_instance is not None:
+                            old_instance.status = "replaced"
+                            old_instance.last_observed = max(
+                                old_instance.last_observed, event.timestamp
+                            )
+                            _append_evidence(old_instance.evidence_ids, event.event_id)
             key = _process_key(event)
             if key is None:
                 ignored += 1
