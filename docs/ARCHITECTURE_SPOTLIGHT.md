@@ -106,7 +106,7 @@ See [HARDWARE_PROFILE.md](HARDWARE_PROFILE.md) for the sanitized host baseline.
 3. Validate ETW decoding against real Windows captures; confirm trace-loss counters and reconcile ETW events with process snapshots.
 4. Validate the fixed Event Log allowlist and SQLite cursor recovery on Windows, then add real-time subscriptions and process/image correlation.
 5. Add app compatibility discovery and UIA read-only tree inspection.
-6. Validate the local chat and embedding adapters against the installed Ollama models; then begin UIA read-only inspection before any user-approved application actions behind a policy broker.
+6. Validate `aie ask` and `aie embed` against the installed Ollama models, including the Nomic vector dimension; then begin UIA read-only inspection before any user-approved application actions behind a policy broker.
 
 ## Spotlight maintenance
 At each implementation increment: update this file, update [ROADMAP.md](ROADMAP.md), add/adjust tests, and record actual validation. Never mark a task DONE based only on writing its interface.
