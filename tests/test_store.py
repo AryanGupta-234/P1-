@@ -173,8 +173,9 @@ def test_ingest_sequence_is_monotonic_across_pruning_and_late_imports(tmp_path):
     first_watermark = first_batch[-1][0]
 
     store.prune(keep_latest=0)
-    store.append(event("late-import", now - timedelta(days=2)))
-    next_batch = store.events_after_sequence(first_watermark, limit=10)
+    reopened = EventStore(store.path)
+    reopened.append(event("late-import", now - timedelta(days=2)))
+    next_batch = reopened.events_after_sequence(first_watermark, limit=10)
     assert len(next_batch) == 1
     assert next_batch[0][1].event_id == "late-import"
     assert next_batch[0][0] > first_watermark
