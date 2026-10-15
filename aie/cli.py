@@ -628,5 +628,22 @@ def memory_export(
     console.print(f"Exported {count} memory records to {output}")
 
 
+@app.command("memory-history")
+def memory_history(
+    memory_id: str = typer.Argument(...),
+    limit: int = typer.Option(20, min=1, max=100),
+    db: Path = typer.Option(database_path(), "--db", help="Local SQLite database."),
+) -> None:
+    """Review previous versions of a corrected memory record."""
+    from aie.memory import MemoryStore
+
+    try:
+        revisions = MemoryStore(db).history(memory_id, limit=limit)
+    except ValueError as exc:
+        console.print(f"[red]Memory history failed:[/red] {exc}")
+        raise typer.Exit(2) from exc
+    console.print_json(json.dumps(revisions, indent=2))
+
+
 if __name__ == "__main__":
     app()
