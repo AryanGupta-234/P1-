@@ -144,10 +144,12 @@ class OllamaClient:
             raise ValueError("embedding input must be a string or list of strings")
         if not texts or any(not isinstance(item, str) or not item for item in texts):
             raise ValueError("embedding input must contain non-empty strings")
-        if isinstance(expected_dimensions, bool):
+        if expected_dimensions is not None and (
+            isinstance(expected_dimensions, bool)
+            or not isinstance(expected_dimensions, int)
+            or expected_dimensions < 1
+        ):
             raise ValueError("expected_dimensions must be a positive integer")
-        if expected_dimensions is not None and expected_dimensions < 1:
-            raise ValueError("expected_dimensions must be positive")
         result = self._post(
             "/api/embed",
             {"model": model, "input": texts},
