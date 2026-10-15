@@ -175,7 +175,9 @@ def project_environment_state(events: Iterable[AIEEvent]) -> EnvironmentProjecti
 
         if kind.startswith("inventory.") and kind.endswith(".baseline"):
             collection = kind[len("inventory."):-len(".baseline")]
-            coverage[collection] = "partial: baseline event has collection count; per-item records follow when available"
+            coverage[collection] = (
+                "partial: collection count plus any entity-level records in this evidence window"
+            )
             continue
         if kind.startswith("inventory.") and kind.endswith((
             ".present_observed", ".added", ".changed", ".removed"
@@ -209,13 +211,18 @@ def project_environment_state(events: Iterable[AIEEvent]) -> EnvironmentProjecti
                 existing.current = current
                 existing.last_observed = max(existing.last_observed, event.timestamp)
                 _append_evidence(existing.evidence_ids, event.event_id)
-            coverage[collection] = "partial: observed entities only; failed or unobserved snapshots remain unknown"
+            coverage[collection] = (
+                "partial: observed entities only; failed or unobserved snapshots remain unknown"
+            )
             continue
 
         if kind == "windows.service.state_changed":
             service = event.data.get("service")
             state = event.data.get("state")
-            if not isinstance(service, str) or not service or not isinstance(state, str) or not state:
+            if (
+                not isinstance(service, str) or not service
+                or not isinstance(state, str) or not state
+            ):
                 ignored += 1
                 continue
             key = (event.host_id, "services", service)
