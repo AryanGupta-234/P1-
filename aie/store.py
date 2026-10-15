@@ -22,7 +22,7 @@ class EventStore:
             db.execute("""CREATE TABLE IF NOT EXISTS checkpoints (
                 checkpoint_key TEXT PRIMARY KEY, checkpoint_value TEXT NOT NULL,
                 updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)""")
-            db.execute("""CREATE TABLE IF NOT EXISTS state_snapshots (
+            db.execute("""CREATE TABLE IF NOT EXISTS state_snapshots_v2 (
                 snapshot_key TEXT PRIMARY KEY, schema_version INTEGER NOT NULL,
                 last_event_sequence INTEGER NOT NULL, payload TEXT NOT NULL,
                 updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)""")
@@ -106,9 +106,9 @@ class EventStore:
             raise ValueError("limit must be between 1 and 10000")
         with self._connect() as db:
             rows = db.execute(
-                "SELECT seq.ingest_seq, events.payload FROM events
+                """SELECT seq.ingest_seq, events.payload FROM events
                    JOIN event_ingest_seq AS seq ON seq.event_id = events.event_id
-                   WHERE seq.ingest_seq > ? ORDER BY seq.ingest_seq ASC LIMIT ?",
+                   WHERE seq.ingest_seq > ? ORDER BY seq.ingest_seq ASC LIMIT ?""",
                 (after_sequence, limit),
             ).fetchall()
         return [
@@ -130,7 +130,7 @@ class EventStore:
             raise ValueError("schema_version must be between 1 and 1000")
         with self._connect() as db:
             db.execute(
-                """INSERT INTO state_snapshots(
+                """INSERT INTO state_snapshots_v2(
                     snapshot_key, schema_version, last_event_sequence, payload, updated_at
                 ) VALUES(?, ?, ?, ?, CURRENT_TIMESTAMP)
                 ON CONFLICT(snapshot_key) DO UPDATE SET
@@ -148,7 +148,7 @@ class EventStore:
         with self._connect() as db:
             row = db.execute(
                 """SELECT schema_version, last_event_sequence, payload
-                   FROM state_snapshots WHERE snapshot_key = ?""",
+                   FROM state_snapshots_v2 WHERE snapshot_key = ?""",
                 (key,),
             ).fetchone()
         return (int(row[0]), int(row[1]), str(row[2])) if row else None
@@ -157,7 +157,7 @@ class EventStore:
         if not key or len(key) > 128:
             raise ValueError("snapshot key must contain 1..128 characters")
         with self._connect() as db:
-            db.execute("DELETE FROM state_snapshots WHERE snapshot_key = ?", (key,))
+            db.execute("DELETE FROM state_snapshots_v2 WHERE snapshot_key = ?", (key,))
 
     def recent(self, limit: int = 50) -> list[AIEEvent]:
         if not 1 <= limit <= 1000:
