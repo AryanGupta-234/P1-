@@ -22,6 +22,10 @@ class EventStore:
             db.execute("""CREATE TABLE IF NOT EXISTS checkpoints (
                 checkpoint_key TEXT PRIMARY KEY, checkpoint_value TEXT NOT NULL,
                 updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)""")
+            db.execute("""CREATE TABLE IF NOT EXISTS state_snapshots (
+                snapshot_key TEXT PRIMARY KEY, schema_version INTEGER NOT NULL,
+                last_event_rowid INTEGER NOT NULL, payload TEXT NOT NULL,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)""")
 
     def _connect(self) -> sqlite3.Connection:
         db = sqlite3.connect(self.path, timeout=10)
@@ -76,6 +80,68 @@ class EventStore:
                    updated_at=CURRENT_TIMESTAMP""",
                 (key, value),
             )
+
+
+    def events_after_rowid(
+        self, after_rowid: int = 0, *, limit: int = 10000
+    ) -> list[tuple[int, AIEEvent]]:
+        """Read events in durable SQLite ingestion order, including late imports."""
+        if isinstance(after_rowid, bool) or after_rowid < 0:
+            raise ValueError("after_rowid must be zero or greater")
+        if not 1 <= limit <= 10000:
+            raise ValueError("limit must be between 1 and 10000")
+        with self._connect() as db:
+            rows = db.execute(
+                "SELECT rowid, payload FROM events WHERE rowid > ? ORDER BY rowid ASC LIMIT ?",
+                (after_rowid, limit),
+            ).fetchall()
+        return [
+            (int(row[0]), AIEEvent.model_validate(json.loads(row[1])))
+            for row in rows
+        ]
+
+    def save_state_snapshot(
+        self, key: str, last_event_rowid: int, payload: str, *, schema_version: int = 1
+    ) -> None:
+        """Atomically persist a versioned projection and its ingestion watermark."""
+        if not key or len(key) > 128:
+            raise ValueError("snapshot key must contain 1..128 characters")
+        if isinstance(last_event_rowid, bool) or last_event_rowid < 0:
+            raise ValueError("last_event_rowid must be zero or greater")
+        if not isinstance(payload, str):
+            raise ValueError("snapshot payload must be a string")
+        if not 1 <= schema_version <= 1000:
+            raise ValueError("schema_version must be between 1 and 1000")
+        with self._connect() as db:
+            db.execute(
+                """INSERT INTO state_snapshots(
+                    snapshot_key, schema_version, last_event_rowid, payload, updated_at
+                ) VALUES(?, ?, ?, ?, CURRENT_TIMESTAMP)
+                ON CONFLICT(snapshot_key) DO UPDATE SET
+                    schema_version=excluded.schema_version,
+                    last_event_rowid=excluded.last_event_rowid,
+                    payload=excluded.payload,
+                    updated_at=CURRENT_TIMESTAMP""",
+                (key, schema_version, last_event_rowid, payload),
+            )
+
+    def load_state_snapshot(self, key: str) -> tuple[int, int, str] | None:
+        """Return (schema version, ingestion watermark, JSON payload)."""
+        if not key or len(key) > 128:
+            raise ValueError("snapshot key must contain 1..128 characters")
+        with self._connect() as db:
+            row = db.execute(
+                """SELECT schema_version, last_event_rowid, payload
+                   FROM state_snapshots WHERE snapshot_key = ?""",
+                (key,),
+            ).fetchone()
+        return (int(row[0]), int(row[1]), str(row[2])) if row else None
+
+    def delete_state_snapshot(self, key: str) -> None:
+        if not key or len(key) > 128:
+            raise ValueError("snapshot key must contain 1..128 characters")
+        with self._connect() as db:
+            db.execute("DELETE FROM state_snapshots WHERE snapshot_key = ?", (key,))
 
     def recent(self, limit: int = 50) -> list[AIEEvent]:
         if not 1 <= limit <= 1000:
