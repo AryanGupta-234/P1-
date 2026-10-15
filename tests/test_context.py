@@ -50,3 +50,16 @@ def test_context_exposes_evidence_reference_truncation():
     process.evidence_truncated = True
     packet = build_environment_context(projection, max_processes=1)
     assert packet["processes"][0]["evidence_truncated"] is True
+
+
+
+def test_context_defensively_caps_legacy_oversized_evidence_lists():
+    projection = sample_projection()
+    process = projection.processes[("host", 1, 1.0)]
+    process.evidence_ids = [f"legacy-{index}" for index in range(70)]
+    packet = build_environment_context(projection, max_processes=1)
+    item = packet["processes"][0]
+    assert item["evidence_ids"] == [f"legacy-{index}" for index in range(6, 70)]
+    assert item["evidence_truncated"] is True
+    assert packet["semantics"]["evidence_reference_retention"] == "latest_64_unique_per_state"
+    assert packet["semantics"]["truncation_marker_field"] == "evidence_truncated"
