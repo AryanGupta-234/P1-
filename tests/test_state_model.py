@@ -25,6 +25,19 @@ def test_process_projection_uses_host_pid_and_creation_time():
     assert projection.processes[("host-a", 42, 20.0)].status == "running"
 
 
+def test_pid_replacement_closes_only_the_exact_previous_instance():
+    events = [
+        event("start-old", "process.started_observed", 1,
+              data={"pid": 42, "create_time": 10.0}),
+        event("replace", "process.replaced_observed", 2,
+              data={"pid": 42, "create_time": 20.0, "previous_create_time": 10.0}),
+    ]
+    projection = project_environment_state(events)
+    assert projection.processes[("host-a", 42, 10.0)].status == "replaced"
+    assert projection.processes[("host-a", 42, 20.0)].status == "running"
+    assert "replace" in projection.processes[("host-a", 42, 10.0)].evidence_ids
+
+
 def test_pid_only_stop_cannot_close_a_process_instance():
     events = [
         event("start", "process.started_observed", 1, data={"pid": 42, "create_time": 10.0}),
