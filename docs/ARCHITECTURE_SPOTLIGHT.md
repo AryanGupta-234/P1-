@@ -86,7 +86,7 @@ See [HARDWARE_PROFILE.md](HARDWARE_PROFILE.md) for the sanitized host baseline.
 - UI Automation client, app-specific automation adapters and action execution.
 - State-aware compaction and recovery evaluation across pruning/corruption edge cases, broader environmental state semantics, relationship modeling and synthetic projection evaluation. Per-entity evidence references are bounded at 64 IDs with explicit truncation metadata, and snapshot writes have a fail-safe 16 MiB payload ceiling. `aie state` persists a versioned projection and resumes by monotonic SQLite ingestion sequence; `aie context` emits bounded facts with provenance but does not reason over them. Initial process baseline coverage remains count-only.
 - End-to-end local Ollama invocation against the target installation, Nomic live dimension confirmation, memory consolidation and cloud gateway.
-- Policy broker, sandboxed actions and autonomous workflows.
+- Full proposal orchestration, sandbox implementation, UIA adapters and autonomous workflows; a non-executing policy evaluator foundation is implemented.
 - Custom kernel driver (not an initial milestone; separate signed-driver research only if ETW cannot meet a demonstrated need).
 
 ## Hard architectural boundaries
