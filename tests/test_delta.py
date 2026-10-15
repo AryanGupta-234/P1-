@@ -20,9 +20,14 @@ def update(instance, items):
 
 def test_first_snapshot_only_establishes_baseline():
     events = update(tracker(), [{"name": "Spooler", "status": "running"}])
-    assert len(events) == 1
-    assert events[0].event_type == "inventory.services.baseline"
-    assert events[0].data == {"item_count": 1}
+    assert [event.event_type for event in events] == [
+        "inventory.services.baseline",
+        "inventory.services.present_observed",
+    ]
+    assert events[0].data == {"item_count": 1, "coverage": "count_only"}
+    assert events[1].entity.stable_id == "Spooler"
+    assert events[1].data["current"]["status"] == "running"
+    assert events[1].evidence_kind == "observed"
 
 
 def test_detects_add_remove_and_change():
