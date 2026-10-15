@@ -262,6 +262,7 @@ class EventStore:
         with self._connect() as db:
             db.execute("DELETE FROM state_snapshots_v2 WHERE snapshot_key = ?", (key,))
             db.execute("DELETE FROM state_snapshot_integrity WHERE snapshot_key = ?", (key,))
+            db.execute("DELETE FROM state_snapshot_backups WHERE snapshot_key = ?", (key,))
 
     def recent(self, limit: int = 50) -> list[AIEEvent]:
         if not 1 <= limit <= 1000:
