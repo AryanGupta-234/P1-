@@ -76,6 +76,35 @@ def models() -> None:
         console.print("  No local Ollama response. Start Ollama; AIE will not pull models.")
 
 
+@app.command()
+def ask(
+    prompt: str = typer.Argument(..., help="Text prompt sent only to the selected local model."),
+    task: str = typer.Option("routine", help="Model policy: routine or complex."),
+    timeout: float = typer.Option(60.0, min=1.0, max=300.0),
+) -> None:
+    """Run one bounded, non-streaming chat request against a selected local Ollama model."""
+    from aie.ollama import OllamaClient, OllamaError
+    from aie.model_policy import choose_local_model
+
+    if task not in {"routine", "complex"}:
+        raise typer.BadParameter("task must be routine or complex")
+    installed = discover_local_models()
+    memory = runtime_profile()["memory_available_gib"]
+    decision = choose_local_model(task, installed, memory)
+    if not decision.available or decision.selected_model is None:
+        console.print(f"[yellow]No eligible local model:[/yellow] {decision.reason}")
+        raise typer.Exit(2)
+    try:
+        result = OllamaClient(timeout=timeout).chat(
+            decision.selected_model,
+            [{"role": "user", "content": prompt}],
+        )
+    except (OllamaError, ValueError) as exc:
+        console.print(f"[red]Local inference failed:[/red] {exc}")
+        raise typer.Exit(2) from exc
+    console.print(result.content)
+
+
 @app.command("etw-catalog")
 def etw_catalog(
     contains: str = typer.Option("Kernel", help="Filter provider names; use an empty string for all."),
