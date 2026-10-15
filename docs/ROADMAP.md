@@ -8,8 +8,8 @@ Status vocabulary: DONE / IN_PROGRESS / BLOCKED / PLANNED. A task is DONE only w
 |---|---|---|---|
 | M0 | Architecture and foundation | IN_PROGRESS | Contracts, package, CLI, docs and Windows CI workflow; CI must execute successfully |
 | M1 | Windows environment observer | IN_PROGRESS | Host/process baseline, app/service/network/task inventory, SQLite and explicit retention API |
-| M2 | Context intelligence | IN_PROGRESS | Conservative process-start evidence correlation exists as a tested library; store/CLI integration and broader context modeling remain |
-| M3 | Cognitive core | IN_PROGRESS | Local model discovery and routing policy exist; actual model adapters/planning remain |
+| M2 | Context intelligence | IN_PROGRESS | Conservative process-start correlation is integrated with SQLite/CLI; environmental state modeling and evaluation remain |
+| M3 | Cognitive core | IN_PROGRESS | Hardware-aware model discovery plus bounded local Ollama chat/embedding adapters and `aie ask`; planning and evaluation remain |
 | M4 | Persistent intelligence | PLANNED | Provenance-aware memory, consolidation and retrieval evaluation |
 | M5 | Controlled autonomy | PLANNED | UIA/app adapters, capability broker, policy, sandbox, audit and recovery |
 | M6 | Generalization research | PLANNED | Held-out transfer and novel-task benchmarks |
@@ -68,8 +68,8 @@ Status vocabulary: DONE / IN_PROGRESS / BLOCKED / PLANNED. A task is DONE only w
 - [x] Discover installed models through local loopback Ollama `/api/tags`.
 - [x] Select routine Qwen 2.5 3B, complex Qwen 2.5 7B with 7.5 GiB free-memory gate, and Nomic embeddings.
 - [x] Never automatically pull models; reject non-loopback Ollama endpoints.
-- [ ] Add Ollama chat adapter with structured output, timeouts and cancellation.
-- [ ] Add Ollama embedding adapter and Nomic dimension validation.
+- [x] Add a local-only Ollama chat adapter with non-streaming structured-output support, bounded response size, timeouts and cooperative cancellation checks; expose `aie ask` with hardware-aware model selection.
+- [x] Add a local-only Ollama embedding adapter with finite-vector, batch-count and caller-specified dimension validation; Nomic live-dimension confirmation remains pending.
 - [ ] Add task complexity classification and model selection evaluation.
 - [ ] Add optional cloud adapter behind an explicit per-task data-egress policy.
 - [ ] Add context budgets, latency/cost metrics and deterministic fallback.
