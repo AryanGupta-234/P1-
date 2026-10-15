@@ -2,7 +2,7 @@
 
 Status vocabulary: DONE / IN_PROGRESS / BLOCKED / PLANNED. A task is DONE only when code exists and its tests or documented validation support the claim.
 
-**Last updated:** 2026-10-14
+**Last updated:** 2026-10-15
 
 | ID | Milestone | Status | Current evidence / exit criteria |
 |---|---|---|---|
