@@ -99,3 +99,20 @@ def test_inventory_removal_is_explicit_and_unknown_absence_is_not_removal():
     projection = project_environment_state(events)
     assert projection.entities[("host-a", "services", "Svc")].status == "removed"
     assert projection.coverage["services"].startswith("partial")
+
+
+def test_projection_serialization_round_trip_and_incremental_update():
+    first = event(
+        "start", "process.started_observed", 1,
+        data={"pid": 42, "create_time": 10.0},
+    )
+    initial = project_environment_state([first])
+    restored = type(initial).from_dict(initial.to_dict())
+    stop = event(
+        "stop", "process.stopped_observed", 2,
+        data={"pid": 42, "create_time": 10.0},
+    )
+    resumed = project_environment_state([stop], initial=restored)
+    instance = resumed.processes[("host-a", 42, 10.0)]
+    assert instance.status == "stopped"
+    assert instance.evidence_ids == ["start", "stop"]
