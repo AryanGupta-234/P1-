@@ -95,8 +95,10 @@ def evaluate_proposal(
 ) -> PolicyDecision:
     """Evaluate capability, target, sandbox, budget and approval gates; never execute."""
     now = now or datetime.now(timezone.utc)
-    if now.tzinfo is None or now.utcoffset() is None:
+    if not isinstance(now, datetime) or now.tzinfo is None or now.utcoffset() is None:
         raise ValueError("now must be timezone-aware")
+    if not isinstance(proposal, ActionProposal):
+        raise ValueError("proposal must be an ActionProposal")
     if not isinstance(proposal.action, str) or not isinstance(proposal.target, str):
         raise ValueError("proposal action and target must be strings")
     if not proposal.action or not proposal.target or not isinstance(proposal.parameters, dict):
