@@ -25,6 +25,7 @@ aie hardware
 aie models
 # Optional local inference after Ollama + a supported model are installed:
 aie ask "Summarize the current system state"
+aie embed "AIE local embedding smoke test"
 aie inventory --output inventory.json
 aie etw-catalog --contains Kernel
 # Optional, bounded ETW process trace (writes a new .etl file):
