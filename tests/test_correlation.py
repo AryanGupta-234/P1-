@@ -108,3 +108,18 @@ def test_correlations_persist_idempotently_from_sqlite_history(tmp_path):
     replayed = correlate_process_starts(store.events_since(since))
     assert store.append_many(replayed) == 0
     assert store.count() == 3
+
+
+def test_correlation_rejects_fractional_pid_and_missing_image_identity():
+    etw, snapshot = _pair()
+    fractional = etw.model_copy(update={
+        "event_id": "fractional-pid",
+        "data": {"pid": 42.5, "image_name": "demo.exe"},
+    })
+    fallback_image = etw.model_copy(update={
+        "event_id": "fallback-image",
+        "entity": EntityRef(type="process", name="pid:42", stable_id="42"),
+        "data": {"pid": 42},
+    })
+    assert correlate_process_starts([fractional, snapshot]) == []
+    assert correlate_process_starts([fallback_image, snapshot]) == []
