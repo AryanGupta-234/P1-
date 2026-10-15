@@ -135,3 +135,69 @@ def test_late_historical_inventory_event_does_not_regress_current_state():
     assert service.current["status"] == "stopped"
     assert service.last_observed == current.timestamp
     assert service.evidence_ids == ["current", "late"]
+
+
+
+def test_process_evidence_history_is_bounded_and_marks_truncation():
+    from aie.state_model import MAX_EVIDENCE_IDS_PER_STATE
+
+    events = [
+        event(
+            f"evidence-{index}",
+            "process.started_observed",
+            index + 1,
+            data={"pid": 42, "create_time": 10.0},
+        )
+        for index in range(MAX_EVIDENCE_IDS_PER_STATE + 5)
+    ]
+    projection = project_environment_state(events)
+    instance = projection.processes[("host-a", 42, 10.0)]
+    assert len(instance.evidence_ids) == MAX_EVIDENCE_IDS_PER_STATE
+    assert instance.evidence_ids[0] == "evidence-5"
+    assert instance.evidence_ids[-1] == f"evidence-{MAX_EVIDENCE_IDS_PER_STATE + 4}"
+    assert instance.evidence_truncated is True
+
+
+def test_entity_evidence_history_is_bounded_and_marks_truncation():
+    from aie.state_model import MAX_EVIDENCE_IDS_PER_STATE
+
+    events = [
+        event(
+            f"entity-{index}",
+            "inventory.services.changed",
+            index + 1,
+            entity_type="service",
+            name="Spooler",
+            stable="Spooler",
+            data={"current": {"name": "Spooler", "status": str(index)}},
+        )
+        for index in range(MAX_EVIDENCE_IDS_PER_STATE + 3)
+    ]
+    projection = project_environment_state(events)
+    entity = projection.entities[("host-a", "services", "Spooler")]
+    assert len(entity.evidence_ids) == MAX_EVIDENCE_IDS_PER_STATE
+    assert entity.evidence_ids[0] == "entity-3"
+    assert entity.evidence_truncated is True
+
+
+def test_legacy_projection_snapshot_defaults_evidence_truncation_to_false():
+    when = datetime(2026, 1, 1, tzinfo=timezone.utc).isoformat()
+    payload = {
+        "processes": [{
+            "host_id": "host-a", "pid": 42, "create_time": 10.0,
+            "image": "demo.exe", "status": "running",
+            "first_observed": when, "last_observed": when,
+            "evidence_ids": ["start"], "etw_confirmed": False,
+        }],
+        "entities": [{
+            "host_id": "host-a", "collection": "services",
+            "identity": "Spooler", "entity_type": "service",
+            "name": "Spooler", "status": "present", "current": {},
+            "first_observed": when, "last_observed": when,
+            "evidence_ids": ["service"],
+        }],
+        "coverage": {}, "ignored_events": 0,
+    }
+    restored = type(project_environment_state([])).from_dict(payload)
+    assert restored.processes[("host-a", 42, 10.0)].evidence_truncated is False
+    assert restored.entities[("host-a", "services", "Spooler")].evidence_truncated is False
