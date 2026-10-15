@@ -40,3 +40,13 @@ def test_context_packet_is_bounded_and_keeps_provenance():
 def test_context_packet_rejects_unbounded_limits(kwargs):
     with pytest.raises(ValueError):
         build_environment_context(sample_projection(), **kwargs)
+
+
+
+def test_context_exposes_evidence_reference_truncation():
+    projection = sample_projection()
+    process = projection.processes[("host", 1, 1.0)]
+    process.evidence_ids = [f"event-{index}" for index in range(64)]
+    process.evidence_truncated = True
+    packet = build_environment_context(projection, max_processes=1)
+    assert packet["processes"][0]["evidence_truncated"] is True
