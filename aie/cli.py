@@ -330,11 +330,15 @@ def state(
     )
     if batch:
         watermark = batch[-1][0]
-    store.save_state_snapshot(
-        "aie.environment.v1", watermark,
-        json.dumps(projection.to_dict(), separators=(",", ":"), allow_nan=False),
-        schema_version=1,
-    )
+    try:
+        store.save_state_snapshot(
+            "aie.environment.v1", watermark,
+            json.dumps(projection.to_dict(), separators=(",", ":"), allow_nan=False),
+            schema_version=1,
+        )
+    except ValueError as exc:
+        console.print(f"[red]Projection snapshot was not saved:[/red] {exc}")
+        raise typer.Exit(2) from exc
     pending = bool(store.events_after_sequence(watermark, limit=1))
     result = {
         "projection_version": 1,
