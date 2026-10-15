@@ -105,6 +105,34 @@ def ask(
     console.print(result.content)
 
 
+@app.command()
+def embed(
+    text: str = typer.Argument(..., help="Text sent only to the local embedding model."),
+    expected_dimensions: int | None = typer.Option(None, min=1),
+    timeout: float = typer.Option(60.0, min=1.0, max=300.0),
+) -> None:
+    """Check local embedding inference and report dimensions without printing vectors."""
+    from aie.ollama import OllamaClient, OllamaError
+
+    installed = discover_local_models()
+    decision = choose_local_model("embedding", installed)
+    if not decision.available or decision.selected_model is None:
+        console.print("[yellow]No eligible local embedding model is installed.[/yellow]")
+        raise typer.Exit(2)
+    try:
+        result = OllamaClient(timeout=timeout).embed(
+            decision.selected_model,
+            text,
+            expected_dimensions=expected_dimensions,
+        )
+    except (OllamaError, ValueError) as exc:
+        console.print(f"[red]Local embedding failed:[/red] {exc}")
+        raise typer.Exit(2) from exc
+    console.print(
+        f"Model: {result.model} | dimensions: {result.dimensions} | vectors: 1"
+    )
+
+
 @app.command("etw-catalog")
 def etw_catalog(
     contains: str = typer.Option("Kernel", help="Filter provider names; use an empty string for all."),
