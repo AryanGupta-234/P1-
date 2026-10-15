@@ -307,7 +307,7 @@ def state(
         False, "--rebuild", help="Replay all currently retained events from the beginning."
     ),
     recover: bool = typer.Option(
-        False, "--recover", help="Restore the previous verified snapshot before replaying new events."
+        False, "--recover", help="Recover from a missing or corrupt snapshot using the previous verified generation."
     ),
     db: Path = typer.Option(database_path(), "--db", help="SQLite event store."),
 ) -> None:
@@ -415,6 +415,39 @@ def prune(
     else:
         deleted = store.prune(keep_latest=keep_latest)
     console.print(f"Deleted {deleted} events. Remaining: {store.count()}")
+
+
+@app.command()
+def prioritize(
+    limit: int = typer.Option(50, min=1, max=1000, help="Maximum ranked state records."),
+    db: Path = typer.Option(database_path(), "--db", help="SQLite event store."),
+) -> None:
+    """Rank observed state by transparent recency and operational-salience heuristics."""
+    from aie.relevance import rank_environment_state
+    from aie.state_model import EnvironmentProjection
+
+    try:
+        saved = EventStore(db).load_state_snapshot("aie.environment.v1")
+    except ValueError as exc:
+        console.print(f"[red]Saved projection integrity check failed:[/red] {exc}")
+        raise typer.Exit(2) from exc
+    if saved is None:
+        console.print("No saved projection. Run aie state first.")
+        raise typer.Exit(2)
+    version, _, payload = saved
+    if version != 1:
+        console.print("[red]Unsupported environment snapshot version.[/red]")
+        raise typer.Exit(2)
+    try:
+        projection = EnvironmentProjection.from_dict(json.loads(payload))
+        ranked = rank_environment_state(projection, limit=limit)
+    except (ValueError, TypeError, KeyError) as exc:
+        console.print(f"[red]Saved projection is invalid:[/red] {exc}")
+        raise typer.Exit(2) from exc
+    console.print_json(json.dumps({
+        "ranking_semantics": "retrieval_priority_not_truth_or_calibrated_confidence",
+        "records": ranked,
+    }, indent=2))
 
 
 if __name__ == "__main__":
