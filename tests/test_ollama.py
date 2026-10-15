@@ -173,3 +173,32 @@ def test_oversized_response_is_rejected():
     client = OllamaClient(opener=lambda request, timeout: LargeResponse({}))
     with pytest.raises(OllamaError, match="4 MiB"):
         client.chat("model", [{"role": "user", "content": "hi"}])
+
+
+def test_chat_rejects_non_boolean_completion_metadata():
+    client = OllamaClient(opener=fake_opener({
+        "message": {"content": "hello"},
+        "done": "false",
+    }))
+    with pytest.raises(OllamaError, match="boolean done"):
+        client.chat("model", [{"role": "user", "content": "hi"}])
+
+
+def test_request_payload_is_bounded_before_network_call():
+    seen = []
+    client = OllamaClient(opener=fake_opener({}, seen))
+    with pytest.raises(ValueError, match="1 MiB"):
+        client.chat("model", [{"role": "user", "content": "x" * (1024 * 1024)}])
+    assert seen == []
+
+
+def test_request_rejects_non_finite_option_values():
+    seen = []
+    client = OllamaClient(opener=fake_opener({}, seen))
+    with pytest.raises(ValueError, match="finite JSON"):
+        client.chat(
+            "model",
+            [{"role": "user", "content": "hi"}],
+            options={"temperature": float("nan")},
+        )
+    assert seen == []
