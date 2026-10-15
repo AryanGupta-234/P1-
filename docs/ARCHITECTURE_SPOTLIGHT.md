@@ -71,6 +71,7 @@ See [HARDWARE_PROFILE.md](HARDWARE_PROFILE.md) for the sanitized host baseline.
 - Opt-in `aie etw-capture PATH.etl --duration N` starts a bounded `Microsoft-Windows-Kernel-Process` trace using Windows `logman`, refuses output overwrite, caps the ETL file at 256 MB by default, bounds ETW buffers (64 KB × 16–64 buffers by default), and always attempts to stop the named session on context exit. `tracerpt` XML can then be normalized with `aie etw-decode INPUT.xml OUTPUT.jsonl`; the streaming decoder clears parsed XML nodes to bound memory, accepts only Kernel-Process event IDs 1/2, records PID/parent PID and image basename, and deliberately discards command lines. Decoded events are assigned deterministic IDs and batch-imported into SQLite, so reprocessing the same trace is idempotent. `aie etw-decode` also reports `EventsLost` and buffer-loss counters when the tracerpt XML header exposes them; confirm those fields on real Windows traces. Schema validation and snapshot reconciliation remain pending.
 - Conservative ETW process-start correlation: `aie correlate --since-minutes N` reads a bounded chronological SQLite history window, matches only same-host, same-PID, same-image observations whose process creation time is within a bounded tolerance of the ETW start timestamp, and persists deterministic derived evidence with both source event IDs. Re-running is idempotent. PID-only stop correlation is deliberately excluded because PID reuse makes it ambiguous.
 - Hardware runtime probe and local loopback-only Ollama model discovery/model selection.
+- `aie/ollama.py`: local-only synchronous Ollama `/api/chat` and `/api/embed` adapters; non-streaming chat, optional JSON/schema format, no tool-call execution, 4 MiB response cap, finite timeout, cooperative cancellation checks, embedding batch/count/finiteness/dimension validation. `aie ask` selects an already-installed routine/complex model through the existing live-memory policy. No model pulls or remote endpoints.
 - Windows CI workflow plus synthetic tests (CI execution still needs confirmation).
 
 ## Not implemented yet
@@ -82,7 +83,7 @@ See [HARDWARE_PROFILE.md](HARDWARE_PROFILE.md) for the sanitized host baseline.
 - Executable path/signature discovery and application adapter registry.
 - UI Automation client, app-specific automation adapters and action execution.
 - Broader environmental state model and contextual reasoning; process-start correlation is integrated but not yet validated against real Windows ETW traces.
-- Actual Ollama chat/embedding invocation, memory consolidation and cloud gateway.
+- End-to-end local Ollama invocation against the target installation, Nomic live dimension confirmation, memory consolidation and cloud gateway.
 - Policy broker, sandboxed actions and autonomous workflows.
 - Custom kernel driver (not an initial milestone; separate signed-driver research only if ETW cannot meet a demonstrated need).
 
@@ -105,7 +106,7 @@ See [HARDWARE_PROFILE.md](HARDWARE_PROFILE.md) for the sanitized host baseline.
 3. Validate ETW decoding against real Windows captures; confirm trace-loss counters and reconcile ETW events with process snapshots.
 4. Validate the fixed Event Log allowlist and SQLite cursor recovery on Windows, then add real-time subscriptions and process/image correlation.
 5. Add app compatibility discovery and UIA read-only tree inspection.
-6. Only then begin user-approved application actions behind a policy broker.
+6. Validate the local chat and embedding adapters against the installed Ollama models; then begin UIA read-only inspection before any user-approved application actions behind a policy broker.
 
 ## Spotlight maintenance
 At each implementation increment: update this file, update [ROADMAP.md](ROADMAP.md), add/adjust tests, and record actual validation. Never mark a task DONE based only on writing its interface.
