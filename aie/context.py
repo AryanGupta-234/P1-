@@ -53,7 +53,7 @@ def build_environment_context(
                 "last_observed": observed(item.last_observed),
                 "etw_confirmed": item.etw_confirmed,
                 "evidence_ids": list(item.evidence_ids),
-                "evidence_truncated": item.evidence_truncated,
+                "evidence_truncated": getattr(item, "evidence_truncated", False),
             }
             for item in selected_processes
         ],
@@ -65,7 +65,7 @@ def build_environment_context(
                 "first_observed": observed(item.first_observed),
                 "last_observed": observed(item.last_observed),
                 "evidence_ids": list(item.evidence_ids),
-                "evidence_truncated": item.evidence_truncated,
+                "evidence_truncated": getattr(item, "evidence_truncated", False),
             }
             for item in selected_entities
         ],
