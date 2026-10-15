@@ -33,6 +33,7 @@ aie etw-capture .\\traces\\process.etl --duration 60
 tracerpt .\\traces\\process.etl -o .\\traces\\process.xml -of XML -y
 aie etw-decode .\\traces\\process.xml .\\traces\\process-events.jsonl  # imports into SQLite; reports loss counters if present
 aie correlate --since-minutes 1440  # correlate ETW starts with matching process snapshots
+aie state --since-minutes 1440      # project retained evidence into partial environment state
 aie observe --duration 30 --jsonl observations.jsonl
 aie export-events archived-events.jsonl
 # Create .\\aie-pause to pause; remove it to resume:
@@ -44,6 +45,8 @@ The observer is read-only and stores events under %LOCALAPPDATA%\AIE. Event coll
 - `aie/`: contracts, observer, SQLite store and CLI.
 - `docs/`: architecture spotlight, roadmap, hardware profile, Windows automation strategy and security.
 - `tests/`: deterministic synthetic tests.
+
+`aie state` replays a bounded retained-event window into a partial process/inventory projection. The first process baseline records only a count, so pre-existing process instances remain unknown until a lifecycle event is observed. Missing entities in a query window are never treated as removals.
 
 ## Current limitations
 Default process lifecycle monitoring uses periodic user-mode snapshots and may miss short-lived processes. An opt-in bounded ETW capture command is now available and writes a raw .etl trace; an offline `aie etw-decode` path now converts tracerpt XML process start/stop records into normalized JSONL. Validate the XML schema and event coverage against real Windows ETL captures before relying on it operationally. A driver requires a separate threat model, signing, review, installation consent and removal plan.
