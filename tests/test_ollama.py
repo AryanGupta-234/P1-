@@ -7,6 +7,7 @@ from aie.ollama import (
     OllamaCancelled,
     OllamaClient,
     OllamaError,
+    _NoRedirectHandler,
 )
 
 
@@ -127,6 +128,8 @@ def test_cancellation_during_request_discards_response():
     "https://example.com",
     "http://user:pass@127.0.0.1:11434",
     "http://127.0.0.1:11434?redirect=1",
+    "http://127.0.0.1:99999",
+    "http://127.0.0.1:11434/custom-path",
 ])
 def test_client_rejects_non_loopback_or_ambiguous_urls(url):
     with pytest.raises(ValueError):
@@ -150,3 +153,23 @@ def test_embeddings_reject_boolean_dimension():
     client = OllamaClient(opener=fake_opener({}))
     with pytest.raises(ValueError):
         client.embed("model", "text", expected_dimensions=True)
+
+
+def test_redirects_are_never_followed():
+    handler = _NoRedirectHandler()
+    request = __import__("urllib.request", fromlist=["Request"]).Request(
+        "http://127.0.0.1:11434/api/chat"
+    )
+    assert handler.redirect_request(
+        request, None, 302, "Found", {}, "http://example.com/collect"
+    ) is None
+
+
+def test_oversized_response_is_rejected():
+    class LargeResponse(Response):
+        def read(self, limit):
+            return b"x" * limit
+
+    client = OllamaClient(opener=lambda request, timeout: LargeResponse({}))
+    with pytest.raises(OllamaError, match="4 MiB"):
+        client.chat("model", [{"role": "user", "content": "hi"}])
