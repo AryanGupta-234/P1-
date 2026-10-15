@@ -112,3 +112,13 @@ See [HARDWARE_PROFILE.md](HARDWARE_PROFILE.md) for the sanitized host baseline.
 
 ## Spotlight maintenance
 At each implementation increment: update this file, update [ROADMAP.md](ROADMAP.md), add/adjust tests, and record actual validation. Never mark a task DONE based only on writing its interface.
+
+
+## Additional foundations implemented — 2026-10-16
+
+- **Context ranking:** `aie prioritize` ranks projected state with deterministic recency, active/present and ETW-confirmation features. The score is retrieval priority, not calibrated confidence or truth.
+- **Read-only cognition:** `aie think` assembles a bounded JSON evidence packet and calls only an eligible loopback Ollama model. Observed strings are untrusted data; there is no tool/action channel.
+- **Persistent memory:** explicit working/episodic/semantic/procedural/prospective records in SQLite, with provenance IDs, confidence, sensitivity, verification, tags, access count and optional TTL. Search excludes sensitive records by default. Corrections preserve immutable previous versions; JSONL export is explicit and sensitive export requires opt-in. TTL cleanup removes revision history too.
+- **Policy foundation:** `aie.policy` is a non-executing evaluator. It requires exact action capabilities, verified targets, sandbox availability for writes, bounded action budgets and expiring approvals bound to the exact proposal digest. No UIA or OS action executor exists.
+
+**Validation still outstanding:** all new tests are authored but have not been run. Windows-host validation, Ollama quality/latency, memory retrieval evaluation, policy adversarial evaluation and end-to-end recovery remain open.
