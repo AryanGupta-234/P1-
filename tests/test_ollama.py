@@ -133,7 +133,20 @@ def test_client_rejects_non_loopback_or_ambiguous_urls(url):
         OllamaClient(base_url=url)
 
 
-@pytest.mark.parametrize("timeout", [0, -1, float("inf"), float("nan")])
+@pytest.mark.parametrize("timeout", [0, -1, 601, True, float("inf"), float("nan")])
 def test_client_rejects_invalid_timeouts(timeout):
     with pytest.raises(ValueError):
         OllamaClient(timeout=timeout)
+
+
+@pytest.mark.parametrize("inputs", [[], 42, ["valid", ""]])
+def test_embeddings_reject_invalid_input_values(inputs):
+    client = OllamaClient(opener=fake_opener({}))
+    with pytest.raises(ValueError):
+        client.embed("model", inputs)
+
+
+def test_embeddings_reject_boolean_dimension():
+    client = OllamaClient(opener=fake_opener({}))
+    with pytest.raises(ValueError):
+        client.embed("model", "text", expected_dimensions=True)
