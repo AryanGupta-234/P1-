@@ -134,7 +134,7 @@ class MemoryStore:
             raise ValueError("query must be a string of at most 1000 characters")
         if kind is not None and kind not in MEMORY_KINDS:
             raise ValueError("invalid memory kind")
-        if not 1 <= limit <= 100:
+        if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 100:
             raise ValueError("limit must be between 1 and 100")
         now = datetime.now(timezone.utc).isoformat()
         clauses = ["(expires_at IS NULL OR expires_at > ?)"]
