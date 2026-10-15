@@ -82,7 +82,8 @@ class EventStore:
             raise ValueError("limit must be between 1 and 1000")
         with self._connect() as db:
             rows = db.execute(
-                "SELECT payload FROM events ORDER BY julianday(timestamp) DESC, event_id DESC LIMIT ?",
+                """SELECT payload FROM events
+                   ORDER BY julianday(timestamp) DESC, event_id DESC LIMIT ?""",
                 (limit,),
             ).fetchall()
         return [AIEEvent.model_validate(json.loads(row[0])) for row in rows]
