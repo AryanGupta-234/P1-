@@ -45,6 +45,16 @@ class MemoryStore:
             db.execute(
                 "CREATE INDEX IF NOT EXISTS idx_memories_expiry ON memories(expires_at)"
             )
+            db.execute("""CREATE TABLE IF NOT EXISTS memory_revisions (
+                revision_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                memory_id TEXT NOT NULL,
+                previous_json TEXT NOT NULL,
+                revised_at TEXT NOT NULL
+            )""")
+            db.execute(
+                "CREATE INDEX IF NOT EXISTS idx_memory_revisions_id "
+                "ON memory_revisions(memory_id, revision_id DESC)"
+            )
 
     def _connect(self) -> sqlite3.Connection:
         db = sqlite3.connect(self.path, timeout=10)
@@ -205,11 +215,41 @@ class MemoryStore:
         updates["updated_at"] = datetime.now(timezone.utc).isoformat()
         assignments = ", ".join(f"{field} = ?" for field in updates)
         with self._connect() as db:
-            cursor = db.execute(
+            previous = db.execute(
+                "SELECT * FROM memories WHERE memory_id = ?", (memory_id,)
+            ).fetchone()
+            if previous is None:
+                return False
+            db.execute(
+                "INSERT INTO memory_revisions(memory_id, previous_json, revised_at) VALUES(?, ?, ?)",
+                (
+                    memory_id,
+                    json.dumps(_decode(previous), ensure_ascii=False, allow_nan=False),
+                    updates["updated_at"],
+                ),
+            )
+            db.execute(
                 f"UPDATE memories SET {assignments} WHERE memory_id = ?",
                 (*updates.values(), memory_id),
             )
-            return cursor.rowcount == 1
+            return True
+
+    def history(self, memory_id: str, *, limit: int = 20) -> list[dict[str, Any]]:
+        """Return prior versions for review; the current version is returned by get()."""
+        if not isinstance(memory_id, str) or not memory_id or len(memory_id) > 64:
+            raise ValueError("memory_id must contain 1..64 characters")
+        if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 100:
+            raise ValueError("limit must be between 1 and 100")
+        with self._connect() as db:
+            rows = db.execute(
+                """SELECT previous_json, revised_at FROM memory_revisions
+                   WHERE memory_id = ? ORDER BY revision_id DESC LIMIT ?""",
+                (memory_id, limit),
+            ).fetchall()
+        return [
+            {"revised_at": row[1], "previous": json.loads(row[0])}
+            for row in rows
+        ]
 
     def export_jsonl(self, destination: Path, *, include_sensitive: bool = False) -> int:
         """Export active memory records; sensitive export requires an explicit opt-in."""
@@ -239,7 +279,10 @@ class MemoryStore:
             raise ValueError("memory_id must contain 1..64 characters")
         with self._connect() as db:
             cursor = db.execute("DELETE FROM memories WHERE memory_id = ?", (memory_id,))
-            return cursor.rowcount == 1
+            if cursor.rowcount == 1:
+                db.execute("DELETE FROM memory_revisions WHERE memory_id = ?", (memory_id,))
+                return True
+            return False
 
     def prune_expired(self, *, now: datetime | None = None) -> int:
         now = now or datetime.now(timezone.utc)
