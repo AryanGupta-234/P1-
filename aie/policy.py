@@ -114,8 +114,12 @@ def evaluate_proposal(
     if context.actions_used >= context.max_actions:
         return PolicyDecision("DENY", "BUDGET_EXHAUSTED", "Action budget is exhausted.", digest, rule.risk)
     required = set(proposal.requested_capabilities)
-    if not required or any(not isinstance(item, str) or not item for item in required):
-        return PolicyDecision("DENY", "INVALID_CAPABILITY", "A non-empty explicit capability set is required.", digest, rule.risk)
+    if (
+        not required
+        or any(not isinstance(item, str) or not item for item in required)
+        or proposal.action not in required
+    ):
+        return PolicyDecision("DENY", "INVALID_CAPABILITY", "The exact action capability must be explicitly requested.", digest, rule.risk)
     if not required.issubset(context.granted_capabilities):
         return PolicyDecision("DENY", "CAPABILITY_MISSING", "One or more requested capabilities were not granted.", digest, rule.risk)
     if rule.verify_target and not context.target_verified:
