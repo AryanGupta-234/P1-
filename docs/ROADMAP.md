@@ -68,7 +68,7 @@ Status vocabulary: DONE / IN_PROGRESS / BLOCKED / PLANNED. A task is DONE only w
 - [x] Discover installed models through local loopback Ollama `/api/tags`.
 - [x] Select routine Qwen 2.5 3B, complex Qwen 2.5 7B with 7.5 GiB free-memory gate, and Nomic embeddings.
 - [x] Never automatically pull models; reject non-loopback Ollama endpoints.
-- [x] Add a local-only Ollama chat adapter with non-streaming structured-output support, bounded response size, timeouts and cooperative cancellation checks; expose `aie ask` with hardware-aware model selection.
+- [x] Add local-only Ollama chat and embedding adapters with non-streaming structured-output support, bounded responses, timeouts, cooperative cancellation checks, redirect/proxy isolation and dimension validation; expose `aie ask` and `aie embed`.
 - [x] Add a local-only Ollama embedding adapter with finite-vector, batch-count and caller-specified dimension validation; Nomic live-dimension confirmation remains pending.
 - [ ] Add task complexity classification and model selection evaluation.
 - [ ] Add optional cloud adapter behind an explicit per-task data-egress policy.
