@@ -278,35 +278,56 @@ def correlate(
 
 @app.command()
 def state(
-    since_minutes: int = typer.Option(
-        1440, min=1, max=10080,
-        help="Project retained evidence from the last seven days at most.",
-    ),
-    limit: int = typer.Option(10000, min=1, max=10000, help="Maximum source events to inspect."),
+    limit: int = typer.Option(10000, min=1, max=10000, help="Maximum new events to process."),
+    rebuild: bool = typer.Option(False, "--rebuild", help="Discard the saved projection and replay retained events."),
     db: Path = typer.Option(database_path(), "--db", help="SQLite event store."),
 ) -> None:
-    """Project a bounded evidence window into partial process and inventory state."""
+    """Update and display the durable evidence-backed environment projection."""
     from dataclasses import asdict
-    from aie.state_model import project_environment_state
+    from aie.state_model import EnvironmentProjection, project_environment_state
 
-    cutoff = datetime.now(timezone.utc) - timedelta(minutes=since_minutes)
-    events = EventStore(db).events_since(cutoff, limit=limit)
-    projection = project_environment_state(events)
+    store = EventStore(db)
+    snapshot = None if rebuild else store.load_state_snapshot("aie.environment.v1")
+    if snapshot is None:
+        projection = None
+        watermark = 0
+    else:
+        version, watermark, payload = snapshot
+        if version != 1:
+            console.print("[red]Unsupported environment snapshot version; use --rebuild.[/red]")
+            raise typer.Exit(2)
+        try:
+            projection = EnvironmentProjection.from_dict(json.loads(payload))
+        except (ValueError, TypeError, KeyError) as exc:
+            console.print(f"[red]Saved projection is invalid; use --rebuild:[/red] {exc}")
+            raise typer.Exit(2) from exc
+
+    batch = store.events_after_rowid(watermark, limit=limit)
+    projection = project_environment_state(
+        (event for _, event in batch), initial=projection
+    )
+    if batch:
+        watermark = batch[-1][0]
+    store.save_state_snapshot(
+        "aie.environment.v1", watermark,
+        json.dumps(projection.to_dict(), separators=(",", ":"), allow_nan=False),
+        schema_version=1,
+    )
+    pending = bool(store.events_after_rowid(watermark, limit=1))
     result = {
-        "window": {"since": cutoff.isoformat(), "source_events": len(events)},
+        "projection_version": 1,
+        "last_ingest_rowid": watermark,
+        "new_events_processed": len(batch),
+        "more_events_pending": pending,
         "coverage": projection.coverage,
-        "processes": [
-            asdict(item) for _, item in sorted(projection.processes.items())
-        ],
-        "entities": [
-            asdict(item) for _, item in sorted(projection.entities.items())
-        ],
+        "processes": [asdict(item) for _, item in sorted(projection.processes.items())],
+        "entities": [asdict(item) for _, item in sorted(projection.entities.items())],
         "ignored_events": projection.ignored_events,
         "limitations": [
-            "This is a projection of retained evidence, not a live or complete inventory.",
-            "The initial process baseline contains a count only; "
-            "pre-existing process instances remain unknown.",
-            "An entity absent from this query window is not inferred to be removed.",
+            "Projection includes evidence ingested up to the reported SQLite row ID.",
+            "The initial process baseline contains a count only; pre-existing instances remain unknown.",
+            "Pruned evidence cannot be reconstructed by --rebuild.",
+            "Missing entities are never inferred to be removed; only explicit removal evidence changes status.",
         ],
     }
     console.print_json(json.dumps(result, default=str))
