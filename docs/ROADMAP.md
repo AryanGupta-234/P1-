@@ -8,7 +8,7 @@ Status vocabulary: DONE / IN_PROGRESS / BLOCKED / PLANNED. A task is DONE only w
 |---|---|---|---|
 | M0 | Architecture and foundation | IN_PROGRESS | Contracts, package, CLI, docs and Windows CI workflow; CI must execute successfully |
 | M1 | Windows environment observer | IN_PROGRESS | Host/process baseline, app/service/network/task inventory, SQLite and explicit retention API |
-| M2 | Context intelligence | IN_PROGRESS | Process correlation, durable incremental state projection and bounded factual context packets and per-entity evidence-reference caps are implemented; Windows validation, total snapshot-size policy and evaluation remain |
+| M2 | Context intelligence | IN_PROGRESS | Process correlation, durable incremental state projection and bounded factual context packets and per-entity evidence-reference caps are implemented; Windows validation, state-aware compaction/recovery and evaluation remain |
 | M3 | Cognitive core | IN_PROGRESS | Hardware-aware model discovery plus bounded local Ollama chat/embedding adapters and `aie ask`; planning and evaluation remain |
 | M4 | Persistent intelligence | PLANNED | Provenance-aware memory, consolidation and retrieval evaluation |
 | M5 | Controlled autonomy | PLANNED | UIA/app adapters, capability broker, policy, sandbox, audit and recovery |
@@ -63,7 +63,8 @@ Status vocabulary: DONE / IN_PROGRESS / BLOCKED / PLANNED. A task is DONE only w
 - [x] Persist versioned compact environment projections separately from raw observations; incremental replay uses a monotonic SQLite ingestion sequence so late-imported ETW/derived events are not skipped.
 - [x] Bound per-process/per-entity evidence references to the latest 64 unique IDs; mark truncation in persisted state/context and defensively cap context output from legacy oversized snapshots.
 - [x] Enforce a 16 MiB UTF-8 snapshot payload ceiling; reject oversized writes before SQLite mutation and preserve the last valid snapshot.
-- [ ] Add state-aware compaction and recovery evaluation for corrupted or pruned histories.
+- [x] Add SHA-256 integrity metadata and verify snapshot payloads on load; corrupted snapshots fail closed with retained-event rebuild guidance, while pre-integrity legacy snapshots remain readable.
+- [ ] Add last-known-good snapshot recovery and state-aware compaction for corrupted or pruned histories.
 - [x] Add bounded deterministic context packets with explicit coverage, observation timestamps and evidence references; no inferred facts or implicit absence-as-removal semantics.
 - [ ] Evidence-backed relevance scoring and confidence calibration.
 - [ ] Privacy-safe project/session context.
