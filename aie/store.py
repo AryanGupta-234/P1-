@@ -216,28 +216,28 @@ class EventStore:
             cutoff = older_than.isoformat()
             with self._connect() as db:
                 before = db.total_changes
-                db.execute(
+                deleted = db.execute(
                     "DELETE FROM events WHERE julianday(timestamp) < julianday(?)",
                     (cutoff,),
-                )
+                ).rowcount
                 db.execute(
                     "DELETE FROM event_ingest_seq WHERE event_id NOT IN (SELECT event_id FROM events)"
                 )
-                return db.total_changes - before
+                return deleted
 
         if keep_latest is None or keep_latest < 0:
             raise ValueError("keep_latest must be zero or greater")
         with self._connect() as db:
             before = db.total_changes
-            db.execute(
+            deleted = db.execute(
                 """DELETE FROM events
                    WHERE event_id NOT IN (
                        SELECT event_id FROM events
                        ORDER BY julianday(timestamp) DESC, event_id DESC LIMIT ?
                    )""",
                 (keep_latest,),
-            )
+            ).rowcount
             db.execute(
                 "DELETE FROM event_ingest_seq WHERE event_id NOT IN (SELECT event_id FROM events)"
             )
-            return db.total_changes - before
+            return deleted
