@@ -3,7 +3,7 @@
 Windows-first, hybrid, persistent intelligence research platform. AGI is a research objective, not a capability claim.
 
 ## Architecture spotlight
-**Current focus: AIE Foundation + Windows Environment Observer (M0/M1).**
+**Current focus: M2 Context Intelligence — evidence-backed environment projection over the Windows observer.**
 Track status and next evidence in [docs/ARCHITECTURE_SPOTLIGHT.md](docs/ARCHITECTURE_SPOTLIGHT.md) and [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ## Principles
