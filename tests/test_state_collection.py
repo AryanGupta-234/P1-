@@ -34,11 +34,10 @@ def test_state_collection_establishes_four_inventory_baselines(monkeypatch):
 
     events = list(provider.collect_state_deltas())
 
-    assert {event.event_type for event in events} == {
-        "inventory.services.baseline",
-        "inventory.network_interfaces.baseline",
-        "inventory.scheduled_tasks.baseline",
-        "inventory.applications.baseline",
+    assert sum(event.event_type.endswith(".baseline") for event in events) == 4
+    assert sum(event.event_type.endswith(".present_observed") for event in events) == 4
+    assert {event.entity.name for event in events if event.event_type.endswith(".present_observed")} == {
+        "Spooler", "Wi-Fi", r"\\AIE\\Daily", "Example App|1.0",
     }
 
 
