@@ -103,6 +103,18 @@ def evaluate_proposal(
         raise ValueError("proposal action, target and parameters are required")
     if not isinstance(context, PolicyContext):
         raise ValueError("context must be a PolicyContext")
+    if (
+        not isinstance(proposal.requested_capabilities, (tuple, list))
+        or any(not isinstance(item, str) or not item for item in proposal.requested_capabilities)
+    ):
+        raise ValueError("requested_capabilities must be a sequence of non-empty strings")
+    if (
+        not isinstance(context.granted_capabilities, (set, frozenset))
+        or any(not isinstance(item, str) or not item for item in context.granted_capabilities)
+    ):
+        raise ValueError("granted_capabilities must be a set of non-empty strings")
+    if not isinstance(context.target_verified, bool) or not isinstance(context.sandbox_available, bool):
+        raise ValueError("target_verified and sandbox_available must be booleans")
     digest = proposal_digest(proposal)
     rule = ACTION_RULES.get(proposal.action)
     if rule is None:
@@ -131,6 +143,9 @@ def evaluate_proposal(
         expiry = context.approval_expires_at
         if not approved or expiry is None:
             return PolicyDecision("REQUIRE_APPROVAL", "APPROVAL_REQUIRED", "This proposal requires explicit approval bound to its exact parameters.", digest, rule.risk)
-        if expiry.tzinfo is None or expiry.utcoffset() is None or expiry <= now:
+        if (
+            not isinstance(expiry, datetime)
+            or expiry.tzinfo is None or expiry.utcoffset() is None or expiry <= now
+        ):
             return PolicyDecision("DENY", "APPROVAL_EXPIRED", "The proposal approval is expired or invalid.", digest, rule.risk)
     return PolicyDecision("ALLOW", "POLICY_SATISFIED", "Proposal passed policy checks; no action was executed.", digest, rule.risk)
