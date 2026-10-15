@@ -54,3 +54,17 @@ The observer is read-only and stores events under %LOCALAPPDATA%\AIE. Event coll
 Default process lifecycle monitoring uses periodic user-mode snapshots and may miss short-lived processes. An opt-in bounded ETW capture command is now available and writes a raw .etl trace; an offline `aie etw-decode` path now converts tracerpt XML process start/stop records into normalized JSONL. Validate the XML schema and event coverage against real Windows ETL captures before relying on it operationally. A driver requires a separate threat model, signing, review, installation consent and removal plan.
 
 Run tests with `python -m pytest`. The Windows CI workflow runs tests and Ruff on pushes and pull requests.
+
+
+## Cognitive, memory and policy foundations
+
+- `aie think "Why is memory usage high?"` builds a bounded provenance-bearing context packet and sends it only to an eligible loopback Ollama model. Observations are treated as untrusted data; no tools or OS actions are exposed.
+- `aie memory-add "A manually reviewed fact" --kind semantic --provenance EVENT_ID` creates an explicit local memory record.
+- `aie memory-search "reviewed fact"` searches unexpired records; sensitive records are excluded by default.
+- `aie memory-correct MEMORY_ID --verification verified` revises a record while preserving its prior version and provenance.
+- `aie memory-history MEMORY_ID` reviews prior versions.
+- `aie memory-export .\\memory.jsonl` exports active records to a new file; sensitive records require `--include-sensitive`.
+- `aie memory-delete MEMORY_ID` explicitly deletes a record and its revision history; `aie memory-prune` removes expired records and their history.
+- `aie.policy` currently evaluates proposals only. It checks a reviewed action allowlist, exact action capabilities, verified target identity, sandbox availability for writes, action budgets and expiring approvals bound to the exact proposal digest. It never executes a proposal.
+
+Memory writes are user-directed; no automatic model-generated consolidation is enabled. Memory is stored in the local SQLite database and is not encrypted by this implementation. Protect the database with the Windows account's filesystem permissions and do not store secrets in it.
