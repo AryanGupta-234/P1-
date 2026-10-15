@@ -97,8 +97,19 @@ def project_environment_state(events: Iterable[AIEEvent]) -> EnvironmentProjecti
     }
     ignored = 0
 
-    ordered = sorted(events, key=lambda item: (item.timestamp, item.event_id))
+    ordered = sorted(
+        events,
+        key=lambda item: (
+            item.timestamp.timestamp()
+            if item.timestamp.tzinfo is not None and item.timestamp.utcoffset() is not None
+            else float("-inf"),
+            item.event_id,
+        ),
+    )
     for event in ordered:
+        if event.timestamp.tzinfo is None or event.timestamp.utcoffset() is None:
+            ignored += 1
+            continue
         kind = event.event_type
         if kind == "process.baseline":
             coverage["processes"] = (
