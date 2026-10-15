@@ -215,7 +215,6 @@ class EventStore:
                 raise ValueError("older_than must be timezone-aware")
             cutoff = older_than.isoformat()
             with self._connect() as db:
-                before = db.total_changes
                 deleted = db.execute(
                     "DELETE FROM events WHERE julianday(timestamp) < julianday(?)",
                     (cutoff,),
@@ -228,7 +227,6 @@ class EventStore:
         if keep_latest is None or keep_latest < 0:
             raise ValueError("keep_latest must be zero or greater")
         with self._connect() as db:
-            before = db.total_changes
             deleted = db.execute(
                 """DELETE FROM events
                    WHERE event_id NOT IN (
