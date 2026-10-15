@@ -36,6 +36,11 @@ class EventStore:
             db.execute("""CREATE TABLE IF NOT EXISTS state_snapshot_integrity (
                 snapshot_key TEXT PRIMARY KEY, payload_sha256 TEXT NOT NULL,
                 updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)""")
+            db.execute("""CREATE TABLE IF NOT EXISTS state_snapshot_backups (
+                snapshot_key TEXT PRIMARY KEY, schema_version INTEGER NOT NULL,
+                last_event_sequence INTEGER NOT NULL, payload TEXT NOT NULL,
+                payload_sha256 TEXT NOT NULL,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)""")
             db.execute(
                 """INSERT OR IGNORE INTO event_ingest_seq(event_id)
                    SELECT event_id FROM events ORDER BY rowid ASC"""
@@ -142,6 +147,33 @@ class EventStore:
         if not 1 <= schema_version <= 1000:
             raise ValueError("schema_version must be between 1 and 1000")
         with self._connect() as db:
+            previous = db.execute(
+                """SELECT snapshot.schema_version, snapshot.last_event_sequence,
+                          snapshot.payload, integrity.payload_sha256
+                   FROM state_snapshots_v2 AS snapshot
+                   LEFT JOIN state_snapshot_integrity AS integrity
+                     ON integrity.snapshot_key = snapshot.snapshot_key
+                   WHERE snapshot.snapshot_key = ?""",
+                (key,),
+            ).fetchone()
+            if previous is not None:
+                previous_payload = str(previous[2])
+                previous_digest = hashlib.sha256(previous_payload.encode("utf-8")).hexdigest()
+                # Keep only a verified previous generation; legacy rows are hashed on migration.
+                if previous[3] is None or previous[3] == previous_digest:
+                    db.execute(
+                        """INSERT INTO state_snapshot_backups(
+                            snapshot_key, schema_version, last_event_sequence,
+                            payload, payload_sha256, updated_at
+                        ) VALUES(?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                        ON CONFLICT(snapshot_key) DO UPDATE SET
+                            schema_version=excluded.schema_version,
+                            last_event_sequence=excluded.last_event_sequence,
+                            payload=excluded.payload,
+                            payload_sha256=excluded.payload_sha256,
+                            updated_at=CURRENT_TIMESTAMP""",
+                        (key, int(previous[0]), int(previous[1]), previous_payload, previous_digest),
+                    )
             digest = hashlib.sha256(payload.encode("utf-8")).hexdigest()
             db.execute(
                 """INSERT INTO state_snapshots_v2(
@@ -186,6 +218,42 @@ class EventStore:
                     f"snapshot '{key}' failed SHA-256 integrity verification; "
                     "use --rebuild if retained events are sufficient"
                 )
+        return int(row[0]), int(row[1]), payload
+
+    def restore_state_snapshot_backup(self, key: str) -> tuple[int, int, str] | None:
+        """Restore the previous verified snapshot generation, if one exists."""
+        if not key or len(key) > 128:
+            raise ValueError("snapshot key must contain 1..128 characters")
+        with self._connect() as db:
+            row = db.execute(
+                """SELECT schema_version, last_event_sequence, payload, payload_sha256
+                   FROM state_snapshot_backups WHERE snapshot_key = ?""",
+                (key,),
+            ).fetchone()
+            if row is None:
+                return None
+            payload = str(row[2])
+            actual = hashlib.sha256(payload.encode("utf-8")).hexdigest()
+            if actual != row[3]:
+                raise ValueError(f"backup snapshot '{key}' failed SHA-256 integrity verification")
+            db.execute(
+                """INSERT INTO state_snapshots_v2(
+                    snapshot_key, schema_version, last_event_sequence, payload, updated_at
+                ) VALUES(?, ?, ?, ?, CURRENT_TIMESTAMP)
+                ON CONFLICT(snapshot_key) DO UPDATE SET
+                    schema_version=excluded.schema_version,
+                    last_event_sequence=excluded.last_event_sequence,
+                    payload=excluded.payload,
+                    updated_at=CURRENT_TIMESTAMP""",
+                (key, int(row[0]), int(row[1]), payload),
+            )
+            db.execute(
+                """INSERT INTO state_snapshot_integrity(snapshot_key, payload_sha256, updated_at)
+                   VALUES(?, ?, CURRENT_TIMESTAMP)
+                   ON CONFLICT(snapshot_key) DO UPDATE SET
+                   payload_sha256=excluded.payload_sha256, updated_at=CURRENT_TIMESTAMP""",
+                (key, actual),
+            )
         return int(row[0]), int(row[1]), payload
 
     def delete_state_snapshot(self, key: str) -> None:
