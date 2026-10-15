@@ -241,6 +241,13 @@ class MemoryStore:
         if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 100:
             raise ValueError("limit must be between 1 and 100")
         with self._connect() as db:
+            active = db.execute(
+                """SELECT 1 FROM memories WHERE memory_id = ?
+                   AND (expires_at IS NULL OR expires_at > ?)""",
+                (memory_id, datetime.now(timezone.utc).isoformat()),
+            ).fetchone()
+            if active is None:
+                return []
             rows = db.execute(
                 """SELECT previous_json, revised_at FROM memory_revisions
                    WHERE memory_id = ? ORDER BY revision_id DESC LIMIT ?""",
@@ -288,12 +295,24 @@ class MemoryStore:
         now = now or datetime.now(timezone.utc)
         if not isinstance(now, datetime) or now.tzinfo is None or now.utcoffset() is None:
             raise ValueError("now must be timezone-aware")
+        cutoff = now.astimezone(timezone.utc).isoformat()
         with self._connect() as db:
-            cursor = db.execute(
-                "DELETE FROM memories WHERE expires_at IS NOT NULL AND expires_at <= ?",
-                (now.astimezone(timezone.utc).isoformat(),),
-            )
-            return cursor.rowcount
+            expired = [
+                row[0] for row in db.execute(
+                    "SELECT memory_id FROM memories WHERE expires_at IS NOT NULL AND expires_at <= ?",
+                    (cutoff,),
+                ).fetchall()
+            ]
+            if expired:
+                db.executemany(
+                    "DELETE FROM memory_revisions WHERE memory_id = ?",
+                    [(memory_id,) for memory_id in expired],
+                )
+                db.executemany(
+                    "DELETE FROM memories WHERE memory_id = ?",
+                    [(memory_id,) for memory_id in expired],
+                )
+            return len(expired)
 
 
 def _decode(row: tuple, *, incremented: bool = False) -> dict[str, Any]:
