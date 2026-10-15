@@ -157,7 +157,11 @@ class MemoryStore:
                 haystack = (record["content"] + " " + " ".join(record["tags"])).casefold()
                 return sum(term in haystack for term in terms), record["memory_id"]
             records = [record for record in records if score(record)[0] > 0]
-            records.sort(key=lambda record: (-score(record)[0], record["created_at"], record["memory_id"]), reverse=True)
+            records.sort(key=lambda record: (
+                -score(record)[0],
+                -datetime.fromisoformat(record["created_at"]).timestamp(),
+                record["memory_id"],
+            ))
         return records[:limit]
 
     def delete(self, memory_id: str) -> bool:
