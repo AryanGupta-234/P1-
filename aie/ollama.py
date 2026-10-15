@@ -18,6 +18,7 @@ from urllib.request import (
 from aie.model_policy import ollama_base_url
 
 _MAX_RESPONSE_BYTES = 4 * 1024 * 1024
+_MAX_REQUEST_BYTES = 1024 * 1024
 _ALLOWED_ROLES = {"system", "user", "assistant"}
 
 
@@ -117,10 +118,13 @@ class OllamaClient:
         message = result.get("message")
         if not isinstance(message, dict) or not isinstance(message.get("content"), str):
             raise OllamaError("Ollama chat response did not contain message.content")
+        done = result.get("done")
+        if not isinstance(done, bool):
+            raise OllamaError("Ollama chat response did not contain a boolean done field")
         return ChatResult(
             model=str(result.get("model") or model),
             content=message["content"],
-            done=bool(result.get("done", False)),
+            done=done,
             total_duration_ns=_optional_int(result.get("total_duration")),
             prompt_tokens=_optional_int(result.get("prompt_eval_count")),
             output_tokens=_optional_int(result.get("eval_count")),
@@ -190,9 +194,17 @@ class OllamaClient:
     ) -> dict[str, Any]:
         if cancel_event is not None and cancel_event.is_set():
             raise OllamaCancelled("inference cancelled before request")
+        try:
+            body = json.dumps(
+                payload, separators=(",", ":"), allow_nan=False
+            ).encode("utf-8")
+        except (TypeError, ValueError) as exc:
+            raise ValueError("Ollama request payload must contain finite JSON values") from exc
+        if len(body) > _MAX_REQUEST_BYTES:
+            raise ValueError("Ollama request exceeded the 1 MiB safety limit")
         request = Request(
             self.base_url + path,
-            data=json.dumps(payload, separators=(",", ":")).encode("utf-8"),
+            data=body,
             headers={"Content-Type": "application/json", "Accept": "application/json"},
             method="POST",
         )
