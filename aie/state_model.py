@@ -13,6 +13,9 @@ from typing import Iterable, Any
 from aie.contracts import AIEEvent
 
 
+MAX_EVIDENCE_IDS_PER_STATE = 64
+
+
 @dataclass
 class ProcessInstance:
     host_id: str
@@ -24,6 +27,7 @@ class ProcessInstance:
     last_observed: datetime
     evidence_ids: list[str] = field(default_factory=list)
     etw_confirmed: bool = False
+    evidence_truncated: bool = False
 
 
 @dataclass
@@ -38,6 +42,7 @@ class EntityState:
     first_observed: datetime
     last_observed: datetime
     evidence_ids: list[str] = field(default_factory=list)
+    evidence_truncated: bool = False
 
 
 @dataclass
@@ -75,6 +80,7 @@ class EnvironmentProjection:
             item = dict(raw)
             item["first_observed"] = datetime.fromisoformat(item["first_observed"])
             item["last_observed"] = datetime.fromisoformat(item["last_observed"])
+            item.setdefault("evidence_truncated", False)
             instance = ProcessInstance(**item)
             processes[(instance.host_id, instance.pid, instance.create_time)] = instance
         entities = {}
@@ -82,6 +88,7 @@ class EnvironmentProjection:
             item = dict(raw)
             item["first_observed"] = datetime.fromisoformat(item["first_observed"])
             item["last_observed"] = datetime.fromisoformat(item["last_observed"])
+            item.setdefault("evidence_truncated", False)
             entity = EntityState(**item)
             entities[(entity.host_id, entity.collection, entity.identity)] = entity
         coverage = payload.get("coverage", {})
@@ -122,9 +129,15 @@ def _process_key(event: AIEEvent):
     return event.host_id, pid, created
 
 
-def _append_evidence(ids: list[str], event_id: str) -> None:
-    if event_id not in ids:
-        ids.append(event_id)
+def _append_evidence(owner: ProcessInstance | EntityState, event_id: str) -> None:
+    """Retain a bounded tail of unique evidence IDs and expose any truncation."""
+    ids = owner.evidence_ids
+    if event_id in ids:
+        return
+    if len(ids) >= MAX_EVIDENCE_IDS_PER_STATE:
+        del ids[0]
+        owner.evidence_truncated = True
+    ids.append(event_id)
 
 
 def project_environment_state(
@@ -177,7 +190,7 @@ def project_environment_state(
                             if event.timestamp >= old_instance.last_observed:
                                 old_instance.status = "replaced"
                                 old_instance.last_observed = event.timestamp
-                            _append_evidence(old_instance.evidence_ids, event.event_id)
+                            _append_evidence(old_instance, event.event_id)
             key = _process_key(event)
             if key is None:
                 ignored += 1
@@ -195,7 +208,7 @@ def project_environment_state(
                     existing.status = "running"
                     existing.image = image
                     existing.last_observed = event.timestamp
-                _append_evidence(existing.evidence_ids, event.event_id)
+                _append_evidence(existing, event.event_id)
             continue
         if kind == "process.stopped_observed":
             key = _process_key(event)
@@ -207,7 +220,7 @@ def project_environment_state(
             if event.timestamp >= instance.last_observed:
                 instance.status = "stopped"
                 instance.last_observed = event.timestamp
-            _append_evidence(instance.evidence_ids, event.event_id)
+            _append_evidence(instance, event.event_id)
             continue
         if kind == "process.start_confirmed_by_etw":
             key = _process_key(event)
