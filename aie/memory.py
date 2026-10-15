@@ -64,23 +64,23 @@ class MemoryStore:
         tags: list[str] | None = None,
         ttl_days: int | None = None,
     ) -> dict[str, Any]:
-        if kind not in MEMORY_KINDS:
+        if not isinstance(kind, str) or kind not in MEMORY_KINDS:
             raise ValueError(f"kind must be one of: {', '.join(sorted(MEMORY_KINDS))}")
         if not isinstance(content, str) or not content.strip() or len(content) > MAX_CONTENT_CHARS:
             raise ValueError(f"content must contain 1..{MAX_CONTENT_CHARS} characters")
         if isinstance(confidence, bool) or not isinstance(confidence, (int, float)) or not math.isfinite(confidence) or not 0 <= confidence <= 1:
             raise ValueError("confidence must be finite and between 0 and 1")
-        if sensitivity not in SENSITIVITY_LEVELS:
+        if not isinstance(sensitivity, str) or sensitivity not in SENSITIVITY_LEVELS:
             raise ValueError("invalid sensitivity level")
-        if verification not in VERIFICATION_STATES:
+        if not isinstance(verification, str) or verification not in VERIFICATION_STATES:
             raise ValueError("invalid verification state")
-        provenance_ids = provenance_ids or []
+        provenance_ids = [] if provenance_ids is None else provenance_ids
         if (
             not isinstance(provenance_ids, list) or len(provenance_ids) > MAX_PROVENANCE_IDS
             or any(not isinstance(item, str) or not item.strip() or len(item) > 128 for item in provenance_ids)
         ):
             raise ValueError(f"provenance_ids must contain at most {MAX_PROVENANCE_IDS} non-empty IDs")
-        tags = tags or []
+        tags = [] if tags is None else tags
         if not isinstance(tags, list) or len(tags) > MAX_TAGS or any(
             not isinstance(tag, str) or not tag.strip() or len(tag) > 64 for tag in tags
         ):
@@ -134,10 +134,12 @@ class MemoryStore:
     ) -> list[dict[str, Any]]:
         if not isinstance(query, str) or len(query) > 1000:
             raise ValueError("query must be a string of at most 1000 characters")
-        if kind is not None and kind not in MEMORY_KINDS:
+        if kind is not None and (not isinstance(kind, str) or kind not in MEMORY_KINDS):
             raise ValueError("invalid memory kind")
         if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 100:
             raise ValueError("limit must be between 1 and 100")
+        if not isinstance(include_sensitive, bool):
+            raise ValueError("include_sensitive must be a boolean")
         now = datetime.now(timezone.utc).isoformat()
         clauses = ["(expires_at IS NULL OR expires_at > ?)"]
         args: list[Any] = [now]
@@ -189,7 +191,7 @@ class MemoryStore:
                 raise ValueError("confidence must be finite and between 0 and 1")
             updates["confidence"] = float(confidence)
         if verification is not None:
-            if verification not in VERIFICATION_STATES:
+            if not isinstance(verification, str) or verification not in VERIFICATION_STATES:
                 raise ValueError("invalid verification state")
             updates["verification"] = verification
         if tags is not None:
@@ -241,7 +243,7 @@ class MemoryStore:
 
     def prune_expired(self, *, now: datetime | None = None) -> int:
         now = now or datetime.now(timezone.utc)
-        if now.tzinfo is None or now.utcoffset() is None:
+        if not isinstance(now, datetime) or now.tzinfo is None or now.utcoffset() is None:
             raise ValueError("now must be timezone-aware")
         with self._connect() as db:
             cursor = db.execute(
