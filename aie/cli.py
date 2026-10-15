@@ -277,6 +277,38 @@ def correlate(
 
 
 @app.command()
+def state(
+    since_minutes: int = typer.Option(1440, min=1, max=10080, help="Project retained evidence from the last seven days at most."),
+    limit: int = typer.Option(10000, min=1, max=10000, help="Maximum source events to inspect."),
+    db: Path = typer.Option(database_path(), "--db", help="SQLite event store."),
+) -> None:
+    """Project a bounded evidence window into partial process and inventory state."""
+    from dataclasses import asdict
+    from aie.state_model import project_environment_state
+
+    cutoff = datetime.now(timezone.utc) - timedelta(minutes=since_minutes)
+    events = EventStore(db).events_since(cutoff, limit=limit)
+    projection = project_environment_state(events)
+    result = {
+        "window": {"since": cutoff.isoformat(), "source_events": len(events)},
+        "coverage": projection.coverage,
+        "processes": [
+            asdict(item) for _, item in sorted(projection.processes.items())
+        ],
+        "entities": [
+            asdict(item) for _, item in sorted(projection.entities.items())
+        ],
+        "ignored_events": projection.ignored_events,
+        "limitations": [
+            "This is a projection of retained evidence, not a live or complete inventory.",
+            "The initial process baseline contains a count only; pre-existing process instances remain unknown.",
+            "An entity absent from this query window is not inferred to be removed.",
+        ],
+    }
+    console.print_json(json.dumps(result, default=str))
+
+
+@app.command()
 def export_events(output: Path = typer.Argument(...)) -> None:
     """Write the complete event store to a chronological JSONL file."""
     count = EventStore(database_path()).export_jsonl(output)
