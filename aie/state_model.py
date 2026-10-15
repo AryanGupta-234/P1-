@@ -174,10 +174,9 @@ def project_environment_state(
                         old_key = (event.host_id, _pid(event), old_created)
                         old_instance = processes.get(old_key)
                         if old_instance is not None:
-                            old_instance.status = "replaced"
-                            old_instance.last_observed = max(
-                                old_instance.last_observed, event.timestamp
-                            )
+                            if event.timestamp >= old_instance.last_observed:
+                                old_instance.status = "replaced"
+                                old_instance.last_observed = event.timestamp
                             _append_evidence(old_instance.evidence_ids, event.event_id)
             key = _process_key(event)
             if key is None:
@@ -192,9 +191,10 @@ def project_environment_state(
                     event.timestamp, event.timestamp, [event.event_id],
                 )
             else:
-                existing.status = "running"
-                existing.image = image
-                existing.last_observed = max(existing.last_observed, event.timestamp)
+                if event.timestamp >= existing.last_observed:
+                    existing.status = "running"
+                    existing.image = image
+                    existing.last_observed = event.timestamp
                 _append_evidence(existing.evidence_ids, event.event_id)
             continue
         if kind == "process.stopped_observed":
@@ -204,8 +204,9 @@ def project_environment_state(
                 ignored += 1
                 continue
             instance = processes[key]
-            instance.status = "stopped"
-            instance.last_observed = max(instance.last_observed, event.timestamp)
+            if event.timestamp >= instance.last_observed:
+                instance.status = "stopped"
+                instance.last_observed = event.timestamp
             _append_evidence(instance.evidence_ids, event.event_id)
             continue
         if kind == "process.start_confirmed_by_etw":
@@ -253,9 +254,10 @@ def project_environment_state(
                     event.timestamp, [event.event_id],
                 )
             else:
-                existing.status = status
-                existing.current = current
-                existing.last_observed = max(existing.last_observed, event.timestamp)
+                if event.timestamp >= existing.last_observed:
+                    existing.status = status
+                    existing.current = current
+                    existing.last_observed = event.timestamp
                 _append_evidence(existing.evidence_ids, event.event_id)
             coverage[collection] = (
                 "partial: observed entities only; failed or unobserved snapshots remain unknown"
@@ -281,9 +283,10 @@ def project_environment_state(
                     [event.event_id],
                 )
             else:
-                existing.current = current
-                existing.status = "present"
-                existing.last_observed = max(existing.last_observed, event.timestamp)
+                if event.timestamp >= existing.last_observed:
+                    existing.current = current
+                    existing.status = "present"
+                    existing.last_observed = event.timestamp
                 _append_evidence(existing.evidence_ids, event.event_id)
             coverage["services"] = "partial: Event Log transitions and sampled inventory evidence"
             continue
