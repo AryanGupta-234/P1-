@@ -450,5 +450,61 @@ def prioritize(
     }, indent=2))
 
 
+@app.command()
+def think(
+    question: str = typer.Argument(..., help="Question about the currently saved observed state."),
+    task: str = typer.Option("routine", help="Local model policy: routine or complex."),
+    timeout: float = typer.Option(90.0, min=1.0, max=300.0),
+    db: Path = typer.Option(database_path(), "--db", help="SQLite event store."),
+) -> None:
+    """Analyze saved observations with a local model; this command cannot execute actions."""
+    from aie.cognition import build_cognitive_messages
+    from aie.context import build_environment_context
+    from aie.ollama import OllamaClient, OllamaError
+    from aie.state_model import EnvironmentProjection
+
+    if task not in {"routine", "complex"}:
+        raise typer.BadParameter("task must be routine or complex")
+    try:
+        saved = EventStore(db).load_state_snapshot("aie.environment.v1")
+    except ValueError as exc:
+        console.print(f"[red]Saved projection integrity check failed:[/red] {exc}")
+        raise typer.Exit(2) from exc
+    if saved is None:
+        console.print("No saved projection. Run aie state first.")
+        raise typer.Exit(2)
+    version, _, payload = saved
+    if version != 1:
+        console.print("[red]Unsupported environment snapshot version.[/red]")
+        raise typer.Exit(2)
+    try:
+        projection = EnvironmentProjection.from_dict(json.loads(payload))
+        packet = build_environment_context(projection)
+        messages = build_cognitive_messages(packet, question)
+    except (ValueError, TypeError, KeyError) as exc:
+        console.print(f"[red]Could not prepare bounded context:[/red] {exc}")
+        raise typer.Exit(2) from exc
+
+    installed = discover_local_models()
+    memory = runtime_profile()["memory_available_gib"]
+    decision = choose_local_model(task, installed, memory)
+    if not decision.available or decision.selected_model is None:
+        console.print(f"[yellow]No eligible local model:[/yellow] {decision.reason}")
+        raise typer.Exit(2)
+    try:
+        result = OllamaClient(timeout=timeout).chat(
+            decision.selected_model,
+            messages,
+            options={"num_predict": 512, "temperature": 0.2},
+        )
+    except (OllamaError, ValueError) as exc:
+        console.print(f"[red]Local analysis failed:[/red] {exc}")
+        raise typer.Exit(2) from exc
+    console.print(result.content)
+    console.print(
+        "[dim]Local analysis only. Output is model-generated and does not alter system state.[/dim]"
+    )
+
+
 if __name__ == "__main__":
     app()
