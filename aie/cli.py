@@ -455,6 +455,7 @@ def think(
     question: str = typer.Argument(..., help="Question about the currently saved observed state."),
     task: str = typer.Option("routine", help="Local model policy: routine or complex."),
     timeout: float = typer.Option(90.0, min=1.0, max=300.0),
+    include_memory: bool = typer.Option(False, "--include-memory", help="Include matching non-sensitive user-created memories."),
     db: Path = typer.Option(database_path(), "--db", help="SQLite event store."),
 ) -> None:
     """Analyze saved observations with a local model; this command cannot execute actions."""
@@ -480,6 +481,11 @@ def think(
     try:
         projection = EnvironmentProjection.from_dict(json.loads(payload))
         packet = build_environment_context(projection)
+        if include_memory:
+            from aie.memory import MemoryStore
+            packet["retrieved_memories"] = MemoryStore(db).search(
+                question, include_sensitive=False, limit=10
+            )
         messages = build_cognitive_messages(packet, question)
     except (ValueError, TypeError, KeyError) as exc:
         console.print(f"[red]Could not prepare bounded context:[/red] {exc}")
