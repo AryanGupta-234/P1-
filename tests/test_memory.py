@@ -95,3 +95,17 @@ def test_memory_export_is_new_file_and_sensitive_is_opt_in(tmp_path):
         store.export_jsonl(output)
     full = tmp_path / "exports" / "all-memory.jsonl"
     assert store.export_jsonl(full, include_sensitive=True) == 2
+
+
+
+def test_memory_correction_history_is_preserved_and_deleted_with_record(tmp_path):
+    store = MemoryStore(tmp_path / "memory.sqlite3")
+    original = store.add("first version")
+    store.revise(original["memory_id"], content="second version")
+    store.revise(original["memory_id"], content="third version")
+    history = store.history(original["memory_id"])
+    assert len(history) == 2
+    assert history[0]["previous"]["content"] == "second version"
+    assert history[1]["previous"]["content"] == "first version"
+    assert store.delete(original["memory_id"])
+    assert store.history(original["memory_id"]) == []
