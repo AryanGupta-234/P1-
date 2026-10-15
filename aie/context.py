@@ -42,6 +42,8 @@ def build_environment_context(
             "inference_performed": False,
             "absence_means_removal": False,
             "evidence_reference_field": "evidence_ids",
+            "evidence_reference_retention": "latest_64_unique_per_state",
+            "truncation_marker_field": "evidence_truncated",
         },
         "coverage": dict(sorted(projection.coverage.items())),
         "processes": [
@@ -52,8 +54,11 @@ def build_environment_context(
                 "first_observed": observed(item.first_observed),
                 "last_observed": observed(item.last_observed),
                 "etw_confirmed": item.etw_confirmed,
-                "evidence_ids": list(item.evidence_ids),
-                "evidence_truncated": getattr(item, "evidence_truncated", False),
+                "evidence_ids": list(item.evidence_ids[-64:]),
+                "evidence_truncated": (
+                    getattr(item, "evidence_truncated", False)
+                    or len(item.evidence_ids) > 64
+                ),
             }
             for item in selected_processes
         ],
@@ -64,8 +69,11 @@ def build_environment_context(
                 "name": item.name, "status": item.status, "current": item.current,
                 "first_observed": observed(item.first_observed),
                 "last_observed": observed(item.last_observed),
-                "evidence_ids": list(item.evidence_ids),
-                "evidence_truncated": getattr(item, "evidence_truncated", False),
+                "evidence_ids": list(item.evidence_ids[-64:]),
+                "evidence_truncated": (
+                    getattr(item, "evidence_truncated", False)
+                    or len(item.evidence_ids) > 64
+                ),
             }
             for item in selected_entities
         ],
