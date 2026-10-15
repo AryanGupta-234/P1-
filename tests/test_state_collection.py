@@ -36,8 +36,12 @@ def test_state_collection_establishes_four_inventory_baselines(monkeypatch):
 
     assert sum(event.event_type.endswith(".baseline") for event in events) == 4
     assert sum(event.event_type.endswith(".present_observed") for event in events) == 4
-    assert {event.entity.name for event in events if event.event_type.endswith(".present_observed")} == {
-        "Spooler", "Wi-Fi", r"\\AIE\\Daily", "Example App|1.0",
+    observed_names = {
+        event.entity.name for event in events
+        if event.event_type.endswith(".present_observed")
+    }
+    assert observed_names == {
+        "Spooler", "Wi-Fi", r"\AIE\Daily", "Example App|1.0",
     }
 
 
