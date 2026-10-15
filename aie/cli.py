@@ -282,7 +282,11 @@ def context(db: Path = typer.Option(database_path(), "--db")) -> None:
     from aie.context import build_environment_context
     from aie.state_model import EnvironmentProjection
 
-    saved = EventStore(db).load_state_snapshot("aie.environment.v1")
+    try:
+        saved = EventStore(db).load_state_snapshot("aie.environment.v1")
+    except ValueError as exc:
+        console.print(f"[red]Saved projection integrity check failed:[/red] {exc}")
+        raise typer.Exit(2) from exc
     if saved is None:
         console.print("No saved projection. Run aie state first.")
         raise typer.Exit(2)
@@ -309,7 +313,14 @@ def state(
     from aie.state_model import EnvironmentProjection, project_environment_state
 
     store = EventStore(db)
-    snapshot = None if rebuild else store.load_state_snapshot("aie.environment.v1")
+    try:
+        snapshot = None if rebuild else store.load_state_snapshot("aie.environment.v1")
+    except ValueError as exc:
+        console.print(
+            f"[red]Saved projection failed integrity verification:[/red] {exc} "
+            "Run aie state --rebuild if retained events are sufficient."
+        )
+        raise typer.Exit(2) from exc
     if snapshot is None:
         projection = None
         watermark = 0
