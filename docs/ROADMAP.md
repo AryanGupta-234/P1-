@@ -63,8 +63,9 @@ Status vocabulary: DONE / IN_PROGRESS / BLOCKED / PLANNED. A task is DONE only w
 - [x] Persist versioned compact environment projections separately from raw observations; incremental replay uses a monotonic SQLite ingestion sequence so late-imported ETW/derived events are not skipped.
 - [x] Bound per-process/per-entity evidence references to the latest 64 unique IDs; mark truncation in persisted state/context and defensively cap context output from legacy oversized snapshots.
 - [x] Enforce a 16 MiB UTF-8 snapshot payload ceiling; reject oversized writes before SQLite mutation and preserve the last valid snapshot.
-- [x] Add SHA-256 integrity metadata and verify snapshot payloads on load; corrupted snapshots fail closed with retained-event rebuild guidance, while pre-integrity legacy snapshots remain readable.
-- [ ] Add last-known-good snapshot recovery and state-aware compaction for corrupted or pruned histories.
+- [x] Add SHA-256 integrity metadata, one verified previous generation and explicit `aie state --recover`; corruption fails closed, recovery replays later events, and pre-integrity legacy snapshots remain readable.
+- [x] Retain one previous verified snapshot generation; `aie state --recover` restores it and replays later retained events after corruption or loss of the current snapshot.
+- [ ] Add state-aware compaction and recovery evaluation for corrupted or pruned histories.
 - [x] Add bounded deterministic context packets with explicit coverage, observation timestamps and evidence references; no inferred facts or implicit absence-as-removal semantics.
 - [ ] Evidence-backed relevance scoring and confidence calibration.
 - [ ] Privacy-safe project/session context.
