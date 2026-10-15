@@ -216,7 +216,9 @@ class MemoryStore:
         assignments = ", ".join(f"{field} = ?" for field in updates)
         with self._connect() as db:
             previous = db.execute(
-                "SELECT * FROM memories WHERE memory_id = ?", (memory_id,)
+                """SELECT * FROM memories WHERE memory_id = ?
+                   AND (expires_at IS NULL OR expires_at > ?)""",
+                (memory_id, datetime.now(timezone.utc).isoformat()),
             ).fetchone()
             if previous is None:
                 return False
@@ -261,6 +263,8 @@ class MemoryStore:
     def export_jsonl(self, destination: Path, *, include_sensitive: bool = False) -> int:
         """Export active memory records; sensitive export requires an explicit opt-in."""
         destination = Path(destination)
+        if not isinstance(include_sensitive, bool):
+            raise ValueError("include_sensitive must be a boolean")
         if destination.resolve() == self.path.resolve():
             raise ValueError("export destination must not be the SQLite database")
         # Export pages the underlying table rather than using the bounded interactive search.
