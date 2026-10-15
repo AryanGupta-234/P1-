@@ -4,7 +4,10 @@ from aie.contracts import AIEEvent, EntityRef
 from aie.state_model import project_environment_state
 
 
-def event(event_id, kind, when, *, host="host-a", name="demo.exe", entity_type="process", stable="42", data=None):
+def event(
+    event_id, kind, when, *, host="host-a", name="demo.exe",
+    entity_type="process", stable="42", data=None,
+):
     return AIEEvent(
         event_id=event_id,
         timestamp=datetime(2026, 1, 1, tzinfo=timezone.utc) + timedelta(seconds=when),
