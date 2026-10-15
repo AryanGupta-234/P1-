@@ -90,7 +90,7 @@ Status vocabulary: DONE / IN_PROGRESS / BLOCKED / PLANNED. A task is DONE only w
 - [x] Add explicit memory add/search/delete/expired-prune CLI workflows; memory is never generated or consolidated automatically.
 - [x] Provenance, confidence, sensitivity, TTL and verification state.
 - [ ] Retrieval benchmark, contradiction handling and memory decay.
-- [ ] User review, correction, export and deletion controls (explicit delete is implemented; correction/export UI remains).
+- [x] User review/search, correction with immutable prior-version history, JSONL export, explicit deletion and TTL cleanup; sensitive records are excluded from search/export unless explicitly opted in.
 - [ ] Experience consolidation with regression tests.
 
 ## M5 — Windows application automation and controlled autonomy
