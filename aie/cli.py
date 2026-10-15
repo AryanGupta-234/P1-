@@ -278,8 +278,12 @@ def correlate(
 
 @app.command()
 def state(
-    limit: int = typer.Option(10000, min=1, max=10000, help="Maximum new events to process."),
-    rebuild: bool = typer.Option(False, "--rebuild", help="Discard the saved projection and replay retained events."),
+    limit: int = typer.Option(
+        10000, min=1, max=10000, help="Maximum new events to process per invocation."
+    ),
+    rebuild: bool = typer.Option(
+        False, "--rebuild", help="Replay all currently retained events from the beginning."
+    ),
     db: Path = typer.Option(database_path(), "--db", help="SQLite event store."),
 ) -> None:
     """Update and display the durable evidence-backed environment projection."""
@@ -302,7 +306,7 @@ def state(
             console.print(f"[red]Saved projection is invalid; use --rebuild:[/red] {exc}")
             raise typer.Exit(2) from exc
 
-    batch = store.events_after_rowid(watermark, limit=limit)
+    batch = store.events_after_sequence(watermark, limit=limit)
     projection = project_environment_state(
         (event for _, event in batch), initial=projection
     )
@@ -313,10 +317,10 @@ def state(
         json.dumps(projection.to_dict(), separators=(",", ":"), allow_nan=False),
         schema_version=1,
     )
-    pending = bool(store.events_after_rowid(watermark, limit=1))
+    pending = bool(store.events_after_sequence(watermark, limit=1))
     result = {
         "projection_version": 1,
-        "last_ingest_rowid": watermark,
+        "last_ingest_sequence": watermark,
         "new_events_processed": len(batch),
         "more_events_pending": pending,
         "coverage": projection.coverage,
@@ -324,7 +328,7 @@ def state(
         "entities": [asdict(item) for _, item in sorted(projection.entities.items())],
         "ignored_events": projection.ignored_events,
         "limitations": [
-            "Projection includes evidence ingested up to the reported SQLite row ID.",
+            "Projection includes evidence ingested up to the reported SQLite ingestion sequence.",
             "The initial process baseline contains a count only; pre-existing instances remain unknown.",
             "Pruned evidence cannot be reconstructed by --rebuild.",
             "Missing entities are never inferred to be removed; only explicit removal evidence changes status.",
