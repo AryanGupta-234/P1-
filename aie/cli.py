@@ -484,7 +484,7 @@ def think(
         if include_memory:
             from aie.memory import MemoryStore
             packet["retrieved_memories"] = MemoryStore(db).search(
-                question, include_sensitive=False, limit=10
+                question[:1000], include_sensitive=False, limit=10
             )
         messages = build_cognitive_messages(packet, question)
     except (ValueError, TypeError, KeyError) as exc:
