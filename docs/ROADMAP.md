@@ -61,7 +61,7 @@ Status vocabulary: DONE / IN_PROGRESS / BLOCKED / PLANNED. A task is DONE only w
 - [x] Add an event-sourced environment projector for process instances and inventory entities, with exact host+PID+creation-time process identity, ETW evidence attachment, explicit removals and coverage/unknown-state reporting.
 - [x] Expose incremental retained-evidence projections through `aie state`; absence from the evidence stream never implies removal.
 - [x] Persist versioned compact environment projections separately from raw observations; incremental replay uses a monotonic SQLite ingestion sequence so late-imported ETW/derived events are not skipped.
-- [x] Bound per-process/per-entity evidence references to the latest 64 unique IDs and mark truncation in persisted state/context; legacy snapshots default the marker to false.
+- [x] Bound per-process/per-entity evidence references to the latest 64 unique IDs; mark truncation in persisted state/context and defensively cap context output from legacy oversized snapshots.
 - [x] Enforce a 16 MiB UTF-8 snapshot payload ceiling; reject oversized writes before SQLite mutation and preserve the last valid snapshot.
 - [ ] Add state-aware compaction and recovery evaluation for corrupted or pruned histories.
 - [x] Add bounded deterministic context packets with explicit coverage, observation timestamps and evidence references; no inferred facts or implicit absence-as-removal semantics.
