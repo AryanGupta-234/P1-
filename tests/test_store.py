@@ -143,3 +143,22 @@ def test_events_since_rejects_invalid_window(since, limit, tmp_path):
     store = EventStore(tmp_path / "events.sqlite3")
     with pytest.raises(ValueError):
         store.events_since(since, limit=limit)
+
+
+def test_events_since_orders_mixed_timezone_offsets_by_instant(tmp_path):
+    from datetime import timedelta
+
+    store = EventStore(tmp_path / "events.sqlite3")
+    # 12:00 UTC is later than 12:00 at UTC+02:00 (10:00 UTC).
+    later_utc = datetime(2026, 1, 1, 12, 0, tzinfo=timezone.utc)
+    earlier_plus_two = datetime(
+        2026, 1, 1, 12, 0, tzinfo=timezone(timedelta(hours=2))
+    )
+    store.append_many([
+        event("later-utc", later_utc),
+        event("earlier-plus-two", earlier_plus_two),
+    ])
+    result = store.events_since(datetime(2026, 1, 1, 9, 0, tzinfo=timezone.utc))
+    assert [item.event_id for item in result] == [
+        "earlier-plus-two", "later-utc"
+    ]
