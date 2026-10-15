@@ -214,8 +214,7 @@ class MemoryStore:
         destination = Path(destination)
         if destination.resolve() == self.path.resolve():
             raise ValueError("export destination must not be the SQLite database")
-        records = self.search("", include_sensitive=include_sensitive, limit=100)
-        # Search has a deliberate 100-record UI bound; export pages the underlying table.
+        # Export pages the underlying table rather than using the bounded interactive search.
         now = datetime.now(timezone.utc).isoformat()
         clause = "(expires_at IS NULL OR expires_at > ?)"
         args: list[Any] = [now]
