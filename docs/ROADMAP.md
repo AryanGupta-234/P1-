@@ -60,8 +60,8 @@ Status vocabulary: DONE / IN_PROGRESS / BLOCKED / PLANNED. A task is DONE only w
 - [x] Emit entity-level `present_observed` evidence for service/network/task/application inventory baselines (collection baseline counts remain explicitly count-only).
 - [x] Add an event-sourced environment projector for process instances and inventory entities, with exact host+PID+creation-time process identity, ETW evidence attachment, explicit removals and coverage/unknown-state reporting.
 - [x] Expose bounded retained-evidence projections through `aie state --since-minutes N`; absence from a query window never implies removal.
-- [ ] Persist compact state snapshots separately from raw observations; current projection is recomputed from retained events.
-- [ ] Evidence-backed relevance scoring and confidence calibration.
+- [x] Persist versioned compact environment projections separately from raw observations; incremental replay uses a monotonic SQLite ingestion sequence so late-imported ETW/derived events are not skipped.
+- [ ] Add snapshot compaction/size policy and recovery evaluation for corrupted or pruned histories.
 - [ ] Evidence-backed relevance scoring and confidence calibration.
 - [ ] Privacy-safe project/session context.
 - [ ] Synthetic evaluation corpus and false-positive/negative metrics.
@@ -112,7 +112,7 @@ Status vocabulary: DONE / IN_PROGRESS / BLOCKED / PLANNED. A task is DONE only w
 3. Validate the ETW decoder against real Windows traces, confirm available loss counters and correlate ETW events with snapshot reconciliation.
 4. Validate the fixed Event Log allowlist and persisted-cursor recovery on Windows, then add real-time subscriptions and process/image correlation.
 5. Build UIA read-only inspector before any app-control actions.
-6. Validate `aie state` against real observer history; then add durable projection checkpoints and a synthetic environmental-state evaluation corpus.
+6. Validate incremental `aie state` checkpoints against real observer history; add snapshot compaction and a synthetic environmental-state evaluation corpus.
 
 ## Hardware/model constraints
 - Routine: `qwen2.5:3b-instruct`.
