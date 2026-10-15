@@ -24,8 +24,15 @@ class EventStore:
                 updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)""")
             db.execute("""CREATE TABLE IF NOT EXISTS state_snapshots (
                 snapshot_key TEXT PRIMARY KEY, schema_version INTEGER NOT NULL,
-                last_event_rowid INTEGER NOT NULL, payload TEXT NOT NULL,
+                last_event_sequence INTEGER NOT NULL, payload TEXT NOT NULL,
                 updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)""")
+            db.execute("""CREATE TABLE IF NOT EXISTS event_ingest_seq (
+                ingest_seq INTEGER PRIMARY KEY AUTOINCREMENT,
+                event_id TEXT NOT NULL UNIQUE)""")
+            db.execute(
+                """INSERT OR IGNORE INTO event_ingest_seq(event_id)
+                   SELECT event_id FROM events ORDER BY rowid ASC"""
+            )
 
     def _connect(self) -> sqlite3.Connection:
         db = sqlite3.connect(self.path, timeout=10)
@@ -45,14 +52,21 @@ class EventStore:
         ]
         if not records:
             return 0
+        inserted = 0
         with self._connect() as db:
-            before = db.total_changes
-            db.executemany(
-                "INSERT OR IGNORE INTO events(event_id,timestamp,source,event_type,payload) "
-                "VALUES(?,?,?,?,?)",
-                records,
-            )
-            return db.total_changes - before
+            for record in records:
+                cursor = db.execute(
+                    "INSERT OR IGNORE INTO events(event_id,timestamp,source,event_type,payload) "
+                    "VALUES(?,?,?,?,?)",
+                    record,
+                )
+                if cursor.rowcount == 1:
+                    db.execute(
+                        "INSERT INTO event_ingest_seq(event_id) VALUES(?)",
+                        (record[0],),
+                    )
+                    inserted += 1
+        return inserted
 
     def get_checkpoint(self, key: str) -> str | None:
         """Read a small durable collector checkpoint by its namespaced key."""
@@ -82,18 +96,20 @@ class EventStore:
             )
 
 
-    def events_after_rowid(
-        self, after_rowid: int = 0, *, limit: int = 10000
+    def events_after_sequence(
+        self, after_sequence: int = 0, *, limit: int = 10000
     ) -> list[tuple[int, AIEEvent]]:
         """Read events in durable SQLite ingestion order, including late imports."""
-        if isinstance(after_rowid, bool) or after_rowid < 0:
-            raise ValueError("after_rowid must be zero or greater")
+        if isinstance(after_sequence, bool) or after_sequence < 0:
+            raise ValueError("after_sequence must be zero or greater")
         if not 1 <= limit <= 10000:
             raise ValueError("limit must be between 1 and 10000")
         with self._connect() as db:
             rows = db.execute(
-                "SELECT rowid, payload FROM events WHERE rowid > ? ORDER BY rowid ASC LIMIT ?",
-                (after_rowid, limit),
+                "SELECT seq.ingest_seq, events.payload FROM events
+                   JOIN event_ingest_seq AS seq ON seq.event_id = events.event_id
+                   WHERE seq.ingest_seq > ? ORDER BY seq.ingest_seq ASC LIMIT ?",
+                (after_sequence, limit),
             ).fetchall()
         return [
             (int(row[0]), AIEEvent.model_validate(json.loads(row[1])))
@@ -101,13 +117,13 @@ class EventStore:
         ]
 
     def save_state_snapshot(
-        self, key: str, last_event_rowid: int, payload: str, *, schema_version: int = 1
+        self, key: str, last_event_sequence: int, payload: str, *, schema_version: int = 1
     ) -> None:
         """Atomically persist a versioned projection and its ingestion watermark."""
         if not key or len(key) > 128:
             raise ValueError("snapshot key must contain 1..128 characters")
-        if isinstance(last_event_rowid, bool) or last_event_rowid < 0:
-            raise ValueError("last_event_rowid must be zero or greater")
+        if isinstance(last_event_sequence, bool) or last_event_sequence < 0:
+            raise ValueError("last_event_sequence must be zero or greater")
         if not isinstance(payload, str):
             raise ValueError("snapshot payload must be a string")
         if not 1 <= schema_version <= 1000:
@@ -115,14 +131,14 @@ class EventStore:
         with self._connect() as db:
             db.execute(
                 """INSERT INTO state_snapshots(
-                    snapshot_key, schema_version, last_event_rowid, payload, updated_at
+                    snapshot_key, schema_version, last_event_sequence, payload, updated_at
                 ) VALUES(?, ?, ?, ?, CURRENT_TIMESTAMP)
                 ON CONFLICT(snapshot_key) DO UPDATE SET
                     schema_version=excluded.schema_version,
-                    last_event_rowid=excluded.last_event_rowid,
+                    last_event_sequence=excluded.last_event_sequence,
                     payload=excluded.payload,
                     updated_at=CURRENT_TIMESTAMP""",
-                (key, schema_version, last_event_rowid, payload),
+                (key, schema_version, last_event_sequence, payload),
             )
 
     def load_state_snapshot(self, key: str) -> tuple[int, int, str] | None:
@@ -131,7 +147,7 @@ class EventStore:
             raise ValueError("snapshot key must contain 1..128 characters")
         with self._connect() as db:
             row = db.execute(
-                """SELECT schema_version, last_event_rowid, payload
+                """SELECT schema_version, last_event_sequence, payload
                    FROM state_snapshots WHERE snapshot_key = ?""",
                 (key,),
             ).fetchone()
@@ -204,6 +220,9 @@ class EventStore:
                     "DELETE FROM events WHERE julianday(timestamp) < julianday(?)",
                     (cutoff,),
                 )
+                db.execute(
+                    "DELETE FROM event_ingest_seq WHERE event_id NOT IN (SELECT event_id FROM events)"
+                )
                 return db.total_changes - before
 
         if keep_latest is None or keep_latest < 0:
@@ -217,5 +236,8 @@ class EventStore:
                        ORDER BY julianday(timestamp) DESC, event_id DESC LIMIT ?
                    )""",
                 (keep_latest,),
+            )
+            db.execute(
+                "DELETE FROM event_ingest_seq WHERE event_id NOT IN (SELECT event_id FROM events)"
             )
             return db.total_changes - before
