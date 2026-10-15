@@ -56,3 +56,10 @@ def test_write_proposal_denied_without_target_verification_or_sandbox():
     assert evaluate_proposal(item, context).reason_code == "TARGET_UNVERIFIED"
     verified = PolicyContext(frozenset({"file.delete"}), target_verified=True)
     assert evaluate_proposal(item, verified).reason_code == "SANDBOX_UNAVAILABLE"
+
+
+
+def test_unrelated_grant_cannot_authorize_a_different_action():
+    item = proposal("file.delete", "C:/temp/x", {}, ("system.inspect",))
+    context = PolicyContext(frozenset({"system.inspect"}), target_verified=True, sandbox_available=True)
+    assert evaluate_proposal(item, context).reason_code == "INVALID_CAPABILITY"
