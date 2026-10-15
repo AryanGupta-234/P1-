@@ -112,7 +112,9 @@ class MemoryStore:
             raise ValueError("memory_id must contain 1..64 characters")
         with self._connect() as db:
             row = db.execute(
-                "SELECT * FROM memories WHERE memory_id = ?", (memory_id,)
+                """SELECT * FROM memories WHERE memory_id = ?
+                   AND (expires_at IS NULL OR expires_at > ?)""",
+                (memory_id, datetime.now(timezone.utc).isoformat()),
             ).fetchone()
             if row is None:
                 return None
@@ -163,6 +165,73 @@ class MemoryStore:
                 record["memory_id"],
             ))
         return records[:limit]
+
+
+    def revise(
+        self,
+        memory_id: str,
+        *,
+        content: str | None = None,
+        confidence: float | None = None,
+        verification: str | None = None,
+        tags: list[str] | None = None,
+    ) -> bool:
+        """Explicitly correct a memory without silently changing its provenance."""
+        if not isinstance(memory_id, str) or not memory_id or len(memory_id) > 64:
+            raise ValueError("memory_id must contain 1..64 characters")
+        updates: dict[str, Any] = {}
+        if content is not None:
+            if not isinstance(content, str) or not content.strip() or len(content) > MAX_CONTENT_CHARS:
+                raise ValueError(f"content must contain 1..{MAX_CONTENT_CHARS} characters")
+            updates["content"] = content
+        if confidence is not None:
+            if isinstance(confidence, bool) or not isinstance(confidence, (int, float)) or not math.isfinite(confidence) or not 0 <= confidence <= 1:
+                raise ValueError("confidence must be finite and between 0 and 1")
+            updates["confidence"] = float(confidence)
+        if verification is not None:
+            if verification not in VERIFICATION_STATES:
+                raise ValueError("invalid verification state")
+            updates["verification"] = verification
+        if tags is not None:
+            if not isinstance(tags, list) or len(tags) > MAX_TAGS or any(
+                not isinstance(tag, str) or not tag.strip() or len(tag) > 64 for tag in tags
+            ):
+                raise ValueError(f"tags must contain at most {MAX_TAGS} non-empty strings")
+            updates["tags_json"] = json.dumps(tags)
+        if not updates:
+            raise ValueError("at least one field must be supplied for revision")
+        updates["updated_at"] = datetime.now(timezone.utc).isoformat()
+        assignments = ", ".join(f"{field} = ?" for field in updates)
+        with self._connect() as db:
+            cursor = db.execute(
+                f"UPDATE memories SET {assignments} WHERE memory_id = ?",
+                (*updates.values(), memory_id),
+            )
+            return cursor.rowcount == 1
+
+    def export_jsonl(self, destination: Path, *, include_sensitive: bool = False) -> int:
+        """Export active memory records; sensitive export requires an explicit opt-in."""
+        destination = Path(destination)
+        if destination.resolve() == self.path.resolve():
+            raise ValueError("export destination must not be the SQLite database")
+        records = self.search("", include_sensitive=include_sensitive, limit=100)
+        # Search has a deliberate 100-record UI bound; export pages the underlying table.
+        now = datetime.now(timezone.utc).isoformat()
+        clause = "(expires_at IS NULL OR expires_at > ?)"
+        args: list[Any] = [now]
+        if not include_sensitive:
+            clause += " AND sensitivity != 'sensitive'"
+        with self._connect() as db:
+            rows = db.execute(
+                "SELECT * FROM memories WHERE " + clause
+                + " ORDER BY created_at ASC, memory_id ASC",
+                args,
+            ).fetchall()
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        with destination.open("x", encoding="utf-8", newline="\\n") as handle:
+            for row in rows:
+                handle.write(json.dumps(_decode(row), ensure_ascii=False, allow_nan=False) + "\\n")
+        return len(rows)
 
     def delete(self, memory_id: str) -> bool:
         if not isinstance(memory_id, str) or not memory_id or len(memory_id) > 64:
