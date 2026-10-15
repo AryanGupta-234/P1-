@@ -3,8 +3,8 @@
 > Always-current project orientation. Read before coding and update in the same change as milestone progress.
 
 **Last updated:** 2026-10-15  
-**Active phase:** Windows Environment Intelligence  
-**Active milestone:** M1 — Environment Observer (user-mode inventory + event pipeline)  
+**Active phase:** Environment Intelligence + Cognitive Foundations  
+**Active milestone:** M2 — Context Intelligence (durable evidence-backed environment projection; Windows validation remains open)  
 **Platform:** Windows 11 x64 only  
 **Development target:** ASUS Vivobook X1605ZA class · 16 GB RAM · Intel Core i5-12500H class
 
