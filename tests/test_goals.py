@@ -67,3 +67,14 @@ def test_goal_cannot_be_completed_with_incomplete_steps(tmp_path):
         store.set_goal_status(goal["goal_id"], "completed")
     store.update_step(goal["goal_id"], step["step_id"], "completed")
     assert store.get(goal["goal_id"])["status"] == "completed"
+
+
+
+def test_goal_cannot_be_completed_with_incomplete_steps(tmp_path):
+    store = GoalStore(tmp_path / "goals.sqlite3")
+    goal = store.create("Must finish")
+    step = store.add_step(goal["goal_id"], "Required work")
+    with pytest.raises(ValueError):
+        store.set_goal_status(goal["goal_id"], "completed")
+    store.update_step(goal["goal_id"], step["step_id"], "completed")
+    assert store.get(goal["goal_id"])["status"] == "completed"
