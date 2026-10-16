@@ -111,13 +111,13 @@ class GoalStore:
         return self._decode(goal,steps)
 
     def list(self, status: str | None = None, limit: int = 50):
-        if status is not None and status not in GOAL_STATUSES:
+        if status is not None and (not isinstance(status, str) or status not in GOAL_STATUSES):
             raise ValueError("invalid goal status")
         if isinstance(limit,bool) or not isinstance(limit,int) or not 1 <= limit <= 200:
             raise ValueError("limit must be between 1 and 200")
         with self._connect() as db:
             if status is None:
-                rows=db.execute("SELECT * FROM goals ORDER BY updated_at DESC LIMIT ?",(limit,)).fetchall()
+                rows=db.execute("SELECT * FROM goals ORDER BY updated_at DESC, goal_id LIMIT ?",(limit,)).fetchall()
             else:
                 rows=db.execute("SELECT * FROM goals WHERE status=? ORDER BY updated_at DESC LIMIT ?",(status,limit)).fetchall()
             result=[]
@@ -159,7 +159,7 @@ class GoalStore:
 
     def update_step(self, goal_id: str, step_id: str, status: str):
         self._id(goal_id); self._id(step_id)
-        if status not in STEP_STATUSES:
+        if not isinstance(status, str) or status not in STEP_STATUSES:
             raise ValueError("invalid step status")
         now=datetime.now(timezone.utc).isoformat()
         with self._connect() as db:
@@ -194,7 +194,7 @@ class GoalStore:
 
     def set_status(self, goal_id: str, status: str):
         self._id(goal_id)
-        if status not in GOAL_STATUSES:
+        if not isinstance(status, str) or status not in GOAL_STATUSES:
             raise ValueError("invalid goal status")
         now=datetime.now(timezone.utc).isoformat()
         with self._connect() as db:
