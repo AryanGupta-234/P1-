@@ -244,3 +244,24 @@ class GoalStore:
         return {"draft_id": row["draft_id"], "goal_id": row["goal_id"], "status": row["status"],
                 "model": row["model"], "plan": json.loads(payload), "sha256": row["plan_sha256"],
                 "created_at": row["created_at"], "updated_at": row["updated_at"]}
+
+
+    def create_plan_draft(self, goal_id: str, plan: dict, model: str):
+        import hashlib
+        from aie.planning import validate_plan_output
+        self._id(goal_id)
+        if not isinstance(model, str) or not model.strip() or len(model) > 160:
+            raise ValueError("invalid model name")
+        normalized = validate_plan_output(json.dumps(plan, ensure_ascii=False, allow_nan=False))
+        payload = json.dumps(normalized, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False)
+        digest = hashlib.sha256(payload.encode("utf-8")).hexdigest()
+        now, draft_id = datetime.now(timezone.utc).isoformat(), str(uuid4())
+        with self._connect() as db:
+            goal = db.execute("SELECT status FROM goals WHERE goal_id=?", (goal_id,)).fetchone()
+            if goal is None or goal["status"] not in {"active", "paused"}:
+                raise ValueError("active or paused goal required")
+            db.execute("INSERT INTO goal_plan_drafts VALUES(?,?, 'pending_review', ?,?,?,?,?)",
+                       (draft_id, goal_id, model.strip(), payload, digest, now, now))
+            self._record(db, goal_id, None, "plan_draft.created", None,
+                         {"draft_id": draft_id, "status": "pending_review", "sha256": digest}, now)
+        return self.get_plan_draft(draft_id)
