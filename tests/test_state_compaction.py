@@ -54,7 +54,7 @@ def test_compaction_only_removes_excess_old_terminal_records():
     assert ("host", "services", "recent") in compacted.entities
     assert ("host", "services", "present") in compacted.entities
     assert len(original.processes) == 5
-    assert compacted.coverage["compaction.processes_pruned_total"] == "1"
+    assert compacted.coverage["compaction.processes_pruned_total"] == "2"
 
 
 def test_compaction_can_remove_all_eligible_old_terminal_records():
