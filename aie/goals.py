@@ -119,7 +119,7 @@ class GoalStore:
             if status is None:
                 rows=db.execute("SELECT * FROM goals ORDER BY updated_at DESC, goal_id LIMIT ?",(limit,)).fetchall()
             else:
-                rows=db.execute("SELECT * FROM goals WHERE status=? ORDER BY updated_at DESC LIMIT ?",(status,limit)).fetchall()
+                rows=db.execute("SELECT * FROM goals WHERE status=? ORDER BY updated_at DESC, goal_id LIMIT ?",(status,limit)).fetchall()
             result=[]
             for goal in rows:
                 steps=db.execute("SELECT * FROM goal_steps WHERE goal_id=? ORDER BY position,step_id",(goal["goal_id"],)).fetchall()
