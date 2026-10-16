@@ -229,3 +229,18 @@ class GoalStore:
             "previous":json.loads(r["previous_json"]) if r["previous_json"] else None,
             "current":json.loads(r["current_json"]),"occurred_at":r["occurred_at"],
         } for r in rows]
+
+
+    def get_plan_draft(self, draft_id: str):
+        import hashlib
+        self._id(draft_id)
+        with self._connect() as db:
+            row = db.execute("SELECT * FROM goal_plan_drafts WHERE draft_id=?", (draft_id,)).fetchone()
+        if row is None:
+            return None
+        payload = row["plan_json"]
+        if hashlib.sha256(payload.encode("utf-8")).hexdigest() != row["plan_sha256"]:
+            raise ValueError("plan draft integrity check failed")
+        return {"draft_id": row["draft_id"], "goal_id": row["goal_id"], "status": row["status"],
+                "model": row["model"], "plan": json.loads(payload), "sha256": row["plan_sha256"],
+                "created_at": row["created_at"], "updated_at": row["updated_at"]}
