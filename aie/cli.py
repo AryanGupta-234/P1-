@@ -392,6 +392,45 @@ def state(
     console.print_json(json.dumps(result, default=str))
 
 
+@app.command("compact-state")
+def compact_state(
+    older_than_days: int = typer.Option(90, min=1, max=36500, help="Only terminal records older than this age are eligible."),
+    max_terminal_records: int = typer.Option(1000, min=0, max=10000, help="Retain this many newest eligible terminal records per collection."),
+    db: Path = typer.Option(database_path(), "--db", help="SQLite event store."),
+) -> None:
+    """Explicitly compact old terminal projection records without deleting raw events."""
+    from aie.state_compaction import compact_projection
+    from aie.state_model import EnvironmentProjection
+
+    store = EventStore(db)
+    try:
+        saved = store.load_state_snapshot("aie.environment.v1")
+        if saved is None:
+            raise ValueError("no saved projection; run aie state first")
+        version, watermark, payload = saved
+        if version != 1:
+            raise ValueError("unsupported projection version")
+        projection = EnvironmentProjection.from_dict(json.loads(payload))
+        cutoff = datetime.now(timezone.utc) - timedelta(days=older_than_days)
+        result = compact_projection(
+            projection, older_than=cutoff, max_terminal_records=max_terminal_records
+        )
+        serialized = json.dumps(result.projection.to_dict(), separators=(",", ":"), allow_nan=False)
+        store.save_state_snapshot("aie.environment.v1", watermark, serialized, schema_version=1)
+    except (OSError, ValueError, TypeError, KeyError) as exc:
+        console.print(f"[red]State compaction failed:[/red] {exc}")
+        raise typer.Exit(2) from exc
+    console.print_json(json.dumps({
+        "processes_removed": result.processes_removed,
+        "entities_removed": result.entities_removed,
+        "max_terminal_records": result.max_terminal_records,
+        "cutoff": cutoff.isoformat(),
+        "last_ingest_sequence_preserved": watermark,
+        "raw_event_count_unchanged": store.count(),
+        "semantics": "only old terminal projection entries compacted; raw event history unchanged",
+    }, indent=2))
+
+
 @app.command()
 def export_events(output: Path = typer.Argument(...)) -> None:
     """Write the complete event store to a chronological JSONL file."""
