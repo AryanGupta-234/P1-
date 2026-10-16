@@ -70,7 +70,7 @@ def test_goal_cannot_be_completed_with_incomplete_steps(tmp_path):
 
 
 
-def test_goal_cannot_be_completed_with_incomplete_steps(tmp_path):
+def test_goal_completion_after_last_step_is_automatic(tmp_path):
     store = GoalStore(tmp_path / "goals.sqlite3")
     goal = store.create("Must finish")
     step = store.add_step(goal["goal_id"], "Required work")
