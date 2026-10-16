@@ -76,7 +76,7 @@ class GoalStore:
             decoded.append(item)
             by_id[item["step_id"]] = item
         for item in decoded:
-            item["ready"] = item["status"] in {"pending", "blocked"} and all(
+            item["ready"] = item["status"] == "pending" and all(
                 by_id.get(dep, {}).get("status") == "completed" for dep in item["dependencies"]
             )
         return {
@@ -178,8 +178,6 @@ class GoalStore:
             done=all(states.get(dep)=="completed" for dep in deps)
             if status in {"in_progress","completed"} and not done:
                 raise ValueError("all dependencies must be completed first")
-            if status=="blocked" and done:
-                raise ValueError("cannot block a step whose dependencies are complete")
             old=row["status"]
             if old==status:
                 return self.get(goal_id)["steps_by_id"][step_id]
