@@ -242,8 +242,10 @@ class GoalStore:
         payload = row["plan_json"]
         if hashlib.sha256(payload.encode("utf-8")).hexdigest() != row["plan_sha256"]:
             raise ValueError("plan draft integrity check failed")
+        from aie.planning import validate_plan_output
+        validated = validate_plan_output(payload)
         return {"draft_id": row["draft_id"], "goal_id": row["goal_id"], "status": row["status"],
-                "model": row["model"], "plan": json.loads(payload), "sha256": row["plan_sha256"],
+                "model": row["model"], "plan": {"steps": validated["steps"]}, "sha256": row["plan_sha256"],
                 "created_at": row["created_at"], "updated_at": row["updated_at"]}
 
 
@@ -328,7 +330,8 @@ class GoalStore:
             if hashlib.sha256(payload.encode("utf-8")).hexdigest() != row["plan_sha256"]:
                 raise ValueError("plan draft integrity check failed")
             if decision == "accepted":
-                steps = json.loads(payload)["steps"]
+                from aie.planning import validate_plan_output
+                steps = validate_plan_output(payload)["steps"]
                 count = db.execute("SELECT COUNT(*) FROM goal_steps WHERE goal_id=?", (row["goal_id"],)).fetchone()[0]
                 if count + len(steps) > 200:
                     raise ValueError("goal step limit would be exceeded")
