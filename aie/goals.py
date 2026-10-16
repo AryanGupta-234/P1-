@@ -203,6 +203,13 @@ class GoalStore:
                 raise ValueError("goal not found")
             if row["status"]=="completed" and status!="completed":
                 raise ValueError("completed goals are terminal")
+            if status == "completed":
+                progress = db.execute(
+                    "SELECT COUNT(*), SUM(CASE WHEN status='completed' THEN 1 ELSE 0 END) "
+                    "FROM goal_steps WHERE goal_id = ?", (goal_id,)
+                ).fetchone()
+                if progress[0] == 0 or progress[1] != progress[0]:
+                    raise ValueError("a goal can be completed only after every step is completed")
             if row["status"]!=status:
                 db.execute("UPDATE goals SET status=?,updated_at=? WHERE goal_id=?",(status,now,goal_id))
                 self._record(db,goal_id,None,"goal.status_changed",{"status":row["status"]},{"status":status},now)
