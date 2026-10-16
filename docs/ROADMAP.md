@@ -84,7 +84,8 @@ Status vocabulary: DONE / IN_PROGRESS / BLOCKED / PLANNED. A task is DONE only w
 - [ ] Add optional cloud adapter behind an explicit per-task data-egress policy.
 - [ ] Add context budgets, latency/cost metrics and deterministic fallback.
 - [x] Add persistent user-directed goals, ordered steps, dependency gates, goal/step state transitions and append-only history; expose CLI and opt-in bounded goal context to `aie think`.
-- [ ] Add model-generated plan drafts with explicit human review/acceptance; models cannot change security policy.
+- [x] Add local model-generated plan suggestions with strict JSON/schema validation, bounded context and dependency ordering; suggestions are returned only for review and never persisted/executed automatically.
+- [ ] Add explicit plan-draft persistence, user acceptance/rejection workflow and plan-quality evaluation; models cannot change security policy.
 
 ## M4 — Persistent Intelligence
 - [x] Add explicit working, episodic, semantic, procedural and prospective memory record kinds in local SQLite.
@@ -128,6 +129,7 @@ Status vocabulary: DONE / IN_PROGRESS / BLOCKED / PLANNED. A task is DONE only w
 7. Evaluate `aie prioritize` against labeled retrieval scenarios; calibrate weights only from measured results.
 8. Validate `aie think` against prompt-injection fixtures and target-host Ollama latency, memory and output quality.
 9. Exercise goal dependency gates, pause/resume, history integrity and bounded `--include-goals` context on Windows.
+10. Evaluate local `goal-suggest` output quality and adversarial goal-text handling; add explicit accept/reject only after review workflow design.
 
 ## Hardware/model constraints
 - Routine: `qwen2.5:3b-instruct`.
