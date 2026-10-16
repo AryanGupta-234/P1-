@@ -100,7 +100,7 @@ Status vocabulary: DONE / IN_PROGRESS / BLOCKED / PLANNED. A task is DONE only w
 - [ ] Experience consolidation with regression tests.
 
 ## M5 — Windows application automation and controlled autonomy
-- [ ] Windows UI Automation (UIA) client and bounded tree inspector.
+- [x] Add a bounded read-only Windows UI Automation inspector with strict window/node/depth/output/time limits; collect structural metadata only and exclude text/value/password contents and all interaction patterns. Native Windows runtime validation remains pending.
 - [ ] App compatibility registry: API / COM / UIA_FULL / UIA_PARTIAL / CLI_ONLY / MANUAL_ONLY.
 - [ ] Adapter SDK for per-application APIs, COM, CLI and UIA.
 - [ ] Window/process identity verification before every UI action.
@@ -126,7 +126,7 @@ Status vocabulary: DONE / IN_PROGRESS / BLOCKED / PLANNED. A task is DONE only w
 2. Validate pause/resume, collector recovery and export on the target Windows host.
 3. Validate the ETW decoder against real Windows traces, confirm available loss counters and correlate ETW events with snapshot reconciliation.
 4. Validate the fixed Event Log allowlist and persisted-cursor recovery on Windows, then add real-time subscriptions and process/image correlation.
-5. Build UIA read-only inspector before any app-control actions.
+5. Validate `aie uia-inspect` on Windows across elevated/non-elevated apps, multi-monitor layouts and common UI frameworks; retain observation-only semantics.
 6. Validate incremental `aie state` checkpoints and `aie compact-state` behavior against real observer history; build a synthetic environmental-state evaluation corpus.
 7. Evaluate `aie prioritize` against labeled retrieval scenarios; calibrate weights only from measured results.
 8. Validate `aie think` against prompt-injection fixtures and target-host Ollama latency, memory and output quality.
