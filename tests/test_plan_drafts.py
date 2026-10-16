@@ -67,3 +67,17 @@ def test_plan_draft_integrity_is_verified(tmp_path):
         store.get_plan_draft(draft["draft_id"])
     with pytest.raises(ValueError, match="integrity"):
         store.resolve_plan_draft(draft["draft_id"], "accepted")
+
+
+def test_planner_validation_metadata_is_normalized_before_persistence(tmp_path):
+    from aie.planning import validate_plan_output
+
+    store = GoalStore(tmp_path / "goals.sqlite3")
+    goal = store.create("Planner output")
+    validated = validate_plan_output(
+        '{"steps":[{"title":"One","description":"First","depends_on":[]}]}'
+    )
+    draft = store.create_plan_draft(goal["goal_id"], validated, "local-model")
+    assert draft["plan"] == {
+        "steps": [{"title": "One", "description": "First", "depends_on": []}]
+    }
