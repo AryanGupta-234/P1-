@@ -56,10 +56,19 @@ def build_plan_messages(goal: dict[str, Any]) -> list[dict[str, str]]:
     for step in steps[:40]:
         if not isinstance(step, dict):
             raise ValueError("existing steps must be objects")
+        step_title = step.get("title", "")
+        step_status = step.get("status", "")
+        dependencies = step.get("dependencies", [])
+        if not isinstance(step_title, str) or not isinstance(step_status, str):
+            raise ValueError("existing step title and status must be strings")
+        if not isinstance(dependencies, list) or len(dependencies) > 32 or any(
+            not isinstance(dep, str) or len(dep) > 64 for dep in dependencies
+        ):
+            raise ValueError("existing step dependencies must be a bounded string list")
         compact_steps.append({
-            "title": str(step.get("title", ""))[:240],
-            "status": str(step.get("status", ""))[:32],
-            "dependencies": step.get("dependencies", [])[:32],
+            "title": step_title[:240],
+            "status": step_status[:32],
+            "dependencies": dependencies,
         })
     context = {
         "goal_title": title,
@@ -91,10 +100,25 @@ def validate_plan_output(content: str) -> dict[str, Any]:
     """Strictly validate model output and reject cycles, extra fields and oversized drafts."""
     if not isinstance(content, str) or not content.strip() or len(content) > MAX_PLAN_OUTPUT_CHARS:
         raise ValueError("plan output must contain 1..12000 characters")
+    def reject_duplicate_keys(pairs):
+        result = {}
+        for key, value in pairs:
+            if key in result:
+                raise ValueError("model output contains duplicate JSON keys")
+            result[key] = value
+        return result
+
+    def reject_nonfinite(value):
+        raise ValueError(f"model output contains non-finite JSON value: {value}")
+
     try:
-        value = json.loads(content)
-    except json.JSONDecodeError as exc:
-        raise ValueError("model did not return valid JSON") from exc
+        value = json.loads(
+            content,
+            object_pairs_hook=reject_duplicate_keys,
+            parse_constant=reject_nonfinite,
+        )
+    except (json.JSONDecodeError, TypeError) as exc:
+        raise ValueError("model did not return valid finite JSON") from exc
     if not isinstance(value, dict) or set(value) != {"steps"}:
         raise ValueError("plan must contain only a steps array")
     steps = value["steps"]
