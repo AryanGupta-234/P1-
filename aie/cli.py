@@ -481,31 +481,51 @@ def think(
         raise typer.Exit(2)
     try:
         projection = EnvironmentProjection.from_dict(json.loads(payload))
-        packet = build_environment_context(projection)
+        packet = build_environment_context(
+            projection, max_processes=12, max_entities=12
+        )
+        for collection in ("processes", "entities"):
+            for item in packet[collection]:
+                refs = item.get("evidence_ids", [])
+                if len(refs) > 8:
+                    item["evidence_truncated"] = True
+                item["evidence_ids"] = refs[-8:]
         if include_memory:
             from aie.memory import MemoryStore
-            packet["retrieved_memories"] = MemoryStore(db).search(
-                question[:1000], include_sensitive=False, limit=10
+            matches = MemoryStore(db).search(
+                question[:1000], include_sensitive=False, limit=5
             )
+            packet["retrieved_memories"] = [{
+                "memory_id": item["memory_id"],
+                "kind": item["kind"],
+                "content": item["content"][:1000],
+                "provenance_ids": item["provenance_ids"][-8:],
+                "confidence": item["confidence"],
+                "verification": item["verification"],
+                "sensitivity": item["sensitivity"],
+                "tags": item["tags"][:8],
+                "created_at": item["created_at"],
+                "expires_at": item["expires_at"],
+            } for item in matches]
         if include_goals:
             from aie.goals import GoalStore
             goal_store = GoalStore(db)
-            goals = goal_store.list(status="active", limit=10) + goal_store.list(status="paused", limit=10)
+            goals = goal_store.list(status="active", limit=6) + goal_store.list(status="paused", limit=6)
             goals.sort(key=lambda goal: (goal["updated_at"], goal["goal_id"]), reverse=True)
             packet["user_goals"] = [{
                 "goal_id": goal["goal_id"],
-                "title": goal["title"],
-                "description": goal["description"][:1000],
+                "title": goal["title"][:160],
+                "description": goal["description"][:400],
                 "status": goal["status"],
                 "progress": goal["progress"],
                 "steps": [{
                     "step_id": step["step_id"],
-                    "title": step["title"],
+                    "title": step["title"][:160],
                     "status": step["status"],
                     "ready": step["ready"],
-                    "dependencies": step["dependencies"],
-                } for step in goal["steps"][:20]],
-            } for goal in goals[:10]]
+                    "dependencies": step["dependencies"][:8],
+                } for step in goal["steps"][:10]],
+            } for goal in goals[:6]]
         messages = build_cognitive_messages(packet, question)
     except (ValueError, TypeError, KeyError) as exc:
         console.print(f"[red]Could not prepare bounded context:[/red] {exc}")
