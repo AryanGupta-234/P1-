@@ -456,6 +456,7 @@ def think(
     task: str = typer.Option("routine", help="Local model policy: routine or complex."),
     timeout: float = typer.Option(90.0, min=1.0, max=300.0),
     include_memory: bool = typer.Option(False, "--include-memory", help="Include matching non-sensitive user-created memories."),
+    include_goals: bool = typer.Option(False, "--include-goals", help="Include active and paused user-authored goals."),
     db: Path = typer.Option(database_path(), "--db", help="SQLite event store."),
 ) -> None:
     """Analyze saved observations with a local model; this command cannot execute actions."""
@@ -486,6 +487,23 @@ def think(
             packet["retrieved_memories"] = MemoryStore(db).search(
                 question[:1000], include_sensitive=False, limit=10
             )
+        if include_goals:
+            from aie.goals import GoalStore
+            goals = GoalStore(db).list(limit=10)
+            packet["user_goals"] = [{
+                "goal_id": goal["goal_id"],
+                "title": goal["title"],
+                "description": goal["description"][:1000],
+                "status": goal["status"],
+                "progress": goal["progress"],
+                "steps": [{
+                    "step_id": step["step_id"],
+                    "title": step["title"],
+                    "status": step["status"],
+                    "ready": step["ready"],
+                    "dependencies": step["dependencies"],
+                } for step in goal["steps"][:20]],
+            } for goal in goals if goal["status"] in {"active", "paused"}]
         messages = build_cognitive_messages(packet, question)
     except (ValueError, TypeError, KeyError) as exc:
         console.print(f"[red]Could not prepare bounded context:[/red] {exc}")
