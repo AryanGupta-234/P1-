@@ -796,5 +796,33 @@ def goal_history(
     console.print_json(json.dumps(history, indent=2))
 
 
+@app.command("goal-suggest")
+def goal_suggest(goal_id: str = typer.Argument(...), db: Path = typer.Option(database_path(), "--db")) -> None:
+    """Create a local structured plan draft for human review; never execute it."""
+    from aie.goals import GoalStore
+    from aie.planning import build_plan_messages, plan_schema, validate_plan_output
+    from aie.ollama import OllamaClient, OllamaError
+
+    goal = GoalStore(db).get(goal_id)
+    if goal is None or goal["status"] not in {"active", "paused"}:
+        console.print("[yellow]An active or paused goal is required.[/yellow]")
+        raise typer.Exit(2)
+    try:
+        messages = build_plan_messages(goal)
+        installed = discover_local_models()
+        decision = choose_local_model("routine", installed, runtime_profile()["memory_available_gib"])
+        if not decision.available or decision.selected_model is None:
+            raise ValueError(decision.reason)
+        result = OllamaClient(timeout=90).chat(
+            decision.selected_model, messages, format=plan_schema(),
+            options={"num_predict": 1024, "temperature": 0.1},
+        )
+        draft = validate_plan_output(result.content)
+    except (OllamaError, ValueError, TypeError, KeyError) as exc:
+        console.print(f"[red]Plan suggestion rejected:[/red] {exc}")
+        raise typer.Exit(2) from exc
+    console.print_json(json.dumps({"goal_id": goal_id, "model": result.model, "draft": draft}, indent=2))
+
+
 if __name__ == "__main__":
     app()
