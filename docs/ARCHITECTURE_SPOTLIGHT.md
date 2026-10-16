@@ -84,7 +84,7 @@ See [HARDWARE_PROFILE.md](HARDWARE_PROFILE.md) for the sanitized host baseline.
 - Dedicated end-to-end runtime tests and Windows-host validation for pause/resume, collector recovery, CPU overhead and event latency.
 - Executable path/signature discovery and application adapter registry.
 - UI Automation client, app-specific automation adapters and action execution.
-- State-aware compaction and recovery evaluation across pruning/corruption edge cases, broader environmental state semantics, relationship modeling and synthetic projection evaluation. Per-entity evidence references are bounded at 64 IDs with explicit truncation metadata, and snapshot writes have a fail-safe 16 MiB payload ceiling. `aie state` persists a versioned projection and resumes by monotonic SQLite ingestion sequence; `aie context` emits bounded facts with provenance but does not reason over them. Initial process baseline coverage remains count-only.
+- Recovery evaluation across pruning/corruption edge cases, broader environmental state semantics, relationship modeling and synthetic projection evaluation. Explicit `aie compact-state --older-than-days N --max-terminal-records N` removes only excess old terminal process/entity records from the saved projection, retains recent/live records, records cumulative compaction metadata, and preserves the raw event log and ingest watermark. Per-entity evidence references are bounded at 64 IDs with explicit truncation metadata, and snapshot writes have a fail-safe 16 MiB payload ceiling. `aie state` persists a versioned projection and resumes by monotonic SQLite ingestion sequence; `aie context` emits bounded facts with provenance but does not reason over them. Initial process baseline coverage remains count-only.
 - End-to-end local Ollama invocation against the target installation, Nomic live dimension confirmation, memory consolidation and cloud gateway.
 - Full proposal orchestration, sandbox implementation, UIA adapters and autonomous workflows; a non-executing policy evaluator foundation is implemented.
 - Custom kernel driver (not an initial milestone; separate signed-driver research only if ETW cannot meet a demonstrated need).
@@ -108,7 +108,7 @@ See [HARDWARE_PROFILE.md](HARDWARE_PROFILE.md) for the sanitized host baseline.
 3. Validate ETW decoding against real Windows captures; confirm trace-loss counters and reconcile ETW events with process snapshots.
 4. Validate the fixed Event Log allowlist and SQLite cursor recovery on Windows, then add real-time subscriptions and process/image correlation.
 5. Add app compatibility discovery and UIA read-only tree inspection.
-6. Validate incremental `aie state` checkpoint recovery against real observer history; add state-aware compaction/recovery and environmental-state evaluation (a 16 MiB hard write ceiling is implemented). Validate local Ollama inference and Nomic dimensions before expanding the cognitive runtime.
+6. Validate incremental `aie state` checkpoint recovery and explicit `aie compact-state` behavior against real observer history; add environmental-state evaluation (a 16 MiB hard write ceiling is implemented). Validate local Ollama inference and Nomic dimensions before expanding the cognitive runtime.
 
 ## Spotlight maintenance
 At each implementation increment: update this file, update [ROADMAP.md](ROADMAP.md), add/adjust tests, and record actual validation. Never mark a task DONE based only on writing its interface.
