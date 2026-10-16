@@ -68,3 +68,10 @@ Run tests with `python -m pytest`. The Windows CI workflow runs tests and Ruff o
 - `aie.policy` currently evaluates proposals only. It checks a reviewed action allowlist, exact action capabilities, verified target identity, sandbox availability for writes, action budgets and expiring approvals bound to the exact proposal digest. It never executes a proposal.
 
 Memory writes are user-directed; no automatic model-generated consolidation is enabled. Memory is stored in the local SQLite database and is not encrypted by this implementation. Protect the database with the Windows account's filesystem permissions and do not store secrets in it.
+
+
+## Persistent goal runtime
+
+AIE now stores user-authored goals and dependency-ordered steps in local SQLite. Step dependencies are checked before starting or completing work. Goal completion requires all steps to be completed. Every goal/step transition is recorded in append-only history. Nothing is executed automatically.
+
+Commands: `aie goal-add`, `aie goal-list`, `aie goal-show`, `aie goal-step-add`, `aie goal-step-update`, `aie goal-status`, and `aie goal-history`. Use `aie think QUESTION --include-goals --include-memory` to optionally provide bounded active/paused goal state and non-sensitive memories to local analysis. These are planning context, not evidence of completed work or permission to act.
