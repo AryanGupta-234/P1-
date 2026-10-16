@@ -81,3 +81,13 @@ def test_planner_validation_metadata_is_normalized_before_persistence(tmp_path):
     assert draft["plan"] == {
         "steps": [{"title": "One", "description": "First", "depends_on": []}]
     }
+
+
+def test_pending_plan_drafts_are_bounded_per_goal(tmp_path):
+    store = GoalStore(tmp_path / "goals.sqlite3")
+    goal = store.create("Bound drafts")
+    for _ in range(20):
+        store.create_plan_draft(goal["goal_id"], sample_plan(), "local-model")
+    with pytest.raises(ValueError, match="draft limit"):
+        store.create_plan_draft(goal["goal_id"], sample_plan(), "local-model")
+    assert len(store.list_plan_drafts(goal["goal_id"], status="pending_review", limit=100)) == 20
