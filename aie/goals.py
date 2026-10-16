@@ -284,3 +284,45 @@ class GoalStore:
             args.append(limit)
             rows = db.execute(query, args).fetchall()
         return [self.get_plan_draft(row["draft_id"]) for row in rows]
+
+
+    def resolve_plan_draft(self, draft_id: str, decision: str):
+        """Reject a draft or add its ordered steps in one SQLite transaction."""
+        import hashlib
+        self._id(draft_id)
+        if decision not in {"accepted", "rejected"}:
+            raise ValueError("decision must be accepted or rejected")
+        now = datetime.now(timezone.utc).isoformat()
+        created = []
+        with self._connect() as db:
+            row = db.execute("SELECT * FROM goal_plan_drafts WHERE draft_id=?", (draft_id,)).fetchone()
+            if row is None or row["status"] != "pending_review":
+                raise ValueError("pending-review draft not found")
+            goal = db.execute("SELECT status FROM goals WHERE goal_id=?", (row["goal_id"],)).fetchone()
+            if goal is None or goal["status"] != "active":
+                raise ValueError("goal must be active to resolve a draft")
+            payload = row["plan_json"]
+            if hashlib.sha256(payload.encode("utf-8")).hexdigest() != row["plan_sha256"]:
+                raise ValueError("plan draft integrity check failed")
+            if decision == "accepted":
+                steps = json.loads(payload)["steps"]
+                count = db.execute("SELECT COUNT(*) FROM goal_steps WHERE goal_id=?", (row["goal_id"],)).fetchone()[0]
+                if count + len(steps) > 200:
+                    raise ValueError("goal step limit would be exceeded")
+                for offset, step in enumerate(steps):
+                    step_id = str(uuid4())
+                    deps = [created[index] for index in step["depends_on"]]
+                    db.execute("INSERT INTO goal_steps VALUES(?,?,?,?, 'pending',?,?,?,?)",
+                               (step_id, row["goal_id"], step["title"].strip(), step["description"],
+                                json.dumps(deps), count + offset, now, now))
+                    created.append(step_id)
+                    self._record(db, row["goal_id"], step_id, "step.created_from_plan", None,
+                                 {"title": step["title"].strip(), "status": "pending",
+                                  "dependencies": deps, "draft_id": draft_id}, now)
+                db.execute("UPDATE goals SET updated_at=? WHERE goal_id=?", (now, row["goal_id"]))
+            db.execute("UPDATE goal_plan_drafts SET status=?,updated_at=? WHERE draft_id=?",
+                       (decision, now, draft_id))
+            self._record(db, row["goal_id"], None, "plan_draft." + decision,
+                         {"status": "pending_review"},
+                         {"draft_id": draft_id, "status": decision, "created_step_ids": created}, now)
+        return {"draft": self.get_plan_draft(draft_id), "created_step_ids": created}
