@@ -818,16 +818,16 @@ def goal_history(
 
 @app.command("goal-suggest")
 def goal_suggest(goal_id: str = typer.Argument(...), db: Path = typer.Option(database_path(), "--db")) -> None:
-    """Create a local structured plan draft for human review; never execute it."""
+    """Generate and persist a local plan draft for explicit human review."""
     from aie.goals import GoalStore
     from aie.planning import build_plan_messages, plan_schema, validate_plan_output
     from aie.ollama import OllamaClient, OllamaError
 
-    goal = GoalStore(db).get(goal_id)
-    if goal is None or goal["status"] not in {"active", "paused"}:
-        console.print("[yellow]An active or paused goal is required.[/yellow]")
-        raise typer.Exit(2)
+    store = GoalStore(db)
     try:
+        goal = store.get(goal_id)
+        if goal is None or goal["status"] not in {"active", "paused"}:
+            raise ValueError("an active or paused goal is required")
         messages = build_plan_messages(goal)
         installed = discover_local_models()
         decision = choose_local_model("routine", installed, runtime_profile()["memory_available_gib"])
@@ -837,11 +837,79 @@ def goal_suggest(goal_id: str = typer.Argument(...), db: Path = typer.Option(dat
             decision.selected_model, messages, format=plan_schema(),
             options={"num_predict": 1024, "temperature": 0.1},
         )
-        draft = validate_plan_output(result.content)
+        plan = validate_plan_output(result.content)
+        draft = store.create_plan_draft(goal_id, plan, result.model)
     except (OllamaError, ValueError, TypeError, KeyError) as exc:
         console.print(f"[red]Plan suggestion rejected:[/red] {exc}")
         raise typer.Exit(2) from exc
-    console.print_json(json.dumps({"goal_id": goal_id, "model": result.model, "draft": draft}, indent=2))
+    console.print_json(json.dumps(draft, indent=2))
+    console.print("[dim]Saved as pending review. No goal steps were changed or executed.[/dim]")
+
+
+@app.command("goal-draft-list")
+def goal_draft_list(
+    goal_id: str = typer.Argument(...),
+    status: str | None = typer.Option(None, help="pending_review, accepted or rejected."),
+    limit: int = typer.Option(20, min=1, max=100),
+    db: Path = typer.Option(database_path(), "--db"),
+) -> None:
+    """List persisted plan drafts for one goal."""
+    from aie.goals import GoalStore
+    try:
+        drafts = GoalStore(db).list_plan_drafts(goal_id, status, limit)
+    except ValueError as exc:
+        console.print(f"[red]Draft listing failed:[/red] {exc}")
+        raise typer.Exit(2) from exc
+    console.print_json(json.dumps(drafts, indent=2))
+
+
+@app.command("goal-draft-show")
+def goal_draft_show(
+    draft_id: str = typer.Argument(...),
+    db: Path = typer.Option(database_path(), "--db"),
+) -> None:
+    """Show one saved plan draft after integrity verification."""
+    from aie.goals import GoalStore
+    try:
+        draft = GoalStore(db).get_plan_draft(draft_id)
+    except ValueError as exc:
+        console.print(f"[red]Draft verification failed:[/red] {exc}")
+        raise typer.Exit(2) from exc
+    if draft is None:
+        console.print("[yellow]Draft not found.[/yellow]")
+        raise typer.Exit(2)
+    console.print_json(json.dumps(draft, indent=2))
+
+
+@app.command("goal-draft-accept")
+def goal_draft_accept(
+    draft_id: str = typer.Argument(...),
+    db: Path = typer.Option(database_path(), "--db"),
+) -> None:
+    """Explicitly accept a reviewed draft and add its steps; nothing is executed."""
+    from aie.goals import GoalStore
+    try:
+        result = GoalStore(db).resolve_plan_draft(draft_id, "accepted")
+    except ValueError as exc:
+        console.print(f"[red]Draft acceptance rejected:[/red] {exc}")
+        raise typer.Exit(2) from exc
+    console.print_json(json.dumps(result, indent=2))
+    console.print("[dim]Steps added to the goal only; no commands or OS actions were run.[/dim]")
+
+
+@app.command("goal-draft-reject")
+def goal_draft_reject(
+    draft_id: str = typer.Argument(...),
+    db: Path = typer.Option(database_path(), "--db"),
+) -> None:
+    """Explicitly reject a pending plan draft."""
+    from aie.goals import GoalStore
+    try:
+        result = GoalStore(db).resolve_plan_draft(draft_id, "rejected")
+    except ValueError as exc:
+        console.print(f"[red]Draft rejection failed:[/red] {exc}")
+        raise typer.Exit(2) from exc
+    console.print_json(json.dumps(result, indent=2))
 
 
 if __name__ == "__main__":
