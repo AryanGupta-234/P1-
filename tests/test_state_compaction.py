@@ -73,3 +73,22 @@ def test_compaction_requires_aware_cutoff_and_bounded_limit():
         compact_projection(projection, older_than=datetime(2026, 1, 1))
     with pytest.raises(ValueError):
         compact_projection(projection, older_than=NOW, max_terminal_records=-1)
+
+
+def test_entity_terminal_limit_is_applied_per_inventory_collection():
+    projection = sample_projection()
+    when = NOW - timedelta(days=120)
+    for collection in ("applications", "scheduled_tasks"):
+        for suffix in ("a", "b"):
+            name = collection + suffix
+            projection.entities[("host", collection, name)] = EntityState(
+                "host", collection, name, collection, name, "removed", {},
+                when - timedelta(minutes=1), when, [name],
+            )
+    result = compact_projection(
+        projection, older_than=NOW - timedelta(days=60), max_terminal_records=1
+    )
+    assert ("host", "applications", "applicationsa") not in result.projection.entities
+    assert ("host", "applications", "applicationsb") in result.projection.entities
+    assert ("host", "scheduled_tasks", "scheduled_tasksa") not in result.projection.entities
+    assert ("host", "scheduled_tasks", "scheduled_tasksb") in result.projection.entities
