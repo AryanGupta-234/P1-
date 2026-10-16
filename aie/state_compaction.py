@@ -40,15 +40,17 @@ def compact_projection(
         (key, item) for key, item in result.processes.items()
         if item.status in {"stopped", "replaced"} and item.last_observed < older_than
     ]
-    entity_candidates = [
-        (key, item) for key, item in result.entities.items()
-        if item.status == "removed" and item.last_observed < older_than
-    ]
-    # Keep the newest old terminal records; all records newer than cutoff remain.
+    entity_groups: dict[str, list] = {}
+    for key, item in result.entities.items():
+        if item.status == "removed" and item.last_observed < older_than:
+            entity_groups.setdefault(item.collection, []).append((key, item))
+    # Keep the newest old terminal records per entity collection; recent entries remain.
     process_candidates.sort(key=lambda pair: (pair[1].last_observed, str(pair[0])), reverse=True)
-    entity_candidates.sort(key=lambda pair: (pair[1].last_observed, str(pair[0])), reverse=True)
     remove_processes = process_candidates[max_terminal_records:]
-    remove_entities = entity_candidates[max_terminal_records:]
+    remove_entities = []
+    for candidates in entity_groups.values():
+        candidates.sort(key=lambda pair: (pair[1].last_observed, str(pair[0])), reverse=True)
+        remove_entities.extend(candidates[max_terminal_records:])
     for key, _ in remove_processes:
         result.processes.pop(key, None)
     for key, _ in remove_entities:
