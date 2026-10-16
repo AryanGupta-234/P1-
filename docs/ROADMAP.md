@@ -11,7 +11,7 @@ Status vocabulary: DONE / IN_PROGRESS / BLOCKED / PLANNED. A task is DONE only w
 | M2 | Context intelligence | IN_PROGRESS | Process correlation, durable incremental state projection and bounded factual context packets and per-entity evidence-reference caps are implemented; Windows validation, state-aware compaction/recovery and evaluation remain |
 | M3 | Cognitive core | IN_PROGRESS | Hardware-aware model discovery, bounded local Ollama chat/embedding, and `aie think` context integration; planning and evaluation remain |
 | M4 | Persistent intelligence | IN_PROGRESS | Explicit SQLite memory records, provenance/confidence/sensitivity/verification/TTL metadata and bounded keyword retrieval; consolidation and evaluation remain |
-| M5 | Controlled autonomy | IN_PROGRESS | Non-executing policy evaluator with exact capabilities, verified targets, sandbox gate, budgets and proposal-bound approvals; UIA and execution remain unimplemented |
+| M5 | Controlled autonomy | IN_PROGRESS | Non-executing policy evaluator plus bounded read-only UIA structure inspector; app adapters, approvals orchestration, sandbox and execution remain unimplemented |
 | M6 | Generalization research | PLANNED | Held-out transfer and novel-task benchmarks |
 
 ## M0 — Foundation
