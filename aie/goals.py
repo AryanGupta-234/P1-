@@ -32,6 +32,7 @@ class GoalStore:
                 current_json TEXT NOT NULL, occurred_at TEXT NOT NULL
             )""")
             db.execute("CREATE INDEX IF NOT EXISTS idx_goal_steps_goal_position ON goal_steps(goal_id, position)")
+            db.execute("""CREATE TABLE IF NOT EXISTS goal_plan_drafts (draft_id TEXT PRIMARY KEY, goal_id TEXT NOT NULL, status TEXT NOT NULL, model TEXT NOT NULL, plan_json TEXT NOT NULL, plan_sha256 TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, FOREIGN KEY(goal_id) REFERENCES goals(goal_id) ON DELETE CASCADE)""")
 
     def _connect(self):
         db = sqlite3.connect(self.path, timeout=10)
