@@ -651,5 +651,130 @@ def memory_history(
     console.print_json(json.dumps(revisions, indent=2))
 
 
+@app.command("goal-add")
+def goal_add(
+    title: str = typer.Argument(...),
+    description: str = typer.Option("", help="Goal context and success criteria."),
+    db: Path = typer.Option(database_path(), "--db", help="Local SQLite database."),
+) -> None:
+    """Create a persistent user-directed goal; no steps are executed automatically."""
+    from aie.goals import GoalStore
+
+    try:
+        goal = GoalStore(db).create(title, description)
+    except ValueError as exc:
+        console.print(f"[red]Goal creation failed:[/red] {exc}")
+        raise typer.Exit(2) from exc
+    console.print_json(json.dumps(goal, indent=2))
+
+
+@app.command("goal-list")
+def goal_list(
+    status: str | None = typer.Option(None),
+    limit: int = typer.Option(50, min=1, max=200),
+    db: Path = typer.Option(database_path(), "--db", help="Local SQLite database."),
+) -> None:
+    """List persistent goals and their progress."""
+    from aie.goals import GoalStore
+
+    try:
+        goals = GoalStore(db).list(status=status, limit=limit)
+    except ValueError as exc:
+        console.print(f"[red]Goal listing failed:[/red] {exc}")
+        raise typer.Exit(2) from exc
+    console.print_json(json.dumps(goals, indent=2))
+
+
+@app.command("goal-show")
+def goal_show(
+    goal_id: str = typer.Argument(...),
+    db: Path = typer.Option(database_path(), "--db", help="Local SQLite database."),
+) -> None:
+    """Show one goal, dependency readiness and progress."""
+    from aie.goals import GoalStore
+
+    try:
+        goal = GoalStore(db).get(goal_id)
+    except ValueError as exc:
+        console.print(f"[red]Goal lookup failed:[/red] {exc}")
+        raise typer.Exit(2) from exc
+    if goal is None:
+        console.print("[yellow]Goal not found.[/yellow]")
+        raise typer.Exit(2)
+    console.print_json(json.dumps(goal, indent=2))
+
+
+@app.command("goal-step-add")
+def goal_step_add(
+    goal_id: str = typer.Argument(...),
+    title: str = typer.Argument(...),
+    description: str = typer.Option("", help="Step completion criteria."),
+    depends_on: str = typer.Option("", help="Comma-separated prerequisite step IDs."),
+    db: Path = typer.Option(database_path(), "--db", help="Local SQLite database."),
+) -> None:
+    """Add a manually specified step and optional prerequisites to an active goal."""
+    from aie.goals import GoalStore
+
+    try:
+        dependencies = [item.strip() for item in depends_on.split(",") if item.strip()]
+        step = GoalStore(db).add_step(goal_id, title, description, dependencies)
+    except ValueError as exc:
+        console.print(f"[red]Step creation failed:[/red] {exc}")
+        raise typer.Exit(2) from exc
+    console.print_json(json.dumps(step, indent=2))
+
+
+@app.command("goal-step-update")
+def goal_step_update(
+    goal_id: str = typer.Argument(...),
+    step_id: str = typer.Argument(...),
+    status: str = typer.Argument(..., help="pending, in_progress, blocked, completed or cancelled."),
+    db: Path = typer.Option(database_path(), "--db", help="Local SQLite database."),
+) -> None:
+    """Update one step; dependency gates are enforced by the goal state machine."""
+    from aie.goals import GoalStore
+
+    try:
+        step = GoalStore(db).update_step(goal_id, step_id, status)
+    except ValueError as exc:
+        console.print(f"[red]Step update rejected:[/red] {exc}")
+        raise typer.Exit(2) from exc
+    console.print_json(json.dumps(step, indent=2))
+
+
+@app.command("goal-status")
+def goal_status(
+    goal_id: str = typer.Argument(...),
+    status: str = typer.Argument(..., help="active, paused, completed or abandoned."),
+    db: Path = typer.Option(database_path(), "--db", help="Local SQLite database."),
+) -> None:
+    """Pause, resume or explicitly close a goal."""
+    from aie.goals import GoalStore
+
+    try:
+        goal = GoalStore(db).set_goal_status(goal_id, status)
+    except ValueError as exc:
+        console.print(f"[red]Goal transition rejected:[/red] {exc}")
+        raise typer.Exit(2) from exc
+    console.print_json(json.dumps(goal, indent=2))
+
+
+@app.command("goal-history")
+def goal_history(
+    goal_id: str = typer.Argument(...),
+    limit: int = typer.Option(100, min=1, max=500),
+    db: Path = typer.Option(database_path(), "--db", help="Local SQLite database."),
+) -> None:
+    """Review append-only goal and step transition history."""
+    from aie.goals import GoalStore
+
+    try:
+        history = GoalStore(db).history(goal_id, limit)
+    except ValueError as exc:
+        console.print(f"[red]Goal history failed:[/red] {exc}")
+        raise typer.Exit(2) from exc
+    console.print_json(json.dumps(history, indent=2))
+
+
 if __name__ == "__main__":
     app()
