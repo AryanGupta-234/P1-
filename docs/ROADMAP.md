@@ -83,7 +83,8 @@ Status vocabulary: DONE / IN_PROGRESS / BLOCKED / PLANNED. A task is DONE only w
 - [ ] Add task complexity classification and model selection evaluation.
 - [ ] Add optional cloud adapter behind an explicit per-task data-egress policy.
 - [ ] Add context budgets, latency/cost metrics and deterministic fallback.
-- [ ] Add goal/planning state machine; models cannot change security policy.
+- [x] Add persistent user-directed goals, ordered steps, dependency gates, goal/step state transitions and append-only history; expose CLI and opt-in bounded goal context to `aie think`.
+- [ ] Add model-generated plan drafts with explicit human review/acceptance; models cannot change security policy.
 
 ## M4 — Persistent Intelligence
 - [x] Add explicit working, episodic, semantic, procedural and prospective memory record kinds in local SQLite.
@@ -92,6 +93,7 @@ Status vocabulary: DONE / IN_PROGRESS / BLOCKED / PLANNED. A task is DONE only w
 - [x] Provenance, confidence, sensitivity, TTL and verification state.
 - [ ] Retrieval benchmark, contradiction handling and memory decay.
 - [x] User review/search, correction with immutable prior-version history, JSONL export, explicit deletion and TTL cleanup; sensitive records are excluded from search/export unless explicitly opted in.
+- [x] Persist user-directed goals and dependency-ordered steps with auditable transitions as the prospective/planning memory substrate.
 - [ ] Experience consolidation with regression tests.
 
 ## M5 — Windows application automation and controlled autonomy
@@ -125,6 +127,7 @@ Status vocabulary: DONE / IN_PROGRESS / BLOCKED / PLANNED. A task is DONE only w
 6. Validate incremental `aie state` checkpoints against real observer history; design explicit state-aware compaction and a synthetic environmental-state evaluation corpus.
 7. Evaluate `aie prioritize` against labeled retrieval scenarios; calibrate weights only from measured results.
 8. Validate `aie think` against prompt-injection fixtures and target-host Ollama latency, memory and output quality.
+9. Exercise goal dependency gates, pause/resume, history integrity and bounded `--include-goals` context on Windows.
 
 ## Hardware/model constraints
 - Routine: `qwen2.5:3b-instruct`.
