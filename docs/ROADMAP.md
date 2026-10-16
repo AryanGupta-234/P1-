@@ -85,7 +85,7 @@ Status vocabulary: DONE / IN_PROGRESS / BLOCKED / PLANNED. A task is DONE only w
 - [ ] Add optional cloud adapter behind an explicit per-task data-egress policy.
 - [ ] Add context budgets, latency/cost metrics and deterministic fallback.
 - [x] Add persistent user-directed goals, ordered steps, dependency gates, goal/step state transitions and append-only history; expose CLI and opt-in bounded goal context to `aie think`.
-- [x] Add local model-generated plan suggestions with strict JSON/schema validation, bounded context and dependency ordering; suggestions are returned only for review and never persisted/executed automatically.
+- [x] Add local model-generated plan suggestions with strict JSON/schema validation, bounded context and dependency ordering; validated drafts are persisted for review but never added as goal steps or executed without explicit acceptance.
 - [x] Persist bounded model plan drafts with SHA-256 integrity metadata, pending-review/accepted/rejected states, audit history and explicit CLI acceptance/rejection. Acceptance atomically creates ordered goal steps and dependencies; it does not execute actions.
 - [ ] Add plan-quality evaluation; models cannot change security policy.
 
