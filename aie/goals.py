@@ -33,6 +33,7 @@ class GoalStore:
             )""")
             db.execute("CREATE INDEX IF NOT EXISTS idx_goal_steps_goal_position ON goal_steps(goal_id, position)")
             db.execute("""CREATE TABLE IF NOT EXISTS goal_plan_drafts (draft_id TEXT PRIMARY KEY, goal_id TEXT NOT NULL, status TEXT NOT NULL, model TEXT NOT NULL, plan_json TEXT NOT NULL, plan_sha256 TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, FOREIGN KEY(goal_id) REFERENCES goals(goal_id) ON DELETE CASCADE)""")
+            db.execute("CREATE INDEX IF NOT EXISTS idx_goal_drafts_goal_status ON goal_plan_drafts(goal_id, status, created_at)")
 
     def _connect(self):
         db = sqlite3.connect(self.path, timeout=10)
@@ -276,6 +277,12 @@ class GoalStore:
             goal = db.execute("SELECT status FROM goals WHERE goal_id=?", (goal_id,)).fetchone()
             if goal is None or goal["status"] not in {"active", "paused"}:
                 raise ValueError("active or paused goal required")
+            counts = db.execute(
+                "SELECT COUNT(*), SUM(CASE WHEN status='pending_review' THEN 1 ELSE 0 END) "
+                "FROM goal_plan_drafts WHERE goal_id=?", (goal_id,)
+            ).fetchone()
+            if counts[0] >= 100 or (counts[1] or 0) >= 20:
+                raise ValueError("goal draft limit reached (100 total, 20 pending review)")
             db.execute("INSERT INTO goal_plan_drafts VALUES(?,?, 'pending_review', ?,?,?,?,?)",
                        (draft_id, goal_id, model.strip(), payload, digest, now, now))
             self._record(db, goal_id, None, "plan_draft.created", None,
