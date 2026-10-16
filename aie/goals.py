@@ -132,10 +132,12 @@ class GoalStore:
         if not isinstance(description,str) or len(description)>8000:
             raise ValueError("description must be at most 8000 characters")
         dependencies=[] if dependencies is None else dependencies
-        if not isinstance(dependencies,list) or len(dependencies)>32 or len(set(dependencies))!=len(dependencies):
+        if not isinstance(dependencies,list) or len(dependencies)>32:
             raise ValueError("dependencies must be a list of up to 32 unique step IDs")
         for dep in dependencies:
             self._id(dep)
+        if len(set(dependencies)) != len(dependencies):
+            raise ValueError("dependencies must be unique")
         now,step_id=datetime.now(timezone.utc).isoformat(),str(uuid4())
         with self._connect() as db:
             goal=db.execute("SELECT status FROM goals WHERE goal_id=?",(goal_id,)).fetchone()
@@ -205,6 +207,10 @@ class GoalStore:
                 db.execute("UPDATE goals SET status=?,updated_at=? WHERE goal_id=?",(status,now,goal_id))
                 self._record(db,goal_id,None,"goal.status_changed",{"status":row["status"]},{"status":status},now)
         return self.get(goal_id)
+
+    def set_goal_status(self, goal_id: str, status: str):
+        """Compatibility-named explicit goal status transition."""
+        return self.set_status(goal_id, status)
 
     def history(self, goal_id: str, limit: int = 100):
         self._id(goal_id)
