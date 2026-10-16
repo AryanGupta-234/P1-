@@ -489,7 +489,9 @@ def think(
             )
         if include_goals:
             from aie.goals import GoalStore
-            goals = GoalStore(db).list(limit=10)
+            goal_store = GoalStore(db)
+            goals = goal_store.list(status="active", limit=10) + goal_store.list(status="paused", limit=10)
+            goals.sort(key=lambda goal: (goal["updated_at"], goal["goal_id"]), reverse=True)
             packet["user_goals"] = [{
                 "goal_id": goal["goal_id"],
                 "title": goal["title"],
@@ -503,7 +505,7 @@ def think(
                     "ready": step["ready"],
                     "dependencies": step["dependencies"],
                 } for step in goal["steps"][:20]],
-            } for goal in goals if goal["status"] in {"active", "paused"}]
+            } for goal in goals[:10]]
         messages = build_cognitive_messages(packet, question)
     except (ValueError, TypeError, KeyError) as exc:
         console.print(f"[red]Could not prepare bounded context:[/red] {exc}")
