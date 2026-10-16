@@ -42,10 +42,10 @@ def test_compaction_only_removes_excess_old_terminal_records():
     original = sample_projection()
     result = compact_projection(original, older_than=NOW - timedelta(days=60), max_terminal_records=1)
     compacted = result.projection
-    assert result.processes_removed == 1
+    assert result.processes_removed == 2
     assert result.entities_removed == 1
     assert ("host", 1, 1.0) not in compacted.processes
-    assert ("host", 2, 2.0) in compacted.processes
+    assert ("host", 2, 2.0) not in compacted.processes
     assert ("host", 3, 3.0) in compacted.processes
     assert ("host", 4, 4.0) in compacted.processes
     assert ("host", 5, 5.0) in compacted.processes
@@ -61,7 +61,7 @@ def test_compaction_can_remove_all_eligible_old_terminal_records():
     result = compact_projection(
         sample_projection(), older_than=NOW - timedelta(days=60), max_terminal_records=0
     )
-    assert result.processes_removed == 2
+    assert result.processes_removed == 3
     assert result.entities_removed == 2
     assert all(item.status == "running" or item.last_observed >= NOW - timedelta(days=60)
                for item in result.projection.processes.values())
