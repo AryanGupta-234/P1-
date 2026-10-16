@@ -252,8 +252,24 @@ class GoalStore:
         self._id(goal_id)
         if not isinstance(model, str) or not model.strip() or len(model) > 160:
             raise ValueError("invalid model name")
-        normalized = validate_plan_output(json.dumps(plan, ensure_ascii=False, allow_nan=False))
-        payload = json.dumps(normalized, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False)
+        if not isinstance(plan, dict) or set(plan) not in (
+            {"steps"},
+            {"steps", "requires_user_review", "saved", "executed"},
+        ):
+            raise ValueError("plan draft has unexpected top-level fields")
+        if set(plan) != {"steps"} and (
+            plan.get("requires_user_review") is not True
+            or plan.get("saved") is not False
+            or plan.get("executed") is not False
+        ):
+            raise ValueError("plan review metadata is invalid")
+        normalized = validate_plan_output(json.dumps(
+            {"steps": plan["steps"]}, ensure_ascii=False, allow_nan=False
+        ))
+        payload = json.dumps(
+            {"steps": normalized["steps"]}, ensure_ascii=False,
+            sort_keys=True, separators=(",", ":"), allow_nan=False
+        )
         digest = hashlib.sha256(payload.encode("utf-8")).hexdigest()
         now, draft_id = datetime.now(timezone.utc).isoformat(), str(uuid4())
         with self._connect() as db:
