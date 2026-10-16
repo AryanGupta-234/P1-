@@ -75,3 +75,6 @@ Memory writes are user-directed; no automatic model-generated consolidation is e
 AIE now stores user-authored goals and dependency-ordered steps in local SQLite. Step dependencies are checked before starting or completing work. Goal completion requires all steps to be completed. Every goal/step transition is recorded in append-only history. Nothing is executed automatically.
 
 Commands: `aie goal-add`, `aie goal-list`, `aie goal-show`, `aie goal-step-add`, `aie goal-step-update`, `aie goal-status`, and `aie goal-history`. Use `aie think QUESTION --include-goals --include-memory` to optionally provide bounded active/paused goal state and non-sensitive memories to local analysis. These are planning context, not evidence of completed work or permission to act.
+
+
+`aie goal-suggest GOAL_ID` returns a structured local-model plan draft for user review. It is not persisted or executed; add accepted steps manually with `aie goal-step-add`.
