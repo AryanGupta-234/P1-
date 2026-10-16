@@ -64,7 +64,8 @@ Status vocabulary: DONE / IN_PROGRESS / BLOCKED / PLANNED. A task is DONE only w
 - [x] Bound per-process/per-entity evidence references to the latest 64 unique IDs; mark truncation in persisted state/context and defensively cap context output from legacy oversized snapshots.
 - [x] Enforce a 16 MiB UTF-8 snapshot payload ceiling; reject oversized writes before SQLite mutation and preserve the last valid snapshot.
 - [x] Add SHA-256 integrity metadata, one verified previous generation and explicit `aie state --recover`; corruption fails closed, recovery replays later events, and pre-integrity legacy snapshots remain readable.
-- [ ] Add state-aware compaction and recovery evaluation for corrupted or pruned histories.
+- [x] Add explicit age-gated projection compaction: only excess old terminal process/entity records are removed, recent/live state is retained, cumulative compaction metadata is recorded, and raw event history plus the ingest watermark are preserved.
+- [ ] Evaluate recovery and rebuild behavior across corrupted or pruned histories.
 - [x] Add bounded deterministic context packets with explicit coverage, observation timestamps and evidence references; no inferred facts or implicit absence-as-removal semantics.
 - [x] Deterministic, explainable state relevance ranking using recency, active/present status and ETW confirmation; `aie prioritize` exposes ranked records and reason strings. Scores are retrieval priority, not calibrated confidence.
 - [ ] Calibrate ranking weights against a labeled retrieval/evaluation corpus and measure ranking quality.
@@ -126,7 +127,7 @@ Status vocabulary: DONE / IN_PROGRESS / BLOCKED / PLANNED. A task is DONE only w
 3. Validate the ETW decoder against real Windows traces, confirm available loss counters and correlate ETW events with snapshot reconciliation.
 4. Validate the fixed Event Log allowlist and persisted-cursor recovery on Windows, then add real-time subscriptions and process/image correlation.
 5. Build UIA read-only inspector before any app-control actions.
-6. Validate incremental `aie state` checkpoints against real observer history; design explicit state-aware compaction and a synthetic environmental-state evaluation corpus.
+6. Validate incremental `aie state` checkpoints and `aie compact-state` behavior against real observer history; build a synthetic environmental-state evaluation corpus.
 7. Evaluate `aie prioritize` against labeled retrieval scenarios; calibrate weights only from measured results.
 8. Validate `aie think` against prompt-injection fixtures and target-host Ollama latency, memory and output quality.
 9. Exercise goal dependency gates, pause/resume, history integrity and bounded `--include-goals` context on Windows.
