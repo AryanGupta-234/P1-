@@ -392,6 +392,30 @@ def state(
     console.print_json(json.dumps(result, default=str))
 
 
+@app.command("uia-inspect")
+def uia_inspect(
+    max_windows: int = typer.Option(12, min=1, max=40),
+    max_nodes: int = typer.Option(250, min=1, max=1000),
+    max_depth: int = typer.Option(5, min=1, max=8),
+    timeout: float = typer.Option(12.0, min=1.0, max=30.0),
+) -> None:
+    """Inspect UI Automation control structure only; never reads field text or acts."""
+    from dataclasses import asdict
+    from aie.providers.uia import inspect_windows
+
+    try:
+        result = inspect_windows(
+            max_windows=max_windows, max_nodes=max_nodes,
+            max_depth=max_depth, timeout=timeout,
+        )
+    except ValueError as exc:
+        console.print(f"[red]UIA inspection rejected:[/red] {exc}")
+        raise typer.Exit(2) from exc
+    console.print_json(json.dumps(asdict(result), indent=2))
+    if not result.available:
+        raise typer.Exit(2)
+
+
 @app.command("compact-state")
 def compact_state(
     older_than_days: int = typer.Option(90, min=1, max=36500, help="Only terminal records older than this age are eligible."),
