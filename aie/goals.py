@@ -265,3 +265,22 @@ class GoalStore:
             self._record(db, goal_id, None, "plan_draft.created", None,
                          {"draft_id": draft_id, "status": "pending_review", "sha256": digest}, now)
         return self.get_plan_draft(draft_id)
+
+
+    def list_plan_drafts(self, goal_id: str, status: str | None = None, limit: int = 20):
+        self._id(goal_id)
+        allowed = {"pending_review", "accepted", "rejected"}
+        if status is not None and status not in allowed:
+            raise ValueError("invalid plan draft status")
+        if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 100:
+            raise ValueError("limit must be between 1 and 100")
+        with self._connect() as db:
+            query = "SELECT draft_id FROM goal_plan_drafts WHERE goal_id=?"
+            args = [goal_id]
+            if status is not None:
+                query += " AND status=?"
+                args.append(status)
+            query += " ORDER BY created_at DESC,draft_id LIMIT ?"
+            args.append(limit)
+            rows = db.execute(query, args).fetchall()
+        return [self.get_plan_draft(row["draft_id"]) for row in rows]
