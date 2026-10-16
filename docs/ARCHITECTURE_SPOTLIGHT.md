@@ -122,3 +122,14 @@ At each implementation increment: update this file, update [ROADMAP.md](ROADMAP.
 - **Policy foundation:** `aie.policy` is a non-executing evaluator. It requires exact action capabilities, verified targets, sandbox availability for writes, bounded action budgets and expiring approvals bound to the exact proposal digest. No UIA or OS action executor exists.
 
 **Validation still outstanding:** all new tests are authored but have not been run. Windows-host validation, Ollama quality/latency, memory retrieval evaluation, policy adversarial evaluation and end-to-end recovery remain open.
+
+
+## Persistent goal runtime — 2026-10-16
+
+- `aie/goals.py` stores explicit user-directed goals and dependency-ordered steps in SQLite. The dependency graph is acyclic by construction because a new step can only depend on existing steps in the same goal.
+- Step transitions enforce prerequisite completion. Completed/cancelled steps are terminal. A goal is automatically completed only when every step is completed; manual completion is rejected while work remains.
+- Goal and step transitions are written to append-only `goal_history` for auditability. Pause/resume and abandonment are explicit state transitions.
+- CLI supports `goal-add`, `goal-list`, `goal-show`, `goal-step-add`, `goal-step-update`, `goal-status`, and `goal-history`.
+- `aie think --include-goals` optionally adds at most ten active/paused goals and at most twenty steps per goal to its bounded local context. The prompt explicitly distinguishes user plans from observations and memories. No planner-generated steps are auto-saved and no goal step is executed.
+
+**Next:** model-generated plan drafts with strict structured-output validation, explicit review/acceptance, and evaluation against user-authored plans. Goal execution remains prohibited until the separate policy/sandbox/action-verification pipeline exists.
