@@ -737,6 +737,32 @@ def memory_search_semantic(
     }, indent=2))
 
 
+@app.command("memory-near-duplicates")
+def memory_near_duplicates(
+    memory_id: str = typer.Argument(...),
+    model: str = typer.Option(..., help="Local embedding model used by memory-index."),
+    threshold: float = typer.Option(0.88, min=-1.0, max=1.0),
+    limit: int = typer.Option(20, min=1, max=100),
+    include_sensitive: bool = typer.Option(False, "--include-sensitive"),
+    db: Path = typer.Option(database_path(), "--db", help="Local SQLite database."),
+) -> None:
+    """Find semantically similar memory candidates; never merge or delete records."""
+    from aie.memory import MemoryStore
+    try:
+        results = MemoryStore(db).find_near_duplicates(
+            memory_id, model, threshold=threshold, limit=limit,
+            include_sensitive=include_sensitive,
+        )
+    except ValueError as exc:
+        console.print(f"[red]Near-duplicate search failed:[/red] {exc}")
+        raise typer.Exit(2) from exc
+    console.print_json(json.dumps({
+        "memory_id": memory_id, "model": model, "threshold": threshold,
+        "candidates": results, "automatic_merge": False,
+        "interpretation": "Embedding similarity is a candidate-generation heuristic; human review is required.",
+    }, indent=2))
+
+
 @app.command("memory-delete")
 def memory_delete(
     memory_id: str = typer.Argument(...),
