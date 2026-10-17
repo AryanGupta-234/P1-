@@ -52,6 +52,37 @@ class ExperienceStore:
                 );
                 CREATE INDEX IF NOT EXISTS idx_skill_drafts_task
                     ON skill_drafts(task_key, status, created_at DESC);
+                CREATE TABLE IF NOT EXISTS skill_versions (
+                    skill_id TEXT NOT NULL,
+                    version INTEGER NOT NULL,
+                    source_draft_id TEXT NOT NULL UNIQUE,
+                    task_key TEXT NOT NULL,
+                    title TEXT NOT NULL,
+                    steps_json TEXT NOT NULL,
+                    evidence_json TEXT NOT NULL,
+                    payload_sha256 TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    PRIMARY KEY(skill_id, version)
+                );
+                CREATE INDEX IF NOT EXISTS idx_skill_versions_task
+                    ON skill_versions(task_key, title, version);
+                CREATE TABLE IF NOT EXISTS skill_evaluations (
+                    evaluation_id TEXT PRIMARY KEY,
+                    skill_id TEXT NOT NULL,
+                    version INTEGER NOT NULL,
+                    suite_key TEXT NOT NULL,
+                    trials INTEGER NOT NULL,
+                    successes INTEGER NOT NULL,
+                    partials INTEGER NOT NULL,
+                    failures INTEGER NOT NULL,
+                    unknown INTEGER NOT NULL,
+                    evidence_json TEXT NOT NULL,
+                    evaluator TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    FOREIGN KEY(skill_id, version) REFERENCES skill_versions(skill_id, version)
+                );
+                CREATE INDEX IF NOT EXISTS idx_skill_evaluations_version
+                    ON skill_evaluations(skill_id, version, suite_key, created_at DESC);
                 CREATE TABLE IF NOT EXISTS learning_audit (
                     audit_id INTEGER PRIMARY KEY AUTOINCREMENT,
                     draft_id TEXT,
@@ -278,6 +309,213 @@ class ExperienceStore:
         )
         if hashlib.sha256(payload.encode("utf-8")).hexdigest() != row["payload_sha256"]:
             raise ValueError("skill draft integrity check failed")
+        return result
+
+
+    @staticmethod
+    def _version_payload(row: sqlite3.Row) -> dict[str, Any]:
+        result = {
+            "skill_id": row["skill_id"], "version": row["version"],
+            "source_draft_id": row["source_draft_id"], "task_key": row["task_key"],
+            "title": row["title"], "steps": json.loads(row["steps_json"]),
+            "evidence_ids": json.loads(row["evidence_json"]), "created_at": row["created_at"],
+        }
+        payload = json.dumps(
+            {"task_key": result["task_key"], "title": result["title"],
+             "steps": result["steps"], "evidence_ids": result["evidence_ids"]},
+            sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False,
+        )
+        if hashlib.sha256(payload.encode("utf-8")).hexdigest() != row["payload_sha256"]:
+            raise ValueError("skill version integrity check failed")
+        return result
+
+    def publish_skill_draft(self, draft_id: str) -> dict[str, Any]:
+        """Freeze an accepted draft as an immutable numbered skill version."""
+        if not isinstance(draft_id, str) or not draft_id or len(draft_id) > 64:
+            raise ValueError("invalid draft_id")
+        with self._connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            draft = db.execute("SELECT * FROM skill_drafts WHERE draft_id=?", (draft_id,)).fetchone()
+            if draft is None or draft["status"] != "accepted":
+                raise ValueError("only an accepted skill draft can be published")
+            payload = json.dumps(
+                {"task_key": draft["task_key"], "title": draft["title"],
+                 "steps": json.loads(draft["steps_json"]),
+                 "evidence_ids": json.loads(draft["evidence_json"])},
+                sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False,
+            )
+            digest = hashlib.sha256(payload.encode("utf-8")).hexdigest()
+            if digest != draft["payload_sha256"]:
+                raise ValueError("skill draft integrity check failed")
+            existing = db.execute(
+                """SELECT skill_id, MAX(version) AS latest FROM skill_versions
+                   WHERE task_key=? AND lower(title)=lower(?) GROUP BY skill_id
+                   ORDER BY latest DESC LIMIT 1""",
+                (draft["task_key"], draft["title"]),
+            ).fetchone()
+            skill_id = existing["skill_id"] if existing else str(uuid4())
+            version = (existing["latest"] + 1) if existing else 1
+            now = self._now()
+            db.execute(
+                "INSERT INTO skill_versions VALUES(?,?,?,?,?,?,?,?,?)",
+                (skill_id, version, draft_id, draft["task_key"], draft["title"],
+                 draft["steps_json"], draft["evidence_json"], digest, now),
+            )
+            db.execute(
+                "INSERT INTO learning_audit(draft_id,event_type,payload_json,occurred_at) VALUES(?,?,?,?)",
+                (draft_id, "skill_version.published",
+                 json.dumps({"skill_id": skill_id, "version": version}), now),
+            )
+            row = db.execute(
+                "SELECT * FROM skill_versions WHERE skill_id=? AND version=?",
+                (skill_id, version),
+            ).fetchone()
+            return self._version_payload(row)
+
+    def list_skill_versions(
+        self, task_key: str | None = None, title: str | None = None, limit: int = 100,
+    ) -> list[dict[str, Any]]:
+        if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 500:
+            raise ValueError("limit must be between 1 and 500")
+        clauses, params = [], []
+        if task_key is not None:
+            clauses.append("task_key=?")
+            params.append(self._task_key(task_key))
+        if title is not None:
+            if not isinstance(title, str) or not title.strip() or len(title) > 160:
+                raise ValueError("title must contain 1..160 characters")
+            clauses.append("lower(title)=lower(?)")
+            params.append(title.strip())
+        where = " WHERE " + " AND ".join(clauses) if clauses else ""
+        with self._connect() as db:
+            rows = db.execute(
+                "SELECT * FROM skill_versions" + where +
+                " ORDER BY task_key, lower(title), version DESC LIMIT ?",
+                (*params, limit),
+            ).fetchall()
+        return [self._version_payload(row) for row in rows]
+
+    def record_skill_evaluation(
+        self, skill_id: str, version: int, suite_key: str, *,
+        trials: int, successes: int, partials: int, failures: int, unknown: int,
+        evidence_ids: list[str], evaluator: str = "reviewed-evidence",
+        minimum_labeled_trials: int = 10, tolerance: float = 0.05,
+    ) -> dict[str, Any]:
+        if not isinstance(skill_id, str) or not skill_id or len(skill_id) > 64:
+            raise ValueError("invalid skill_id")
+        if isinstance(version, bool) or not isinstance(version, int) or version < 1:
+            raise ValueError("version must be a positive integer")
+        suite = self._task_key(suite_key)
+        counts = (trials, successes, partials, failures, unknown)
+        if any(isinstance(value, bool) or not isinstance(value, int) or value < 0 for value in counts):
+            raise ValueError("evaluation counts must be non-negative integers")
+        if not 1 <= trials <= 10000 or successes + partials + failures + unknown != trials:
+            raise ValueError("outcome counts must sum exactly to trials (1..10000)")
+        if isinstance(minimum_labeled_trials, bool) or not isinstance(minimum_labeled_trials, int) or not 2 <= minimum_labeled_trials <= 1000:
+            raise ValueError("minimum_labeled_trials must be between 2 and 1000")
+        if isinstance(tolerance, bool) or not isinstance(tolerance, (int, float)) or not 0 <= tolerance <= 0.25:
+            raise ValueError("tolerance must be between 0 and 0.25")
+        if evaluator not in {"user", "reviewed-evidence"}:
+            raise ValueError("evaluator must be user or reviewed-evidence")
+        if not isinstance(evidence_ids, list) or not evidence_ids or len(evidence_ids) > MAX_EVIDENCE or any(
+            not isinstance(item, str) or not item.strip() or len(item) > 128 for item in evidence_ids
+        ):
+            raise ValueError("evaluation requires 1..32 evidence references")
+        evidence = list(dict.fromkeys(evidence_ids))
+        now, evaluation_id = self._now(), str(uuid4())
+        with self._connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            exists = db.execute(
+                "SELECT 1 FROM skill_versions WHERE skill_id=? AND version=?",
+                (skill_id, version),
+            ).fetchone()
+            if exists is None:
+                raise ValueError("skill version not found")
+            db.execute(
+                "INSERT INTO skill_evaluations VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
+                (evaluation_id, skill_id, version, suite, trials, successes, partials,
+                 failures, unknown, json.dumps(evidence), evaluator, now),
+            )
+            baseline = db.execute(
+                """SELECT * FROM skill_evaluations
+                   WHERE skill_id=? AND version<? AND suite_key=?
+                   ORDER BY version DESC, created_at DESC LIMIT 1""",
+                (skill_id, version, suite),
+            ).fetchone()
+            candidate_labeled = successes + partials + failures
+            candidate_rate = successes / candidate_labeled if candidate_labeled else None
+            candidate_failure_rate = failures / candidate_labeled if candidate_labeled else None
+            status = "insufficient_data"
+            baseline_info = None
+            if candidate_labeled >= minimum_labeled_trials and baseline is None:
+                status = "baseline_only"
+            elif candidate_labeled >= minimum_labeled_trials and baseline is not None:
+                base_labeled = baseline["successes"] + baseline["partials"] + baseline["failures"]
+                if base_labeled >= minimum_labeled_trials:
+                    base_success_rate = baseline["successes"] / base_labeled
+                    base_failure_rate = baseline["failures"] / base_labeled
+                    baseline_info = {
+                        "version": baseline["version"], "labeled_trials": base_labeled,
+                        "success_rate": base_success_rate, "failure_rate": base_failure_rate,
+                        "success_rate_95pct_wilson": self._wilson_interval(baseline["successes"], base_labeled),
+                    }
+                    candidate_interval = self._wilson_interval(successes, candidate_labeled)
+                    baseline_interval = baseline_info["success_rate_95pct_wilson"]
+                    candidate_failure_interval = self._wilson_interval(failures, candidate_labeled)
+                    baseline_failure_interval = self._wilson_interval(baseline["failures"], base_labeled)
+                    regressed = (
+                        candidate_interval["lower"] < baseline_interval["lower"] - tolerance
+                        or candidate_failure_interval["upper"] > baseline_failure_interval["upper"] + tolerance
+                    )
+                    status = "regression_observed" if regressed else "no_regression_observed"
+                else:
+                    status = "baseline_insufficient_data"
+        result = {
+            "evaluation_id": evaluation_id, "skill_id": skill_id, "version": version,
+            "suite_key": suite, "trials": trials, "labeled_trials": candidate_labeled,
+            "successes": successes, "partials": partials, "failures": failures,
+            "unknown": unknown, "success_rate": candidate_rate,
+            "failure_rate": candidate_failure_rate,
+            "success_rate_95pct_wilson": self._wilson_interval(successes, candidate_labeled),
+            "baseline": baseline_info, "status": status,
+            "automation_eligible": False,
+            "interpretation": "Evaluation is evidence-recorded but not an execution grant; human review and separate policy gates remain mandatory.",
+            "created_at": now,
+        }
+        with self._connect() as db:
+            db.execute(
+                "INSERT INTO learning_audit(event_type,payload_json,occurred_at) VALUES(?,?,?)",
+                ("skill_evaluation.recorded", json.dumps(result, sort_keys=True), now),
+            )
+        return result
+
+    def list_skill_evaluations(self, skill_id: str, version: int | None = None) -> list[dict[str, Any]]:
+        if not isinstance(skill_id, str) or not skill_id or len(skill_id) > 64:
+            raise ValueError("invalid skill_id")
+        if version is not None and (isinstance(version, bool) or not isinstance(version, int) or version < 1):
+            raise ValueError("version must be a positive integer")
+        query = "SELECT * FROM skill_evaluations WHERE skill_id=?"
+        params: list[Any] = [skill_id]
+        if version is not None:
+            query += " AND version=?"
+            params.append(version)
+        query += " ORDER BY version, suite_key, created_at"
+        with self._connect() as db:
+            rows = db.execute(query, params).fetchall()
+        result = []
+        for row in rows:
+            labeled = row["successes"] + row["partials"] + row["failures"]
+            result.append({
+                "evaluation_id": row["evaluation_id"], "skill_id": row["skill_id"],
+                "version": row["version"], "suite_key": row["suite_key"],
+                "trials": row["trials"], "labeled_trials": labeled,
+                "successes": row["successes"], "partials": row["partials"],
+                "failures": row["failures"], "unknown": row["unknown"],
+                "evidence_ids": json.loads(row["evidence_json"]),
+                "success_rate": row["successes"] / labeled if labeled else None,
+                "failure_rate": row["failures"] / labeled if labeled else None,
+                "evaluator": row["evaluator"], "created_at": row["created_at"],
+            })
         return result
 
     def resolve_skill_draft(self, draft_id: str, decision: str) -> dict[str, Any]:
