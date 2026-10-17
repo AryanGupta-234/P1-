@@ -288,6 +288,21 @@ class ExperienceStore:
                    FROM experiences WHERE task_key=? ORDER BY created_at, experience_id""",
                 (key,),
             ).fetchall()
+            relationship_counts = {
+                row["relation"]: row["count"] for row in db.execute(
+                    """SELECT l.relation,COUNT(*) AS count FROM experience_links l
+                       JOIN experiences e ON e.experience_id=l.experience_id
+                       WHERE e.task_key=? GROUP BY l.relation""", (key,)
+                ).fetchall()
+            }
+            conflicted_summaries = db.execute(
+                """SELECT COUNT(*) FROM (
+                    SELECT f.semantic_key FROM experiences e
+                    JOIN experience_fingerprints f ON f.experience_id=e.experience_id
+                    WHERE e.task_key=? AND e.outcome IN ('success','partial','failure')
+                    GROUP BY f.semantic_key HAVING COUNT(DISTINCT e.outcome)>1
+                )""", (key,)
+            ).fetchone()[0]
         counts = {outcome: 0 for outcome in sorted(OUTCOMES)}
         verifier_counts: dict[str, int] = {}
         evidence_ids: set[str] = set()
@@ -316,6 +331,9 @@ class ExperienceStore:
             "unique_evidence_references": len(evidence_ids),
             "verifiers": verifier_counts,
             "repeated_summary_groups": sum(1 for count in summary_counts.values() if count > 1),
+            "duplicate_links": relationship_counts.get("duplicate_of", 0),
+            "contradiction_links": relationship_counts.get("contradicts", 0),
+            "conflicted_summary_groups": conflicted_summaries,
             "latest_experience_at": rows[-1]["created_at"] if rows else None,
             "interpretation": (
                 "Descriptive history only; small samples and user-reported outcomes are not "
