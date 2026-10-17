@@ -232,7 +232,7 @@ class MemoryStore:
         with self._connect() as db:
             rows = db.execute(
                 "SELECT * FROM memories WHERE " + clause +
-                " ORDER BY created_at,memory_id LIMIT 500", args
+                " ORDER BY created_at,memory_id LIMIT 10000", args
             ).fetchall()
             indexed_rows = db.execute(
                 "SELECT memory_id,content_sha256 FROM memory_embeddings WHERE model=?",
@@ -351,13 +351,19 @@ class MemoryStore:
         for row in rows:
             if hashlib.sha256(row["content"].encode("utf-8")).hexdigest() != row["content_sha256"]:
                 continue
-            stored = json.loads(row["vector_json"])
-            if len(stored) != len(vector):
+            try:
+                stored = json.loads(row["vector_json"])
+                if not isinstance(stored, list) or len(stored) != len(vector) or any(
+                    isinstance(value, bool) or not isinstance(value, (int, float))
+                    or not math.isfinite(value) for value in stored
+                ):
+                    continue
+                stored_norm = math.sqrt(sum(float(value) ** 2 for value in stored))
+                if stored_norm == 0:
+                    continue
+                cosine = sum(float(a) * float(b) for a, b in zip(vector, stored)) / (query_norm * stored_norm)
+            except (TypeError, ValueError, json.JSONDecodeError):
                 continue
-            stored_norm = math.sqrt(sum(float(value) ** 2 for value in stored))
-            if stored_norm == 0:
-                continue
-            cosine = sum(float(a) * float(b) for a, b in zip(vector, stored)) / (query_norm * stored_norm)
             created = datetime.fromisoformat(row["created_at"])
             if created.tzinfo is None:
                 created = created.replace(tzinfo=timezone.utc)
