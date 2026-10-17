@@ -159,6 +159,9 @@ Status vocabulary: DONE / IN_PROGRESS / BLOCKED / PLANNED. A task is DONE only w
 12. Exercise immutable skill publication, version sequencing, payload tampering, same-suite baseline comparisons, minimum-sample behavior and regression detection; independently validate that evaluation records never unlock action execution.
 13. Exercise legacy experience fingerprint backfill, duplicate-link idempotency, contradictory outcome detection, knowledge candidate conflict withholding, one-time review, tamper rejection and idempotent semantic-memory publication.
 14. Verify that a contradiction recorded after knowledge acceptance blocks publication; verify task reports include duplicate/contradiction counts and that imported semantic memory retains the bounded source and evidence references.
+15. Validate local embedding indexing with an already-installed Ollama model, sensitive-record exclusion, content-hash invalidation after memory edits, dimension mismatch handling, corrupt-vector rejection and repeatable re-indexing.
+16. Validate recency half-life ranking and semantic cosine retrieval with labeled relevance fixtures; confirm candidate-only near-duplicate search never mutates or merges records.
+17. Exercise contradiction adjudication decisions, evidence requirements, one-time review, audit records and proof that source outcomes remain unchanged; tamper with skill evaluation rows and ensure integrity checks reject them.
 
 ## Hardware/model constraints
 - Routine: `qwen2.5:3b-instruct`.
