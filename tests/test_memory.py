@@ -109,3 +109,26 @@ def test_memory_correction_history_is_preserved_and_deleted_with_record(tmp_path
     assert history[1]["previous"]["content"] == "first version"
     assert store.delete(original["memory_id"])
     assert store.history(original["memory_id"]) == []
+
+
+def test_reviewed_knowledge_import_is_idempotent_and_provenance_preserving(tmp_path):
+    store = MemoryStore(tmp_path / "memory.sqlite3")
+    first = store.import_reviewed_knowledge(
+        "knowledge-1", "Repeatedly verified display navigation",
+        provenance_ids=["experience-1", "event-1"], tags=["task:display"],
+    )
+    second = store.import_reviewed_knowledge(
+        "knowledge-1", "Repeatedly verified display navigation",
+        provenance_ids=["experience-1", "event-1"], tags=["task:display"],
+    )
+    assert first["memory_id"] == second["memory_id"]
+    assert first["kind"] == "semantic"
+    assert first["verification"] == "supported"
+    assert first["provenance_ids"] == ["experience-1", "event-1"]
+    assert len(store.search("display", kind="semantic")) == 1
+
+
+def test_reviewed_knowledge_import_requires_provenance(tmp_path):
+    store = MemoryStore(tmp_path / "memory.sqlite3")
+    with pytest.raises(ValueError, match="provenance"):
+        store.import_reviewed_knowledge("knowledge-2", "No provenance", provenance_ids=[])
