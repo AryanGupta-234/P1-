@@ -355,3 +355,14 @@ def test_knowledge_draft_cannot_publish_without_evidence(tmp_path: Path):
     store.resolve_knowledge_draft(draft["knowledge_id"], "accepted")
     with pytest.raises(ValueError, match="publication requires"):
         store.validate_knowledge_publication(draft["knowledge_id"])
+
+
+def test_task_report_includes_duplicate_and_conflict_diagnostics(tmp_path: Path):
+    store = ExperienceStore(tmp_path / "learning.db")
+    store.record("task", "same action", "success", evidence_ids=["e1"])
+    store.record("task", " SAME   ACTION ", "success", evidence_ids=["e2"])
+    store.record("task", "same action", "failure", evidence_ids=["e3"])
+    report = store.task_report("task")
+    assert report["duplicate_links"] == 1
+    assert report["contradiction_links"] == 2
+    assert report["conflicted_summary_groups"] == 1
