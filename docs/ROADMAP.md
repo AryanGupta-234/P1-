@@ -94,7 +94,12 @@ Status vocabulary: DONE / IN_PROGRESS / BLOCKED / PLANNED. A task is DONE only w
 - [x] Persist provenance IDs, confidence, sensitivity, verification state, tags, access count and optional TTL; exclude sensitive records from retrieval by default.
 - [x] Add explicit memory add/search/delete/expired-prune CLI workflows; memory is never generated or consolidated automatically.
 - [x] Provenance, confidence, sensitivity, TTL and verification state.
-- [ ] Retrieval benchmark, contradiction handling and memory decay.
+- [x] Add configurable exponential recency weighting to lexical memory retrieval; recency influences rank but never deletes old memories.
+- [x] Add local Ollama embedding indexing, cosine-similarity retrieval and content-hash invalidation; sensitive memories remain excluded by default.
+- [x] Add semantic near-duplicate candidate discovery with explicit human review; no automatic merge or deletion.
+- [x] Add one-time, evidence-backed contradiction adjudication with append-only audit; original experience outcomes remain unchanged.
+- [x] Add SHA-256 integrity checks for skill evaluation records and verify prior baselines before regression comparisons.
+- [ ] Build independent held-out benchmark execution, calibration and promotion criteria; add retrieval-quality benchmark suites and statistical promotion gates.
 - [x] User review/search, correction with immutable prior-version history, JSONL export, explicit deletion and TTL cleanup; sensitive records are excluded from search/export unless explicitly opted in.
 - [x] Persist user-directed goals and dependency-ordered steps with auditable transitions as the prospective/planning memory substrate.
 - [x] Add persistent task-experience records with outcome labels, verifier class, bounded evidence references and task-family indexing.
@@ -107,7 +112,11 @@ Status vocabulary: DONE / IN_PROGRESS / BLOCKED / PLANNED. A task is DONE only w
 - [x] Flag same-description, conflicting non-unknown outcomes as contradictions; never auto-select a winning outcome. Expose relationships for review.
 - [x] Add repeated-experience knowledge drafts that withhold contradictory clusters, retain source/evidence provenance, use payload integrity checks and require one-time human review.
 - [x] Publish only accepted, repeated, evidence-backed successful knowledge into semantic memory through an idempotent import ledger; partial/failure/unknown candidates remain review-only.
-- [ ] Add semantic near-duplicate detection, recency/decay and contradiction resolution workflows, an independently-run held-out benchmark harness, statistical promotion criteria and adapter eligibility gates.
+- [x] Add semantic near-duplicate memory candidates through local embedding similarity; preserve source records and require human review.
+- [x] Add recency-weighted lexical and semantic retrieval with configurable exponential half-life.
+- [x] Add evidence-backed human contradiction adjudication; decisions are immutable per pair, audited, and do not rewrite original experiences.
+- [x] Add SHA-256 integrity checks for skill evaluation records and reject tampered baselines before regression comparisons.
+- [ ] Add independently-run held-out benchmark execution, retrieval-quality measurement, calibrated promotion criteria and adapter eligibility gates.
 - [ ] Add controlled self-improvement experiments: propose changes in isolated branches/worktrees, run independent evaluation, require human approval for merge; no self-modifying production runtime.
 
 ## M5 — Windows application automation and controlled autonomy
