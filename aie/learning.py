@@ -326,6 +326,11 @@ class ExperienceStore:
                     GROUP BY f.semantic_key HAVING COUNT(DISTINCT e.outcome)>1
                 )""", (key,)
             ).fetchone()[0]
+            adjudicated_contradictions = db.execute(
+                """SELECT COUNT(*) FROM experience_adjudications a
+                   JOIN experiences e ON e.experience_id=a.experience_id
+                   WHERE e.task_key=?""", (key,)
+            ).fetchone()[0]
         counts = {outcome: 0 for outcome in sorted(OUTCOMES)}
         verifier_counts: dict[str, int] = {}
         evidence_ids: set[str] = set()
@@ -357,6 +362,7 @@ class ExperienceStore:
             "duplicate_links": relationship_counts.get("duplicate_of", 0),
             "contradiction_links": relationship_counts.get("contradicts", 0),
             "conflicted_summary_groups": conflicted_summaries,
+            "adjudicated_contradictions": adjudicated_contradictions,
             "latest_experience_at": rows[-1]["created_at"] if rows else None,
             "interpretation": (
                 "Descriptive history only; small samples and user-reported outcomes are not "
