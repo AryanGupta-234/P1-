@@ -185,3 +185,18 @@ def test_embedding_validation_and_dimension_mismatch(tmp_path):
     assert store.semantic_search([1.0], "embed") == []
     with pytest.raises(ValueError, match="non-zero"):
         store.semantic_search([0.0, 0.0], "embed")
+
+
+def test_semantic_near_duplicates_are_candidates_only(tmp_path):
+    store = MemoryStore(tmp_path / "memory.sqlite3")
+    first = store.add("Display settings instructions")
+    second = store.add("How to configure screen display")
+    store.store_embedding(first["memory_id"], "embed", [1.0, 0.0],
+                          expected_content=first["content"])
+    store.store_embedding(second["memory_id"], "embed", [0.99, 0.01],
+                          expected_content=second["content"])
+    candidates = store.find_near_duplicates(first["memory_id"], "embed", threshold=0.9)
+    assert len(candidates) == 1
+    assert candidates[0]["memory_id"] == second["memory_id"]
+    assert candidates[0]["candidate_only"] is True
+    assert candidates[0]["automatic_merge"] is False
