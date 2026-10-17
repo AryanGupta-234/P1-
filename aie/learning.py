@@ -515,10 +515,11 @@ class ExperienceStore:
                 raise ValueError("new contradictory outcomes exist; review the knowledge candidate again")
             placeholders = ",".join("?" for _ in provenance)
             sources = db.execute(
-                f"""SELECT experience_id,evidence_json FROM experiences
-                    WHERE task_key=? AND outcome='success'
-                      AND experience_id IN ({placeholders})""",
-                (row["task_key"], *provenance),
+                f"""SELECT e.experience_id,e.evidence_json FROM experiences e
+                    JOIN experience_fingerprints f ON f.experience_id=e.experience_id
+                    WHERE e.task_key=? AND e.outcome='success' AND f.semantic_key=?
+                      AND e.experience_id IN ({placeholders})""",
+                (row["task_key"], row["normalized_summary"], *provenance),
             ).fetchall()
             if len(sources) != len(provenance):
                 raise ValueError("knowledge provenance no longer matches successful source experiences")
@@ -569,7 +570,7 @@ class ExperienceStore:
     ) -> list[dict[str, Any]]:
         if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 200:
             raise ValueError("limit must be between 1 and 200")
-        if status is not None and status not in DRAFT_STATES:
+        if status is not None and (not isinstance(status, str) or status not in DRAFT_STATES):
             raise ValueError("invalid knowledge draft status")
         clauses, params = [], []
         if task_key is not None:
