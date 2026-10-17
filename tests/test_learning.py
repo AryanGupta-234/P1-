@@ -405,7 +405,7 @@ def test_skill_evaluation_integrity_detects_tampering(tmp_path: Path):
     for index in range(3):
         store.record("task", "completed task", "success", evidence_ids=[f"e{index}"])
     draft = store.create_skill_draft(
-        "task", "Completed task", ["Check the result"], evidence_ids=["e0", "e1", "e2"]
+        "task", "Completed task", ["Check the result"]
     )
     store.resolve_skill_draft(draft["draft_id"], "accepted")
     version = store.publish_skill_draft(draft["draft_id"])
