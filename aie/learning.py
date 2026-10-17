@@ -945,11 +945,25 @@ class ExperienceStore:
                 (evaluation_id, hashlib.sha256(integrity_payload.encode("utf-8")).hexdigest()),
             )
             baseline = db.execute(
-                """SELECT * FROM skill_evaluations
-                   WHERE skill_id=? AND version<? AND suite_key=?
-                   ORDER BY version DESC, created_at DESC LIMIT 1""",
+                """SELECT e.*,i.payload_sha256 AS integrity_sha256
+                   FROM skill_evaluations e
+                   LEFT JOIN skill_evaluation_integrity i ON i.evaluation_id=e.evaluation_id
+                   WHERE e.skill_id=? AND e.version<? AND e.suite_key=?
+                   ORDER BY e.version DESC,e.created_at DESC LIMIT 1""",
                 (skill_id, version, suite),
             ).fetchone()
+            if baseline is not None and baseline["integrity_sha256"] is not None:
+                baseline_payload = json.dumps(
+                    {"evaluation_id": baseline["evaluation_id"], "skill_id": baseline["skill_id"],
+                     "version": baseline["version"], "suite_key": baseline["suite_key"],
+                     "trials": baseline["trials"], "successes": baseline["successes"],
+                     "partials": baseline["partials"], "failures": baseline["failures"],
+                     "unknown": baseline["unknown"], "evidence_ids": json.loads(baseline["evidence_json"]),
+                     "evaluator": baseline["evaluator"], "created_at": baseline["created_at"]},
+                    sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False,
+                )
+                if hashlib.sha256(baseline_payload.encode("utf-8")).hexdigest() != baseline["integrity_sha256"]:
+                    raise ValueError("baseline skill evaluation integrity check failed")
             candidate_labeled = successes + partials + failures
             candidate_rate = successes / candidate_labeled if candidate_labeled else None
             candidate_failure_rate = failures / candidate_labeled if candidate_labeled else None
