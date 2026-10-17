@@ -347,6 +347,11 @@ class ExperienceStore:
             digest = hashlib.sha256(payload.encode("utf-8")).hexdigest()
             if digest != draft["payload_sha256"]:
                 raise ValueError("skill draft integrity check failed")
+            already_published = db.execute(
+                "SELECT 1 FROM skill_versions WHERE source_draft_id=?", (draft_id,)
+            ).fetchone()
+            if already_published is not None:
+                raise ValueError("skill draft has already been published")
             existing = db.execute(
                 """SELECT skill_id, MAX(version) AS latest FROM skill_versions
                    WHERE task_key=? AND lower(title)=lower(?) GROUP BY skill_id
