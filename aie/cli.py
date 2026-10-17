@@ -1174,6 +1174,46 @@ def experience_relationships(
     console.print_json(json.dumps(report, indent=2))
 
 
+@app.command("experience-adjudicate")
+def experience_adjudicate(
+    experience_id: str = typer.Argument(...),
+    related_experience_id: str = typer.Argument(...),
+    decision: str = typer.Argument(..., help="confirmed_conflict, source_is_correct, related_is_correct, inconclusive, not_same_claim"),
+    rationale: str = typer.Option(..., help="Human explanation for the decision."),
+    evidence: str = typer.Option(..., help="Comma-separated supporting evidence references."),
+    reviewer: str = typer.Option("user"),
+    db: Path = typer.Option(database_path(), "--db"),
+) -> None:
+    """Record a one-time, evidence-backed human adjudication without rewriting outcomes."""
+    from aie.learning import ExperienceStore
+    try:
+        result = ExperienceStore(db).adjudicate_experience_contradiction(
+            experience_id, related_experience_id, decision, rationale=rationale,
+            evidence_ids=[item.strip() for item in evidence.split(",") if item.strip()],
+            reviewer=reviewer,
+        )
+    except ValueError as exc:
+        console.print(f"[red]Contradiction adjudication rejected:[/red] {exc}")
+        raise typer.Exit(2) from exc
+    console.print_json(json.dumps(result, indent=2))
+
+
+@app.command("experience-adjudication-list")
+def experience_adjudication_list(
+    task_key: str = typer.Argument(...),
+    limit: int = typer.Option(100, min=1, max=500),
+    db: Path = typer.Option(database_path(), "--db"),
+) -> None:
+    """List human contradiction decisions and their supporting evidence."""
+    from aie.learning import ExperienceStore
+    try:
+        result = ExperienceStore(db).list_experience_adjudications(task_key, limit)
+    except ValueError as exc:
+        console.print(f"[red]Adjudication query failed:[/red] {exc}")
+        raise typer.Exit(2) from exc
+    console.print_json(json.dumps(result, indent=2))
+
+
 @app.command("knowledge-consolidate")
 def knowledge_consolidate(
     task_key: str = typer.Argument(...),
