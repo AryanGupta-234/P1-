@@ -353,5 +353,5 @@ def test_knowledge_draft_cannot_publish_without_evidence(tmp_path: Path):
         store.record("task", "Display page reached", "success")
     draft = store.create_knowledge_drafts("task")[0]
     store.resolve_knowledge_draft(draft["knowledge_id"], "accepted")
-    with pytest.raises(ValueError, match="successful source"):
+    with pytest.raises(ValueError, match="publication requires"):
         store.validate_knowledge_publication(draft["knowledge_id"])
