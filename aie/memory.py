@@ -260,6 +260,8 @@ class MemoryStore:
             raise ValueError("embedding vector must contain 1..16384 values")
         if any(isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) for value in vector):
             raise ValueError("embedding vector must contain finite numbers")
+        if math.sqrt(sum(float(value) ** 2 for value in vector)) == 0:
+            raise ValueError("embedding vector must have non-zero magnitude")
         digest = hashlib.sha256(expected_content.encode("utf-8")).hexdigest()
         now = datetime.now(timezone.utc).isoformat()
         with self._connect() as db:
@@ -289,8 +291,14 @@ class MemoryStore:
     ) -> list[dict[str, Any]]:
         if not isinstance(memory_id, str) or not memory_id or len(memory_id) > 64:
             raise ValueError("invalid memory_id")
+        if not isinstance(model, str) or not model.strip() or len(model) > 128:
+            raise ValueError("invalid embedding model")
         if isinstance(threshold, bool) or not isinstance(threshold, (int, float)) or not math.isfinite(threshold) or not -1 <= threshold <= 1:
             raise ValueError("threshold must be between -1 and 1")
+        if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 100:
+            raise ValueError("limit must be between 1 and 100")
+        if not isinstance(include_sensitive, bool):
+            raise ValueError("include_sensitive must be a boolean")
         with self._connect() as db:
             row = db.execute(
                 """SELECT e.vector_json,e.content_sha256,m.content
@@ -301,8 +309,12 @@ class MemoryStore:
             ).fetchone()
         if row is None or hashlib.sha256(row["content"].encode("utf-8")).hexdigest() != row["content_sha256"]:
             raise ValueError("memory has no current embedding for this model; run memory-index")
+        try:
+            query_vector = json.loads(row["vector_json"])
+        except (TypeError, ValueError, json.JSONDecodeError) as exc:
+            raise ValueError("stored embedding is malformed; run memory-index again") from exc
         candidates = self.semantic_search(
-            json.loads(row["vector_json"]), model, limit=min(100, limit + 1),
+            query_vector, model, limit=100,
             include_sensitive=include_sensitive,
         )
         return [
