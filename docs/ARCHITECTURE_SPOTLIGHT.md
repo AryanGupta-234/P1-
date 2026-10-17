@@ -2,7 +2,7 @@
 
 > Always-current project orientation. Read before coding and update in the same change as milestone progress.
 
-**Last updated:** 2026-10-16  
+**Last updated:** 2026-10-17  
 **Active phase:** Environment Intelligence + Cognitive Foundations  
 **Active milestone:** M2 — Context Intelligence (durable evidence-backed environment projection; Windows validation remains open)  
 **Platform:** Windows 11 x64 only  
@@ -135,3 +135,10 @@ At each implementation increment: update this file, update [ROADMAP.md](ROADMAP.
 **Plan suggestions:** `aie/planning.py` builds a bounded prompt from user goal data and validates Ollama JSON against a strict schema. Dependencies can only point to earlier suggested steps, preventing cycles. `aie goal-suggest GOAL_ID` persists a bounded draft with `pending_review` status and SHA-256 integrity metadata. `aie goal-draft-list/show` expose drafts; `aie goal-draft-accept/reject` provide explicit one-time resolution. Acceptance creates ordered goal steps and dependency links in one SQLite transaction and records the transition in goal history. Rejection leaves goal steps unchanged. Draft integrity is checked before display/resolution; storage is capped at 100 drafts and 20 pending reviews per goal. This is plan persistence only: no commands or OS actions execute. Plan-quality evaluation remains open, and goal execution remains prohibited until the separate policy/sandbox/action-verification pipeline exists.
 
 - Cognitive context applies a second-stage prompt budget: at most 12 processes and 12 entities with the latest eight evidence IDs each, five non-sensitive memory matches with 1,000-character content caps, and six active/paused goals with ten steps each. Truncation remains explicit; oversized packets fail closed rather than silently dropping arbitrary fields.
+
+
+## Windows Settings URI catalogue
+
+The codebase now has a conservative `ms-settings:` starter set plus bounded JSON/CSV import, case-insensitive deduplication and local search (`aie settings-search`, `aie settings-import`). Catalogue records carry source, build bounds and an explicit validation status. The starter set is intentionally marked `unverified`; URI syntax alone does not establish support. The catalogue is metadata only: it does not launch Settings or modify configuration.
+
+**Open work:** obtain a source-backed comprehensive dataset (the requested 1,500+ target is not yet claimed), audit provenance/licensing and duplicates, then validate supported destinations on the target Windows 11 edition/build. Navigation and any future mutation capability must remain separate and policy-gated.
