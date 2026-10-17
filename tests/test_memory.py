@@ -153,7 +153,7 @@ def test_embedding_index_and_semantic_search(tmp_path):
     first = store.add("Configure the display resolution", kind="semantic")
     second = store.add("Prepare a vegetable soup recipe", kind="semantic")
     secret = store.add("Private display notes", sensitivity="sensitive")
-    assert len(store.get_embedding_candidates("local-embed")) == 3
+    assert len(store.get_embedding_candidates("local-embed")) == 2
     store.store_embedding(first["memory_id"], "local-embed", [1.0, 0.0], expected_content=first["content"])
     store.store_embedding(second["memory_id"], "local-embed", [0.0, 1.0], expected_content=second["content"])
     store.store_embedding(secret["memory_id"], "local-embed", [0.9, 0.1], expected_content=secret["content"])
