@@ -200,3 +200,22 @@ def test_semantic_near_duplicates_are_candidates_only(tmp_path):
     assert candidates[0]["memory_id"] == second["memory_id"]
     assert candidates[0]["candidate_only"] is True
     assert candidates[0]["automatic_merge"] is False
+
+
+def test_memory_delete_and_expiry_remove_embedding_indexes(tmp_path):
+    store = MemoryStore(tmp_path / "memory.sqlite3")
+    doomed = store.add("Temporary indexed memory", ttl_days=1)
+    store.store_embedding(doomed["memory_id"], "embed", [1.0, 0.0],
+                          expected_content=doomed["content"])
+    with store._connect() as db:
+        assert db.execute("SELECT COUNT(*) FROM memory_embeddings").fetchone()[0] == 1
+    future = datetime.now(timezone.utc) + timedelta(days=2)
+    assert store.prune_expired(now=future) == 1
+    with store._connect() as db:
+        assert db.execute("SELECT COUNT(*) FROM memory_embeddings").fetchone()[0] == 0
+    retained = store.add("Delete indexed memory")
+    store.store_embedding(retained["memory_id"], "embed", [1.0, 0.0],
+                          expected_content=retained["content"])
+    assert store.delete(retained["memory_id"]) is True
+    with store._connect() as db:
+        assert db.execute("SELECT COUNT(*) FROM memory_embeddings").fetchone()[0] == 0
