@@ -113,6 +113,22 @@ aie skill-version-list "settings.open_display" --title "Open Display Settings"
 # Record outcomes from a named, evidence-backed evaluation suite:
 aie skill-evaluate SKILL_ID 1 "display-settings-regression" --trials 20 --successes 18 --partials 1 --failures 1 --unknown 0 --evidence "EVAL_REPORT_ID"
 aie skill-evaluation-list SKILL_ID
+
+# Inspect duplicate/contradictory outcomes; source records are never deleted:
+aie experience-relationships "settings.open_display"
+
+# Create review-only knowledge candidates from at least three repeated,
+# non-contradictory experiences:
+aie knowledge-consolidate "settings.open_display" --minimum-repetitions 3
+aie knowledge-draft-list "settings.open_display" --status pending_review
+aie knowledge-draft-review KNOWLEDGE_ID accepted
+
+# Only accepted, repeated successes with evidence can enter semantic memory:
+aie knowledge-publish KNOWLEDGE_ID
 ```
 
 An accepted skill is currently a reviewed procedural reference, not executable automation. No skill can grant itself capabilities, alter policy, modify source code, or execute OS actions. `aie learn-report TASK_KEY` reports success/partial/failure/unknown counts, a 95% Wilson interval for the descriptive success rate, evidence-backed success coverage, unique evidence references, verifier mix and repeated-summary groups. Unknown outcomes are excluded from the rate; the report explicitly warns that small samples and user-reported outcomes are not proof of reliability. `aie skill-draft-list [TASK_KEY] --status pending_review` lists drafts only after verifying each payload digest. Skill decisions now use a serialized SQLite write transaction and verify the payload in that same transaction, preventing competing reviewers from both resolving a draft. These reports are descriptive—not a promotion gate—and accepted skills remain non-executable. Accepted drafts can be frozen with `aie skill-publish` into immutable numbered versions; publishing requires prior acceptance, checks the draft digest in a serialized transaction, and retains the source draft. `aie skill-evaluate` records a complete outcome partition (success/partial/failure/unknown) and evidence references for a named suite. Version 1 establishes a baseline; later versions are compared with the latest earlier evaluation from the same suite using Wilson intervals and a configurable tolerance. Fewer than ten labeled trials is insufficient by default. Results are `baseline_only`, `insufficient_data`, `baseline_insufficient_data`, `regression_observed` or `no_regression_observed`. The last status is not a reliability certification: the suite identity and evidence are supplied by the operator, and no independent benchmark runner exists yet. Every result explicitly reports `automation_eligible=false`; evaluation cannot grant execution permissions.
+
+Experience ingestion now computes a stable SHA-256 fingerprint over normalized task key, whitespace-normalized/case-folded summary and outcome. Exact repeats create `duplicate_of` links; the original rows and evidence remain intact. The same normalized task description with conflicting non-unknown outcomes creates `contradicts` links rather than choosing a winner. Existing experience rows receive fingerprints during database initialization. `aie experience-relationships TASK_KEY` exposes these review signals; they are heuristic text matches, not semantic equivalence proofs.
+
+`aie knowledge-consolidate TASK_KEY` proposes knowledge drafts only when the same normalized summary/outcome repeats at least three times (configurable). Candidates with conflicting non-unknown outcomes are withheld. Drafts retain source experience IDs and evidence references, are SHA-256 checked, and require one-time human acceptance. Only accepted successful candidates with evidence can be published to semantic memory. The memory import is idempotent by knowledge ID, records all bounded source/evidence provenance, and is tagged as reviewed learning. Partial/failure/unknown candidates can be inspected but cannot be promoted to semantic memory by this path. No model-generated text is silently consolidated.
