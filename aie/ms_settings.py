@@ -201,3 +201,14 @@ def starter_catalog() -> list[SettingsEntry]:
         SettingsEntry(uri, title, category, source="aie-starter-set", validation_status="unverified")
         for uri, title, category in STARTER_ENTRIES
     ]
+
+
+
+def default_catalog_path() -> Path:
+    """Return the bundled, source-documented Settings URI catalogue path."""
+    return Path(__file__).resolve().parent / "data" / "ms_settings_catalog.json"
+
+
+def documented_catalog() -> list[SettingsEntry]:
+    """Load the bundled Microsoft Learn catalogue with provenance metadata."""
+    return load_catalog(default_catalog_path())
