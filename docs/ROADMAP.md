@@ -101,7 +101,9 @@ Status vocabulary: DONE / IN_PROGRESS / BLOCKED / PLANNED. A task is DONE only w
 - [x] Add evidence-gated procedural skill drafts: require repeated success, at least one evidence-backed episode, payload integrity, explicit review and append-only decision audit; accepted skills remain non-executable references.
 - [x] Add descriptive task-family evaluation reports: outcome counts, Wilson 95% interval, evidence-backed success fraction, verifier mix, unique evidence references and repeated-summary indicators; unknown outcomes are excluded from the success-rate denominator.
 - [x] Add integrity-checked skill-draft listing and serialize review decisions with SQLite `BEGIN IMMEDIATE`; verify the payload inside the same transaction and require exactly one pending-to-final transition.
-- [ ] Add true experience deduplication with provenance-preserving duplicate links, contradiction/recency handling, skill versioning and held-out regression-evaluation gates before a skill can become eligible for an adapter.
+- [x] Add immutable numbered skill versions sourced only from accepted, digest-verified drafts; preserve source-draft lineage and verify version payloads on listing.
+- [x] Add evidence-referenced skill evaluation records with exact outcome partitions, same-suite baseline comparisons, Wilson intervals, minimum labeled-sample checks, regression flags and atomic audit writes; evaluations never grant execution eligibility.
+- [ ] Add true experience deduplication with provenance-preserving duplicate links, contradiction/recency handling, an independently-run held-out benchmark harness, statistical promotion criteria and adapter eligibility gates.
 - [ ] Add controlled self-improvement experiments: propose changes in isolated branches/worktrees, run independent evaluation, require human approval for merge; no self-modifying production runtime.
 
 ## M5 — Windows application automation and controlled autonomy
@@ -141,6 +143,7 @@ Status vocabulary: DONE / IN_PROGRESS / BLOCKED / PLANNED. A task is DONE only w
 9. Exercise goal dependency gates, pause/resume, history integrity and bounded `--include-goals` context on Windows.
 10. Evaluate local `goal-suggest` output quality and adversarial goal-text handling; exercise draft integrity checks, one-time resolution and atomic step creation.
 11. Exercise `aie learn-report` against synthetic task histories; validate Wilson intervals, evidence coverage and unknown-outcome handling. Test concurrent skill-review attempts and tampered-draft rejection.
+12. Exercise immutable skill publication, version sequencing, payload tampering, same-suite baseline comparisons, minimum-sample behavior and regression detection; independently validate that evaluation records never unlock action execution.
 
 ## Hardware/model constraints
 - Routine: `qwen2.5:3b-instruct`.
