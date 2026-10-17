@@ -66,3 +66,23 @@ def test_save_and_merge_roundtrip(tmp_path: Path):
     ])
     save_catalog(path, merged)
     assert len(load_catalog(path)) == len(merged)
+
+
+
+def test_bundled_documented_catalogue_has_provenance_and_200_plus_entries():
+    from aie.ms_settings import documented_catalog
+
+    entries = documented_catalog()
+    assert len(entries) >= 200
+    assert all(item.validation_status == "documented" for item in entries)
+    assert all(item.source_url.startswith("https://learn.microsoft.com/") for item in entries)
+    assert any("Deprecated" in item.version_notes for item in entries)
+
+
+def test_bundled_catalogue_retains_requirements_metadata():
+    from aie.ms_settings import documented_catalog
+
+    entries = documented_catalog()
+    camera = next(item for item in entries if item.uri == "ms-settings:camera")
+    assert "Windows 11" in camera.version_notes
+    assert documented_catalog()
