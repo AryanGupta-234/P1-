@@ -1090,6 +1090,84 @@ def skill_draft_list(
     console.print_json(json.dumps(drafts, indent=2))
 
 
+@app.command("skill-publish")
+def skill_publish(
+    draft_id: str = typer.Argument(...),
+    db: Path = typer.Option(database_path(), "--db"),
+) -> None:
+    """Freeze an accepted draft as an immutable numbered skill version."""
+    from aie.learning import ExperienceStore
+    try:
+        version = ExperienceStore(db).publish_skill_draft(draft_id)
+    except ValueError as exc:
+        console.print(f"[red]Skill publication rejected:[/red] {exc}")
+        raise typer.Exit(2) from exc
+    console.print_json(json.dumps(version, indent=2))
+    console.print("[dim]Versioned reference only. It is not executable or automation-eligible.[/dim]")
+
+
+@app.command("skill-version-list")
+def skill_version_list(
+    task_key: str | None = typer.Argument(None),
+    title: str | None = typer.Option(None, help="Optional case-insensitive skill title."),
+    limit: int = typer.Option(100, min=1, max=500),
+    db: Path = typer.Option(database_path(), "--db"),
+) -> None:
+    """List immutable skill versions after digest verification."""
+    from aie.learning import ExperienceStore
+    try:
+        versions = ExperienceStore(db).list_skill_versions(task_key, title, limit)
+    except ValueError as exc:
+        console.print(f"[red]Skill version query failed:[/red] {exc}")
+        raise typer.Exit(2) from exc
+    console.print_json(json.dumps(versions, indent=2))
+
+
+@app.command("skill-evaluate")
+def skill_evaluate(
+    skill_id: str = typer.Argument(...),
+    version: int = typer.Argument(..., min=1),
+    suite_key: str = typer.Argument(...),
+    trials: int = typer.Option(..., min=1, max=10000),
+    successes: int = typer.Option(..., min=0),
+    partials: int = typer.Option(..., min=0),
+    failures: int = typer.Option(..., min=0),
+    unknown: int = typer.Option(0, min=0),
+    evidence: str = typer.Option(..., help="Comma-separated evaluation evidence references."),
+    evaluator: str = typer.Option("reviewed-evidence", help="user or reviewed-evidence"),
+    db: Path = typer.Option(database_path(), "--db"),
+) -> None:
+    """Record held-out skill-suite outcomes and compare against an earlier version."""
+    from aie.learning import ExperienceStore
+    try:
+        report = ExperienceStore(db).record_skill_evaluation(
+            skill_id, version, suite_key, trials=trials, successes=successes,
+            partials=partials, failures=failures, unknown=unknown,
+            evidence_ids=[item.strip() for item in evidence.split(",") if item.strip()],
+            evaluator=evaluator,
+        )
+    except ValueError as exc:
+        console.print(f"[red]Skill evaluation rejected:[/red] {exc}")
+        raise typer.Exit(2) from exc
+    console.print_json(json.dumps(report, indent=2))
+
+
+@app.command("skill-evaluation-list")
+def skill_evaluation_list(
+    skill_id: str = typer.Argument(...),
+    version: int | None = typer.Option(None, min=1),
+    db: Path = typer.Option(database_path(), "--db"),
+) -> None:
+    """Review recorded evaluation results for a skill and its versions."""
+    from aie.learning import ExperienceStore
+    try:
+        reports = ExperienceStore(db).list_skill_evaluations(skill_id, version)
+    except ValueError as exc:
+        console.print(f"[red]Skill evaluation query failed:[/red] {exc}")
+        raise typer.Exit(2) from exc
+    console.print_json(json.dumps(reports, indent=2))
+
+
 @app.command("skill-draft")
 def skill_draft(
     task_key: str = typer.Argument(...),
