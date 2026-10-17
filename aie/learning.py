@@ -72,9 +72,7 @@ class ExperienceStore:
                     evidence_json TEXT NOT NULL,
                     reviewer TEXT NOT NULL,
                     created_at TEXT NOT NULL,
-                    UNIQUE(experience_id,related_experience_id),
-                    FOREIGN KEY(experience_id,related_experience_id)
-                        REFERENCES experience_links(experience_id,related_experience_id)
+                    UNIQUE(experience_id,related_experience_id)
                 );
                 CREATE INDEX IF NOT EXISTS idx_experience_adjudications_created
                     ON experience_adjudications(created_at DESC);
