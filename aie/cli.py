@@ -1168,11 +1168,7 @@ def knowledge_publish(
     from aie.learning import ExperienceStore
     from aie.memory import MemoryStore
     try:
-        draft = ExperienceStore(db).get_knowledge_draft(knowledge_id)
-        if draft is None or draft["status"] != "accepted":
-            raise ValueError("knowledge candidate must be accepted before publication")
-        if draft["outcome"] != "success" or not draft["evidence_ids"]:
-            raise ValueError("only repeated successful knowledge with evidence can enter semantic memory")
+        draft = ExperienceStore(db).validate_knowledge_publication(knowledge_id)
         record = MemoryStore(memory_db).import_reviewed_knowledge(
             knowledge_id, draft["content"],
             provenance_ids=list(dict.fromkeys(draft["provenance_ids"] + draft["evidence_ids"])),
