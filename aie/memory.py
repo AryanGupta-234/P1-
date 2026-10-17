@@ -54,7 +54,13 @@ class MemoryStore:
             db.execute(
                 "CREATE INDEX IF NOT EXISTS idx_memory_revisions_id "
                 "ON memory_revisions(memory_id, revision_id DESC)"
-            )
+            );
+            db.execute("""CREATE TABLE IF NOT EXISTS memory_imports (
+                source_key TEXT PRIMARY KEY,
+                memory_id TEXT NOT NULL UNIQUE,
+                imported_at TEXT NOT NULL,
+                FOREIGN KEY(memory_id) REFERENCES memories(memory_id)
+            )""")
 
     def _connect(self) -> sqlite3.Connection:
         db = sqlite3.connect(self.path, timeout=10)
@@ -178,6 +184,56 @@ class MemoryStore:
             ))
         return records[:limit]
 
+
+
+    def import_reviewed_knowledge(
+        self, source_key: str, content: str, *, provenance_ids: list[str],
+        tags: list[str] | None = None, confidence: float = 0.7,
+    ) -> dict[str, Any]:
+        """Idempotently import a human-accepted, evidence-backed knowledge item."""
+        if not isinstance(source_key, str) or not source_key.strip() or len(source_key) > 128:
+            raise ValueError("source_key must contain 1..128 characters")
+        if not isinstance(provenance_ids, list) or not provenance_ids or len(provenance_ids) > MAX_PROVENANCE_IDS or any(
+            not isinstance(item, str) or not item.strip() or len(item) > 128 for item in provenance_ids
+        ):
+            raise ValueError("reviewed knowledge requires 1..64 provenance references")
+        now = datetime.now(timezone.utc).isoformat()
+        memory_id = str(uuid4())
+        # Validate through the same constraints as normal memory creation.
+        if not isinstance(content, str) or not content.strip() or len(content) > MAX_CONTENT_CHARS:
+            raise ValueError(f"content must contain 1..{MAX_CONTENT_CHARS} characters")
+        if isinstance(confidence, bool) or not isinstance(confidence, (int, float)) or not math.isfinite(confidence) or not 0 <= confidence <= 1:
+            raise ValueError("confidence must be finite and between 0 and 1")
+        tags = [] if tags is None else tags
+        if not isinstance(tags, list) or len(tags) > MAX_TAGS or any(
+            not isinstance(tag, str) or not tag.strip() or len(tag) > 64 for tag in tags
+        ):
+            raise ValueError("invalid tags")
+        with self._connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            existing = db.execute(
+                "SELECT memory_id FROM memory_imports WHERE source_key=?", (source_key,)
+            ).fetchone()
+            if existing is not None:
+                row = db.execute("SELECT * FROM memories WHERE memory_id=?",
+                                 (existing[0],)).fetchone()
+                if row is None:
+                    raise ValueError("knowledge import ledger points to missing memory")
+                return _decode(row)
+            db.execute(
+                """INSERT INTO memories(
+                    memory_id,kind,content,provenance_json,confidence,sensitivity,
+                    verification,tags_json,created_at,updated_at,expires_at,access_count
+                ) VALUES(?,?,?,?,?,'internal','supported',?,?,?,NULL,0)""",
+                (memory_id, "semantic", content.strip(), json.dumps(list(dict.fromkeys(provenance_ids))),
+                 float(confidence), json.dumps(list(dict.fromkeys(tags + ["reviewed-learning"]))),
+                 now, now),
+            )
+            db.execute(
+                "INSERT INTO memory_imports VALUES(?,?,?)", (source_key, memory_id, now)
+            )
+            row = db.execute("SELECT * FROM memories WHERE memory_id=?", (memory_id,)).fetchone()
+        return _decode(row)
 
     def revise(
         self,
