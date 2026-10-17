@@ -398,3 +398,25 @@ def test_contradiction_adjudication_rejects_non_contradiction_pairs(tmp_path: Pa
             second["experience_id"], first["experience_id"], "confirmed_conflict",
             rationale="This should not be allowed", evidence_ids=["review"],
         )
+
+
+def test_skill_evaluation_integrity_detects_tampering(tmp_path: Path):
+    store = ExperienceStore(tmp_path / "learning.db")
+    for index in range(3):
+        store.record("task", "completed task", "success", evidence_ids=[f"e{index}"])
+    draft = store.create_skill_draft(
+        "task", "Completed task", ["Check the result"], evidence_ids=["e0", "e1", "e2"]
+    )
+    store.resolve_skill_draft(draft["draft_id"], "accepted")
+    version = store.publish_skill_draft(draft["draft_id"])
+    evaluation = store.record_skill_evaluation(
+        version["skill_id"], 1, "held-out-v1", trials=10,
+        successes=9, partials=0, failures=1, unknown=0,
+        evidence_ids=["benchmark-report"],
+    )
+    assert store.list_skill_evaluations(version["skill_id"])[0]["evaluation_id"] == evaluation["evaluation_id"]
+    with store._connect() as db:
+        db.execute("UPDATE skill_evaluations SET successes=1 WHERE evaluation_id=?",
+                   (evaluation["evaluation_id"],))
+    with pytest.raises(ValueError, match="integrity"):
+        store.list_skill_evaluations(version["skill_id"])
