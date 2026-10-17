@@ -389,6 +389,7 @@ class ExperienceStore:
         if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 100:
             raise ValueError("limit must be between 1 and 100")
         with self._connect() as db:
+            db.execute("BEGIN IMMEDIATE")
             groups = db.execute(
                 """SELECT f.semantic_key,e.summary,e.outcome,COUNT(*) AS repetitions
                    FROM experiences e JOIN experience_fingerprints f
@@ -416,7 +417,7 @@ class ExperienceStore:
                     """SELECT experience_id,evidence_json,verifier FROM experiences e
                        JOIN experience_fingerprints f ON f.experience_id=e.experience_id
                        WHERE e.task_key=? AND f.semantic_key=? AND e.outcome=?
-                       ORDER BY e.created_at,e.experience_id""",
+                       ORDER BY e.created_at,e.experience_id LIMIT 32""",
                     (key, group["semantic_key"], group["outcome"]),
                 ).fetchall()
                 provenance = [row["experience_id"] for row in source_rows]
@@ -477,6 +478,56 @@ class ExperienceStore:
         if hashlib.sha256(payload.encode("utf-8")).hexdigest() != row["payload_sha256"]:
             raise ValueError("knowledge draft integrity check failed")
         return result
+
+    def validate_knowledge_publication(self, knowledge_id: str) -> dict[str, Any]:
+        """Recheck an accepted candidate against current evidence immediately before memory import."""
+        if not isinstance(knowledge_id, str) or not knowledge_id or len(knowledge_id) > 64:
+            raise ValueError("invalid knowledge_id")
+        with self._connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            row = db.execute("SELECT * FROM knowledge_drafts WHERE knowledge_id=?",
+                             (knowledge_id,)).fetchone()
+            if row is None or row["status"] != "accepted":
+                raise ValueError("knowledge candidate must be accepted before publication")
+            payload = json.dumps(
+                {"task_key": row["task_key"], "normalized_summary": row["normalized_summary"],
+                 "content": row["content"], "outcome": row["outcome"],
+                 "provenance_ids": json.loads(row["provenance_json"]),
+                 "evidence_ids": json.loads(row["evidence_json"])},
+                sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False,
+            )
+            if hashlib.sha256(payload.encode("utf-8")).hexdigest() != row["payload_sha256"]:
+                raise ValueError("knowledge draft integrity check failed")
+            if row["outcome"] != "success":
+                raise ValueError("only successful knowledge can enter semantic memory")
+            evidence = json.loads(row["evidence_json"])
+            provenance = json.loads(row["provenance_json"])
+            if not evidence or len(provenance) < 3 or len(provenance) > 32:
+                raise ValueError("publication requires at least three bounded source experiences and evidence")
+            conflicts = db.execute(
+                """SELECT COUNT(DISTINCT outcome) FROM experiences e
+                   JOIN experience_fingerprints f ON f.experience_id=e.experience_id
+                   WHERE e.task_key=? AND f.semantic_key=?
+                     AND e.outcome IN ('success','partial','failure')""",
+                (row["task_key"], row["normalized_summary"]),
+            ).fetchone()[0]
+            if conflicts != 1:
+                raise ValueError("new contradictory outcomes exist; review the knowledge candidate again")
+            placeholders = ",".join("?" for _ in provenance)
+            sources = db.execute(
+                f"""SELECT experience_id,evidence_json FROM experiences
+                    WHERE task_key=? AND outcome='success'
+                      AND experience_id IN ({placeholders})""",
+                (row["task_key"], *provenance),
+            ).fetchall()
+            if len(sources) != len(provenance):
+                raise ValueError("knowledge provenance no longer matches successful source experiences")
+            available_evidence = {
+                item for source in sources for item in json.loads(source["evidence_json"])
+            }
+            if not set(evidence).issubset(available_evidence):
+                raise ValueError("knowledge evidence references do not match source experiences")
+        return self.get_knowledge_draft(knowledge_id) or {}
 
     def resolve_knowledge_draft(self, knowledge_id: str, decision: str) -> dict[str, Any]:
         if not isinstance(knowledge_id, str) or not knowledge_id or len(knowledge_id) > 64:
