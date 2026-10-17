@@ -533,6 +533,7 @@ class MemoryStore:
             cursor = db.execute("DELETE FROM memories WHERE memory_id = ?", (memory_id,))
             if cursor.rowcount == 1:
                 db.execute("DELETE FROM memory_revisions WHERE memory_id = ?", (memory_id,))
+                db.execute("DELETE FROM memory_embeddings WHERE memory_id = ?", (memory_id,))
                 return True
             return False
 
@@ -551,6 +552,10 @@ class MemoryStore:
             if expired:
                 db.executemany(
                     "DELETE FROM memory_revisions WHERE memory_id = ?",
+                    [(memory_id,) for memory_id in expired],
+                )
+                db.executemany(
+                    "DELETE FROM memory_embeddings WHERE memory_id = ?",
                     [(memory_id,) for memory_id in expired],
                 )
                 db.executemany(
