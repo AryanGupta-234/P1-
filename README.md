@@ -86,3 +86,21 @@ Commands: `aie goal-add`, `aie goal-list`, `aie goal-show`, `aie goal-step-add`,
 AIE bundles 219 distinct `ms-settings:` URI entries transcribed from Microsoft's official Settings URI reference. Search the bundled catalogue with `aie settings-search privacy microphone`. Import a larger local JSON or CSV catalogue with `aie settings-import .\\settings-uris.json --output .\\settings-catalog.json`, then search it with `aie settings-search bluetooth --catalog .\\settings-catalog.json`.
 
 The bundled data lives at `aie/data/ms_settings_catalog.json` and records Microsoft's Learn page as provenance plus version/availability notes where Microsoft provides them. Entries are marked `documented`, not runtime-verified. Microsoft's reference explicitly warns that availability varies by Windows version, SKU and hardware. The importer validates the URI scheme and bounded metadata, deduplicates URIs case-insensitively, and supports up to 10,000 records / 8 MiB per input file. Fields include `uri`, `title`, `category`, `description`, `source`, `source_url`, `version_notes`, `requirements`, `validation_status`, `min_build` and `max_build`. Validation states are deliberately explicit: `unverified`, `documented`, `verified-on-host`, or `unsupported`. The 219 documented entries are not 1,500 unique documented URIs; that larger target remains open pending further authoritative sources. AIE does not open these URIs, change settings, or infer undocumented support. The catalogue is navigation metadata, not an action capability.
+
+
+## Evidence-gated learning and procedural skill formation
+
+AIE is being developed toward a progressively more autonomous learning system. The current learning loop is deliberately bounded: record task outcomes, retain evidence references, identify repeated successful task families, draft reusable human-readable procedures, and require explicit review before storing them as accepted procedural references.
+
+```powershell
+# Record outcomes (use real event/evidence IDs where available)
+aie experience-add "settings.open_display" "Display page reached and visually confirmed" success --evidence "EVENT_ID_1" --verifier reviewed-evidence
+aie experience-list "settings.open_display"
+
+# After at least three successful episodes, including evidence references:
+aie skill-draft "settings.open_display" "Open Display Settings" '["Resolve the intended Settings destination","Verify the target window identity","Confirm the expected page is visible"]'
+aie skill-draft-show DRAFT_ID
+aie skill-draft-accept DRAFT_ID
+```
+
+An accepted skill is currently a reviewed procedural reference, not executable automation. No skill can grant itself capabilities, alter policy, modify source code, or execute OS actions. This provides the first persistent experience-to-procedure learning substrate while evaluation, safe adapter execution and stronger autonomy controls are developed.
