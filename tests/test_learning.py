@@ -387,6 +387,8 @@ def test_contradiction_adjudication_is_evidence_backed_one_time_and_non_destruct
     relations = store.task_relationships("task")["relationships"]
     assert relations[0]["adjudication_decision"] == "source_is_correct"
     assert relations[0]["adjudication_evidence_ids"] == ["screenshot-review-1"]
+    assert store.task_report("task")["adjudicated_contradictions"] == 1
+    assert store.list_experience_adjudications("task")[0]["decision"] == "source_is_correct"
 
 
 def test_contradiction_adjudication_rejects_non_contradiction_pairs(tmp_path: Path):
