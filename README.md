@@ -61,6 +61,10 @@ Run tests with `python -m pytest`. The Windows CI workflow runs tests and Ruff o
 - `aie think "Why is memory usage high?"` builds a bounded provenance-bearing context packet and sends it only to an eligible loopback Ollama model. Add `--include-memory` to retrieve matching non-sensitive user-created memories; stored memories are distinguished from live observations. No tools or OS actions are exposed.
 - `aie memory-add "A manually reviewed fact" --kind semantic --provenance EVENT_ID` creates an explicit local memory record.
 - `aie memory-search "reviewed fact"` searches unexpired records; sensitive records are excluded by default.
+- `aie memory-search "reviewed fact" --recency-half-life-days 180 --recency-weight 0.15` applies bounded recency weighting to lexical retrieval; the defaults gently prefer recent context without deleting older facts.
+- `aie memory-index EMBEDDING_MODEL` indexes eligible memories in bounded batches using an already-installed loopback Ollama embedding model; sensitive memories are excluded by default.
+- `aie memory-search-semantic "how do I change screen resolution?" --model EMBEDDING_MODEL` performs local embedding/cosine retrieval with stale-content hash checks.
+- `aie memory-near-duplicates MEMORY_ID --model EMBEDDING_MODEL` surfaces similarity candidates for human review; it never merges or deletes records.
 - `aie memory-correct MEMORY_ID --verification verified` revises a record while preserving its prior version and provenance.
 - `aie memory-history MEMORY_ID` reviews prior versions.
 - `aie memory-export .\\memory.jsonl` exports active records to a new file; sensitive records require `--include-sensitive`.
@@ -68,7 +72,7 @@ Run tests with `python -m pytest`. The Windows CI workflow runs tests and Ruff o
 - `aie uia-inspect` enumerates a bounded Windows UI Automation control tree (default 12 windows, 250 nodes, depth 5, 12-second timeout). It reports structural metadata only: control type, automation ID, class/framework, enabled/offscreen state and bounds. It intentionally excludes control names, typed text, values, password contents, screenshots and interaction patterns. It never clicks, types or changes settings.
 - `aie.policy` currently evaluates proposals only. It checks a reviewed action allowlist, exact action capabilities, verified target identity, sandbox availability for writes, action budgets and expiring approvals bound to the exact proposal digest. It never executes a proposal.
 
-Memory writes are user-directed; no automatic model-generated consolidation is enabled. Memory is stored in the local SQLite database and is not encrypted by this implementation. Protect the database with the Windows account's filesystem permissions and do not store secrets in it.
+Memory writes remain explicit and user-directed. Embedding generation is local through the loopback Ollama adapter; no remote fallback or model pull occurs. Embeddings are tied to a model name, dimension and content SHA-256; edits make the old vector stale and eligible for re-indexing. Retrieval uses cosine similarity plus configurable recency weighting. Similarity scores are candidate-generation signals, not truth or confidence, and near-duplicate detection never auto-merges. Memory is stored in local SQLite and is not encrypted by this implementation. Protect the database with Windows account filesystem permissions and do not store secrets in it.
 
 
 ## Persistent goal runtime
