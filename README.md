@@ -79,3 +79,10 @@ Commands: `aie goal-add`, `aie goal-list`, `aie goal-show`, `aie goal-step-add`,
 
 
 `aie goal-suggest GOAL_ID` generates and persists a structured local-model draft in `pending_review`. Use `aie goal-draft-list GOAL_ID`, `aie goal-draft-show DRAFT_ID`, then explicitly choose `aie goal-draft-accept DRAFT_ID` or `aie goal-draft-reject DRAFT_ID`. Acceptance adds the ordered steps and dependency links in one SQLite transaction; it does not execute commands or OS actions. Draft payloads are SHA-256 checked when read or resolved. Retention is bounded to 100 drafts per goal and 20 pending reviews. Only pending drafts on active goals can be resolved.
+
+
+## Windows Settings URI catalogue
+
+AIE includes a conservative starter catalogue for common `ms-settings:` destinations. Search it with `aie settings-search privacy microphone`. Import a larger locally held JSON or CSV catalogue with `aie settings-import .\\settings-uris.json --output .\\settings-catalog.json`, then search it with `aie settings-search bluetooth --catalog .\\settings-catalog.json`.
+
+The importer validates the URI scheme and bounded metadata, deduplicates URIs case-insensitively, and supports up to 10,000 records / 8 MiB per input file. Fields are `uri`, `title`, optional `category`, `description`, `source`, `validation_status`, `min_build` and `max_build`. Validation states are deliberately explicit: `unverified`, `documented`, `verified-on-host`, or `unsupported`. Starter entries are all `unverified`; a syntactically valid URI is not proof that it works on this Windows edition/build. AIE does not open these URIs, change settings, or infer undocumented support. The catalogue is navigation metadata, not an action capability.
