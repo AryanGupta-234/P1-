@@ -151,7 +151,9 @@ AIE's long-term objective is a highly capable, continuously improving, increasin
 - Task experiences are stored separately from raw observations and include outcome, verifier class and evidence IDs.
 - Reusable procedural drafts require repeated successful episodes and at least one evidence-backed episode.
 - Draft payloads are SHA-256 checked; acceptance/rejection is one-time and audited.
+- `aie learn-report TASK_KEY` reports outcome distributions, a descriptive Wilson interval, evidence-backed success coverage, verifier mix, unique evidence references and repeated-summary groups. Unknown outcomes are excluded from the success-rate denominator; the report is not a reliability certification.
+- `aie skill-draft-list` verifies payload integrity before listing. Review uses a serialized SQLite write transaction and verifies the exact draft payload before the one-time state transition.
 - Accepted skills remain non-executable procedural references. They do not receive capabilities, alter the policy broker, modify production code or invoke OS operations.
-- Next: skill versioning, regression suites, contradiction/forgetting controls, adapter bindings, sandboxed execution and outcome verification.
+- Next: provenance-preserving experience deduplication, contradiction/recency controls, versioned skills, held-out regression suites, adapter bindings, sandboxed execution and outcome verification.
 
 **Autonomy progression:** observe → reason → recommend → draft → human-approved action → narrowly delegated action. Each stage requires separate evidence, capability scope, resource budget, audit trail and rollback/stop behavior. High-impact actions remain explicitly approved. Production self-modification is out of scope; future self-improvement experiments must occur in isolated branches with independent evaluation and human merge approval.
