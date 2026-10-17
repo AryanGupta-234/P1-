@@ -29,6 +29,9 @@ class SettingsEntry:
     validation_status: str = "unverified"
     min_build: int | None = None
     max_build: int | None = None
+    source_url: str = ""
+    version_notes: str = ""
+    requirements: str = ""
 
 
 def validate_entry(raw: dict[str, Any]) -> SettingsEntry:
@@ -77,6 +80,9 @@ def validate_entry(raw: dict[str, Any]) -> SettingsEntry:
         validation_status=status,
         min_build=minimum,
         max_build=maximum,
+        source_url=field("source_url", ""),
+        version_notes=field("version_notes", ""),
+        requirements=field("requirements", ""),
     )
 
 
