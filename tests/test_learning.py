@@ -247,3 +247,63 @@ def test_skill_evaluation_with_unknown_only_is_insufficient(tmp_path: Path):
     assert report["status"] == "insufficient_data"
     assert report["success_rate"] is None
     assert report["automation_eligible"] is False
+
+
+def test_duplicate_experiences_are_linked_without_deletion(tmp_path: Path):
+    store = ExperienceStore(tmp_path / "learning.db")
+    first = store.record("task", "Opened Settings page", "success", evidence_ids=["e1"])
+    second = store.record(" TASK ", "  OPENED   SETTINGS PAGE ", "success", evidence_ids=["e2"])
+    assert second["duplicate_of"] == first["experience_id"]
+    assert store.list_experiences("task") and len(store.list_experiences("task")) == 2
+    report = store.task_relationships("task")
+    assert report["records_preserved"] is True
+    assert report["relationships"][0]["relation"] == "duplicate_of"
+
+
+def test_contradictory_outcomes_are_flagged_not_resolved(tmp_path: Path):
+    store = ExperienceStore(tmp_path / "learning.db")
+    first = store.record("task", "Opened Settings page", "success", evidence_ids=["e1"])
+    second = store.record("task", " opened settings PAGE ", "failure", evidence_ids=["e2"])
+    assert first["contradicts"] == []
+    assert first["experience_id"] in second["contradicts"]
+    links = store.task_relationships("task")["relationships"]
+    assert any(item["relation"] == "contradicts" for item in links)
+    assert len(store.list_experiences("task")) == 2
+
+
+def test_unknown_outcome_does_not_create_false_contradiction(tmp_path: Path):
+    store = ExperienceStore(tmp_path / "learning.db")
+    store.record("task", "Opened Settings page", "success", evidence_ids=["e1"])
+    unknown = store.record("task", "opened settings page", "unknown")
+    assert unknown["contradicts"] == []
+
+
+def test_knowledge_consolidation_requires_repetition_and_skips_conflicts(tmp_path: Path):
+    store = ExperienceStore(tmp_path / "learning.db")
+    for index in range(3):
+        store.record("task", "Display page reached", "success",
+                     evidence_ids=[f"e{index}"], verifier="reviewed-evidence")
+    drafts = store.create_knowledge_drafts("task")
+    assert len(drafts) == 1
+    draft = drafts[0]
+    assert draft["status"] == "pending_review"
+    assert len(draft["provenance_ids"]) == 3
+    assert len(draft["evidence_ids"]) == 3
+    store.record("task", " display page reached ", "failure", evidence_ids=["bad"])
+    assert store.create_knowledge_drafts("task") == []
+
+
+def test_knowledge_draft_integrity_and_one_time_review(tmp_path: Path):
+    store = ExperienceStore(tmp_path / "learning.db")
+    for index in range(3):
+        store.record("task", f"same result", "success", evidence_ids=[f"e{index}"])
+    draft = store.create_knowledge_drafts("task")[0]
+    accepted = store.resolve_knowledge_draft(draft["knowledge_id"], "accepted")
+    assert accepted["status"] == "accepted"
+    with pytest.raises(ValueError, match="pending-review"):
+        store.resolve_knowledge_draft(draft["knowledge_id"], "rejected")
+    with store._connect() as db:
+        db.execute("UPDATE knowledge_drafts SET content='tampered' WHERE knowledge_id=?",
+                   (draft["knowledge_id"],))
+    with pytest.raises(ValueError, match="integrity"):
+        store.get_knowledge_draft(draft["knowledge_id"])
