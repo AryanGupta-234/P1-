@@ -1,3 +1,4 @@
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pytest
@@ -135,3 +136,23 @@ def test_skill_draft_resolution_checks_integrity_before_transition(tmp_path: Pat
         row = db.execute("SELECT status FROM skill_drafts WHERE draft_id=?",
                          (draft["draft_id"],)).fetchone()
     assert row["status"] == "pending_review"
+
+
+def test_competing_skill_reviewers_can_only_resolve_once(tmp_path: Path):
+    path = tmp_path / "learning.db"
+    store = ExperienceStore(path)
+    for index in range(3):
+        store.record("task", f"success {index}", "success", evidence_ids=[f"e{index}"])
+    draft = store.create_skill_draft("task", "Procedure", ["Inspect"])
+
+    def decide(decision: str):
+        try:
+            result = ExperienceStore(path).resolve_skill_draft(draft["draft_id"], decision)
+            return result["status"]
+        except ValueError:
+            return "already-resolved"
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = list(pool.map(decide, ["accepted", "rejected"]))
+    assert results.count("already-resolved") == 1
+    assert sum(item in {"accepted", "rejected"} for item in results) == 1
