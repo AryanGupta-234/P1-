@@ -142,3 +142,16 @@ At each implementation increment: update this file, update [ROADMAP.md](ROADMAP.
 The repository now bundles 219 distinct URI records transcribed from Microsoft's official [Launch Windows Settings reference](https://learn.microsoft.com/en-us/windows/apps/develop/launch/launch-settings) in `aie/data/ms_settings_catalog.json`. Each record retains its Microsoft Learn source URL, category, and applicable version/availability notes. `aie settings-search` searches this bundled catalogue by default; `aie settings-import` accepts additional bounded JSON/CSV sources. Entries are labelled `documented`, not runtime-verified. Microsoft notes that availability varies by Windows version, SKU and hardware. The catalogue is metadata only: it does not launch Settings or modify configuration.
 
 **Open work:** reach the 1,500+ target only by discovering and auditing further authoritative first-party sources; keep internal/undocumented protocol identifiers in a separate evidence tier. Validate destinations on the target Windows 11 edition/build. Navigation and any future mutation capability must remain separate and policy-gated.
+
+
+## Learning and autonomy trajectory
+
+AIE's long-term objective is a highly capable, continuously improving, increasingly autonomous system. The implementation must earn each autonomy increase through measured reliability rather than assume it. Current learning foundation:
+
+- Task experiences are stored separately from raw observations and include outcome, verifier class and evidence IDs.
+- Reusable procedural drafts require repeated successful episodes and at least one evidence-backed episode.
+- Draft payloads are SHA-256 checked; acceptance/rejection is one-time and audited.
+- Accepted skills remain non-executable procedural references. They do not receive capabilities, alter the policy broker, modify production code or invoke OS operations.
+- Next: skill versioning, regression suites, contradiction/forgetting controls, adapter bindings, sandboxed execution and outcome verification.
+
+**Autonomy progression:** observe → reason → recommend → draft → human-approved action → narrowly delegated action. Each stage requires separate evidence, capability scope, resource budget, audit trail and rollback/stop behavior. High-impact actions remain explicitly approved. Production self-modification is out of scope; future self-improvement experiments must occur in isolated branches with independent evaluation and human merge approval.
