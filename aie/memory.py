@@ -76,6 +76,7 @@ class MemoryStore:
 
     def _connect(self) -> sqlite3.Connection:
         db = sqlite3.connect(self.path, timeout=10)
+        db.row_factory = sqlite3.Row
         db.execute("PRAGMA journal_mode=WAL")
         db.execute("PRAGMA busy_timeout=10000")
         return db
@@ -215,8 +216,10 @@ class MemoryStore:
 
 
     def get_embedding_candidates(
-        self, *, limit: int = 100, include_sensitive: bool = False,
+        self, model: str, *, limit: int = 100, include_sensitive: bool = False,
     ) -> list[dict[str, Any]]:
+        if not isinstance(model, str) or not model.strip() or len(model) > 128:
+            raise ValueError("invalid embedding model")
         if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 500:
             raise ValueError("limit must be between 1 and 500")
         if not isinstance(include_sensitive, bool):
@@ -231,13 +234,23 @@ class MemoryStore:
                 """SELECT m.* FROM memories m WHERE """ + clause +
                 """ AND NOT EXISTS (
                     SELECT 1 FROM memory_embeddings e
-                    WHERE e.memory_id=m.memory_id
-                      AND e.content_sha256=lower(hex(zeroblob(0))) 
+                    WHERE e.memory_id=m.memory_id AND e.model=?
+                      AND e.content_sha256=lower(hex(zeroblob(0)))
                 ) ORDER BY m.created_at,m.memory_id LIMIT ?""",
-                (*args, limit),
+                (*args[:-0] if False else args, model, limit),
             ).fetchall()
-        # Return all active records; the caller can compare their content hash to the index.
-        return [_decode(row) for row in rows]
+        # The indexed digest is checked below so revised content is re-embedded.
+        candidates = []
+        for row in rows:
+            with self._connect() as check_db:
+                indexed = check_db.execute(
+                    "SELECT content_sha256 FROM memory_embeddings WHERE memory_id=? AND model=?",
+                    (row["memory_id"], model),
+                ).fetchone()
+            digest = hashlib.sha256(row["content"].encode("utf-8")).hexdigest()
+            if indexed is None or indexed[0] != digest:
+                candidates.append(_decode(row))
+        return candidates
 
     def store_embedding(
         self, memory_id: str, model: str, vector: list[float], *,
@@ -300,7 +313,6 @@ class MemoryStore:
         if query_norm == 0:
             raise ValueError("query embedding must have non-zero magnitude")
         now = datetime.now(timezone.utc).isoformat()
-        clause = "e.model=? AND e.dimensions=? AND e.content_sha256=lower(hex(zeroblob(0)))"
         # Hash validation is performed in Python against the live content.
         with self._connect() as db:
             rows = db.execute(
