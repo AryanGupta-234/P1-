@@ -366,3 +366,35 @@ def test_task_report_includes_duplicate_and_conflict_diagnostics(tmp_path: Path)
     assert report["duplicate_links"] == 1
     assert report["contradiction_links"] == 2
     assert report["conflicted_summary_groups"] == 1
+
+
+def test_contradiction_adjudication_is_evidence_backed_one_time_and_non_destructive(tmp_path: Path):
+    store = ExperienceStore(tmp_path / "learning.db")
+    first = store.record("task", "Page loaded", "success", evidence_ids=["event-success"])
+    second = store.record("task", "page loaded", "failure", evidence_ids=["event-failure"])
+    result = store.adjudicate_experience_contradiction(
+        second["experience_id"], first["experience_id"], "source_is_correct",
+        rationale="The later capture contains the verified target page.",
+        evidence_ids=["screenshot-review-1"], reviewer="operator",
+    )
+    assert result["source_outcomes_unchanged"] is True
+    assert len(store.list_experiences("task")) == 2
+    with pytest.raises(ValueError, match="already has"):
+        store.adjudicate_experience_contradiction(
+            second["experience_id"], first["experience_id"], "inconclusive",
+            rationale="Second adjudication attempt", evidence_ids=["review-2"],
+        )
+    relations = store.task_relationships("task")["relationships"]
+    assert relations[0]["adjudication_decision"] == "source_is_correct"
+    assert relations[0]["adjudication_evidence_ids"] == ["screenshot-review-1"]
+
+
+def test_contradiction_adjudication_rejects_non_contradiction_pairs(tmp_path: Path):
+    store = ExperienceStore(tmp_path / "learning.db")
+    first = store.record("task", "Page loaded", "success", evidence_ids=["e1"])
+    second = store.record("task", "Page loaded", "success", evidence_ids=["e2"])
+    with pytest.raises(ValueError, match="do not have a contradiction"):
+        store.adjudicate_experience_contradiction(
+            second["experience_id"], first["experience_id"], "confirmed_conflict",
+            rationale="This should not be allowed", evidence_ids=["review"],
+        )
