@@ -422,7 +422,7 @@ class ExperienceStore:
                 raise ValueError("the selected experiences do not have a contradiction link")
             inserted = db.execute(
                 """INSERT OR IGNORE INTO experience_adjudications
-                   VALUES(?,?,?,?,?,?,?,?,?)""",
+                   VALUES(?,?,?,?,?,?,?,?)""",
                 (adjudication_id, experience_id, related_experience_id, decision,
                  rationale.strip(), json.dumps(evidence), reviewer.strip(), now),
             ).rowcount
