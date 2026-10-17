@@ -132,3 +132,56 @@ def test_reviewed_knowledge_import_requires_provenance(tmp_path):
     store = MemoryStore(tmp_path / "memory.sqlite3")
     with pytest.raises(ValueError, match="provenance"):
         store.import_reviewed_knowledge("knowledge-2", "No provenance", provenance_ids=[])
+
+
+def test_memory_search_recency_is_bounded_and_configurable(tmp_path):
+    store = MemoryStore(tmp_path / "memory.sqlite3")
+    old = store.add("shared topic old", confidence=1.0)
+    recent = store.add("shared topic recent", confidence=0.1)
+    with store._connect() as db:
+        db.execute("UPDATE memories SET created_at=? WHERE memory_id=?",
+                   ((datetime.now(timezone.utc) - timedelta(days=365)).isoformat(),
+                    old["memory_id"]))
+    results = store.search("shared topic", recency_weight=1.0, recency_half_life_days=30)
+    assert results[0]["memory_id"] == recent["memory_id"]
+    stable = store.search("shared topic", recency_weight=0.0)
+    assert {item["memory_id"] for item in stable} == {old["memory_id"], recent["memory_id"]}
+
+
+def test_embedding_index_and_semantic_search(tmp_path):
+    store = MemoryStore(tmp_path / "memory.sqlite3")
+    first = store.add("Configure the display resolution", kind="semantic")
+    second = store.add("Prepare a vegetable soup recipe", kind="semantic")
+    secret = store.add("Private display notes", sensitivity="sensitive")
+    assert len(store.get_embedding_candidates("local-embed")) == 3
+    store.store_embedding(first["memory_id"], "local-embed", [1.0, 0.0], expected_content=first["content"])
+    store.store_embedding(second["memory_id"], "local-embed", [0.0, 1.0], expected_content=second["content"])
+    store.store_embedding(secret["memory_id"], "local-embed", [0.9, 0.1], expected_content=secret["content"])
+    results = store.semantic_search([0.95, 0.05], "local-embed")
+    assert results[0]["memory_id"] == first["memory_id"]
+    assert secret["memory_id"] not in {item["memory_id"] for item in results}
+    assert results[0]["similarity"] > 0.99
+
+
+def test_embedding_stale_content_is_excluded_and_reindexed(tmp_path):
+    store = MemoryStore(tmp_path / "memory.sqlite3")
+    record = store.add("Original content")
+    store.store_embedding(record["memory_id"], "embed", [1.0, 0.0],
+                          expected_content=record["content"])
+    assert store.get_embedding_candidates("embed") == []
+    assert store.revise(record["memory_id"], content="Changed content")
+    assert [item["memory_id"] for item in store.get_embedding_candidates("embed")] == [record["memory_id"]]
+    assert store.semantic_search([1.0, 0.0], "embed") == []
+
+
+def test_embedding_validation_and_dimension_mismatch(tmp_path):
+    store = MemoryStore(tmp_path / "memory.sqlite3")
+    record = store.add("Dimension test")
+    with pytest.raises(ValueError, match="finite"):
+        store.store_embedding(record["memory_id"], "embed", [float("nan")],
+                              expected_content=record["content"])
+    store.store_embedding(record["memory_id"], "embed", [1.0, 0.0],
+                          expected_content=record["content"])
+    assert store.semantic_search([1.0], "embed") == []
+    with pytest.raises(ValueError, match="non-zero"):
+        store.semantic_search([0.0, 0.0], "embed")
