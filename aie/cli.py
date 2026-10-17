@@ -1090,6 +1090,105 @@ def skill_draft_list(
     console.print_json(json.dumps(drafts, indent=2))
 
 
+@app.command("experience-relationships")
+def experience_relationships(
+    task_key: str = typer.Argument(...),
+    limit: int = typer.Option(200, min=1, max=1000),
+    db: Path = typer.Option(database_path(), "--db"),
+) -> None:
+    """Inspect preserved duplicate and contradictory experience links."""
+    from aie.learning import ExperienceStore
+    try:
+        report = ExperienceStore(db).task_relationships(task_key, limit)
+    except ValueError as exc:
+        console.print(f"[red]Relationship query failed:[/red] {exc}")
+        raise typer.Exit(2) from exc
+    console.print_json(json.dumps(report, indent=2))
+
+
+@app.command("knowledge-consolidate")
+def knowledge_consolidate(
+    task_key: str = typer.Argument(...),
+    minimum_repetitions: int = typer.Option(3, min=2, max=50),
+    limit: int = typer.Option(20, min=1, max=100),
+    db: Path = typer.Option(database_path(), "--db"),
+) -> None:
+    """Create review-only knowledge candidates from repeated, non-contradictory experiences."""
+    from aie.learning import ExperienceStore
+    try:
+        drafts = ExperienceStore(db).create_knowledge_drafts(
+            task_key, minimum_repetitions=minimum_repetitions, limit=limit
+        )
+    except ValueError as exc:
+        console.print(f"[red]Knowledge consolidation failed:[/red] {exc}")
+        raise typer.Exit(2) from exc
+    console.print_json(json.dumps(drafts, indent=2))
+
+
+@app.command("knowledge-draft-list")
+def knowledge_draft_list(
+    task_key: str | None = typer.Argument(None),
+    status: str | None = typer.Option(None),
+    limit: int = typer.Option(50, min=1, max=200),
+    db: Path = typer.Option(database_path(), "--db"),
+) -> None:
+    """List integrity-checked knowledge candidates."""
+    from aie.learning import ExperienceStore
+    try:
+        drafts = ExperienceStore(db).list_knowledge_drafts(task_key, status, limit)
+    except ValueError as exc:
+        console.print(f"[red]Knowledge draft listing failed:[/red] {exc}")
+        raise typer.Exit(2) from exc
+    console.print_json(json.dumps(drafts, indent=2))
+
+
+@app.command("knowledge-draft-review")
+def knowledge_draft_review(
+    knowledge_id: str = typer.Argument(...),
+    decision: str = typer.Argument(..., help="accepted or rejected"),
+    db: Path = typer.Option(database_path(), "--db"),
+) -> None:
+    """Accept or reject one knowledge candidate; review is one-time and audited."""
+    from aie.learning import ExperienceStore
+    try:
+        draft = ExperienceStore(db).resolve_knowledge_draft(knowledge_id, decision)
+    except ValueError as exc:
+        console.print(f"[red]Knowledge review rejected:[/red] {exc}")
+        raise typer.Exit(2) from exc
+    console.print_json(json.dumps(draft, indent=2))
+
+
+@app.command("knowledge-publish")
+def knowledge_publish(
+    knowledge_id: str = typer.Argument(...),
+    db: Path = typer.Option(database_path(), "--db", help="Learning database."),
+    memory_db: Path = typer.Option(memory_database_path(), "--memory-db", help="Memory database."),
+) -> None:
+    """Publish an accepted, evidence-backed success candidate into semantic memory."""
+    from aie.learning import ExperienceStore
+    from aie.memory import MemoryStore
+    try:
+        draft = ExperienceStore(db).get_knowledge_draft(knowledge_id)
+        if draft is None or draft["status"] != "accepted":
+            raise ValueError("knowledge candidate must be accepted before publication")
+        if draft["outcome"] != "success" or not draft["evidence_ids"]:
+            raise ValueError("only repeated successful knowledge with evidence can enter semantic memory")
+        record = MemoryStore(memory_db).import_reviewed_knowledge(
+            knowledge_id, draft["content"],
+            provenance_ids=list(dict.fromkeys(draft["provenance_ids"] + draft["evidence_ids"])),
+            tags=["task:" + draft["task_key"], "outcome:success"],
+            confidence=0.7,
+        )
+    except ValueError as exc:
+        console.print(f"[red]Knowledge publication rejected:[/red] {exc}")
+        raise typer.Exit(2) from exc
+    console.print_json(json.dumps({
+        "knowledge_id": knowledge_id, "memory_id": record["memory_id"],
+        "kind": record["kind"], "verification": record["verification"],
+        "idempotent": True, "provenance_count": len(record["provenance_ids"]),
+    }, indent=2))
+
+
 @app.command("skill-publish")
 def skill_publish(
     draft_id: str = typer.Argument(...),
