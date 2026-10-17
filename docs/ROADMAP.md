@@ -97,7 +97,10 @@ Status vocabulary: DONE / IN_PROGRESS / BLOCKED / PLANNED. A task is DONE only w
 - [ ] Retrieval benchmark, contradiction handling and memory decay.
 - [x] User review/search, correction with immutable prior-version history, JSONL export, explicit deletion and TTL cleanup; sensitive records are excluded from search/export unless explicitly opted in.
 - [x] Persist user-directed goals and dependency-ordered steps with auditable transitions as the prospective/planning memory substrate.
-- [ ] Experience consolidation with regression tests.
+- [x] Add persistent task-experience records with outcome labels, verifier class, bounded evidence references and task-family indexing.
+- [x] Add evidence-gated procedural skill drafts: require repeated success, at least one evidence-backed episode, payload integrity, explicit review and append-only decision audit; accepted skills remain non-executable references.
+- [ ] Add experience deduplication, contradiction/recency handling, skill versioning and regression-evaluation gates before a skill can become eligible for an adapter.
+- [ ] Add controlled self-improvement experiments: propose changes in isolated branches/worktrees, run independent evaluation, require human approval for merge; no self-modifying production runtime.
 
 ## M5 — Windows application automation and controlled autonomy
 - [x] Add a bounded read-only Windows UI Automation inspector with strict window/node/depth/output/time limits; collect structural metadata only and exclude text/value/password contents and all interaction patterns. Native Windows runtime validation remains pending.
@@ -107,6 +110,7 @@ Status vocabulary: DONE / IN_PROGRESS / BLOCKED / PLANNED. A task is DONE only w
 - [ ] Capability manifests and least-privilege action identities.
 - [x] Add a non-executing policy evaluator with reviewed action allowlist, exact action capabilities, target verification, sandbox requirement for writes, bounded action budget and SHA-256 proposal-bound expiring approvals.
 - [ ] Proposal → policy → approval → sandbox → verification workflow (end-to-end orchestration and execution are not implemented).
+- [ ] Bind reviewed procedural skills to versioned app adapters with least-privilege manifests; a learned procedure must never create or expand its own capabilities.
 - [ ] Timeouts, rate limits, resource budgets, rollback and audit.
 - [ ] Approval gates for delete/send/purchase/submit/install/security/privileged actions.
 - [ ] Prompt-injection and tool-misuse adversarial tests.
@@ -117,6 +121,8 @@ Status vocabulary: DONE / IN_PROGRESS / BLOCKED / PLANNED. A task is DONE only w
 - [ ] Causal/temporal reasoning evaluated separately from retrieval.
 - [ ] Calibration, robustness, forgetting and recovery metrics.
 - [ ] Reproducible experiment logs; benchmark progress is not proof of AGI.
+- [ ] Continual-learning evaluation: retention, catastrophic forgetting, transfer, calibration, recovery and regression across held-out task families.
+- [ ] Autonomy ladder evaluation: observe → recommend → draft → supervised action → narrowly delegated action, with explicit gates at every transition.
 
 ## Active GitHub work item
 - [Issue #3 — Validate Windows Observer and implement ETW process telemetry](https://github.com/AryanGupta-234/P1-/issues/3)
