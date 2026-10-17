@@ -1058,6 +1058,38 @@ def experience_list(
     console.print_json(json.dumps(records, indent=2))
 
 
+@app.command("learn-report")
+def learn_report(
+    task_key: str = typer.Argument(..., help="Task family key to evaluate."),
+    db: Path = typer.Option(database_path(), "--db", help="Local SQLite database."),
+) -> None:
+    """Report descriptive task outcomes, evidence coverage and uncertainty."""
+    from aie.learning import ExperienceStore
+    try:
+        report = ExperienceStore(db).task_report(task_key)
+    except ValueError as exc:
+        console.print(f"[red]Learning report failed:[/red] {exc}")
+        raise typer.Exit(2) from exc
+    console.print_json(json.dumps(report, indent=2))
+
+
+@app.command("skill-draft-list")
+def skill_draft_list(
+    task_key: str | None = typer.Argument(None, help="Optional task family filter."),
+    status: str | None = typer.Option(None, help="pending_review, accepted or rejected."),
+    limit: int = typer.Option(50, min=1, max=200),
+    db: Path = typer.Option(database_path(), "--db", help="Local SQLite database."),
+) -> None:
+    """List skill drafts after verifying each stored payload digest."""
+    from aie.learning import ExperienceStore
+    try:
+        drafts = ExperienceStore(db).list_skill_drafts(task_key, status, limit)
+    except ValueError as exc:
+        console.print(f"[red]Skill draft listing failed:[/red] {exc}")
+        raise typer.Exit(2) from exc
+    console.print_json(json.dumps(drafts, indent=2))
+
+
 @app.command("skill-draft")
 def skill_draft(
     task_key: str = typer.Argument(...),
