@@ -10,7 +10,7 @@ Status vocabulary: DONE / IN_PROGRESS / BLOCKED / PLANNED. A task is DONE only w
 | M1 | Windows environment observer | IN_PROGRESS | Host/process baseline, app/service/network/task inventory, SQLite and explicit retention API |
 | M2 | Context intelligence | IN_PROGRESS | Process correlation, durable incremental state projection and bounded factual context packets and per-entity evidence-reference caps are implemented; Windows validation, state-aware compaction/recovery and evaluation remain |
 | M3 | Cognitive core | IN_PROGRESS | Hardware-aware model discovery, bounded local Ollama chat/embedding, and `aie think` context integration; planning and evaluation remain |
-| M4 | Persistent intelligence | IN_PROGRESS | Explicit SQLite memory records, provenance/confidence/sensitivity/verification/TTL metadata and bounded keyword retrieval; consolidation and evaluation remain |
+| M4 | Persistent intelligence | IN_PROGRESS | Provenance-aware experiences, duplicate/contradiction links, reviewed knowledge consolidation, immutable skills and evaluation records; retrieval benchmarks, recency and independent evaluation remain |
 | M5 | Controlled autonomy | IN_PROGRESS | Non-executing policy evaluator plus bounded read-only UIA structure inspector; app adapters, approvals orchestration, sandbox and execution remain unimplemented |
 | M6 | Generalization research | PLANNED | Held-out transfer and novel-task benchmarks |
 
@@ -149,6 +149,7 @@ Status vocabulary: DONE / IN_PROGRESS / BLOCKED / PLANNED. A task is DONE only w
 11. Exercise `aie learn-report` against synthetic task histories; validate Wilson intervals, evidence coverage and unknown-outcome handling. Test concurrent skill-review attempts and tampered-draft rejection.
 12. Exercise immutable skill publication, version sequencing, payload tampering, same-suite baseline comparisons, minimum-sample behavior and regression detection; independently validate that evaluation records never unlock action execution.
 13. Exercise legacy experience fingerprint backfill, duplicate-link idempotency, contradictory outcome detection, knowledge candidate conflict withholding, one-time review, tamper rejection and idempotent semantic-memory publication.
+14. Verify that a contradiction recorded after knowledge acceptance blocks publication; verify task reports include duplicate/contradiction counts and that imported semantic memory retains the bounded source and evidence references.
 
 ## Hardware/model constraints
 - Routine: `qwen2.5:3b-instruct`.
