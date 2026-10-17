@@ -129,6 +129,25 @@ class ExperienceStore:
                     occurred_at TEXT NOT NULL
                 );
             """)
+            # Backfill fingerprints for pre-existing experiences without modifying them.
+            rows = db.execute(
+                "SELECT experience_id,task_key,summary,outcome FROM experiences "
+                "WHERE experience_id NOT IN (SELECT experience_id FROM experience_fingerprints)"
+            ).fetchall()
+            for row in rows:
+                normalized = " ".join(row["summary"].casefold().split())
+                exact = hashlib.sha256(json.dumps(
+                    [row["task_key"], normalized, row["outcome"]],
+                    ensure_ascii=False, separators=(",", ":")
+                ).encode("utf-8")).hexdigest()
+                semantic = hashlib.sha256(json.dumps(
+                    [row["task_key"], normalized],
+                    ensure_ascii=False, separators=(",", ":")
+                ).encode("utf-8")).hexdigest()
+                db.execute(
+                    "INSERT OR IGNORE INTO experience_fingerprints VALUES(?,?,?)",
+                    (row["experience_id"], exact, semantic),
+                )
 
     def _connect(self):
         db = sqlite3.connect(self.path, timeout=10)
@@ -329,6 +348,192 @@ class ExperienceStore:
         # Re-read through the integrity-checking accessor before exposing content.
         return [draft for row in rows
                 if (draft := self.get_skill_draft(row["draft_id"])) is not None]
+
+
+    def task_relationships(self, task_key: str, limit: int = 200) -> dict[str, Any]:
+        key = self._task_key(task_key)
+        if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 1000:
+            raise ValueError("limit must be between 1 and 1000")
+        with self._connect() as db:
+            rows = db.execute(
+                """SELECT l.experience_id,l.related_experience_id,l.relation,l.created_at,
+                          a.summary AS source_summary,a.outcome AS source_outcome,
+                          b.summary AS related_summary,b.outcome AS related_outcome
+                   FROM experience_links l
+                   JOIN experiences a ON a.experience_id=l.experience_id
+                   JOIN experiences b ON b.experience_id=l.related_experience_id
+                   WHERE a.task_key=? ORDER BY l.created_at DESC LIMIT ?""",
+                (key, limit),
+            ).fetchall()
+        return {
+            "task_key": key,
+            "relationships": [{
+                "experience_id": row["experience_id"],
+                "related_experience_id": row["related_experience_id"],
+                "relation": row["relation"], "created_at": row["created_at"],
+                "source_summary": row["source_summary"],
+                "source_outcome": row["source_outcome"],
+                "related_summary": row["related_summary"],
+                "related_outcome": row["related_outcome"],
+            } for row in rows],
+            "records_preserved": True,
+            "interpretation": "Exact normalized-text matches are candidate duplicates; differing non-unknown outcomes for the same normalized task description are contradictions requiring review, not automatic resolution.",
+        }
+
+    def create_knowledge_drafts(
+        self, task_key: str, *, minimum_repetitions: int = 3, limit: int = 20,
+    ) -> list[dict[str, Any]]:
+        key = self._task_key(task_key)
+        if isinstance(minimum_repetitions, bool) or not isinstance(minimum_repetitions, int) or not 2 <= minimum_repetitions <= 50:
+            raise ValueError("minimum_repetitions must be between 2 and 50")
+        if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 100:
+            raise ValueError("limit must be between 1 and 100")
+        with self._connect() as db:
+            groups = db.execute(
+                """SELECT f.semantic_key,e.summary,e.outcome,COUNT(*) AS repetitions
+                   FROM experiences e JOIN experience_fingerprints f
+                     ON f.experience_id=e.experience_id
+                   WHERE e.task_key=? AND e.outcome IN ('success','partial','failure')
+                   GROUP BY f.semantic_key,e.outcome
+                   HAVING COUNT(*)>=?
+                   ORDER BY repetitions DESC,e.summary LIMIT ?""",
+                (key, minimum_repetitions, limit),
+            ).fetchall()
+            created = []
+            for group in groups:
+                # Do not consolidate an outcome when the same task description has
+                # contradictory non-unknown outcomes; surface it for human review first.
+                competing = db.execute(
+                    """SELECT COUNT(DISTINCT outcome) FROM experiences e
+                       JOIN experience_fingerprints f ON f.experience_id=e.experience_id
+                       WHERE e.task_key=? AND f.semantic_key=?
+                         AND e.outcome IN ('success','partial','failure')""",
+                    (key, group["semantic_key"]),
+                ).fetchone()[0]
+                if competing > 1:
+                    continue
+                source_rows = db.execute(
+                    """SELECT experience_id,evidence_json,verifier FROM experiences e
+                       JOIN experience_fingerprints f ON f.experience_id=e.experience_id
+                       WHERE e.task_key=? AND f.semantic_key=? AND e.outcome=?
+                       ORDER BY e.created_at,e.experience_id""",
+                    (key, group["semantic_key"], group["outcome"]),
+                ).fetchall()
+                provenance = [row["experience_id"] for row in source_rows]
+                evidence = list(dict.fromkeys(
+                    item for row in source_rows for item in json.loads(row["evidence_json"])
+                ))[:MAX_EVIDENCE]
+                content = group["summary"].strip()
+                payload = json.dumps(
+                    {"task_key": key, "normalized_summary": group["semantic_key"],
+                     "content": content, "outcome": group["outcome"],
+                     "provenance_ids": provenance, "evidence_ids": evidence},
+                    sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False,
+                )
+                digest = hashlib.sha256(payload.encode("utf-8")).hexdigest()
+                existing = db.execute(
+                    """SELECT knowledge_id FROM knowledge_drafts
+                       WHERE task_key=? AND normalized_summary=? AND outcome=?""",
+                    (key, group["semantic_key"], group["outcome"]),
+                ).fetchone()
+                if existing:
+                    continue
+                now, knowledge_id = self._now(), str(uuid4())
+                db.execute(
+                    "INSERT INTO knowledge_drafts VALUES(?,?,?,?,?,?,?,?,'pending_review',?,?)",
+                    (knowledge_id, key, group["semantic_key"], content, group["outcome"],
+                     json.dumps(provenance), json.dumps(evidence), digest, now, now),
+                )
+                db.execute(
+                    "INSERT INTO learning_audit(event_type,payload_json,occurred_at) VALUES(?,?,?)",
+                    ("knowledge_draft.created",
+                     json.dumps({"knowledge_id": knowledge_id, "source_count": len(provenance),
+                                 "outcome": group["outcome"]}), now),
+                )
+                created.append(knowledge_id)
+        return [self.get_knowledge_draft(item) for item in created]
+
+    def get_knowledge_draft(self, knowledge_id: str) -> dict[str, Any] | None:
+        if not isinstance(knowledge_id, str) or not knowledge_id or len(knowledge_id) > 64:
+            raise ValueError("invalid knowledge_id")
+        with self._connect() as db:
+            row = db.execute("SELECT * FROM knowledge_drafts WHERE knowledge_id=?",
+                             (knowledge_id,)).fetchone()
+        if row is None:
+            return None
+        result = {
+            "knowledge_id": row["knowledge_id"], "task_key": row["task_key"],
+            "content": row["content"], "outcome": row["outcome"],
+            "provenance_ids": json.loads(row["provenance_json"]),
+            "evidence_ids": json.loads(row["evidence_json"]), "status": row["status"],
+            "created_at": row["created_at"], "updated_at": row["updated_at"],
+        }
+        payload = json.dumps(
+            {"task_key": result["task_key"], "normalized_summary": row["normalized_summary"],
+             "content": result["content"], "outcome": result["outcome"],
+             "provenance_ids": result["provenance_ids"], "evidence_ids": result["evidence_ids"]},
+            sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False,
+        )
+        if hashlib.sha256(payload.encode("utf-8")).hexdigest() != row["payload_sha256"]:
+            raise ValueError("knowledge draft integrity check failed")
+        return result
+
+    def resolve_knowledge_draft(self, knowledge_id: str, decision: str) -> dict[str, Any]:
+        if not isinstance(knowledge_id, str) or not knowledge_id or len(knowledge_id) > 64:
+            raise ValueError("invalid knowledge_id")
+        if not isinstance(decision, str) or decision not in {"accepted", "rejected"}:
+            raise ValueError("decision must be accepted or rejected")
+        now = self._now()
+        with self._connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            row = db.execute("SELECT * FROM knowledge_drafts WHERE knowledge_id=?",
+                             (knowledge_id,)).fetchone()
+            if row is None or row["status"] != "pending_review":
+                raise ValueError("pending-review knowledge draft not found")
+            payload = json.dumps(
+                {"task_key": row["task_key"], "normalized_summary": row["normalized_summary"],
+                 "content": row["content"], "outcome": row["outcome"],
+                 "provenance_ids": json.loads(row["provenance_json"]),
+                 "evidence_ids": json.loads(row["evidence_json"])},
+                sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False,
+            )
+            if hashlib.sha256(payload.encode("utf-8")).hexdigest() != row["payload_sha256"]:
+                raise ValueError("knowledge draft integrity check failed")
+            changed = db.execute(
+                "UPDATE knowledge_drafts SET status=?,updated_at=? "
+                "WHERE knowledge_id=? AND status='pending_review'",
+                (decision, now, knowledge_id),
+            ).rowcount
+            if changed != 1:
+                raise ValueError("knowledge draft already resolved")
+            db.execute(
+                "INSERT INTO learning_audit(event_type,payload_json,occurred_at) VALUES(?,?,?)",
+                ("knowledge_draft." + decision,
+                 json.dumps({"knowledge_id": knowledge_id}), now),
+            )
+        return self.get_knowledge_draft(knowledge_id) or {}
+
+    def list_knowledge_drafts(
+        self, task_key: str | None = None, status: str | None = None, limit: int = 50,
+    ) -> list[dict[str, Any]]:
+        if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 200:
+            raise ValueError("limit must be between 1 and 200")
+        if status is not None and status not in DRAFT_STATES:
+            raise ValueError("invalid knowledge draft status")
+        clauses, params = [], []
+        if task_key is not None:
+            clauses.append("task_key=?")
+            params.append(self._task_key(task_key))
+        if status is not None:
+            clauses.append("status=?")
+            params.append(status)
+        where = " WHERE " + " AND ".join(clauses) if clauses else ""
+        with self._connect() as db:
+            rows = db.execute(
+                "SELECT knowledge_id FROM knowledge_drafts" + where +
+                " ORDER BY created_at DESC,knowledge_id LIMIT ?", (*params, limit)
+            ).fetchall()
+        return [self.get_knowledge_draft(row["knowledge_id"]) for row in rows]
 
     def create_skill_draft(
         self, task_key: str, title: str, steps: list[str], *,
