@@ -136,6 +136,11 @@ class ExperienceStore:
                 );
                 CREATE INDEX IF NOT EXISTS idx_skill_evaluations_version
                     ON skill_evaluations(skill_id, version, suite_key, created_at DESC);
+                CREATE TABLE IF NOT EXISTS skill_evaluation_integrity (
+                    evaluation_id TEXT PRIMARY KEY,
+                    payload_sha256 TEXT NOT NULL,
+                    FOREIGN KEY(evaluation_id) REFERENCES skill_evaluations(evaluation_id)
+                );
                 CREATE TABLE IF NOT EXISTS learning_audit (
                     audit_id INTEGER PRIMARY KEY AUTOINCREMENT,
                     draft_id TEXT,
@@ -921,6 +926,18 @@ class ExperienceStore:
                 (evaluation_id, skill_id, version, suite, trials, successes, partials,
                  failures, unknown, json.dumps(evidence), evaluator, now),
             )
+            integrity_payload = json.dumps(
+                {"evaluation_id": evaluation_id, "skill_id": skill_id,
+                 "version": version, "suite_key": suite, "trials": trials,
+                 "successes": successes, "partials": partials, "failures": failures,
+                 "unknown": unknown, "evidence_ids": evidence, "evaluator": evaluator,
+                 "created_at": now},
+                sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False,
+            )
+            db.execute(
+                "INSERT INTO skill_evaluation_integrity VALUES(?,?)",
+                (evaluation_id, hashlib.sha256(integrity_payload.encode("utf-8")).hexdigest()),
+            )
             baseline = db.execute(
                 """SELECT * FROM skill_evaluations
                    WHERE skill_id=? AND version<? AND suite_key=?
@@ -988,9 +1005,26 @@ class ExperienceStore:
             params.append(version)
         query += " ORDER BY version, suite_key, created_at"
         with self._connect() as db:
-            rows = db.execute(query, params).fetchall()
+            rows = db.execute(
+                query.replace("SELECT * FROM skill_evaluations",
+                              "SELECT e.*,i.payload_sha256 AS integrity_sha256 FROM skill_evaluations e "
+                              "LEFT JOIN skill_evaluation_integrity i ON i.evaluation_id=e.evaluation_id"),
+                params,
+            ).fetchall()
         result = []
         for row in rows:
+            if row["integrity_sha256"] is not None:
+                payload = json.dumps(
+                    {"evaluation_id": row["evaluation_id"], "skill_id": row["skill_id"],
+                     "version": row["version"], "suite_key": row["suite_key"],
+                     "trials": row["trials"], "successes": row["successes"],
+                     "partials": row["partials"], "failures": row["failures"],
+                     "unknown": row["unknown"], "evidence_ids": json.loads(row["evidence_json"]),
+                     "evaluator": row["evaluator"], "created_at": row["created_at"]},
+                    sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False,
+                )
+                if hashlib.sha256(payload.encode("utf-8")).hexdigest() != row["integrity_sha256"]:
+                    raise ValueError("skill evaluation integrity check failed")
             labeled = row["successes"] + row["partials"] + row["failures"]
             result.append({
                 "evaluation_id": row["evaluation_id"], "skill_id": row["skill_id"],
