@@ -39,6 +39,43 @@ class ExperienceStore:
                 );
                 CREATE INDEX IF NOT EXISTS idx_experiences_task
                     ON experiences(task_key, created_at DESC);
+                CREATE TABLE IF NOT EXISTS experience_fingerprints (
+                    experience_id TEXT PRIMARY KEY,
+                    fingerprint TEXT NOT NULL,
+                    semantic_key TEXT NOT NULL,
+                    FOREIGN KEY(experience_id) REFERENCES experiences(experience_id)
+                );
+                CREATE INDEX IF NOT EXISTS idx_experience_fingerprints_exact
+                    ON experience_fingerprints(fingerprint);
+                CREATE INDEX IF NOT EXISTS idx_experience_fingerprints_semantic
+                    ON experience_fingerprints(semantic_key);
+                CREATE TABLE IF NOT EXISTS experience_links (
+                    experience_id TEXT NOT NULL,
+                    related_experience_id TEXT NOT NULL,
+                    relation TEXT NOT NULL CHECK(relation IN ('duplicate_of','contradicts')),
+                    created_at TEXT NOT NULL,
+                    PRIMARY KEY(experience_id, related_experience_id, relation),
+                    FOREIGN KEY(experience_id) REFERENCES experiences(experience_id),
+                    FOREIGN KEY(related_experience_id) REFERENCES experiences(experience_id)
+                );
+                CREATE INDEX IF NOT EXISTS idx_experience_links_related
+                    ON experience_links(related_experience_id, relation);
+                CREATE TABLE IF NOT EXISTS knowledge_drafts (
+                    knowledge_id TEXT PRIMARY KEY,
+                    task_key TEXT NOT NULL,
+                    normalized_summary TEXT NOT NULL,
+                    content TEXT NOT NULL,
+                    outcome TEXT NOT NULL,
+                    provenance_json TEXT NOT NULL,
+                    evidence_json TEXT NOT NULL,
+                    payload_sha256 TEXT NOT NULL,
+                    status TEXT NOT NULL CHECK(status IN ('pending_review','accepted','rejected')),
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    UNIQUE(task_key, normalized_summary, outcome)
+                );
+                CREATE INDEX IF NOT EXISTS idx_knowledge_drafts_status
+                    ON knowledge_drafts(status, created_at DESC);
                 CREATE TABLE IF NOT EXISTS skill_drafts (
                     draft_id TEXT PRIMARY KEY,
                     task_key TEXT NOT NULL,
@@ -130,17 +167,66 @@ class ExperienceStore:
         # A claimed success without independent evidence is deliberately downgraded.
         if outcome == "success" and verifier != "user" and not evidence_ids:
             raise ValueError("system/evidence-verified success requires evidence IDs")
+        clean_summary = " ".join(summary.casefold().split())
+        fingerprint = hashlib.sha256(
+            json.dumps([key, clean_summary, outcome], ensure_ascii=False,
+                       separators=(",", ":")).encode("utf-8")
+        ).hexdigest()
+        semantic_key = hashlib.sha256(
+            json.dumps([key, clean_summary], ensure_ascii=False,
+                       separators=(",", ":")).encode("utf-8")
+        ).hexdigest()
         record = {
             "experience_id": str(uuid4()), "task_key": key, "summary": summary.strip(),
             "outcome": outcome, "evidence_ids": list(dict.fromkeys(evidence_ids)),
             "verifier": verifier, "created_at": self._now(),
+            "duplicate_of": None, "contradicts": [],
         }
         with self._connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            prior_same = db.execute(
+                """SELECT e.experience_id FROM experiences e
+                   JOIN experience_fingerprints f ON f.experience_id=e.experience_id
+                   WHERE f.fingerprint=? ORDER BY e.created_at, e.experience_id LIMIT 1""",
+                (fingerprint,),
+            ).fetchone()
+            prior_related = db.execute(
+                """SELECT e.experience_id,e.outcome FROM experiences e
+                   JOIN experience_fingerprints f ON f.experience_id=e.experience_id
+                   WHERE f.semantic_key=? ORDER BY e.created_at,e.experience_id""",
+                (semantic_key,),
+            ).fetchall()
             db.execute(
                 "INSERT INTO experiences VALUES(?,?,?,?,?,?,?)",
                 (record["experience_id"], key, record["summary"], outcome,
                  json.dumps(record["evidence_ids"]), verifier, record["created_at"]),
             )
+            db.execute(
+                "INSERT INTO experience_fingerprints VALUES(?,?,?)",
+                (record["experience_id"], fingerprint, semantic_key),
+            )
+            if prior_same is not None:
+                record["duplicate_of"] = prior_same["experience_id"]
+                db.execute(
+                    "INSERT INTO experience_links VALUES(?,?,?,?)",
+                    (record["experience_id"], prior_same["experience_id"],
+                     "duplicate_of", record["created_at"]),
+                )
+            for prior in prior_related:
+                if prior["outcome"] != outcome and outcome != "unknown" and prior["outcome"] != "unknown":
+                    record["contradicts"].append(prior["experience_id"])
+                    db.execute(
+                        "INSERT INTO experience_links VALUES(?,?,?,?)",
+                        (record["experience_id"], prior["experience_id"],
+                         "contradicts", record["created_at"]),
+                    )
+            if record["duplicate_of"] or record["contradicts"]:
+                db.execute(
+                    "INSERT INTO learning_audit(experience_id,event_type,payload_json,occurred_at) VALUES(?,?,?,?)",
+                    (record["experience_id"], "experience.relationships_detected",
+                     json.dumps({"duplicate_of": record["duplicate_of"],
+                                 "contradicts": record["contradicts"]}), record["created_at"]),
+                )
         return record
 
     def list_experiences(self, task_key: str, limit: int = 50) -> list[dict[str, Any]]:
