@@ -415,7 +415,7 @@ class ExperienceStore:
             raise ValueError("minimum_labeled_trials must be between 2 and 1000")
         if isinstance(tolerance, bool) or not isinstance(tolerance, (int, float)) or not 0 <= tolerance <= 0.25:
             raise ValueError("tolerance must be between 0 and 0.25")
-        if evaluator not in {"user", "reviewed-evidence"}:
+        if not isinstance(evaluator, str) or evaluator not in {"user", "reviewed-evidence"}:
             raise ValueError("evaluator must be user or reviewed-evidence")
         if not isinstance(evidence_ids, list) or not evidence_ids or len(evidence_ids) > MAX_EVIDENCE or any(
             not isinstance(item, str) or not item.strip() or len(item) > 128 for item in evidence_ids
@@ -470,6 +470,13 @@ class ExperienceStore:
                     status = "regression_observed" if regressed else "no_regression_observed"
                 else:
                     status = "baseline_insufficient_data"
+            db.execute(
+                "INSERT INTO learning_audit(event_type,payload_json,occurred_at) VALUES(?,?,?)",
+                ("skill_evaluation.recorded",
+                 json.dumps({"evaluation_id": evaluation_id, "skill_id": skill_id,
+                             "version": version, "suite_key": suite, "status": status}),
+                 now),
+            )
         result = {
             "evaluation_id": evaluation_id, "skill_id": skill_id, "version": version,
             "suite_key": suite, "trials": trials, "labeled_trials": candidate_labeled,
@@ -482,11 +489,6 @@ class ExperienceStore:
             "interpretation": "Evaluation is evidence-recorded but not an execution grant; human review and separate policy gates remain mandatory.",
             "created_at": now,
         }
-        with self._connect() as db:
-            db.execute(
-                "INSERT INTO learning_audit(event_type,payload_json,occurred_at) VALUES(?,?,?)",
-                ("skill_evaluation.recorded", json.dumps(result, sort_keys=True), now),
-            )
         return result
 
     def list_skill_evaluations(self, skill_id: str, version: int | None = None) -> list[dict[str, Any]]:
