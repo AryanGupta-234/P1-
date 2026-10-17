@@ -1017,5 +1017,117 @@ def settings_import(
     console.print(f"Imported {len(incoming)} unique entries; catalogue now contains {len(combined)} entries at {output}")
 
 
+
+
+@app.command("experience-add")
+def experience_add(
+    task_key: str = typer.Argument(..., help="Stable task family key, e.g. settings.open_display."),
+    summary: str = typer.Argument(..., help="Concise outcome summary."),
+    outcome: str = typer.Argument(..., help="success, partial, failure or unknown."),
+    evidence: str = typer.Option("", "--evidence", help="Comma-separated event/evidence IDs."),
+    verifier: str = typer.Option("user", help="user, system or reviewed-evidence."),
+    db: Path = typer.Option(database_path(), "--db"),
+) -> None:
+    """Record an observed task outcome for later evidence-gated learning."""
+    from aie.learning import ExperienceStore
+    try:
+        record = ExperienceStore(db).record(
+            task_key, summary, outcome,
+            evidence_ids=[part.strip() for part in evidence.split(",") if part.strip()],
+            verifier=verifier,
+        )
+    except ValueError as exc:
+        console.print(f"[red]Experience rejected:[/red] {exc}")
+        raise typer.Exit(2) from exc
+    console.print_json(json.dumps(record, indent=2))
+
+
+@app.command("experience-list")
+def experience_list(
+    task_key: str = typer.Argument(...),
+    limit: int = typer.Option(50, min=1, max=200),
+    db: Path = typer.Option(database_path(), "--db"),
+) -> None:
+    """Review recorded outcomes for one task family."""
+    from aie.learning import ExperienceStore
+    try:
+        records = ExperienceStore(db).list_experiences(task_key, limit)
+    except ValueError as exc:
+        console.print(f"[red]Experience query failed:[/red] {exc}")
+        raise typer.Exit(2) from exc
+    console.print_json(json.dumps(records, indent=2))
+
+
+@app.command("skill-draft")
+def skill_draft(
+    task_key: str = typer.Argument(...),
+    title: str = typer.Argument(...),
+    steps_json: str = typer.Argument(..., help="JSON array of proposed human-readable steps."),
+    minimum_successes: int = typer.Option(3, min=2, max=20),
+    db: Path = typer.Option(database_path(), "--db"),
+) -> None:
+    """Create a reusable procedural-skill draft after repeated evidence-backed success."""
+    from aie.learning import ExperienceStore
+    try:
+        steps = json.loads(steps_json)
+        draft = ExperienceStore(db).create_skill_draft(
+            task_key, title, steps, minimum_successes=minimum_successes
+        )
+    except (ValueError, TypeError, json.JSONDecodeError) as exc:
+        console.print(f"[red]Skill draft rejected:[/red] {exc}")
+        raise typer.Exit(2) from exc
+    console.print_json(json.dumps(draft, indent=2))
+    console.print("[dim]Pending review only. This skill is not executable and cannot change policy.[/dim]")
+
+
+@app.command("skill-draft-show")
+def skill_draft_show(
+    draft_id: str = typer.Argument(...),
+    db: Path = typer.Option(database_path(), "--db"),
+) -> None:
+    """Show a skill draft after integrity verification."""
+    from aie.learning import ExperienceStore
+    try:
+        draft = ExperienceStore(db).get_skill_draft(draft_id)
+    except ValueError as exc:
+        console.print(f"[red]Skill draft verification failed:[/red] {exc}")
+        raise typer.Exit(2) from exc
+    if draft is None:
+        console.print("[yellow]Skill draft not found.[/yellow]")
+        raise typer.Exit(2)
+    console.print_json(json.dumps(draft, indent=2))
+
+
+@app.command("skill-draft-accept")
+def skill_draft_accept(
+    draft_id: str = typer.Argument(...),
+    db: Path = typer.Option(database_path(), "--db"),
+) -> None:
+    """Accept a reviewed skill record; does not grant execution or OS capabilities."""
+    from aie.learning import ExperienceStore
+    try:
+        draft = ExperienceStore(db).resolve_skill_draft(draft_id, "accepted")
+    except ValueError as exc:
+        console.print(f"[red]Skill acceptance rejected:[/red] {exc}")
+        raise typer.Exit(2) from exc
+    console.print_json(json.dumps(draft, indent=2))
+    console.print("[dim]Stored as a reviewed procedural reference only; nothing was executed.[/dim]")
+
+
+@app.command("skill-draft-reject")
+def skill_draft_reject(
+    draft_id: str = typer.Argument(...),
+    db: Path = typer.Option(database_path(), "--db"),
+) -> None:
+    """Reject a pending procedural-skill draft."""
+    from aie.learning import ExperienceStore
+    try:
+        draft = ExperienceStore(db).resolve_skill_draft(draft_id, "rejected")
+    except ValueError as exc:
+        console.print(f"[red]Skill rejection failed:[/red] {exc}")
+        raise typer.Exit(2) from exc
+    console.print_json(json.dumps(draft, indent=2))
+
+
 if __name__ == "__main__":
     app()
