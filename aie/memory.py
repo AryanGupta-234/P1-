@@ -1,6 +1,7 @@
 """Explicit, provenance-aware local memory records; no automatic consolidation."""
 from __future__ import annotations
 
+import hashlib
 import json
 import math
 import sqlite3
@@ -61,6 +62,17 @@ class MemoryStore:
                 imported_at TEXT NOT NULL,
                 FOREIGN KEY(memory_id) REFERENCES memories(memory_id)
             )""")
+            db.execute("""CREATE TABLE IF NOT EXISTS memory_embeddings (
+                memory_id TEXT NOT NULL,
+                model TEXT NOT NULL,
+                dimensions INTEGER NOT NULL,
+                vector_json TEXT NOT NULL,
+                content_sha256 TEXT NOT NULL,
+                indexed_at TEXT NOT NULL,
+                PRIMARY KEY(memory_id,model),
+                FOREIGN KEY(memory_id) REFERENCES memories(memory_id)
+            )""")
+            db.execute("CREATE INDEX IF NOT EXISTS idx_memory_embeddings_model ON memory_embeddings(model,dimensions)")
 
     def _connect(self) -> sqlite3.Connection:
         db = sqlite3.connect(self.path, timeout=10)
@@ -147,6 +159,8 @@ class MemoryStore:
         kind: str | None = None,
         include_sensitive: bool = False,
         limit: int = 20,
+        recency_half_life_days: float = 180.0,
+        recency_weight: float = 0.15,
     ) -> list[dict[str, Any]]:
         if not isinstance(query, str) or len(query) > 1000:
             raise ValueError("query must be a string of at most 1000 characters")
@@ -156,6 +170,10 @@ class MemoryStore:
             raise ValueError("limit must be between 1 and 100")
         if not isinstance(include_sensitive, bool):
             raise ValueError("include_sensitive must be a boolean")
+        if isinstance(recency_half_life_days, bool) or not isinstance(recency_half_life_days, (int, float)) or not math.isfinite(recency_half_life_days) or not 1 <= recency_half_life_days <= 36500:
+            raise ValueError("recency_half_life_days must be between 1 and 36500")
+        if isinstance(recency_weight, bool) or not isinstance(recency_weight, (int, float)) or not math.isfinite(recency_weight) or not 0 <= recency_weight <= 1:
+            raise ValueError("recency_weight must be between 0 and 1")
         now = datetime.now(timezone.utc).isoformat()
         clauses = ["(expires_at IS NULL OR expires_at > ?)"]
         args: list[Any] = [now]
@@ -172,19 +190,152 @@ class MemoryStore:
             ).fetchall()
         terms = [term.casefold() for term in query.split() if term]
         records = [_decode(row) for row in rows]
-        if terms:
-            def score(record: dict[str, Any]) -> tuple[int, str]:
-                haystack = (record["content"] + " " + " ".join(record["tags"])).casefold()
-                return sum(term in haystack for term in terms), record["memory_id"]
-            records = [record for record in records if score(record)[0] > 0]
-            records.sort(key=lambda record: (
-                -score(record)[0],
-                -datetime.fromisoformat(record["created_at"]).timestamp(),
-                record["memory_id"],
-            ))
+        now_dt = datetime.now(timezone.utc)
+        def recency(record: dict[str, Any]) -> float:
+            created = datetime.fromisoformat(record["created_at"])
+            if created.tzinfo is None:
+                created = created.replace(tzinfo=timezone.utc)
+            age_days = max(0.0, (now_dt - created.astimezone(timezone.utc)).total_seconds() / 86400)
+            return math.exp(-math.log(2) * age_days / float(recency_half_life_days))
+        def relevance(record: dict[str, Any]) -> float:
+            if not terms:
+                return 1.0
+            haystack = (record["content"] + " " + " ".join(record["tags"])).casefold()
+            return sum(term in haystack for term in terms) / len(terms)
+        records = [record for record in records if not terms or relevance(record) > 0]
+        records.sort(key=lambda record: (
+            -(relevance(record) * (1.0 - float(recency_weight))
+              + recency(record) * float(recency_weight)),
+            -datetime.fromisoformat(record["created_at"]).timestamp(),
+            record["memory_id"],
+        ))
         return records[:limit]
 
 
+
+
+    def get_embedding_candidates(
+        self, *, limit: int = 100, include_sensitive: bool = False,
+    ) -> list[dict[str, Any]]:
+        if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 500:
+            raise ValueError("limit must be between 1 and 500")
+        if not isinstance(include_sensitive, bool):
+            raise ValueError("include_sensitive must be a boolean")
+        now = datetime.now(timezone.utc).isoformat()
+        clause = "(expires_at IS NULL OR expires_at > ?)"
+        args: list[Any] = [now]
+        if not include_sensitive:
+            clause += " AND sensitivity != 'sensitive'"
+        with self._connect() as db:
+            rows = db.execute(
+                """SELECT m.* FROM memories m WHERE """ + clause +
+                """ AND NOT EXISTS (
+                    SELECT 1 FROM memory_embeddings e
+                    WHERE e.memory_id=m.memory_id
+                      AND e.content_sha256=lower(hex(zeroblob(0))) 
+                ) ORDER BY m.created_at,m.memory_id LIMIT ?""",
+                (*args, limit),
+            ).fetchall()
+        # Return all active records; the caller can compare their content hash to the index.
+        return [_decode(row) for row in rows]
+
+    def store_embedding(
+        self, memory_id: str, model: str, vector: list[float], *,
+        expected_content: str,
+    ) -> bool:
+        if not isinstance(memory_id, str) or not memory_id or len(memory_id) > 64:
+            raise ValueError("invalid memory_id")
+        if not isinstance(model, str) or not model.strip() or len(model) > 128:
+            raise ValueError("model must contain 1..128 characters")
+        if not isinstance(expected_content, str) or not expected_content:
+            raise ValueError("expected_content must be non-empty")
+        if not isinstance(vector, list) or not vector or len(vector) > 16384:
+            raise ValueError("embedding vector must contain 1..16384 values")
+        if any(isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) for value in vector):
+            raise ValueError("embedding vector must contain finite numbers")
+        digest = hashlib.sha256(expected_content.encode("utf-8")).hexdigest()
+        now = datetime.now(timezone.utc).isoformat()
+        with self._connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            row = db.execute(
+                """SELECT content FROM memories WHERE memory_id=?
+                   AND (expires_at IS NULL OR expires_at>?)""",
+                (memory_id, now),
+            ).fetchone()
+            if row is None:
+                return False
+            if row[0] != expected_content:
+                raise ValueError("memory content changed while embedding; re-index it")
+            db.execute(
+                """INSERT INTO memory_embeddings VALUES(?,?,?,?,?,?)
+                   ON CONFLICT(memory_id,model) DO UPDATE SET
+                   dimensions=excluded.dimensions,vector_json=excluded.vector_json,
+                   content_sha256=excluded.content_sha256,indexed_at=excluded.indexed_at""",
+                (memory_id, model, len(vector), json.dumps(vector, allow_nan=False),
+                 digest, now),
+            )
+        return True
+
+    def semantic_search(
+        self, vector: list[float], model: str, *, limit: int = 20,
+        include_sensitive: bool = False, recency_half_life_days: float = 180.0,
+        recency_weight: float = 0.10,
+    ) -> list[dict[str, Any]]:
+        if not isinstance(model, str) or not model.strip() or len(model) > 128:
+            raise ValueError("invalid embedding model")
+        if not isinstance(vector, list) or not vector or len(vector) > 16384 or any(
+            isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value)
+            for value in vector
+        ):
+            raise ValueError("query embedding must contain finite values")
+        if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 100:
+            raise ValueError("limit must be between 1 and 100")
+        if not isinstance(include_sensitive, bool):
+            raise ValueError("include_sensitive must be a boolean")
+        if isinstance(recency_half_life_days, bool) or not isinstance(recency_half_life_days, (int, float)) or not math.isfinite(recency_half_life_days) or not 1 <= recency_half_life_days <= 36500:
+            raise ValueError("recency_half_life_days must be between 1 and 36500")
+        if isinstance(recency_weight, bool) or not isinstance(recency_weight, (int, float)) or not math.isfinite(recency_weight) or not 0 <= recency_weight <= 1:
+            raise ValueError("recency_weight must be between 0 and 1")
+        query_norm = math.sqrt(sum(float(value) ** 2 for value in vector))
+        if query_norm == 0:
+            raise ValueError("query embedding must have non-zero magnitude")
+        now = datetime.now(timezone.utc).isoformat()
+        clause = "e.model=? AND e.dimensions=? AND e.content_sha256=lower(hex(zeroblob(0)))"
+        # Hash validation is performed in Python against the live content.
+        with self._connect() as db:
+            rows = db.execute(
+                """SELECT m.*,e.vector_json,e.content_sha256,e.dimensions
+                   FROM memory_embeddings e JOIN memories m ON m.memory_id=e.memory_id
+                   WHERE e.model=? AND e.dimensions=?
+                     AND (m.expires_at IS NULL OR m.expires_at>?) """ +
+                ("" if include_sensitive else "AND m.sensitivity!='sensitive' ") +
+                "ORDER BY m.created_at DESC LIMIT 1000",
+                (model, len(vector), now),
+            ).fetchall()
+        now_dt = datetime.now(timezone.utc)
+        results = []
+        for row in rows:
+            if hashlib.sha256(row["content"].encode("utf-8")).hexdigest() != row["content_sha256"]:
+                continue
+            stored = json.loads(row["vector_json"])
+            if len(stored) != len(vector):
+                continue
+            stored_norm = math.sqrt(sum(float(value) ** 2 for value in stored))
+            if stored_norm == 0:
+                continue
+            cosine = sum(float(a) * float(b) for a, b in zip(vector, stored)) / (query_norm * stored_norm)
+            created = datetime.fromisoformat(row["created_at"])
+            if created.tzinfo is None:
+                created = created.replace(tzinfo=timezone.utc)
+            age_days = max(0.0, (now_dt - created.astimezone(timezone.utc)).total_seconds() / 86400)
+            recency = math.exp(-math.log(2) * age_days / float(recency_half_life_days))
+            score = max(-1.0, min(1.0, cosine)) * (1.0 - float(recency_weight)) + recency * float(recency_weight)
+            item = _decode(row)
+            item["similarity"] = max(-1.0, min(1.0, cosine))
+            item["retrieval_score"] = score
+            results.append(item)
+        results.sort(key=lambda item: (-item["retrieval_score"], item["memory_id"]))
+        return results[:limit]
 
     def import_reviewed_knowledge(
         self, source_key: str, content: str, *, provenance_ids: list[str],
