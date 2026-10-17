@@ -320,3 +320,38 @@ def test_existing_experiences_receive_fingerprints_on_upgrade(tmp_path: Path):
     repeated = upgraded.record("task", " legacy   EXPERIENCE ", "success")
     assert repeated["duplicate_of"] == original["experience_id"]
     assert len(upgraded.list_experiences("task")) == 2
+
+
+def test_accepted_knowledge_is_blocked_if_later_experience_contradicts(tmp_path: Path):
+    store = ExperienceStore(tmp_path / "learning.db")
+    for index in range(3):
+        store.record("task", "Display page reached", "success",
+                     evidence_ids=[f"e{index}"])
+    draft = store.create_knowledge_drafts("task")[0]
+    store.resolve_knowledge_draft(draft["knowledge_id"], "accepted")
+    store.record("task", "display page reached", "failure", evidence_ids=["later-failure"])
+    with pytest.raises(ValueError, match="contradictory"):
+        store.validate_knowledge_publication(draft["knowledge_id"])
+
+
+def test_knowledge_publication_revalidates_lineage_and_evidence(tmp_path: Path):
+    store = ExperienceStore(tmp_path / "learning.db")
+    for index in range(3):
+        store.record("task", "Display page reached", "success",
+                     evidence_ids=[f"e{index}"])
+    draft = store.create_knowledge_drafts("task")[0]
+    store.resolve_knowledge_draft(draft["knowledge_id"], "accepted")
+    checked = store.validate_knowledge_publication(draft["knowledge_id"])
+    assert checked["status"] == "accepted"
+    assert len(checked["provenance_ids"]) == 3
+    assert checked["evidence_ids"]
+
+
+def test_knowledge_draft_cannot_publish_without_evidence(tmp_path: Path):
+    store = ExperienceStore(tmp_path / "learning.db")
+    for index in range(3):
+        store.record("task", "Display page reached", "success")
+    draft = store.create_knowledge_drafts("task")[0]
+    store.resolve_knowledge_draft(draft["knowledge_id"], "accepted")
+    with pytest.raises(ValueError, match="successful source"):
+        store.validate_knowledge_publication(draft["knowledge_id"])
