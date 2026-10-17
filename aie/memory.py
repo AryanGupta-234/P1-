@@ -231,26 +231,20 @@ class MemoryStore:
             clause += " AND sensitivity != 'sensitive'"
         with self._connect() as db:
             rows = db.execute(
-                """SELECT m.* FROM memories m WHERE """ + clause +
-                """ AND NOT EXISTS (
-                    SELECT 1 FROM memory_embeddings e
-                    WHERE e.memory_id=m.memory_id AND e.model=?
-                      AND e.content_sha256=lower(hex(zeroblob(0)))
-                ) ORDER BY m.created_at,m.memory_id LIMIT ?""",
-                (*args[:-0] if False else args, model, limit),
+                "SELECT * FROM memories WHERE " + clause +
+                " ORDER BY created_at,memory_id LIMIT 500", args
             ).fetchall()
-        # The indexed digest is checked below so revised content is re-embedded.
+            indexed_rows = db.execute(
+                "SELECT memory_id,content_sha256 FROM memory_embeddings WHERE model=?",
+                (model,),
+            ).fetchall()
+        indexed = {row["memory_id"]: row["content_sha256"] for row in indexed_rows}
         candidates = []
         for row in rows:
-            with self._connect() as check_db:
-                indexed = check_db.execute(
-                    "SELECT content_sha256 FROM memory_embeddings WHERE memory_id=? AND model=?",
-                    (row["memory_id"], model),
-                ).fetchone()
             digest = hashlib.sha256(row["content"].encode("utf-8")).hexdigest()
-            if indexed is None or indexed[0] != digest:
+            if indexed.get(row["memory_id"]) != digest:
                 candidates.append(_decode(row))
-        return candidates
+        return candidates[:limit]
 
     def store_embedding(
         self, memory_id: str, model: str, vector: list[float], *,
