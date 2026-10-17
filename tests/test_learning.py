@@ -307,3 +307,16 @@ def test_knowledge_draft_integrity_and_one_time_review(tmp_path: Path):
                    (draft["knowledge_id"],))
     with pytest.raises(ValueError, match="integrity"):
         store.get_knowledge_draft(draft["knowledge_id"])
+
+
+def test_existing_experiences_receive_fingerprints_on_upgrade(tmp_path: Path):
+    path = tmp_path / "learning.db"
+    store = ExperienceStore(path)
+    original = store.record("task", "Legacy experience", "success", evidence_ids=["old"])
+    with store._connect() as db:
+        db.execute("DELETE FROM experience_fingerprints WHERE experience_id=?",
+                   (original["experience_id"],))
+    upgraded = ExperienceStore(path)
+    repeated = upgraded.record("task", " legacy   EXPERIENCE ", "success")
+    assert repeated["duplicate_of"] == original["experience_id"]
+    assert len(upgraded.list_experiences("task")) == 2
