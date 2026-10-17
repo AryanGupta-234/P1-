@@ -283,6 +283,34 @@ class MemoryStore:
             )
         return True
 
+    def find_near_duplicates(
+        self, memory_id: str, model: str, *, threshold: float = 0.88,
+        limit: int = 20, include_sensitive: bool = False,
+    ) -> list[dict[str, Any]]:
+        if not isinstance(memory_id, str) or not memory_id or len(memory_id) > 64:
+            raise ValueError("invalid memory_id")
+        if isinstance(threshold, bool) or not isinstance(threshold, (int, float)) or not math.isfinite(threshold) or not -1 <= threshold <= 1:
+            raise ValueError("threshold must be between -1 and 1")
+        with self._connect() as db:
+            row = db.execute(
+                """SELECT e.vector_json,e.content_sha256,m.content
+                   FROM memory_embeddings e JOIN memories m ON m.memory_id=e.memory_id
+                   WHERE e.memory_id=? AND e.model=?
+                     AND (m.expires_at IS NULL OR m.expires_at>?)""",
+                (memory_id, model, datetime.now(timezone.utc).isoformat()),
+            ).fetchone()
+        if row is None or hashlib.sha256(row["content"].encode("utf-8")).hexdigest() != row["content_sha256"]:
+            raise ValueError("memory has no current embedding for this model; run memory-index")
+        candidates = self.semantic_search(
+            json.loads(row["vector_json"]), model, limit=min(100, limit + 1),
+            include_sensitive=include_sensitive,
+        )
+        return [
+            {**item, "candidate_only": True, "automatic_merge": False}
+            for item in candidates
+            if item["memory_id"] != memory_id and item["similarity"] >= float(threshold)
+        ][:limit]
+
     def semantic_search(
         self, vector: list[float], model: str, *, limit: int = 20,
         include_sensitive: bool = False, recency_half_life_days: float = 180.0,
