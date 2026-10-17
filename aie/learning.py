@@ -149,25 +149,7 @@ class ExperienceStore:
                     "INSERT OR IGNORE INTO experience_fingerprints VALUES(?,?,?)",
                     (row["experience_id"], exact, semantic),
                 )
-                prior = db.execute(
-                    """SELECT e.experience_id,e.outcome,f.fingerprint FROM experiences e
-                       JOIN experience_fingerprints f ON f.experience_id=e.experience_id
-                       WHERE f.semantic_key=? AND e.experience_id<>?
-                       ORDER BY e.created_at,e.experience_id""",
-                    (semantic, row["experience_id"]),
-                ).fetchall()
-                for previous in prior:
-                    relation = None
-                    if previous["fingerprint"] == exact:
-                        relation = "duplicate_of"
-                    elif row["outcome"] != "unknown" and previous["outcome"] != "unknown" and row["outcome"] != previous["outcome"]:
-                        relation = "contradicts"
-                    if relation:
-                        db.execute(
-                            "INSERT OR IGNORE INTO experience_links VALUES(?,?,?,?)",
-                            (row["experience_id"], previous["experience_id"],
-                             relation, self._now()),
-                        )
+
 
     def _connect(self):
         db = sqlite3.connect(self.path, timeout=10)
