@@ -483,10 +483,16 @@ class ExperienceStore:
             rows = db.execute(
                 """SELECT l.experience_id,l.related_experience_id,l.relation,l.created_at,
                           a.summary AS source_summary,a.outcome AS source_outcome,
-                          b.summary AS related_summary,b.outcome AS related_outcome
+                          b.summary AS related_summary,b.outcome AS related_outcome,
+                          j.decision AS adjudication_decision,
+                          j.rationale AS adjudication_rationale,
+                          j.evidence_json AS adjudication_evidence
                    FROM experience_links l
                    JOIN experiences a ON a.experience_id=l.experience_id
                    JOIN experiences b ON b.experience_id=l.related_experience_id
+                   LEFT JOIN experience_adjudications j
+                     ON j.experience_id=l.experience_id
+                    AND j.related_experience_id=l.related_experience_id
                    WHERE a.task_key=? ORDER BY l.created_at DESC LIMIT ?""",
                 (key, limit),
             ).fetchall()
@@ -500,6 +506,12 @@ class ExperienceStore:
                 "source_outcome": row["source_outcome"],
                 "related_summary": row["related_summary"],
                 "related_outcome": row["related_outcome"],
+                "adjudication_decision": row["adjudication_decision"],
+                "adjudication_rationale": row["adjudication_rationale"],
+                "adjudication_evidence_ids": (
+                    json.loads(row["adjudication_evidence"])
+                    if row["adjudication_evidence"] else []
+                ),
             } for row in rows],
             "records_preserved": True,
             "interpretation": "Exact normalized-text matches are candidate duplicates; differing non-unknown outcomes for the same normalized task description are contradictions requiring review, not automatic resolution.",
