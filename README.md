@@ -96,6 +96,10 @@ AIE is being developed toward a progressively more autonomous learning system. T
 # Record outcomes (use real event/evidence IDs where available)
 aie experience-add "settings.open_display" "Display page reached and visually confirmed" success --evidence "EVENT_ID_1" --verifier reviewed-evidence
 aie experience-list "settings.open_display"
+aie learn-report "settings.open_display"  # outcome rates, Wilson interval, evidence coverage
+
+# Review skill drafts (all statuses, or filter by --status pending_review):
+aie skill-draft-list "settings.open_display" --status pending_review
 
 # After at least three successful episodes, including evidence references:
 aie skill-draft "settings.open_display" "Open Display Settings" '["Resolve the intended Settings destination","Verify the target window identity","Confirm the expected page is visible"]'
@@ -103,4 +107,4 @@ aie skill-draft-show DRAFT_ID
 aie skill-draft-accept DRAFT_ID
 ```
 
-An accepted skill is currently a reviewed procedural reference, not executable automation. No skill can grant itself capabilities, alter policy, modify source code, or execute OS actions. This provides the first persistent experience-to-procedure learning substrate while evaluation, safe adapter execution and stronger autonomy controls are developed.
+An accepted skill is currently a reviewed procedural reference, not executable automation. No skill can grant itself capabilities, alter policy, modify source code, or execute OS actions. `aie learn-report TASK_KEY` reports success/partial/failure/unknown counts, a 95% Wilson interval for the descriptive success rate, evidence-backed success coverage, unique evidence references, verifier mix and repeated-summary groups. Unknown outcomes are excluded from the rate; the report explicitly warns that small samples and user-reported outcomes are not proof of reliability. `aie skill-draft-list [TASK_KEY] --status pending_review` lists drafts only after verifying each payload digest. Skill decisions now use a serialized SQLite write transaction and verify the payload in that same transaction, preventing competing reviewers from both resolving a draft. These reports are descriptive—not a promotion gate—and accepted skills remain non-executable.
