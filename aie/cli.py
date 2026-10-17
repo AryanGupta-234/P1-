@@ -975,10 +975,6 @@ def goal_draft_reject(
     console.print_json(json.dumps(result, indent=2))
 
 
-if __name__ == "__main__":
-    app()
-
-
 @app.command("settings-search")
 def settings_search(
     query: str = typer.Argument("", help="Search URI, title, category or description."),
@@ -986,10 +982,10 @@ def settings_search(
     catalog: Path | None = typer.Option(None, "--catalog", help="Optional imported JSON/CSV catalogue."),
 ) -> None:
     """Search the local ms-settings URI catalogue; does not open or change Settings."""
-    from aie.ms_settings import load_catalog, search_catalog, starter_catalog
+    from aie.ms_settings import documented_catalog, load_catalog, search_catalog
 
     try:
-        entries = load_catalog(catalog) if catalog else starter_catalog()
+        entries = load_catalog(catalog) if catalog else documented_catalog()
         matches = search_catalog(entries, query, limit)
     except (OSError, ValueError, json.JSONDecodeError) as exc:
         console.print(f"[red]Settings catalogue error:[/red] {exc}")
@@ -1008,14 +1004,18 @@ def settings_import(
     merge: bool = typer.Option(True, "--merge/--replace", help="Merge with existing output catalogue when present."),
 ) -> None:
     """Validate and import a local JSON/CSV ms-settings catalogue; never executes URIs."""
-    from aie.ms_settings import load_catalog, merge_catalog, save_catalog, starter_catalog
+    from aie.ms_settings import documented_catalog, load_catalog, merge_catalog, save_catalog
 
     try:
         incoming = load_catalog(source)
-        existing = load_catalog(output) if merge and output.exists() else starter_catalog() if merge else []
+        existing = load_catalog(output) if merge and output.exists() else documented_catalog() if merge else []
         combined = merge_catalog(existing, incoming)
         save_catalog(output, combined)
     except (OSError, ValueError, json.JSONDecodeError) as exc:
         console.print(f"[red]Settings catalogue import failed:[/red] {exc}")
         raise typer.Exit(2) from exc
     console.print(f"Imported {len(incoming)} unique entries; catalogue now contains {len(combined)} entries at {output}")
+
+
+if __name__ == "__main__":
+    app()
