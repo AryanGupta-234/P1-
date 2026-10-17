@@ -654,6 +654,8 @@ def memory_search(
     kind: str | None = typer.Option(None),
     include_sensitive: bool = typer.Option(False, "--include-sensitive"),
     limit: int = typer.Option(20, min=1, max=100),
+    recency_half_life_days: float = typer.Option(180.0, min=1.0, max=36500.0),
+    recency_weight: float = typer.Option(0.15, min=0.0, max=1.0),
     db: Path = typer.Option(database_path(), "--db", help="Local SQLite database."),
 ) -> None:
     """Search unexpired local memories; sensitive records are excluded by default."""
@@ -661,12 +663,78 @@ def memory_search(
 
     try:
         records = MemoryStore(db).search(
-            query, kind=kind, include_sensitive=include_sensitive, limit=limit
+            query, kind=kind, include_sensitive=include_sensitive, limit=limit,
+            recency_half_life_days=recency_half_life_days, recency_weight=recency_weight,
         )
     except ValueError as exc:
         console.print(f"[red]Memory search failed:[/red] {exc}")
         raise typer.Exit(2) from exc
     console.print_json(json.dumps(records, indent=2))
+
+
+@app.command("memory-index")
+def memory_index(
+    model: str = typer.Argument(..., help="Already-installed local Ollama embedding model."),
+    limit: int = typer.Option(100, min=1, max=500),
+    batch_size: int = typer.Option(16, min=1, max=64),
+    db: Path = typer.Option(database_path(), "--db", help="Local SQLite database."),
+) -> None:
+    """Index eligible local memories with an already-installed loopback Ollama model."""
+    from aie.memory import MemoryStore
+    from aie.ollama import OllamaClient, OllamaError
+    store = MemoryStore(db)
+    try:
+        candidates = store.get_embedding_candidates(model, limit=limit)
+        client = OllamaClient()
+        indexed = 0
+        for offset in range(0, len(candidates), batch_size):
+            batch = candidates[offset:offset + batch_size]
+            result = client.embed(model, [item["content"] for item in batch])
+            for item, vector in zip(batch, result.embeddings):
+                if store.store_embedding(
+                    item["memory_id"], model, vector, expected_content=item["content"]
+                ):
+                    indexed += 1
+        console.print_json(json.dumps({
+            "model": model, "considered": len(candidates), "indexed": indexed,
+            "dimensions": result.dimensions if candidates else None,
+            "sensitive_records_included": False,
+            "remote_fallback": False,
+        }, indent=2))
+    except (ValueError, OllamaError) as exc:
+        console.print(f"[red]Memory indexing failed:[/red] {exc}")
+        raise typer.Exit(2) from exc
+
+
+@app.command("memory-search-semantic")
+def memory_search_semantic(
+    query: str = typer.Argument(...),
+    model: str = typer.Option(..., help="Same local embedding model used by memory-index."),
+    limit: int = typer.Option(20, min=1, max=100),
+    include_sensitive: bool = typer.Option(False, "--include-sensitive"),
+    recency_half_life_days: float = typer.Option(180.0, min=1.0, max=36500.0),
+    recency_weight: float = typer.Option(0.10, min=0.0, max=1.0),
+    db: Path = typer.Option(database_path(), "--db", help="Local SQLite database."),
+) -> None:
+    """Retrieve semantically similar memories using local embeddings and cosine similarity."""
+    from aie.memory import MemoryStore
+    from aie.ollama import OllamaClient, OllamaError
+    try:
+        embedded = OllamaClient().embed(model, query)
+        records = MemoryStore(db).semantic_search(
+            embedded.embeddings[0], model, limit=limit,
+            include_sensitive=include_sensitive,
+            recency_half_life_days=recency_half_life_days,
+            recency_weight=recency_weight,
+        )
+    except (ValueError, OllamaError) as exc:
+        console.print(f"[red]Semantic memory search failed:[/red] {exc}")
+        raise typer.Exit(2) from exc
+    console.print_json(json.dumps({
+        "query": query, "model": model, "dimensions": embedded.dimensions,
+        "results": records,
+        "interpretation": "Cosine similarity is a retrieval heuristic, not truth or confidence. Stale content hashes and expired records are excluded.",
+    }, indent=2))
 
 
 @app.command("memory-delete")
