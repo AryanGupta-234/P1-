@@ -1162,7 +1162,7 @@ def knowledge_draft_review(
 def knowledge_publish(
     knowledge_id: str = typer.Argument(...),
     db: Path = typer.Option(database_path(), "--db", help="Learning database."),
-    memory_db: Path = typer.Option(memory_database_path(), "--memory-db", help="Memory database."),
+    memory_db: Path = typer.Option(database_path(), "--memory-db", help="Memory database.")
 ) -> None:
     """Publish an accepted, evidence-backed success candidate into semantic memory."""
     from aie.learning import ExperienceStore
