@@ -60,6 +60,24 @@ class ExperienceStore:
                 );
                 CREATE INDEX IF NOT EXISTS idx_experience_links_related
                     ON experience_links(related_experience_id, relation);
+                CREATE TABLE IF NOT EXISTS experience_adjudications (
+                    adjudication_id TEXT PRIMARY KEY,
+                    experience_id TEXT NOT NULL,
+                    related_experience_id TEXT NOT NULL,
+                    decision TEXT NOT NULL CHECK(decision IN (
+                        'confirmed_conflict','source_is_correct','related_is_correct',
+                        'inconclusive','not_same_claim'
+                    )),
+                    rationale TEXT NOT NULL,
+                    evidence_json TEXT NOT NULL,
+                    reviewer TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    UNIQUE(experience_id,related_experience_id),
+                    FOREIGN KEY(experience_id,related_experience_id)
+                        REFERENCES experience_links(experience_id,related_experience_id)
+                );
+                CREATE INDEX IF NOT EXISTS idx_experience_adjudications_created
+                    ON experience_adjudications(created_at DESC);
                 CREATE TABLE IF NOT EXISTS knowledge_drafts (
                     knowledge_id TEXT PRIMARY KEY,
                     task_key TEXT NOT NULL,
@@ -369,6 +387,95 @@ class ExperienceStore:
         return [draft for row in rows
                 if (draft := self.get_skill_draft(row["draft_id"])) is not None]
 
+
+
+    def adjudicate_experience_contradiction(
+        self, experience_id: str, related_experience_id: str, decision: str, *,
+        rationale: str, evidence_ids: list[str], reviewer: str = "user",
+    ) -> dict[str, Any]:
+        allowed = {"confirmed_conflict", "source_is_correct", "related_is_correct",
+                   "inconclusive", "not_same_claim"}
+        for value, label in ((experience_id, "experience_id"),
+                             (related_experience_id, "related_experience_id")):
+            if not isinstance(value, str) or not value or len(value) > 64:
+                raise ValueError(f"invalid {label}")
+        if experience_id == related_experience_id:
+            raise ValueError("a contradiction must reference two different experiences")
+        if not isinstance(decision, str) or decision not in allowed:
+            raise ValueError("invalid contradiction decision")
+        if not isinstance(rationale, str) or not 8 <= len(rationale.strip()) <= 2000:
+            raise ValueError("rationale must contain 8..2000 characters")
+        if not isinstance(evidence_ids, list) or not evidence_ids or len(evidence_ids) > MAX_EVIDENCE or any(
+            not isinstance(item, str) or not item.strip() or len(item) > 128 for item in evidence_ids
+        ):
+            raise ValueError("adjudication requires 1..32 evidence references")
+        if not isinstance(reviewer, str) or not reviewer.strip() or len(reviewer) > 128:
+            raise ValueError("reviewer must contain 1..128 characters")
+        evidence = list(dict.fromkeys(evidence_ids))
+        now, adjudication_id = self._now(), str(uuid4())
+        with self._connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            relation = db.execute(
+                """SELECT relation FROM experience_links
+                   WHERE experience_id=? AND related_experience_id=?""",
+                (experience_id, related_experience_id),
+            ).fetchone()
+            if relation is None or relation["relation"] != "contradicts":
+                raise ValueError("the selected experiences do not have a contradiction link")
+            inserted = db.execute(
+                """INSERT OR IGNORE INTO experience_adjudications
+                   VALUES(?,?,?,?,?,?,?,?,?)""",
+                (adjudication_id, experience_id, related_experience_id, decision,
+                 rationale.strip(), json.dumps(evidence), reviewer.strip(), now),
+            ).rowcount
+            if inserted != 1:
+                raise ValueError("this contradiction already has an adjudication")
+            db.execute(
+                "INSERT INTO learning_audit(event_type,payload_json,occurred_at) VALUES(?,?,?)",
+                ("experience.contradiction_adjudicated",
+                 json.dumps({"adjudication_id": adjudication_id,
+                             "experience_id": experience_id,
+                             "related_experience_id": related_experience_id,
+                             "decision": decision, "reviewer": reviewer.strip()}), now),
+            )
+            source = db.execute("SELECT task_key FROM experiences WHERE experience_id=?",
+                                 (experience_id,)).fetchone()
+        return {
+            "adjudication_id": adjudication_id, "experience_id": experience_id,
+            "related_experience_id": related_experience_id, "decision": decision,
+            "rationale": rationale.strip(), "evidence_ids": evidence,
+            "reviewer": reviewer.strip(), "created_at": now,
+            "task_key": source["task_key"],
+            "source_outcomes_unchanged": True,
+        }
+
+    def list_experience_adjudications(self, task_key: str, limit: int = 100) -> list[dict[str, Any]]:
+        key = self._task_key(task_key)
+        if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 500:
+            raise ValueError("limit must be between 1 and 500")
+        with self._connect() as db:
+            rows = db.execute(
+                """SELECT a.*,e.summary AS source_summary,e.outcome AS source_outcome,
+                          r.summary AS related_summary,r.outcome AS related_outcome
+                   FROM experience_adjudications a
+                   JOIN experiences e ON e.experience_id=a.experience_id
+                   JOIN experiences r ON r.experience_id=a.related_experience_id
+                   WHERE e.task_key=? ORDER BY a.created_at DESC LIMIT ?""",
+                (key, limit),
+            ).fetchall()
+        return [{
+            "adjudication_id": row["adjudication_id"],
+            "experience_id": row["experience_id"],
+            "related_experience_id": row["related_experience_id"],
+            "decision": row["decision"], "rationale": row["rationale"],
+            "evidence_ids": json.loads(row["evidence_json"]),
+            "reviewer": row["reviewer"], "created_at": row["created_at"],
+            "source_summary": row["source_summary"],
+            "source_outcome": row["source_outcome"],
+            "related_summary": row["related_summary"],
+            "related_outcome": row["related_outcome"],
+            "source_outcomes_unchanged": True,
+        } for row in rows]
 
     def task_relationships(self, task_key: str, limit: int = 200) -> dict[str, Any]:
         key = self._task_key(task_key)
