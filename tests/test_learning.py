@@ -422,3 +422,30 @@ def test_skill_evaluation_integrity_detects_tampering(tmp_path: Path):
                    (evaluation["evaluation_id"],))
     with pytest.raises(ValueError, match="integrity"):
         store.list_skill_evaluations(version["skill_id"])
+
+
+def test_tampered_skill_evaluation_baseline_cannot_influence_next_version(tmp_path: Path):
+    store = ExperienceStore(tmp_path / "learning.db")
+    for index in range(3):
+        store.record("task", "completed task", "success", evidence_ids=[f"e{index}"])
+    first = store.create_skill_draft("task", "Task skill", ["Verify completion"])
+    store.resolve_skill_draft(first["draft_id"], "accepted")
+    version_one = store.publish_skill_draft(first["draft_id"])
+    baseline = store.record_skill_evaluation(
+        version_one["skill_id"], 1, "held-out", trials=10,
+        successes=9, partials=0, failures=1, unknown=0,
+        evidence_ids=["baseline-report"],
+    )
+    second = store.create_skill_draft("task", "Task skill", ["Verify completion", "Record result"])
+    store.resolve_skill_draft(second["draft_id"], "accepted")
+    version_two = store.publish_skill_draft(second["draft_id"])
+    assert version_two["version"] == 2
+    with store._connect() as db:
+        db.execute("UPDATE skill_evaluations SET successes=0 WHERE evaluation_id=?",
+                   (baseline["evaluation_id"],))
+    with pytest.raises(ValueError, match="baseline.*integrity"):
+        store.record_skill_evaluation(
+            version_one["skill_id"], 2, "held-out", trials=10,
+            successes=10, partials=0, failures=0, unknown=0,
+            evidence_ids=["candidate-report"],
+        )
