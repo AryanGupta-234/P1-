@@ -156,3 +156,94 @@ def test_competing_skill_reviewers_can_only_resolve_once(tmp_path: Path):
         results = list(pool.map(decide, ["accepted", "rejected"]))
     assert results.count("already-resolved") == 1
     assert sum(item in {"accepted", "rejected"} for item in results) == 1
+
+
+def _accepted_skill(store: ExperienceStore, title: str = "Reusable procedure"):
+    for index in range(3):
+        store.record("task", f"success {index}", "success",
+                     evidence_ids=[f"source-{index}"], verifier="reviewed-evidence")
+    draft = store.create_skill_draft("task", title, ["Inspect", "Verify"])
+    store.resolve_skill_draft(draft["draft_id"], "accepted")
+    return draft
+
+
+def test_skill_versions_are_immutable_and_increment(tmp_path: Path):
+    store = ExperienceStore(tmp_path / "learning.db")
+    first_draft = _accepted_skill(store)
+    first = store.publish_skill_draft(first_draft["draft_id"])
+    assert first["version"] == 1
+    second_draft = _accepted_skill(store)
+    second = store.publish_skill_draft(second_draft["draft_id"])
+    assert second["skill_id"] == first["skill_id"]
+    assert second["version"] == 2
+    versions = store.list_skill_versions("TASK", title="Reusable procedure")
+    assert [item["version"] for item in versions] == [2, 1]
+    with pytest.raises(ValueError, match="already|accepted"):
+        store.publish_skill_draft(first_draft["draft_id"])
+
+
+def test_skill_publish_requires_acceptance_and_checks_digest(tmp_path: Path):
+    store = ExperienceStore(tmp_path / "learning.db")
+    draft = _accepted_skill(store)
+    with store._connect() as db:
+        db.execute("UPDATE skill_drafts SET title='tampered' WHERE draft_id=?",
+                   (draft["draft_id"],))
+    with pytest.raises(ValueError, match="integrity"):
+        store.publish_skill_draft(draft["draft_id"])
+    assert store.list_skill_versions() == []
+
+
+def test_skill_regression_evaluation_compares_same_suite_versions(tmp_path: Path):
+    store = ExperienceStore(tmp_path / "learning.db")
+    first_draft = _accepted_skill(store)
+    first = store.publish_skill_draft(first_draft["draft_id"])
+    second_draft = _accepted_skill(store)
+    second = store.publish_skill_draft(second_draft["draft_id"])
+
+    baseline = store.record_skill_evaluation(
+        first["skill_id"], 1, "held-out-settings-v1", trials=10,
+        successes=10, partials=0, failures=0, unknown=0,
+        evidence_ids=["baseline-report"], evaluator="reviewed-evidence",
+    )
+    assert baseline["status"] == "baseline_only"
+    assert baseline["automation_eligible"] is False
+
+    candidate = store.record_skill_evaluation(
+        second["skill_id"], 2, "held-out-settings-v1", trials=10,
+        successes=0, partials=0, failures=10, unknown=0,
+        evidence_ids=["candidate-report"], evaluator="reviewed-evidence",
+    )
+    assert candidate["status"] == "regression_observed"
+    assert candidate["baseline"]["version"] == 1
+    assert candidate["automation_eligible"] is False
+    assert len(store.list_skill_evaluations(first["skill_id"])) == 2
+
+
+def test_skill_evaluation_requires_valid_counts_and_evidence(tmp_path: Path):
+    store = ExperienceStore(tmp_path / "learning.db")
+    draft = _accepted_skill(store)
+    version = store.publish_skill_draft(draft["draft_id"])
+    args = (version["skill_id"], 1, "suite")
+    with pytest.raises(ValueError, match="sum exactly"):
+        store.record_skill_evaluation(
+            *args, trials=10, successes=9, partials=0, failures=0, unknown=0,
+            evidence_ids=["report"],
+        )
+    with pytest.raises(ValueError, match="evidence"):
+        store.record_skill_evaluation(
+            *args, trials=10, successes=10, partials=0, failures=0, unknown=0,
+            evidence_ids=[],
+        )
+
+
+def test_skill_evaluation_with_unknown_only_is_insufficient(tmp_path: Path):
+    store = ExperienceStore(tmp_path / "learning.db")
+    draft = _accepted_skill(store)
+    version = store.publish_skill_draft(draft["draft_id"])
+    report = store.record_skill_evaluation(
+        version["skill_id"], 1, "suite", trials=10, successes=0,
+        partials=0, failures=0, unknown=10, evidence_ids=["unknown-outcome-log"],
+    )
+    assert report["status"] == "insufficient_data"
+    assert report["success_rate"] is None
+    assert report["automation_eligible"] is False
