@@ -1072,9 +1072,10 @@ function renderStatus(s){
  lastStatus=s;const running=s.status==="running",paused=s.observer_paused===true,features=s.features||{},health=s.provider_health||{},providers=Object.values(health),bad=providers.filter(p=>p.state==="degraded").length,deep=s.deep_inventory||{},alerts=Array.isArray(deep.posture_alerts)?deep.posture_alerts:[],restart=s.restart||{};
  if($("restartWatchState"))$("restartWatchState").textContent=restart.watch_status==="watching"?"AUTO RESTART / WATCHING":restart.watch_status==="disabled"?"AUTO RESTART / OFF":String(restart.watch_status||"CHECKING").replaceAll("_"," ").toUpperCase();
  if($("restartWatchDescription")){
-  $("restartWatchDescription").textContent=restart.reason
-   ?restart.reason+" · "+(restart.watch_status==="restart_pending"||restart.watch_status==="launching"?"Restart in progress.":"Last restart reason.")
-   :"Watches installed AIE Python modules every 2 seconds. Three stable snapshots are required before a code-update restart. It does not pull or install packages.";
+  const restartReason=restart.reason||restart.last_reason;
+  $("restartWatchDescription").textContent=restartReason
+   ?restartReason+" · "+(restart.watch_status==="restart_pending"||restart.watch_status==="launching"?"Restart in progress.":"Last restart reason.")
+   :"Watches installed AIE Python modules and collector settings every 2 seconds. Three stable snapshots are required before restart. It does not pull or install packages.";
  }
  $("liveBadge").innerHTML=restart.status==="scheduled"||restart.status==="restarting"
   ?'<i class="led" style="background:var(--amber);color:var(--amber)"></i>RESTARTING'
@@ -1228,7 +1229,9 @@ async function saveProfile(){
   $("profileNote").textContent=r.restart_scheduled
    ?"Saved. Sentinel is gracefully restarting to reinitialize the updated collectors. This dashboard will reconnect and reload automatically."
    :r.restart_required
-    ?"Saved. These sensor changes require a worker restart. Auto-restart is off; use RESTART in the header when ready."
+    ?r.restart_error
+     ?"Saved, but automatic restart could not be scheduled ("+r.restart_error+"). Use RESTART in the header."
+     :"Saved. These sensor changes require a worker restart. Auto-restart is off; use RESTART in the header when ready."
     :"Saved successfully. Scheduled collectors and automation rules will adopt these settings on the next observer cycle.";
   toast(r.restart_scheduled?"Profile saved · Sentinel restart scheduled. The dashboard will reconnect automatically.":"Sentinel feature profile saved.");
  }catch(e){
