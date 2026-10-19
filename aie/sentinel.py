@@ -625,7 +625,7 @@ def sentinel_dashboard() -> None:
     if not isinstance(base, str) or not base.startswith("http://127.0.0.1:"):
         console.print("[red]Loopback dashboard is unavailable.[/red]")
         raise typer.Exit(1)
-    url = f"{base}?token={_ensure_token()}"
+    url = f"{base}#token={_ensure_token()}"
     if not webbrowser.open(url, new=2):
         console.print(f"Open this local URL: {url}")
     else:
