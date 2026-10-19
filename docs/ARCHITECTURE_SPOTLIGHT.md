@@ -157,3 +157,22 @@ Feature complete = implementation + tests + documented limits + privacy/security
 
 ## Keep this page accurate
 Update this file and `docs/ROADMAP.md` with every implementation increment. Add ADRs for lasting design changes and record exact validation evidence.
+
+
+## Sentinel Prime operator console and task manager
+
+The Sentinel loopback dashboard now has eight operator workspaces: Command, System Intelligence, Telemetry, Evidence Vault, AI Laboratory, Feature Control, Task Manager and Knowledge Base. The visual layer is a self-contained HTML/CSS/JavaScript interface served by the authenticated loopback worker; it does not require a remote UI service or external font/image host.
+
+Feature Control separates:
+- The scheduled-work master switch from per-job enable switches.
+- Continuous sensor switches and sampling cadence (collector reinitialization requires a worker restart).
+- Scheduled inventory, registry, deep inventory, Microsoft knowledge and local AI jobs.
+- Event-triggered AI review rules.
+- Explicit opt-in Event Log, ETW, window-title and allowlisted UI Automation collection.
+- Local Ollama model selection and bounded knowledge crawler settings.
+
+The Task Manager reports real managed worker jobs, trigger origin, start/finish timestamps, duration and a rolling 60-entry run history. The history is preserved between worker starts. Provider-health metrics are shown as expandable internal tool records. The Windows process panel is a bounded inventory snapshot exposing process name, PID and start time only; it is not a process termination console. In-flight Python threads are allowed to finish. Disabling a feature prevents future scheduled runs, while Pause Watch gates observer-driven scheduling and Stop Worker performs a graceful worker shutdown.
+
+Ask Sentinel has a Maintenance & Settings Advisor mode. It receives the same bounded local evidence projection used by other Ask modes: internal/public events only, private fields recursively filtered, at most 20 records, and local Ollama inference. It may return proposed changes only for an allowlist of Sentinel profile booleans. Suggestions are evidence-ID filtered and staged into Feature Control for user review; they are not saved automatically. The advisor may explain manual Windows remediation but cannot emit shell scripts/registry edits or execute arbitrary operating-system actions. Privacy-sensitive collectors are not suggested for automatic enablement.
+
+Validation boundary: source-level wiring has been inspected. Target Windows 11 desktop runtime, visual usability, Ollama response quality and end-to-end feature-toggle behavior remain pending; do not infer those outcomes from this implementation alone.
