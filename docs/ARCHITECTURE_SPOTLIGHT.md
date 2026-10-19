@@ -2,7 +2,7 @@
 
 > Current project truth. Read before implementation and update with every milestone change.
 
-**Last updated:** 2026-10-11 | **Current feature branch:** `feat/agent-orchestration-core` | **Target integration:** `dev` | **Platform:** Windows 10/11 only
+**Last updated:** 2026-10-19 | **Current integration branch:** `dev` | **Platform:** Windows 10/11 only
 
 ## North star
 Build persistent personal intelligence that observes explicitly permitted signals, models context, reasons about goals, learns reusable skills and executes scoped actions safely. AGI remains a research objective, not a capability claim.
@@ -103,6 +103,20 @@ Build persistent personal intelligence that observes explicitly permitted signal
 - Approval and execution are separate operations. The execution gate remains disabled by default; no autonomous remediation is enabled.
 - These orchestration/execution additions currently live on `feat/agent-orchestration-core`; they are not represented as merged into `dev` until the pull request is reviewed and integrated.
 
+## Sentinel background runtime
+
+The first persistent Sentinel prototype is integrated on `dev`. It reuses AIE read-only Windows collectors and the local SQLite event store rather than introducing a second observation stack.
+
+- A detached per-user worker supports manual start/stop and an ONLOGON Task Scheduler entry using LIMITED, interactive-only permissions.
+- A named mutex prevents duplicate worker instances. Pause/resume reuse the global AIE observer pause marker; graceful stop is a worker stop file.
+- A local-only dashboard binds to 127.0.0.1. Its API requires a random per-user token and exposes provider health, system resources, event history and explicit pause/resume/stop controls.
+- A periodic Windows inventory snapshot includes bounded process identity, installed application metadata, service metadata, scheduled-task names/status and network-interface metadata. It does not collect process command lines, executable paths, uninstall commands, scheduled-task XML or network addresses.
+- Local Ollama inference runs a fast 4B triage pass followed sequentially by an independent 6B review when installed and memory headroom permits. Each stage releases its model afterwards. Model results are derived advisory evidence, not actions or policy.
+- ETW process lifecycle capture remains opt-in. The standard background task is deliberately least-privilege; it does not install a custom driver or promise always-on elevated kernel tracing.
+- The browser/video observer remains separately opt-in and uses its existing extension/native-host pipeline.
+
+Reference: [Sentinel Runtime](SENTINEL.md).
+
 ## Pending validation and implementation
 - Windows CI run [#581](https://github.com/AryanGupta-234/P1-/actions/runs/38123875398) passed on Python 3.11 and 3.12, including the current observer-health, ETW lifecycle/loss, task-session, dry-run governance and privacy-control tests.
 - Target-desktop Chrome/Edge extension/native-host installation and live playback validation.
@@ -118,7 +132,7 @@ Build persistent personal intelligence that observes explicitly permitted signal
 - OS-process sandboxing, rollback and automatic recovery for interrupted handlers.
 - Postcondition verification beyond explicit human checks; the fixed Settings URI adapter reports dispatch, not verified application state.
 - Tool-selection/plan-quality evaluation and held-out task-family benchmarks.
-- Windows tray/desktop assistant UI.
+- Validate the Sentinel worker, loopback console, Task Scheduler behavior, ETW privilege boundary, Windows inventory refresh and Ollama model residency on the target Windows 11 desktop.
 
 ## Immediate engineering sequence
 1. Validate browser/native-host, UIA, Event Log and ETW elevation/behavior on the target Windows desktop.
