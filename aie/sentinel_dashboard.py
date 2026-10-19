@@ -28,21 +28,21 @@ DASHBOARD_HTML = r"""<!doctype html>
 
 :root{
   color-scheme:dark;
-  --bg:#080b0c;
-  --bg2:#0d1112;
-  --panel:#121819;
-  --panel2:#171f20;
-  --line:#2a3735;
-  --line2:#405149;
-  --text:#e4e9e3;
-  --soft:#b5c0b9;
-  --muted:#718079;
-  --orange:#ff6b38;
-  --orange2:#c94c2c;
-  --lime:#b8e65b;
+  --bg:#111722;
+  --bg2:#151a24;
+  --panel:#1c2431;
+  --panel2:#242f3f;
+  --line:#263243;
+  --line2:#354357;
+  --text:#f1f5f9;
+  --soft:#b8c5d5;
+  --muted:#8798ad;
+  --orange:#77b7ff;
+  --orange2:#3979b8;
+  --lime:#77b7ff;
   --red:#f05252;
   --amber:#eab45e;
-  --green:#7cd59c;
+  --green:#7cc6a2;
   --display:"Segoe UI Variable Display","Aptos Display","Segoe UI",Arial,sans-serif;
   --mono:"Cascadia Code","Consolas",monospace;
   --radius:22px;

@@ -69,6 +69,8 @@
                                FontSize="12" Foreground="{StaticResource TextMutedBrush}" Margin="0,6,0,0"/>
                 </StackPanel>
                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Button x:Name="AdminModeButton" Content="Relaunch as administrator" Margin="0,0,10,0" Click="AdminMode_Click"/>
+                    <Button Content="Open Sentinel cockpit" Margin="0,0,10,0" Click="OpenSentinelDashboard_Click"/>
                     <Border Background="#FF1C2C3B" BorderBrush="#FF31516F" BorderThickness="1" CornerRadius="14" Padding="11,7" Margin="0,0,10,0">
                         <StackPanel Orientation="Horizontal">
                             <Ellipse Width="7" Height="7" Fill="#FF7CC6A2" VerticalAlignment="Center" Margin="0,0,7,0"/>
@@ -150,6 +152,25 @@
                                     <TextBlock Text="No action capabilities are granted by this dashboard."
                                                VerticalAlignment="Center" FontSize="10" Foreground="{StaticResource TextMutedBrush}" Margin="12,0,0,0"/>
                                 </StackPanel>
+                            </StackPanel>
+                        </Border>
+
+                        <Border Background="{StaticResource PanelBrush}" CornerRadius="14" Padding="19" Margin="0,0,0,14">
+                            <StackPanel>
+                                <TextBlock Text="Ask the shared assistant" Style="{StaticResource SectionTitle}"/>
+                                <TextBlock Text="Choose installed Ollama for local inference or Groq Llama 3.3 70B for remote inference. This request sends only the text below; live activity and memory are not attached."
+                                           TextWrapping="Wrap" FontSize="11" Foreground="{StaticResource TextMutedBrush}" Margin="0,0,0,12"/>
+                                <TextBox x:Name="AskInput" Height="62" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"
+                                         ToolTip="Ask a question"/>
+                                <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                                    <ComboBox x:Name="AskProvider" Width="190" SelectedIndex="0" Margin="0,0,9,0">
+                                        <ComboBoxItem Content="Local Ollama" Tag="local"/>
+                                        <ComboBoxItem Content="Groq · Llama 3.3 70B" Tag="groq"/>
+                                    </ComboBox>
+                                    <Button x:Name="AskButton" Content="Ask assistant" Style="{StaticResource PrimaryButton}" Click="AskAssistant_Click"/>
+                                </StackPanel>
+                                <TextBox x:Name="AskOutput" Height="110" IsReadOnly="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"
+                                         FontFamily="Cascadia Mono" FontSize="10" Margin="0,10,0,0"/>
                             </StackPanel>
                         </Border>
 

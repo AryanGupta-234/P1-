@@ -759,7 +759,7 @@ def delete_all_events(
 def ask(
     prompt: str = typer.Argument(..., help="Prompt to send to the model."),
     task: Literal["routine", "complex"] = typer.Option("routine", help="Choose the reasoning tier."),
-    provider: Literal["local", "cloud"] = typer.Option("local", help="Select local Ollama or explicitly enabled cloud inference."),
+    provider: Literal["local", "cloud", "groq"] = typer.Option("local", help="Select local Ollama, configured cloud, or Groq Llama 3.3 70B."),
     allow_remote_ollama: bool = typer.Option(
         False,
         "--allow-remote-ollama",
@@ -814,7 +814,7 @@ def ask(
     from aie.models.router import LocalModelRouter
 
     memory_ids: tuple[str, ...] = ()
-    remote_selected = provider == "cloud" or allow_remote_ollama
+    remote_selected = provider in {"cloud", "groq"} or allow_remote_ollama
     if with_activity and remote_selected and not confirm_activity_egress:
         console.print("[red]Attaching activity context to a remote model needs --confirm-activity-egress.[/red]")
         raise typer.Exit(2)
@@ -912,10 +912,10 @@ def ask(
             decision = gateway.prepare(
                 request,
                 RemoteEgressContext(
-                    channel="cloud" if provider == "cloud" else "remote_ollama",
+                    channel="cloud" if provider in {"cloud", "groq"} else "remote_ollama",
                     allow_egress=(
                         allow_cloud_egress
-                        if provider == "cloud"
+                        if provider in {"cloud", "groq"}
                         else allow_remote_ollama
                     ),
                     activity_attached=with_activity,
@@ -930,17 +930,19 @@ def ask(
             prepared_request = decision.request
             egress_redactions = decision.redactions
 
-        if provider == "cloud":
-            from aie.models.openai_compatible import OpenAICompatibleClient
+        if provider in {"cloud", "groq"}:
+            from aie.models.openai_compatible import GroqClient, OpenAICompatibleClient
 
-            cloud_client = OpenAICompatibleClient(
-                allow_cloud_egress=allow_cloud_egress,
+            cloud_client = (
+                GroqClient(allow_cloud_egress=allow_cloud_egress)
+                if provider == "groq"
+                else OpenAICompatibleClient(allow_cloud_egress=allow_cloud_egress)
             )
             response = cloud_client.chat(prepared_request)
         else:
             if allow_cloud_egress:
                 raise ValueError(
-                    "--allow-cloud-egress is only meaningful with --provider cloud."
+                    "--allow-cloud-egress is only meaningful with --provider cloud or groq."
                 )
             client = OllamaClient(allow_remote=allow_remote_ollama)
             response = LocalModelRouter(client).generate(prepared_request)

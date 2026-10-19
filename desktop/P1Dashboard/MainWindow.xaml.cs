@@ -1,4 +1,6 @@
 using System.IO;
+using System.Diagnostics;
+using System.Security.Principal;
 using System.Text.RegularExpressions;
 using System.Windows;
 using System.Windows.Controls;
@@ -14,6 +16,11 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        if (new WindowsPrincipal(WindowsIdentity.GetCurrent()).IsInRole(WindowsBuiltInRole.Administrator))
+        {
+            AdminModeButton.Content = "Administrator session active";
+            AdminModeButton.IsEnabled = false;
+        }
         Loaded += MainWindow_Loaded;
         Closed += (_, _) => _lifetime.Cancel();
     }
@@ -130,6 +137,77 @@ public partial class MainWindow : Window
     private async void Refresh_Click(object sender, RoutedEventArgs e)
     {
         await RefreshDashboardAsync();
+    }
+
+    private async void OpenSentinelDashboard_Click(object sender, RoutedEventArgs e)
+    {
+        var result = await InvokeAsync("sentinel", "dashboard");
+        if (result is { Succeeded: true })
+        {
+            FooterStatus.Text = "P1 Sentinel cockpit opened with live telemetry, system inventory, evidence and worker activity.";
+        }
+    }
+
+    private async void AskAssistant_Click(object sender, RoutedEventArgs e)
+    {
+        var prompt = AskInput.Text.Trim();
+        if (prompt.Length is < 1 or > 4000)
+        {
+            AskOutput.Text = "Enter a prompt between 1 and 4,000 characters.";
+            return;
+        }
+
+        var selected = AskProvider.SelectedItem as ComboBoxItem;
+        var provider = selected?.Tag?.ToString() ?? "local";
+        var arguments = new List<string> { "ask", prompt, "--provider", provider };
+        if (provider == "groq")
+        {
+            arguments.Add("--allow-cloud-egress");
+        }
+
+        AskButton.IsEnabled = false;
+        AskOutput.Text = provider == "groq" ? "Sending prompt to Groq…" : "Asking local Ollama…";
+        try
+        {
+            var result = await _cli.RunAsync(arguments, _lifetime.Token);
+            AskOutput.Text = result.CombinedOutput;
+            FooterStatus.Text = result.Succeeded
+                ? $"Assistant replied using {provider}."
+                : $"Assistant request failed (exit {result.ExitCode}).";
+        }
+        catch (Exception exception)
+        {
+            AskOutput.Text = $"{exception.GetType().Name}: {exception.Message}";
+            FooterStatus.Text = "Assistant request failed.";
+        }
+        finally
+        {
+            AskButton.IsEnabled = true;
+        }
+    }
+
+    private void AdminMode_Click(object sender, RoutedEventArgs e)
+    {
+        var executable = Environment.ProcessPath;
+        if (string.IsNullOrWhiteSpace(executable))
+        {
+            FooterStatus.Text = "Could not locate the P1- executable for an elevated restart.";
+            return;
+        }
+
+        try
+        {
+            Process.Start(new ProcessStartInfo(executable) { UseShellExecute = true, Verb = "runas" });
+            Application.Current.Shutdown();
+        }
+        catch (System.ComponentModel.Win32Exception exception) when (exception.NativeErrorCode == 1223)
+        {
+            FooterStatus.Text = "Administrator restart cancelled at the Windows UAC prompt.";
+        }
+        catch (Exception exception)
+        {
+            FooterStatus.Text = $"Could not start administrator session: {exception.Message}";
+        }
     }
 
     private async void RunAgent_Click(object sender, RoutedEventArgs e)

@@ -133,3 +133,19 @@ class OpenAICompatibleClient:
             local_inference=False,
             provider="openai-compatible",
         )
+
+
+class GroqClient(OpenAICompatibleClient):
+    """Groq's OpenAI-compatible API with a known model and explicit egress opt-in."""
+
+    def __init__(self, *, allow_cloud_egress: bool = False) -> None:
+        super().__init__(
+            allow_cloud_egress=allow_cloud_egress,
+            base_url="https://api.groq.com/openai/v1",
+            api_key=os.environ.get("GROQ_API_KEY", ""),
+            model=os.environ.get("GROQ_MODEL", "llama-3.3-70b-versatile"),
+        )
+
+    def chat(self, request: ModelRequest) -> ModelResponse:
+        response = super().chat(request)
+        return response.model_copy(update={"provider": "groq"})

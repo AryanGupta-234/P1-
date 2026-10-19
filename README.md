@@ -57,6 +57,10 @@ python -m ruff check .
 ```
 Foundation works without models or internet. Local events are stored under `%LOCALAPPDATA%\AIE`.
 
+### Groq and local Ollama
+
+`aie ask` defaults to the hardware-aware local Ollama router. For an explicitly remote request, set `GROQ_API_KEY` in the current user environment and run `aie ask "your prompt" --provider groq --allow-cloud-egress`. Groq uses `llama-3.3-70b-versatile` by default; set `GROQ_MODEL` to select another available Groq model. Remote requests pass through the same egress audit and redaction gateway as the configured OpenAI-compatible provider. Activity, memory and session context each require their own explicit confirmation before they can be attached to a remote request. Never put API keys in source files or command arguments.
+
 ## Persistent Sentinel agent
 Install the background observer for the current Windows user, then open the live local console:
 
