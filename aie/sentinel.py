@@ -391,6 +391,12 @@ def _ensure_token() -> str:
 
 def _worker() -> None:
     _require_windows()
+    handoff_state = _read_state()
+    parent_pid = handoff_state.get("restart_parent_pid")
+    if isinstance(parent_pid, int) and not isinstance(parent_pid, bool) and parent_pid > 0:
+        deadline = time.monotonic() + 30.0
+        while _pid_is_sentinel(parent_pid) and time.monotonic() < deadline:
+            time.sleep(0.1)
     mutex = _acquire_mutex()
     if mutex is None:
         return
@@ -1483,6 +1489,7 @@ def _worker() -> None:
             state["stopped_at"] = _now()
             state["heartbeat_at"] = _now()
             if restart_requested:
+                state["restart_parent_pid"] = os.getpid()
                 previous_info = state.get("restart", {})
                 state["restart"] = {
                     **(previous_info if isinstance(previous_info, dict) else {}),
