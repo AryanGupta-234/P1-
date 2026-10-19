@@ -591,6 +591,10 @@ def make_dashboard_server(
                         raise RuntimeError("profile provider unavailable")
                     config = config_loader()
                     fields = (
+                        "automation_enabled", "inventory_enabled", "inventory_interval_seconds",
+                        "sample_interval_seconds", "network_interval_seconds",
+                        "process_resource_interval_seconds", "include_network",
+                        "include_foreground", "include_process_resources",
                         "registry_enabled", "deep_inventory_enabled", "knowledge_enabled",
                         "ai_enabled", "registry_interval_seconds",
                         "deep_inventory_interval_seconds", "knowledge_interval_seconds",
@@ -598,6 +602,8 @@ def make_dashboard_server(
                         "auto_review_on_registry_changes", "low_disk_alert_percent",
                         "low_battery_alert_percent", "include_event_logs",
                         "include_etw", "include_window_titles", "ui_tree_apps",
+                        "knowledge_learn_top_per_query", "knowledge_github_files_per_repo",
+                        "fast_model", "deep_model",
                     )
                     self._json(200, {"profile": {key: config[key] for key in fields}})
                 except (OSError, RuntimeError, ValueError):
@@ -808,11 +814,19 @@ def make_dashboard_server(
                     self._json(400, {"error": "profile values are required"})
                     return
                 boolean_fields = {
+                    "automation_enabled", "inventory_enabled",
+                    "include_network", "include_foreground", "include_process_resources",
                     "registry_enabled", "deep_inventory_enabled", "knowledge_enabled", "ai_enabled",
                     "auto_review_on_posture_alerts", "auto_review_on_registry_changes",
                     "include_event_logs", "include_etw", "include_window_titles",
                 }
                 integer_ranges = {
+                    "sample_interval_seconds": (1, 30),
+                    "network_interval_seconds": (5, 300),
+                    "process_resource_interval_seconds": (2, 300),
+                    "inventory_interval_seconds": (300, 7200),
+                    "knowledge_learn_top_per_query": (1, 10),
+                    "knowledge_github_files_per_repo": (1, 20),
                     "registry_interval_seconds": (60, 3600),
                     "deep_inventory_interval_seconds": (300, 7200),
                     "knowledge_interval_seconds": (3600, 604800),
@@ -820,7 +834,8 @@ def make_dashboard_server(
                     "low_disk_alert_percent": (1, 30),
                     "low_battery_alert_percent": (5, 40),
                 }
-                if any(key not in boolean_fields and key not in integer_ranges and key != "ui_tree_apps" for key in values):
+                model_fields = {"fast_model", "deep_model"}
+                if any(key not in boolean_fields and key not in integer_ranges and key not in model_fields and key != "ui_tree_apps" for key in values):
                     self._json(400, {"error": "profile contains an unsupported setting"})
                     return
                 if "ui_tree_apps" in values:
@@ -840,14 +855,20 @@ def make_dashboard_server(
                 for key, value in values.items():
                     if key == "ui_tree_apps":
                         continue
-                    if key in boolean_fields:
+                    if key in model_fields:
+                        if value is not None and (
+                            not isinstance(value, str) or not value.strip() or len(value) > 200
+                        ):
+                            self._json(400, {"error": "model setting must be null or an installed model tag"})
+                            return
+                    elif key in boolean_fields:
                         if not isinstance(value, bool):
                             self._json(400, {"error": "boolean setting has an invalid value"})
                             return
                     else:
                         minimum, maximum = integer_ranges[key]
                         if isinstance(value, bool) or not isinstance(value, int) or not minimum <= value <= maximum:
-                            self._json(400, {"error": "interval is outside its supported range"})
+                            self._json(400, {"error": "numeric setting is outside its supported range"})
                             return
                 try:
                     if config_loader is None or config_saver is None:
@@ -855,7 +876,7 @@ def make_dashboard_server(
                     config = config_loader()
                     config.update(values)
                     config_saver(config)
-                    fields = tuple(boolean_fields | set(integer_ranges) | {"ui_tree_apps"})
+                    fields = tuple(boolean_fields | set(integer_ranges) | model_fields | {"ui_tree_apps"})
                     self._json(200, {"saved": True, "profile": {key: config[key] for key in fields}})
                 except (OSError, RuntimeError, ValueError):
                     self._json(503, {"error": "Unable to save the Sentinel profile"})
@@ -870,19 +891,27 @@ def make_dashboard_server(
                 if not isinstance(action, str) or action not in allowed or command_queue is None:
                     self._json(400, {"error": "unsupported command"})
                     return
-                if action in {"ai_review_now", "knowledge_crawl_now", "registry_scan_now"}:
+                required_flags = {
+                    "deep_scan_now": "deep_inventory_enabled",
+                    "ai_review_now": "ai_enabled",
+                    "knowledge_crawl_now": "knowledge_enabled",
+                    "registry_scan_now": "registry_enabled",
+                }
+                if action in set(required_flags) | {"scan_now"}:
                     try:
                         active_profile = config_loader() if config_loader is not None else {}
                     except (OSError, RuntimeError, ValueError):
                         self._json(503, {"error": "Sentinel profile is unavailable"})
                         return
-                    required_flag = {
-                        "ai_review_now": "ai_enabled",
-                        "knowledge_crawl_now": "knowledge_enabled",
-                        "registry_scan_now": "registry_enabled",
-                    }[action]
-                    if active_profile.get(required_flag) is not True:
+                    required_flag = required_flags.get(action)
+                    if required_flag and active_profile.get(required_flag) is not True:
                         self._json(409, {"error": required_flag.replace("_", " ") + " is disabled in the current profile"})
+                        return
+                    if action == "scan_now" and not any(
+                        active_profile.get(key) is True
+                        for key in ("inventory_enabled", "deep_inventory_enabled", "registry_enabled")
+                    ):
+                        self._json(409, {"error": "All system inventory collectors are disabled in the current profile"})
                         return
                 try:
                     command_queue.put_nowait(action)
