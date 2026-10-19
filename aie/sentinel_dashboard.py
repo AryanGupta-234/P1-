@@ -21,6 +21,10 @@ DASHBOARD_HTML = r"""<!doctype html>
 <meta name="color-scheme" content="dark">
 <title>SENTINEL // AIE</title>
 <style>
+.core-eye{width:78px;height:78px;transform:none;position:relative;clip-path:polygon(50% 0,88% 12%,100% 42%,87% 83%,50% 100%,13% 83%,0 42%,12% 12%);border:2px solid #7feaff;background:linear-gradient(155deg,#4a7184 0%,#1a3447 30%,#081725 75%);box-shadow:0 0 30px #53e4f277,inset 0 0 20px #ff647633}
+.core-eye:before{content:"";position:absolute;left:15%;right:15%;top:16%;height:18%;background:linear-gradient(90deg,#ff6a7e,#8eeeff 48%,#ff6a7e);clip-path:polygon(0 0,100% 0,82% 100%,18% 100%);opacity:.92}
+.core-eye:after{content:"";position:absolute;left:26%;right:26%;bottom:10%;height:19%;background:linear-gradient(90deg,#ff6476,#304f64,#ff6476);clip-path:polygon(0 0,100% 0,72% 100%,28% 100%);border:1px solid #ff6376}
+.core-eye span{position:relative;z-index:1;width:22px;height:22px;transform:none;border:3px solid #eaffff;background:radial-gradient(circle,#fff 0,#70edff 38%,#1686a2 75%);box-shadow:0 0 24px #6cefff,0 0 42px #ff526d66}
 :root{--bg:#070c15;--panel:#0d1725;--panel2:#101e2e;--line:#20334a;--ink:#e7f2ff;--muted:#8195aa;--cyan:#53e4f2;--blue:#4e9eff;--amber:#ffbd69;--green:#5de0b0;--red:#ff657f;--radius:18px}
 *{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:radial-gradient(ellipse at 67% -12%,#16304a 0,transparent 43%),linear-gradient(145deg,#070c15,#091321 65%,#09101a);color:var(--ink);font:14px/1.5 "Segoe UI",Inter,system-ui,sans-serif;min-height:100vh}
 body:before{content:"";position:fixed;inset:0;pointer-events:none;opacity:.16;background-image:linear-gradient(#3e7890 1px,transparent 1px),linear-gradient(90deg,#3e7890 1px,transparent 1px);background-size:48px 48px;mask-image:linear-gradient(to bottom,black,transparent 72%)}
@@ -284,7 +288,7 @@ function renderDeepDiagnostics(status){
  $("metricDrivers").textContent=deep.system_driver_count??"—";
  $("metricPnp").textContent=deep.pnp_device_count??"—";
  $("metricFirewall").textContent=deep.firewall_profile_count??"—";
- $("metricBuild").textContent=osInfo.BuildNumber||"—";
+ $("metricBuild").textContent=[osInfo.Caption,osInfo.BuildNumber].filter(Boolean).join(" · ")||"—";
  const disks=$("diskList");disks.replaceChildren();
  const diskItems=Array.isArray(deep.disks)?deep.disks:[];
  if(!diskItems.length)disks.append(create("div","panel-sub","Disk inventory will appear after the next CIM scan."));
@@ -732,7 +736,7 @@ def make_dashboard_server(
                     "scan_now", "deep_scan_now", "registry_scan_now",
                     "ai_review_now", "knowledge_crawl_now",
                 }
-                if action not in allowed or command_queue is None:
+                if not isinstance(action, str) or action not in allowed or command_queue is None:
                     self._json(400, {"error": "unsupported command"})
                     return
                 try:
