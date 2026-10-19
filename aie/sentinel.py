@@ -458,6 +458,8 @@ def _worker() -> None:
         "status": "scheduled" if config["inventory_enabled"] else "disabled",
         "last_snapshot_at": None,
     }
+    state["tasks"] = {}
+    state["task_history"] = []
 
     def update_inventory() -> None:
         nonlocal inventory_thread
@@ -945,6 +947,68 @@ def _worker() -> None:
             ai_lock.release()
             ai_thread = None
 
+    task_sequence = 0
+    task_labels = {
+        "inventory": ("System inventory", "inventory"),
+        "registry": ("Registry intelligence", "registry"),
+        "deep_inventory": ("Deep Windows inventory", "deep_inventory"),
+        "knowledge": ("Microsoft knowledge sync", "knowledge"),
+        "ai_review": ("Local AI evidence review", "ai"),
+    }
+
+    def managed_task_thread(
+        key: str,
+        trigger: str,
+        target: Any,
+        thread_name: str,
+    ) -> threading.Thread:
+        nonlocal task_sequence
+        task_sequence += 1
+        label, result_key = task_labels[key]
+        task_id = f"{key}-{task_sequence}"
+
+        def run() -> None:
+            started_mono = time.monotonic()
+            record: dict[str, Any] = {
+                "id": task_id,
+                "key": key,
+                "name": label,
+                "status": "running",
+                "trigger": trigger,
+                "started_at": _now(),
+                "finished_at": None,
+                "duration_seconds": None,
+            }
+            with state_lock:
+                tasks = state.setdefault("tasks", {})
+                tasks[key] = record.copy()
+                _write_state(state)
+            try:
+                target()
+            except Exception as exc:  # noqa: BLE001 - a failed job must not stop the observer.
+                record["status"] = "failed"
+                record["error_type"] = type(exc).__name__
+            else:
+                domain_state = state.get(result_key, {})
+                domain_status = domain_state.get("status") if isinstance(domain_state, dict) else None
+                record["status"] = (
+                    "completed_with_warnings"
+                    if domain_status in {"degraded", "partial", "unavailable"}
+                    else "completed"
+                )
+            finally:
+                record["finished_at"] = _now()
+                record["duration_seconds"] = round(time.monotonic() - started_mono, 2)
+                with state_lock:
+                    tasks = state.setdefault("tasks", {})
+                    tasks[key] = record.copy()
+                    history = state.setdefault("task_history", [])
+                    history.append(record.copy())
+                    state["task_history"] = history[-60:]
+                    _write_state(state)
+
+        return threading.Thread(target=run, name=thread_name, daemon=True)
+
     def on_cycle(cycle: dict[str, object]) -> None:
         nonlocal next_analysis, last_count_update, last_cycle_event, next_inventory, next_registry, next_deep_inventory, next_knowledge
         nonlocal ai_thread, inventory_thread, registry_thread, deep_inventory_thread, knowledge_thread
@@ -1027,44 +1091,39 @@ def _worker() -> None:
             started_actions: list[str] = []
             deferred_actions: list[str] = []
             if action in {"scan_now", "deep_scan_now"} and config["deep_inventory_enabled"] and deep_inventory_lock.acquire(blocking=False):
-                deep_inventory_thread = threading.Thread(
-                    target=update_deep_inventory,
-                    name="aie-sentinel-deep-scan-on-demand",
-                    daemon=True,
+                deep_inventory_thread = managed_task_thread(
+                    "deep_inventory", "manual command", update_deep_inventory,
+                    "aie-sentinel-deep-scan-on-demand",
                 )
                 deep_inventory_thread.start()
                 started_actions.append("deep_inventory")
             if action == "scan_now" and config["inventory_enabled"] and inventory_lock.acquire(blocking=False):
-                inventory_thread = threading.Thread(
-                    target=update_inventory,
-                    name="aie-sentinel-inventory-on-demand",
-                    daemon=True,
+                inventory_thread = managed_task_thread(
+                    "inventory", "manual command", update_inventory,
+                    "aie-sentinel-inventory-on-demand",
                 )
                 inventory_thread.start()
                 started_actions.append("system_inventory")
             if action in {"scan_now", "registry_scan_now"} and config["registry_enabled"] and registry_lock.acquire(blocking=False):
-                registry_thread = threading.Thread(
-                    target=update_registry,
-                    name="aie-sentinel-registry-scan-on-demand",
-                    daemon=True,
+                registry_thread = managed_task_thread(
+                    "registry", "manual command", update_registry,
+                    "aie-sentinel-registry-scan-on-demand",
                 )
                 registry_thread.start()
                 started_actions.append("registry")
             if action == "knowledge_crawl_now" and config["knowledge_enabled"] and knowledge_lock.acquire(blocking=False):
-                knowledge_thread = threading.Thread(
-                    target=update_knowledge,
-                    name="aie-sentinel-knowledge-crawl-on-demand",
-                    daemon=True,
+                knowledge_thread = managed_task_thread(
+                    "knowledge", "manual command", update_knowledge,
+                    "aie-sentinel-knowledge-crawl-on-demand",
                 )
                 knowledge_thread.start()
                 started_actions.append("knowledge_crawl")
             if action == "ai_review_now" and config["ai_enabled"]:
                 if ai_lock.acquire(blocking=False):
                     next_analysis = now_mono + int(config["analysis_interval_seconds"])
-                    ai_thread = threading.Thread(
-                        target=update_ai,
-                        name="aie-sentinel-ai-review-on-demand",
-                        daemon=True,
+                    ai_thread = managed_task_thread(
+                        "ai_review", "manual command", update_ai,
+                        "aie-sentinel-ai-review-on-demand",
                     )
                     ai_thread.start()
                     started_actions.append("ai_review")
@@ -1115,40 +1174,36 @@ def _worker() -> None:
             and inventory_lock.acquire(blocking=False)
         ):
             next_inventory = now_mono + int(config["inventory_interval_seconds"])
-            inventory_thread = threading.Thread(
-                target=update_inventory,
-                name="aie-sentinel-windows-inventory",
-                daemon=True,
+            inventory_thread = managed_task_thread(
+                "inventory", "scheduled", update_inventory,
+                "aie-sentinel-windows-inventory",
             )
             inventory_thread.start()
 
         if cycle.get("status") == "running" and config["automation_enabled"] and config["registry_enabled"] and registry_provider is not None:
             if now_mono >= next_registry and registry_lock.acquire(blocking=False):
                 next_registry = now_mono + int(config["registry_interval_seconds"])
-                registry_thread = threading.Thread(
-                    target=update_registry,
-                    name="aie-sentinel-registry-observer",
-                    daemon=True,
+                registry_thread = managed_task_thread(
+                    "registry", "scheduled", update_registry,
+                    "aie-sentinel-registry-observer",
                 )
                 registry_thread.start()
 
         if cycle.get("status") == "running" and config["automation_enabled"] and config["deep_inventory_enabled"]:
             if now_mono >= next_deep_inventory and deep_inventory_lock.acquire(blocking=False):
                 next_deep_inventory = now_mono + int(config["deep_inventory_interval_seconds"])
-                deep_inventory_thread = threading.Thread(
-                    target=update_deep_inventory,
-                    name="aie-sentinel-deep-windows-inventory",
-                    daemon=True,
+                deep_inventory_thread = managed_task_thread(
+                    "deep_inventory", "scheduled", update_deep_inventory,
+                    "aie-sentinel-deep-windows-inventory",
                 )
                 deep_inventory_thread.start()
 
         if cycle.get("status") == "running" and config["automation_enabled"] and config["knowledge_enabled"]:
             if now_mono >= next_knowledge and knowledge_lock.acquire(blocking=False):
                 next_knowledge = now_mono + int(config["knowledge_interval_seconds"])
-                knowledge_thread = threading.Thread(
-                    target=update_knowledge,
-                    name="aie-sentinel-microsoft-knowledge-crawler",
-                    daemon=True,
+                knowledge_thread = managed_task_thread(
+                    "knowledge", "scheduled", update_knowledge,
+                    "aie-sentinel-microsoft-knowledge-crawler",
                 )
                 knowledge_thread.start()
 
@@ -1160,10 +1215,9 @@ def _worker() -> None:
             and ai_lock.acquire(blocking=False)
         ):
             next_analysis = now_mono + int(config["analysis_interval_seconds"])
-            ai_thread = threading.Thread(
-                target=update_ai,
-                name="aie-sentinel-local-model-review",
-                daemon=True,
+            ai_thread = managed_task_thread(
+                "ai_review", "scheduled", update_ai,
+                "aie-sentinel-local-model-review",
             )
             ai_thread.start()
 
