@@ -434,7 +434,7 @@ def _worker() -> None:
             ai_thread = None
 
     def on_cycle(cycle: dict[str, object]) -> None:
-        nonlocal next_analysis, last_count_update, last_cycle_event, ai_thread
+        nonlocal next_analysis, last_count_update, last_cycle_event, next_inventory, ai_thread, inventory_thread
         now_mono = time.monotonic()
         with state_lock:
             state["status"] = "running"
