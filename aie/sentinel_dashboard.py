@@ -549,7 +549,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
        </div>
        <div class="control-group-title">Sampling cadence</div>
        <div class="interval-grid">
-        <div class="interval"><label for="cfgSampleInterval">OBSERVER SAMPLE / SECONDS</label><input id="cfgSampleInterval" type="number" min="1" max="30" step="1"></div>
+        <div class="interval"><label for="cfgSampleInterval">OBSERVER SAMPLE / SECONDS</label><input id="cfgSampleInterval" type="number" min="0.5" max="30" step="0.5"></div>
         <div class="interval"><label for="cfgNetworkInterval">NETWORK SAMPLE / SECONDS</label><input id="cfgNetworkInterval" type="number" min="5" max="300" step="5"></div>
         <div class="interval"><label for="cfgProcessInterval">PROCESS SAMPLE / SECONDS</label><input id="cfgProcessInterval" type="number" min="2" max="300" step="1"></div>
        </div>
@@ -838,12 +838,12 @@ function applyPreset(name){
  toast(name.toUpperCase()+" preset loaded. Save settings to apply.");
 }
 async function saveProfile(){
- const integer=id=>Number.parseInt($(id).value,10);
+ const integer=id=>Number.parseInt($(id).value,10),numeric=id=>Number.parseFloat($(id).value);
  const appAllowlist=$("cfgUITreeApps").value.split(",").map(x=>x.trim().toLowerCase()).filter(Boolean);
  const values={
   automation_enabled:$("cfgAutomation").checked,inventory_enabled:$("cfgInventory").checked,
   include_network:$("cfgNetwork").checked,include_foreground:$("cfgForeground").checked,include_process_resources:$("cfgProcessResources").checked,
-  sample_interval_seconds:integer("cfgSampleInterval"),network_interval_seconds:integer("cfgNetworkInterval"),process_resource_interval_seconds:integer("cfgProcessInterval"),
+  sample_interval_seconds:numeric("cfgSampleInterval"),network_interval_seconds:integer("cfgNetworkInterval"),process_resource_interval_seconds:integer("cfgProcessInterval"),
   inventory_interval_seconds:integer("cfgInventoryInterval")*60,
   registry_enabled:$("cfgRegistry").checked,deep_inventory_enabled:$("cfgDeep").checked,knowledge_enabled:$("cfgKnowledge").checked,ai_enabled:$("cfgAI").checked,
   auto_review_on_posture_alerts:$("cfgPostureReview").checked,auto_review_on_registry_changes:$("cfgRegistryReview").checked,
@@ -1435,8 +1435,8 @@ def make_dashboard_server(
                     "auto_review_on_posture_alerts", "auto_review_on_registry_changes",
                     "include_event_logs", "include_etw", "include_window_titles",
                 }
+                float_ranges = {"sample_interval_seconds": (0.5, 30.0)}
                 integer_ranges = {
-                    "sample_interval_seconds": (1, 30),
                     "network_interval_seconds": (5, 300),
                     "process_resource_interval_seconds": (2, 300),
                     "inventory_interval_seconds": (300, 7200),
@@ -1450,7 +1450,7 @@ def make_dashboard_server(
                     "low_battery_alert_percent": (5, 40),
                 }
                 model_fields = {"fast_model", "deep_model"}
-                if any(key not in boolean_fields and key not in integer_ranges and key not in model_fields and key != "ui_tree_apps" for key in values):
+                if any(key not in boolean_fields and key not in integer_ranges and key not in float_ranges and key not in model_fields and key != "ui_tree_apps" for key in values):
                     self._json(400, {"error": "profile contains an unsupported setting"})
                     return
                 if "ui_tree_apps" in values:
@@ -1483,6 +1483,11 @@ def make_dashboard_server(
                         if not isinstance(value, bool):
                             self._json(400, {"error": "boolean setting has an invalid value"})
                             return
+                    elif key in float_ranges:
+                        minimum, maximum = float_ranges[key]
+                        if isinstance(value, bool) or not isinstance(value, (int, float)) or not minimum <= value <= maximum:
+                            self._json(400, {"error": "sampling interval is outside its supported range"})
+                            return
                     else:
                         minimum, maximum = integer_ranges[key]
                         if isinstance(value, bool) or not isinstance(value, int) or not minimum <= value <= maximum:
@@ -1494,7 +1499,7 @@ def make_dashboard_server(
                     config = config_loader()
                     config.update(values)
                     config_saver(config)
-                    fields = tuple(boolean_fields | set(integer_ranges) | model_fields | {"ui_tree_apps"})
+                    fields = tuple(boolean_fields | set(integer_ranges) | set(float_ranges) | model_fields | {"ui_tree_apps"})
                     self._json(200, {"saved": True, "profile": {key: config[key] for key in fields}})
                 except (OSError, RuntimeError, ValueError):
                     self._json(503, {"error": "Unable to save the Sentinel profile"})
