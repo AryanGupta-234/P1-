@@ -5,6 +5,7 @@ import hmac
 import json
 import queue
 import re
+import sqlite3
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -550,6 +551,12 @@ def _event_payload(event: Any) -> dict[str, Any] | None:
     }
 
 
+def _latest_event(db_path: Path, event_type: str) -> Any | None:
+    """Fetch the newest matching event through the indexed event-type query."""
+    matches = EventStore(db_path).query_events(event_types=(event_type,), limit=1)
+    return matches[0] if matches else None
+
+
 def make_dashboard_server(
     *,
     token: str,
@@ -642,13 +649,7 @@ def make_dashboard_server(
             if parsed.path == "/api/drivers":
                 try:
                     query = parse_qs(parsed.query).get("q", [""])[0].strip().casefold()[:100]
-                    latest = next(
-                        (
-                            event for event in EventStore(db_path).recent(1000)
-                            if event.event_type == "windows.deep_inventory"
-                        ),
-                        None,
-                    )
+                    latest = _latest_event(db_path, "windows.deep_inventory")
                     if latest is None:
                         self._json(200, {"snapshot_at": None, "total": 0, "drivers": []})
                         return
@@ -676,7 +677,7 @@ def make_dashboard_server(
                         "matched": len(drivers),
                         "drivers": drivers[:80],
                     })
-                except (OSError, ValueError):
+                except (OSError, ValueError, sqlite3.Error):
                     self._json(503, {"error": "Local driver inventory is unavailable"})
                 return
             if parsed.path == "/api/catalog":
@@ -695,13 +696,7 @@ def make_dashboard_server(
                         return
                     query = params.get("q", [""])[0].strip().casefold()[:100]
                     limit = max(1, min(200, int(params.get("limit", ["80"])[0])))
-                    latest = next(
-                        (
-                            event for event in EventStore(db_path).recent(1500)
-                            if event.event_type == "windows.system_inventory"
-                        ),
-                        None,
-                    )
+                    latest = _latest_event(db_path, "windows.system_inventory")
                     if latest is None:
                         self._json(200, {"available": False, "snapshot_at": None, "total": 0, "matched": 0, "items": []})
                         return
@@ -740,7 +735,7 @@ def make_dashboard_server(
                             "interfaces": len(latest.data.get("network_interfaces", [])) if isinstance(latest.data.get("network_interfaces"), list) else 0,
                         },
                     })
-                except (OSError, ValueError):
+                except (OSError, ValueError, sqlite3.Error):
                     self._json(503, {"error": "System inventory catalog is unavailable"})
                 return
             if parsed.path == "/api/ai/models":
@@ -762,13 +757,7 @@ def make_dashboard_server(
                 return
             if parsed.path == "/api/inventory":
                 try:
-                    latest = next(
-                        (
-                            event for event in EventStore(db_path).recent(1500)
-                            if event.event_type == "windows.deep_inventory"
-                        ),
-                        None,
-                    )
+                    latest = _latest_event(db_path, "windows.deep_inventory")
                     if latest is None:
                         self._json(200, {"available": False, "snapshot_at": None, "data": {}})
                         return
@@ -777,7 +766,7 @@ def make_dashboard_server(
                         "snapshot_at": latest.timestamp.isoformat(),
                         "data": _safe_json_value(latest.data),
                     })
-                except (OSError, ValueError):
+                except (OSError, ValueError, sqlite3.Error):
                     self._json(503, {"error": "Deep inventory snapshot is unavailable"})
                 return
             if parsed.path == "/api/knowledge/search":
@@ -793,7 +782,7 @@ def make_dashboard_server(
                         data_dir() / "knowledge" / "microsoft-knowledge.sqlite3"
                     ).search(query, limit=max(1, min(10, limit_value)))
                     self._json(200, {"results": results})
-                except (OSError, ValueError):
+                except (OSError, ValueError, sqlite3.Error):
                     self._json(503, {"error": "Local knowledge index is unavailable"})
                 return
             if parsed.path == "/api/events":
@@ -804,7 +793,7 @@ def make_dashboard_server(
                     event_type = params.get("type", [""])[0].strip().casefold()[:100]
                     store = EventStore(db_path)
                     events = []
-                    for event in store.recent(min(1500, limit * 5)):
+                    for event in store.recent(min(1000, limit * 5)):
                         payload = _event_payload(event)
                         if payload is None:
                             continue
@@ -821,7 +810,7 @@ def make_dashboard_server(
                         if len(events) >= limit:
                             break
                     self._json(200, {"events": events, "returned": len(events), "query": query})
-                except (OSError, ValueError):
+                except (OSError, ValueError, sqlite3.Error):
                     self._json(503, {"error": "Event store is not available"})
                 return
             self._json(404, {"error": "not found"})
