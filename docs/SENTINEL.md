@@ -67,7 +67,7 @@ Sentinel can run a two-stage analysis against the already-installed local Ollama
 1. A fast 4B model triages a small, bounded packet of recent non-sensitive evidence.
 2. A separate 6B model reviews the triage against the original evidence, challenges unsupported claims and lists uncertainty.
 
-The stages run sequentially, and the Ollama request asks the server to release each model after its turn. A memory guard avoids selecting the 4B stage below 4.5 GiB available RAM or the 6B review below 8 GiB available RAM. If an exact 4B/6B tag is not available, AIE may use an eligible already-installed model from its existing local model policy. A missing model is never downloaded automatically. There is no remote/cloud fallback.
+The stages run sequentially, and each Ollama request asks the server to release its model after the turn. The 4B pass requires at least 4.5 GiB available RAM; the 6B review requires at least 8 GiB. Sentinel uses only installed 4B and 6B tags (automatic discovery or exact configured tags). It does not silently substitute unrelated model sizes, download missing models, or fall back to cloud inference.
 
 The output is a derived, evidence-linked event. Model text is advisory only: it cannot execute shell commands, change permissions, alter policy, or initiate Windows remediation. Ollama being unavailable does not stop the sensor loop.
 
