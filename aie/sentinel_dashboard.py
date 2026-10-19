@@ -358,6 +358,10 @@ main{max-width:1920px;padding:0 clamp(20px,2.4vw,38px) 48px}
 .task-pill.completed-with-warnings,.task-pill.partial,.task-pill.degraded{border-color:#937142;background:#3a3020;color:#f5d394}
 .task-pill.failed,.task-pill.unavailable,.task-pill.critical{border-color:#99515e;background:#462733;color:#ffb4b8}
 .task-pill.disabled,.task-pill.manual-only,.task-pill.unknown{border-color:#53667b;background:#27384b;color:#aebed0}
+.ai-suggestion{display:grid;gap:11px;border:1px solid #395c7b;border-radius:13px;background:linear-gradient(135deg,#1a3854,#13283f);padding:14px}
+.ai-suggestion p{font-size:11px;line-height:1.55;color:#b5c9dc;margin:6px 0}
+.ai-suggestion .task-row-head{align-items:flex-start}
+.ai-suggestion .task-row-head strong{text-transform:capitalize}
 .task-tool{border:1px solid #304d68;border-radius:12px;background:#14283d;padding:11px 13px}
 .task-tool summary{display:flex;justify-content:space-between;align-items:center;gap:10px;cursor:pointer;list-style:none}
 .task-tool summary::-webkit-details-marker{display:none}
@@ -1181,7 +1185,7 @@ def make_dashboard_server(
     state_path: Path,
     stop_path: Path,
     db_path: Path,
-    command_queue: queue.Queue[str] | None = None,
+    command_queue: queue.Queue[tuple[str, str]] | None = None,
     config_loader: Callable[[], dict[str, Any]] | None = None,
     config_saver: Callable[[dict[str, Any]], None] | None = None,
     inference_lock: Any = None,
@@ -1585,7 +1589,7 @@ def make_dashboard_server(
                         self._json(409, {"error": "All system inventory collectors are disabled in the current profile"})
                         return
                 try:
-                    command_queue.put_nowait(action)
+                    command_queue.put_nowait((action, "dashboard manual command"))
                 except queue.Full:
                     self._json(429, {"error": "Sentinel command queue is busy"})
                     return
