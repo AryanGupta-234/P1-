@@ -1051,7 +1051,7 @@ def _worker() -> None:
             except Exception:  # noqa: BLE001 - audit failure must not stop observation.
                 pass
 
-        if now_mono >= next_inventory and inventory_lock.acquire(blocking=False):
+        if cycle.get("status") == "running" and now_mono >= next_inventory and inventory_lock.acquire(blocking=False):
             next_inventory = now_mono + 900.0
             inventory_thread = threading.Thread(
                 target=update_inventory,
