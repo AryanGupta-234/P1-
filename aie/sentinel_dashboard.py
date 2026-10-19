@@ -554,6 +554,7 @@ def make_dashboard_server(
     command_queue: queue.Queue[str] | None = None,
     config_loader: Callable[[], dict[str, Any]] | None = None,
     config_saver: Callable[[dict[str, Any]], None] | None = None,
+    inference_lock: Any = None,
     port: int = 8765,
 ) -> ThreadingHTTPServer:
     if not isinstance(token, str) or len(token) < 32:
@@ -752,7 +753,13 @@ def make_dashboard_server(
                 if not isinstance(question, str) or not question.strip() or len(question) > 500:
                     self._json(400, {"error": "question must contain 1-500 characters"})
                     return
+                acquired = False
                 try:
+                    if inference_lock is not None:
+                        acquired = inference_lock.acquire(blocking=False)
+                        if not acquired:
+                            self._json(409, {"error": "Local AI engine is busy with another inference."})
+                            return
                     from aie.sentinel_ai import SentinelModelCollaborator
                     answer = SentinelModelCollaborator().ask(
                         question,
@@ -761,6 +768,9 @@ def make_dashboard_server(
                     self._json(200, answer)
                 except Exception as exc:  # noqa: BLE001 - local inference errors stay within this request.
                     self._json(503, {"error": type(exc).__name__})
+                finally:
+                    if acquired and inference_lock is not None:
+                        inference_lock.release()
                 return
 
             action = body.get("action")
