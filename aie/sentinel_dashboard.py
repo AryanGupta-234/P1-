@@ -99,6 +99,9 @@ body:after{content:"";position:fixed;inset:0;z-index:0;pointer-events:none;opaci
 .disk-meter i{display:block;height:100%;background:linear-gradient(90deg,#438dba,#67eaff,#ff7587);box-shadow:0 0 10px #5fe5ff55}
 .pnp-pills{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
 .driver-list{display:grid;gap:6px;margin-top:8px;max-height:290px;overflow:auto;padding-right:3px}
+.health-good{color:#75e8c4!important}.health-warn{color:#ffcb79!important}.health-bad{color:#ff93a4!important}
+.health-detail{font-size:8px;color:#819bb0;margin-top:4px;line-height:1.45}
+
 .driver-row{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,.8fr) auto;gap:8px;align-items:center;border:1px solid #243e53;border-radius:9px;padding:8px;background:#0a1723}
 .driver-row strong{display:block;font-size:9px;overflow-wrap:anywhere}
 .driver-row small{display:block;color:#7f9bb1;font-size:8px;margin-top:3px;overflow-wrap:anywhere}
@@ -234,14 +237,21 @@ body:after{content:"";position:fixed;inset:0;z-index:0;pointer-events:none;opaci
         <div class="metric-tile"><small>PNP DEVICES</small><strong id="metricPnp">—</strong></div>
         <div class="metric-tile"><small>FIREWALL PROFILES</small><strong id="metricFirewall">—</strong></div>
         <div class="metric-tile"><small>WINDOWS BUILD</small><strong id="metricBuild">—</strong></div>
+        <div class="metric-tile"><small>PHYSICAL DISKS</small><strong id="metricPhysicalDisks">—</strong></div>
+        <div class="metric-tile"><small>BITLOCKER VOLUMES</small><strong id="metricBitlocker">—</strong></div>
+        <div class="metric-tile"><small>BATTERY</small><strong id="metricBattery">—</strong></div>
+        <div class="metric-tile"><small>HYPERVISOR</small><strong id="metricHypervisor">—</strong></div>
       </div>
       <div class="deep-columns">
         <div><div class="deep-subhead">FIXED STORAGE</div><div id="diskList" class="disk-list"><div class="panel-sub">Waiting for a CIM snapshot.</div></div>
+          <div class="deep-subhead" style="margin-top:16px">PHYSICAL STORAGE HEALTH</div><div id="physicalHealthList" class="disk-list"><div class="panel-sub">Storage health metadata appears when Windows exposes the Storage module.</div></div>
           <div class="deep-subhead" style="margin-top:16px">SIGNED DRIVER / DEVICE EXPLORER</div>
           <div class="knowledge-search"><input id="driverQuery" type="search" maxlength="100" placeholder="Filter device or driver provider…"><button id="driverSearchBtn">FILTER</button></div>
           <div class="driver-list" id="driverResults"><div class="panel-sub">Searches the latest local signed-PnP inventory snapshot.</div></div>
         </div>
-        <div><div class="deep-subhead">SECURITY & DEVICE HEALTH</div><div id="securityList" class="security-list"><div class="panel-sub">Waiting for Defender / firewall status.</div></div><div id="pnpSummary" class="pnp-pills"></div></div>
+        <div><div class="deep-subhead">SECURITY & DEVICE HEALTH</div><div id="securityList" class="security-list"><div class="panel-sub">Waiting for Defender / firewall status.</div></div><div class="deep-subhead" style="margin-top:14px">BITLOCKER ENCRYPTION</div><div id="encryptionList" class="security-list"><div class="panel-sub">Volume encryption metadata appears when available.</div></div>
+          <div class="deep-subhead" style="margin-top:14px">BATTERY STATUS</div><div id="batteryList" class="security-list"><div class="panel-sub">Battery telemetry appears when a battery is present.</div></div>
+          <div id="pnpSummary" class="pnp-pills"></div></div>
       </div>
     </section>
     <section class="panel" id="insights">
@@ -314,6 +324,31 @@ function renderDeepDiagnostics(status){
  $("metricPnp").textContent=deep.pnp_device_count??"—";
  $("metricFirewall").textContent=deep.firewall_profile_count??"—";
  $("metricBuild").textContent=[osInfo.Caption,osInfo.BuildNumber].filter(Boolean).join(" · ")||"—";
+ const physical=Array.isArray(deep.physical_disks)?deep.physical_disks:[];
+ const encryption=Array.isArray(deep.bitlocker_volumes)?deep.bitlocker_volumes:[];
+ const batteries=Array.isArray(deep.batteries)?deep.batteries:[];
+ $("metricPhysicalDisks").textContent=deep.physical_disk_count??physical.length??"—";
+ $("metricBitlocker").textContent=deep.bitlocker_volume_count??encryption.length??"—";
+ $("metricBattery").textContent=batteries.length?(batteries[0].charge_percent==null?"Present":batteries[0].charge_percent+"%"):"—";
+ $("metricHypervisor").textContent=deep.hypervisor_present===true?"DETECTED":deep.hypervisor_present===false?"NO":"—";
+ const physicalTarget=$("physicalHealthList");physicalTarget.replaceChildren();
+ if(!physical.length)physicalTarget.append(create("div","panel-sub","Physical disk health is not exposed by this Windows configuration."));
+ for(const disk of physical){
+  const row=create("div","disk-row"),top=create("div","disk-top"),name=create("strong",null,disk.name||"Physical disk"),state=create("small","health-"+(String(disk.health||"").toLowerCase()==="healthy"?"good":String(disk.health||"").toLowerCase()==="warning"?"warn":"bad"),String(disk.health||"UNKNOWN").toUpperCase());
+  top.append(name,state);row.append(top,create("div","health-detail",(disk.media_type||"—")+" · "+(disk.bus_type||"—")+" · "+(disk.operational||"—")+" · "+(disk.size_gib||0)+" GiB"));physicalTarget.append(row);
+ }
+ const encryptionTarget=$("encryptionList");encryptionTarget.replaceChildren();
+ if(!encryption.length)encryptionTarget.append(create("div","panel-sub","BitLocker status is unavailable or no BitLocker volumes were returned."));
+ for(const volume of encryption){
+  const row=create("div","security-row"),left=create("div"),name=create("strong",null,(volume.mount||"Volume")+" · "+(volume.volume_status||"Unknown")),detail=create("small","health-detail",(volume.encryption_percent??"—")+"% encrypted · "+(volume.method||"—")),state=create("span","provider-state"+(String(volume.protection||"").toLowerCase()==="on"?"":" degraded"),String(volume.protection||"UNKNOWN").toUpperCase());
+  left.append(name,detail);row.append(left,state);encryptionTarget.append(row);
+ }
+ const batteryTarget=$("batteryList");batteryTarget.replaceChildren();
+ if(!batteries.length)batteryTarget.append(create("div","panel-sub","No battery telemetry is available."));
+ for(const battery of batteries){
+  const row=create("div","security-row"),name=create("strong",null,battery.name||"Battery"),statusText=create("span","provider-state",battery.charge_percent==null?"UNKNOWN":battery.charge_percent+"%");
+  row.append(name,statusText,battery.estimated_runtime_minutes==null?create("small","health-detail",battery.health_status||""):create("small","health-detail","Estimated runtime "+battery.estimated_runtime_minutes+" min"));batteryTarget.append(row);
+ }
  const disks=$("diskList");disks.replaceChildren();
  const diskItems=Array.isArray(deep.disks)?deep.disks:[];
  if(!diskItems.length)disks.append(create("div","panel-sub","Disk inventory will appear after the next CIM scan."));
