@@ -108,7 +108,9 @@ Sentinel can run a two-stage analysis against the already-installed local Ollama
 
 The stages run sequentially, and each Ollama request asks the server to release its model after the turn. The 4B pass requires at least 4.5 GiB available RAM; the 6B review requires at least 8 GiB. Sentinel uses only installed 4B and 6B tags (automatic discovery or exact configured tags). It does not silently substitute unrelated model sizes, download missing models, or fall back to cloud inference.
 
-The output is a derived, evidence-linked event. Model text is advisory only: it cannot execute shell commands, change permissions, alter policy, or initiate Windows remediation. Ollama being unavailable does not stop the sensor loop.
+Before model inference, Sentinel can retrieve up to three relevant entries from the local Microsoft knowledge index using the observed event categories. The 4B and 6B stages receive these bounded excerpts and source URLs as untrusted reference material. The dashboard shows the reference links used by the latest assessment. A model cannot turn a documentation snippet into permission to run a command.
+
+The output is a derived, evidence-linked event. Model text is advisory only: it cannot execute shell commands, change permissions, alter policy, or initiate Windows remediation. Ollama or the crawler being unavailable does not stop the sensor loop.
 
 Optional exact model tags can be set in the local config file at %LOCALAPPDATA%\AIE\sentinel-config.json. Use a tag that is already listed by ollama list. Default discovery is automatic.
 
