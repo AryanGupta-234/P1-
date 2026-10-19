@@ -63,7 +63,7 @@ $result.bitlocker = Safe-Query { Get-BitLockerVolume |
                   EncryptionPercentage, EncryptionMethod }
 $result.batteries = Safe-Query { Get-CimInstance -ClassName Win32_Battery |
     Select-Object -First 8 Name, BatteryStatus, EstimatedChargeRemaining,
-                  EstimatedRunTime, Status, Chemistry }
+                  EstimatedRunTime, DesignCapacity, FullChargeCapacity, Status, Chemistry }
 $result | ConvertTo-Json -Depth 6 -Compress
 """
 
@@ -221,7 +221,7 @@ def collect_windows_deep_inventory() -> AIEEvent:
     )
     batteries = _clean_section(
         raw, "batteries",
-        ("Name", "BatteryStatus", "EstimatedChargeRemaining", "EstimatedRunTime", "Status", "Chemistry"),
+        ("Name", "BatteryStatus", "EstimatedChargeRemaining", "EstimatedRunTime", "DesignCapacity", "FullChargeCapacity", "Status", "Chemistry"),
         8,
     )
 
