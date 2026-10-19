@@ -581,7 +581,12 @@ function renderEvents(events){
   feed.append(row);
  }
 }
-async function request(path,options={}){const response=await fetch(path,{...options,headers:{...headers,...(options.headers||{})},cache:"no-store"});if(!response.ok)throw new Error("Local API "+response.status);return response.json()}
+async function request(path,options={}){
+ const response=await fetch(path,{...options,headers:{...headers,...(options.headers||{})},cache:"no-store"});
+ let payload={};try{payload=await response.json()}catch{}
+ if(!response.ok)throw new Error(payload.error||("Local API "+response.status));
+ return payload;
+}
 async function refresh(){try{const [s,e]=await Promise.all([request("/api/status"),request("/api/events?limit=90")]);renderStatus(s);renderEvents(e.events||[]);drawChart()}catch(err){$("liveBadge").innerHTML='<span style="color:var(--amber)">RECONNECTING</span>'}}
 async function control(action){if(action==="stop"&&!confirm("Stop the Sentinel background worker? You can start it again from the CLI."))return;try{await request("/api/control",{method:"POST",headers:{"Content-Type":"application/json","Origin":location.origin},body:JSON.stringify({action})});setTimeout(refresh,700)}catch(e){alert("Control request failed: "+e.message)}}
 $("pauseBtn").addEventListener("click",()=>control("pause"));$("resumeBtn").addEventListener("click",()=>control("resume"));$("stopBtn").addEventListener("click",()=>control("stop"));
