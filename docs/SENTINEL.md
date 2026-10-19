@@ -107,6 +107,11 @@ Ask Sentinel is a user-triggered local Q&A surface. It builds a bounded packet f
 
 The redesigned Titan command deck surfaces system inventory counts, Windows build metadata, bounded fixed-disk capacity/free-space values, Defender booleans, firewall profile status, PnP health counts and the latest triage hypotheses/reviewer uncertainties. It uses the same loopback-only API, token and local SQLite store as the existing dashboard. Live resource charts continue to display sampled CPU and RAM; decorative motion does not generate or simulate telemetry.
 
+The deep diagnostics view additionally queries Windows Storage cmdlets for bounded physical-disk health metadata when available, BitLocker volume status and encryption percentage (never recovery keys), and battery status/estimated charge/runtime. Missing Windows modules, unsupported hardware or unavailable classes are reported as unavailable data rather than synthesized values. A filterable signed-PnP driver explorer reads the latest local CIM event; it does not query the internet.
+
+Ask Sentinel and the scheduled two-stage 4B/6B analysis share one inference lock. A Q&A request receives a busy response rather than launching a competing model while another inference is running, helping avoid unnecessary concurrent model memory use.
+
+
 
 ## Local Ollama collaboration
 
