@@ -383,6 +383,7 @@ def _worker() -> None:
                 command_queue=command_queue,
                 config_loader=_load_config,
                 config_saver=_save_config,
+                inference_lock=ai_lock,
                 port=port,
             )
             state["dashboard_url"] = f"http://127.0.0.1:{port}/"
