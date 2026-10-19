@@ -1051,7 +1051,7 @@ document.addEventListener("keydown",e=>{
  if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="k"){e.preventDefault();openCommandPalette();return}
  if(e.key==="Escape"&&$("commandOverlay").classList.contains("open")){e.preventDefault();closeCommandPalette();return}
  if((e.ctrlKey||e.metaKey)&&e.shiftKey&&/^Digit[1-8]$/.test(e.code)){
-  e.preventDefault();const nav=document.querySelectorAll(".nav-btn")[Number(e.code.slice(-1))-1];if(nav)switchView(nav.dataset.view);
+  e.preventDefault();const shortcutViews=["cockpit","system","telemetry","evidence","ai","autonomy","tasks","knowledge"];switchView(shortcutViews[Number(e.code.slice(-1))-1]);
  }
 });
 function drawCanvas(id,dataA,dataB){const canvas=$(id);if(!canvas)return;const rect=canvas.getBoundingClientRect();const w=Math.max(320,Math.round(rect.width*devicePixelRatio)),h=Math.max(150,Math.round(rect.height*devicePixelRatio));if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h}const ctx=canvas.getContext("2d");ctx.clearRect(0,0,w,h);const pad=18*devicePixelRatio;ctx.strokeStyle="rgba(130,165,194,.18)";ctx.lineWidth=devicePixelRatio;for(let i=0;i<=4;i++){const y=pad+(h-2*pad)*i/4;ctx.beginPath();ctx.moveTo(pad,y);ctx.lineTo(w-pad,y);ctx.stroke()}function line(values,color){if(values.length<2)return;ctx.beginPath();ctx.strokeStyle=color;ctx.lineWidth=2*devicePixelRatio;ctx.shadowBlur=8*devicePixelRatio;ctx.shadowColor=color;values.forEach((value,index)=>{const x=pad+(w-2*pad)*index/Math.max(1,values.length-1);const y=h-pad-(h-2*pad)*Math.max(0,Math.min(100,Number(value)||0))/100;if(index===0)ctx.moveTo(x,y);else ctx.lineTo(x,y)});ctx.stroke();ctx.shadowBlur=0}line(dataA,"#8bdcff");line(dataB,"#ff7774")}
