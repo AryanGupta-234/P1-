@@ -49,6 +49,15 @@ $result.pnp_status = Safe-Query {
     }
     [pscustomobject]@{ present_device_count = [int]$items.Count; status_counts = @($groups) }
 }
+$result.physical_disks = Safe-Query { Get-PhysicalDisk |
+    Select-Object -First 32 FriendlyName, MediaType, BusType, HealthStatus,
+                  OperationalStatus, Size }
+$result.bitlocker = Safe-Query { Get-BitLockerVolume |
+    Select-Object -First 32 MountPoint, VolumeStatus, ProtectionStatus,
+                  EncryptionPercentage, EncryptionMethod }
+$result.batteries = Safe-Query { Get-CimInstance -ClassName Win32_Battery |
+    Select-Object -First 8 Name, BatteryStatus, EstimatedChargeRemaining,
+                  EstimatedRunTime, Status, Chemistry }
 $result | ConvertTo-Json -Depth 6 -Compress
 """
 
@@ -186,6 +195,21 @@ def collect_windows_deep_inventory() -> AIEEvent:
     pnp_status_counts = _clean_section(
         pnp, "status_counts", ("status", "count"), 16
     )
+    physical_disks = _clean_section(
+        raw, "physical_disks",
+        ("FriendlyName", "MediaType", "BusType", "HealthStatus", "OperationalStatus", "Size"),
+        32,
+    )
+    bitlocker = _clean_section(
+        raw, "bitlocker",
+        ("MountPoint", "VolumeStatus", "ProtectionStatus", "EncryptionPercentage", "EncryptionMethod"),
+        32,
+    )
+    batteries = _clean_section(
+        raw, "batteries",
+        ("Name", "BatteryStatus", "EstimatedChargeRemaining", "EstimatedRunTime", "Status", "Chemistry"),
+        8,
+    )
 
     data = {
         "operating_system": os_info,
@@ -200,6 +224,9 @@ def collect_windows_deep_inventory() -> AIEEvent:
         "firewall_profiles": firewall,
         "pnp_device_count": pnp.get("present_device_count"),
         "pnp_status_counts": pnp_status_counts,
+        "physical_disks": physical_disks,
+        "bitlocker_volumes": bitlocker,
+        "batteries": batteries,
         "scope": {
             "wmi_classes": [
                 "Win32_OperatingSystem", "Win32_ComputerSystem", "Win32_Processor",
@@ -208,6 +235,9 @@ def collect_windows_deep_inventory() -> AIEEvent:
             "additional_surfaces": [
                 "Microsoft Defender status", "Windows Firewall profile status",
                 "present PnP device status counts",
+                "physical disk health metadata (where the Storage module is available)",
+                "BitLocker volume encryption status (where the module is available; no recovery keys)",
+                "battery charge/status metadata",
             ],
             "command_lines_collected": False,
             "executable_paths_collected": False,
