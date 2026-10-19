@@ -32,6 +32,9 @@ TASK_NAME = "AIE Sentinel Background Watch"
 DEFAULT_CONFIG: dict[str, Any] = {
     "sample_interval_seconds": 2.0,
     "network_interval_seconds": 30.0,
+    "automation_enabled": True,
+    "inventory_enabled": True,
+    "inventory_interval_seconds": 900,
     "include_network": True,
     "include_foreground": True,
     "include_process_resources": True,
@@ -107,6 +110,7 @@ def _load_config() -> dict[str, Any]:
     if not isinstance(config["analysis_interval_seconds"], int) or isinstance(config["analysis_interval_seconds"], bool) or not 60 <= config["analysis_interval_seconds"] <= 3600:
         raise RuntimeError("analysis_interval_seconds must be between 60 and 3600.")
     for key, minimum, maximum in (
+        ("inventory_interval_seconds", 300, 7200),
         ("registry_interval_seconds", 60, 3600),
         ("deep_inventory_interval_seconds", 300, 7200),
         ("knowledge_interval_seconds", 3600, 604800),
@@ -126,6 +130,7 @@ def _load_config() -> dict[str, Any]:
     if not isinstance(config["ui_tree_apps"], list) or any(not isinstance(item, str) for item in config["ui_tree_apps"]):
         raise RuntimeError("ui_tree_apps must be a list of executable names.")
     for key in (
+        "automation_enabled", "inventory_enabled",
         "include_network", "include_foreground", "include_process_resources",
         "include_event_logs", "include_etw", "include_window_titles", "ai_enabled",
         "registry_enabled", "deep_inventory_enabled", "knowledge_enabled",
@@ -362,6 +367,8 @@ def _worker() -> None:
             "automatic_actions_taken": False,
         },
         "features": {
+            "automation": config["automation_enabled"],
+            "inventory": config["inventory_enabled"],
             "network": config["include_network"],
             "foreground": config["include_foreground"],
             "process_resources": config["include_process_resources"],
@@ -442,6 +449,11 @@ def _worker() -> None:
         "status": "scheduled" if config["knowledge_enabled"] else "disabled",
         "documents": 0,
     }
+    state["inventory"] = {
+        "enabled": bool(config["inventory_enabled"]),
+        "status": "scheduled" if config["inventory_enabled"] else "disabled",
+        "last_snapshot_at": None,
+    }
 
     def update_inventory() -> None:
         nonlocal inventory_thread
@@ -452,6 +464,15 @@ def _worker() -> None:
             data = event.data
             with state_lock:
                 state["last_inventory_at"] = event.timestamp.isoformat()
+                state["inventory"] = {
+                    "enabled": True,
+                    "status": "available",
+                    "last_snapshot_at": event.timestamp.isoformat(),
+                    "process_count": data.get("process_count", 0),
+                    "application_count": data.get("installed_application_count", 0),
+                    "service_count": data.get("service_count", 0),
+                    "scheduled_task_count": data.get("scheduled_task_count", 0),
+                }
                 state["inventory_summary"] = {
                     "processes": data.get("process_count", 0),
                     "applications": data.get("installed_application_count", 0),
@@ -463,6 +484,12 @@ def _worker() -> None:
         except Exception as exc:  # noqa: BLE001 - inventory refresh cannot stop observation.
             with state_lock:
                 state["inventory_error"] = type(exc).__name__
+                state["inventory"] = {
+                    "enabled": True,
+                    "status": "degraded",
+                    "error": type(exc).__name__,
+                    "last_attempt_at": _now(),
+                }
                 _write_state(state)
         finally:
             inventory_lock.release()
@@ -479,6 +506,7 @@ def _worker() -> None:
             if (
                 latest is not None
                 and latest.event_type == "registry.configuration_changed"
+                and config["automation_enabled"]
                 and config["ai_enabled"]
                 and config["auto_review_on_registry_changes"]
             ):
@@ -737,7 +765,12 @@ def _worker() -> None:
                     "posture_alerts": posture_alerts,
                     "posture_alert_count": len(posture_alerts),
                     "alert_keys": alert_keys,
-                    "automatic_ai_review_queued": bool(auto_review_needed and config["ai_enabled"]),
+                    "automatic_ai_review_queued": bool(
+                        auto_review_needed
+                        and config["automation_enabled"]
+                        and config["ai_enabled"]
+                        and config["auto_review_on_posture_alerts"]
+                    ),
                     "operating_system": {
                         key: operating_system.get(key)
                         for key in ("Caption", "Version", "BuildNumber", "OSArchitecture")
@@ -760,7 +793,12 @@ def _worker() -> None:
                 }
                 state["event_count"] = store.count()
                 _write_state(state)
-            if auto_review_needed and config["ai_enabled"] and config["auto_review_on_posture_alerts"]:
+            if (
+                auto_review_needed
+                and config["automation_enabled"]
+                and config["ai_enabled"]
+                and config["auto_review_on_posture_alerts"]
+            ):
                 try:
                     command_queue.put_nowait("ai_review_now")
                     from aie.contracts import AIEEvent, EntityRef
@@ -915,11 +953,24 @@ def _worker() -> None:
         with state_lock:
             state["status"] = "running"
             state["features"].update({
+                "automation": bool(config["automation_enabled"]),
+                "inventory": bool(config["inventory_enabled"]),
+                "network": bool(config["include_network"]),
+                "foreground": bool(config["include_foreground"]),
+                "process_resources": bool(config["include_process_resources"]),
+                "event_logs": bool(config["include_event_logs"]),
+                "kernel_etw": bool(config["include_etw"]),
+                "window_titles": bool(config["include_window_titles"]),
+                "ui_tree_allowlist_count": len(config["ui_tree_apps"]),
                 "registry": bool(config["registry_enabled"]),
                 "deep_windows_inventory": bool(config["deep_inventory_enabled"]),
                 "microsoft_knowledge_crawler": bool(config["knowledge_enabled"]),
             })
             state["ai"]["enabled"] = bool(config["ai_enabled"])
+            if not config["inventory_enabled"] and not inventory_lock.locked():
+                state["inventory"].update({"enabled": False, "status": "disabled"})
+            elif config["inventory_enabled"] and state.get("inventory", {}).get("status") == "disabled":
+                state["inventory"].update({"enabled": True, "status": "scheduled"})
             if not config["registry_enabled"] and not registry_lock.locked():
                 state["registry"].update({"enabled": False, "status": "disabled"})
             if not config["deep_inventory_enabled"] and not deep_inventory_lock.locked():
@@ -970,7 +1021,7 @@ def _worker() -> None:
 
             started_actions: list[str] = []
             deferred_actions: list[str] = []
-            if action in {"scan_now", "deep_scan_now"} and deep_inventory_lock.acquire(blocking=False):
+            if action in {"scan_now", "deep_scan_now"} and config["deep_inventory_enabled"] and deep_inventory_lock.acquire(blocking=False):
                 deep_inventory_thread = threading.Thread(
                     target=update_deep_inventory,
                     name="aie-sentinel-deep-scan-on-demand",
@@ -978,7 +1029,7 @@ def _worker() -> None:
                 )
                 deep_inventory_thread.start()
                 started_actions.append("deep_inventory")
-            if action == "scan_now" and inventory_lock.acquire(blocking=False):
+            if action == "scan_now" and config["inventory_enabled"] and inventory_lock.acquire(blocking=False):
                 inventory_thread = threading.Thread(
                     target=update_inventory,
                     name="aie-sentinel-inventory-on-demand",
@@ -1051,8 +1102,14 @@ def _worker() -> None:
             except Exception:  # noqa: BLE001 - audit failure must not stop observation.
                 pass
 
-        if cycle.get("status") == "running" and now_mono >= next_inventory and inventory_lock.acquire(blocking=False):
-            next_inventory = now_mono + 900.0
+        if (
+            cycle.get("status") == "running"
+            and config["automation_enabled"]
+            and config["inventory_enabled"]
+            and now_mono >= next_inventory
+            and inventory_lock.acquire(blocking=False)
+        ):
+            next_inventory = now_mono + int(config["inventory_interval_seconds"])
             inventory_thread = threading.Thread(
                 target=update_inventory,
                 name="aie-sentinel-windows-inventory",
@@ -1060,7 +1117,7 @@ def _worker() -> None:
             )
             inventory_thread.start()
 
-        if cycle.get("status") == "running" and config["registry_enabled"] and registry_provider is not None:
+        if cycle.get("status") == "running" and config["automation_enabled"] and config["registry_enabled"] and registry_provider is not None:
             if now_mono >= next_registry and registry_lock.acquire(blocking=False):
                 next_registry = now_mono + int(config["registry_interval_seconds"])
                 registry_thread = threading.Thread(
@@ -1070,7 +1127,7 @@ def _worker() -> None:
                 )
                 registry_thread.start()
 
-        if cycle.get("status") == "running" and config["deep_inventory_enabled"]:
+        if cycle.get("status") == "running" and config["automation_enabled"] and config["deep_inventory_enabled"]:
             if now_mono >= next_deep_inventory and deep_inventory_lock.acquire(blocking=False):
                 next_deep_inventory = now_mono + int(config["deep_inventory_interval_seconds"])
                 deep_inventory_thread = threading.Thread(
@@ -1080,7 +1137,7 @@ def _worker() -> None:
                 )
                 deep_inventory_thread.start()
 
-        if cycle.get("status") == "running" and config["knowledge_enabled"]:
+        if cycle.get("status") == "running" and config["automation_enabled"] and config["knowledge_enabled"]:
             if now_mono >= next_knowledge and knowledge_lock.acquire(blocking=False):
                 next_knowledge = now_mono + int(config["knowledge_interval_seconds"])
                 knowledge_thread = threading.Thread(
@@ -1091,7 +1148,8 @@ def _worker() -> None:
                 knowledge_thread.start()
 
         if (
-            config["ai_enabled"]
+            config["automation_enabled"]
+            and config["ai_enabled"]
             and cycle.get("status") == "running"
             and now_mono >= next_analysis
             and ai_lock.acquire(blocking=False)
