@@ -290,6 +290,8 @@ main{min-width:0;padding:18px clamp(14px,2.1vw,32px) 40px;max-width:1900px;width
    <div class="section-head"><div><div class="section-label">POLICY / SCHEDULE / AUTOMATION</div><div class="section-title">AUTONOMY CONTROL DECK</div><div class="section-description">Configure background collection and evidence-triggered AI reviews. All automatic intelligence remains advisory.</div></div><span class="tag">LOCAL CONFIG</span></div>
    <div class="grid">
     <section class="panel"><div class="panel-head"><div><div class="panel-title">AUTOMATED SENSOR PROFILE</div><div class="panel-sub">Saved locally and applied by the Sentinel worker</div></div><span class="tag">PROFILE / v2</span></div>
+     <div class="button-row" style="margin-bottom:12px"><button class="btn" data-preset="deep">⚡ DEEP WATCH</button><button class="btn" data-preset="balanced">◈ BALANCED</button><button class="btn" data-preset="quiet">◌ LOW IMPACT</button></div>
+     <div class="note" id="presetNote">A preset updates the form only. Review and save before the worker applies it.</div>
      <div class="form-grid">
       <label class="toggle"><input type="checkbox" id="cfgRegistry"><span><strong>Registry intelligence</strong><small>Read-only key snapshots, autorun-name changes and service metadata</small></span></label>
       <label class="toggle"><input type="checkbox" id="cfgDeep"><span><strong>Deep Windows inventory</strong><small>Drivers, devices, disks, Defender, firewall, BitLocker and firmware</small></span></label>
@@ -425,6 +427,20 @@ function renderRuntime(s){const target=$("runtimeProfile");target.replaceChildre
 function renderKnowledgeStats(){const k=lastStatus?.knowledge||{};$("knowledgeState").textContent=String(k.status||"NOT STARTED").toUpperCase();const target=$("knowledgeStats");if(!target)return;target.replaceChildren(infoCard("LOCAL DOCUMENTS",k.documents??"—","Indexed SQLite corpus"),infoCard("ADDED / UPDATED",(k.documents_added??"—")+" / "+(k.documents_updated??"—"),"Last crawler pass"),infoCard("SOURCE GROUPS",Object.keys(k.sources||{}).length,"Allowlisted Microsoft sources"),infoCard("LAST CRAWL",age(k.last_fetched_at),"Local status"))}
 async function loadProfile(){try{const r=await request("/api/config");lastConfig=r.profile||{};renderProfile(lastConfig)}catch(e){$("profileNote").textContent="Profile load failed: "+e.message}}
 function renderProfile(p){$("cfgRegistry").checked=p.registry_enabled===true;$("cfgDeep").checked=p.deep_inventory_enabled===true;$("cfgKnowledge").checked=p.knowledge_enabled===true;$("cfgAI").checked=p.ai_enabled===true;$("cfgPostureReview").checked=p.auto_review_on_posture_alerts===true;$("cfgRegistryReview").checked=p.auto_review_on_registry_changes===true;$("cfgRegistryInterval").value=p.registry_interval_seconds??180;$("cfgDeepInterval").value=p.deep_inventory_interval_seconds??900;$("cfgKnowledgeInterval").value=p.knowledge_interval_seconds??21600;$("cfgAIInterval").value=p.analysis_interval_seconds??300;$("cfgDiskThreshold").value=p.low_disk_alert_percent??10;$("cfgBatteryThreshold").value=p.low_battery_alert_percent??15;$("cfgEventLogs").checked=p.include_event_logs===true;$("cfgEtw").checked=p.include_etw===true;$("cfgWindowTitles").checked=p.include_window_titles===true;$("cfgUITreeApps").value=Array.isArray(p.ui_tree_apps)?p.ui_tree_apps.join(", "):""}
+function applyPreset(name){
+ const presets={
+  deep:{registry:true,deep:true,knowledge:true,ai:true,posture:true,registryReview:true,registrySec:90,deepSec:300,knowledgeSec:3600,aiSec:120,disk:10,battery:15},
+  balanced:{registry:true,deep:true,knowledge:true,ai:true,posture:true,registryReview:false,registrySec:180,deepSec:900,knowledgeSec:21600,aiSec:300,disk:10,battery:15},
+  quiet:{registry:true,deep:true,knowledge:true,ai:true,posture:true,registryReview:false,registrySec:900,deepSec:3600,knowledgeSec:86400,aiSec:900,disk:8,battery:12}
+ };
+ const p=presets[name];if(!p)return;
+ $("cfgRegistry").checked=p.registry;$("cfgDeep").checked=p.deep;$("cfgKnowledge").checked=p.knowledge;$("cfgAI").checked=p.ai;
+ $("cfgPostureReview").checked=p.posture;$("cfgRegistryReview").checked=p.registryReview;
+ $("cfgRegistryInterval").value=p.registrySec;$("cfgDeepInterval").value=p.deepSec;$("cfgKnowledgeInterval").value=p.knowledgeSec;$("cfgAIInterval").value=p.aiSec;
+ $("cfgDiskThreshold").value=p.disk;$("cfgBatteryThreshold").value=p.battery;
+ $("presetNote").textContent=name.toUpperCase()+" PRESET LOADED · Review the thresholds and press SAVE PROFILE to commit.";
+ toast(name.toUpperCase()+" preset loaded. Save to apply.");
+}
 async function saveProfile(){const integer=id=>Number.parseInt($(id).value,10);const values={
  registry_enabled:$("cfgRegistry").checked,deep_inventory_enabled:$("cfgDeep").checked,knowledge_enabled:$("cfgKnowledge").checked,ai_enabled:$("cfgAI").checked,
  auto_review_on_posture_alerts:$("cfgPostureReview").checked,auto_review_on_registry_changes:$("cfgRegistryReview").checked,
@@ -476,6 +492,7 @@ $("resumeBtn").addEventListener("click",async()=>{try{await post("/api/control",
 $("notifyBtn").addEventListener("click",enableNotifications);$("notifyEnable").addEventListener("click",enableNotifications);
 $("refreshBtn").addEventListener("click",()=>refresh(true));$("modelRefresh").addEventListener("click",()=>{lastModelsFetch=0;loadModels()});
 $("saveProfile").addEventListener("click",saveProfile);$("reloadProfile").addEventListener("click",loadProfile);
+document.querySelectorAll("[data-preset]").forEach(button=>button.addEventListener("click",()=>applyPreset(button.dataset.preset)));
 $("askBtn").addEventListener("click",askSentinel);$("aiQuestion").addEventListener("keydown",e=>{if(e.key==="Enter")askSentinel()});
 $("driverSearch").addEventListener("click",searchDrivers);$("driverQuery").addEventListener("keydown",e=>{if(e.key==="Enter")searchDrivers()});
 $("catalogSearch").addEventListener("click",()=>loadCatalog());
