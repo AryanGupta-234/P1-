@@ -655,7 +655,7 @@ kbd{font:9px var(--mono);color:#829087;border:1px solid #526158;border-radius:6p
  <main>
   <header class="topbar">
    <div class="top-left"><div class="top-mark"></div><div><div class="eyebrow">AIE / SENTINEL PRIME — WINDOWS NODE / 01</div><div class="view-title" id="viewTitle">COMMAND CENTER</div></div></div>
-   <div class="top-right"><span class="clock" id="clock">--:--:--</span><button class="icon-btn" id="paletteBtn" title="Open searchable command palette" aria-label="Open command palette">⌕ COMMANDS <kbd>Ctrl K</kbd></button><span class="system-badge" id="liveBadge"><i class="led"></i>CONNECTING</span><button class="icon-btn" id="notifyBtn">ALERTS</button><button class="icon-btn" id="refreshBtn">SYNC / F5</button><button class="icon-btn" id="stopBtn" style="border-color:#713e37;color:#ffaaa0">STOP WORKER</button></div>
+   <div class="top-right"><span class="clock" id="clock">--:--:--</span><button class="icon-btn" id="paletteBtn" title="Open searchable command palette" aria-label="Open command palette">⌕ COMMANDS <kbd>Ctrl K</kbd></button><span class="system-badge" id="liveBadge"><i class="led"></i>CONNECTING</span><button class="icon-btn" id="notifyBtn">ALERTS</button><button class="icon-btn" id="refreshBtn">SYNC / F5</button><button class="icon-btn" id="restartBtn" title="Gracefully restart Sentinel and reconnect this dashboard">↻ RESTART</button><button class="icon-btn" id="stopBtn" style="border-color:#713e37;color:#ffaaa0">STOP WORKER</button></div>
   </header>
 
   <section class="screen active" data-screen="cockpit">
@@ -784,6 +784,13 @@ kbd{font:9px var(--mono);color:#829087;border:1px solid #526158;border-radius:6p
        <label class="master-switch"><input type="checkbox" id="cfgAutomation"><span id="automationSwitchText">AUTOMATION ON</span></label>
       </div>
       <div class="control-footnote" id="automationExplanation">Turning this master switch off stops periodic jobs and automatic review triggers. The live observer and enabled baseline sensors continue; you can still launch allowed one-time jobs manually.</div>
+      <div class="control-divider"></div>
+      <div class="control-group-title">AGENT LIFECYCLE / AUTOMATIC RECOVERY</div>
+      <div class="form-grid">
+       <label class="toggle"><input type="checkbox" id="cfgAutoRestart"><span><strong>Auto-restart after agent updates</strong><small>Watch installed AIE Python modules for completed changes. After three stable scans, Sentinel gracefully restarts and reloads the updated code.</small></span></label>
+      </div>
+      <div class="control-footnote" id="restartWatchDescription">The source watcher checks every 2 seconds and waits for three consistent snapshots before restarting. It does not download updates or install packages.</div>
+      <div class="button-row"><span class="tag" id="restartWatchState">CHECKING RESTART WATCH</span><span class="panel-sub">Continuous sensor changes also restart automatically when this setting is enabled.</span></div>
      </section>
 
      <div class="grid equal">
@@ -1058,12 +1065,20 @@ document.addEventListener("keydown",e=>{
   e.preventDefault();const shortcutViews=["cockpit","system","telemetry","evidence","ai","autonomy","tasks","knowledge"];switchView(shortcutViews[Number(e.code.slice(-1))-1]);
  }
 });
-function drawCanvas(id,dataA,dataB){const canvas=$(id);if(!canvas)return;const rect=canvas.getBoundingClientRect();const w=Math.max(320,Math.round(rect.width*devicePixelRatio)),h=Math.max(150,Math.round(rect.height*devicePixelRatio));if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h}const ctx=canvas.getContext("2d");ctx.clearRect(0,0,w,h);const pad=18*devicePixelRatio;ctx.strokeStyle="rgba(130,165,194,.18)";ctx.lineWidth=devicePixelRatio;for(let i=0;i<=4;i++){const y=pad+(h-2*pad)*i/4;ctx.beginPath();ctx.moveTo(pad,y);ctx.lineTo(w-pad,y);ctx.stroke()}function line(values,color){if(values.length<2)return;ctx.beginPath();ctx.strokeStyle=color;ctx.lineWidth=2*devicePixelRatio;ctx.shadowBlur=8*devicePixelRatio;ctx.shadowColor=color;values.forEach((value,index)=>{const x=pad+(w-2*pad)*index/Math.max(1,values.length-1);const y=h-pad-(h-2*pad)*Math.max(0,Math.min(100,Number(value)||0))/100;if(index===0)ctx.moveTo(x,y);else ctx.lineTo(x,y)});ctx.stroke();ctx.shadowBlur=0}line(dataA,"#8bdcff");line(dataB,"#ff7774")}
+function drawCanvas(id,dataA,dataB){const canvas=$(id);if(!canvas)return;const rect=canvas.getBoundingClientRect();const w=Math.max(320,Math.round(rect.width*devicePixelRatio)),h=Math.max(150,Math.round(rect.height*devicePixelRatio));if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h}const ctx=canvas.getContext("2d");ctx.clearRect(0,0,w,h);const pad=18*devicePixelRatio;ctx.strokeStyle="rgba(143,166,155,.18)";ctx.lineWidth=devicePixelRatio;for(let i=0;i<=4;i++){const y=pad+(h-2*pad)*i/4;ctx.beginPath();ctx.moveTo(pad,y);ctx.lineTo(w-pad,y);ctx.stroke()}function line(values,color){if(values.length<2)return;ctx.beginPath();ctx.strokeStyle=color;ctx.lineWidth=2*devicePixelRatio;ctx.shadowBlur=8*devicePixelRatio;ctx.shadowColor=color;values.forEach((value,index)=>{const x=pad+(w-2*pad)*index/Math.max(1,values.length-1);const y=h-pad-(h-2*pad)*Math.max(0,Math.min(100,Number(value)||0))/100;if(index===0)ctx.moveTo(x,y);else ctx.lineTo(x,y)});ctx.stroke();ctx.shadowBlur=0}line(dataA,"#b8e65b");line(dataB,"#ff6b38")}
 function drawCharts(){drawCanvas("mainChart",cpuHistory,memHistory);drawCanvas("telemetryChart",cpuHistory,memHistory)}
 function addSample(s){const cpu=Number(s.cpu_percent)||0,total=Number(s.hardware?.memory_total_gib)||0,avail=Number(s.hardware?.memory_available_gib)||0;cpuHistory.push(cpu);memHistory.push(total?Math.max(0,(total-avail)/total*100):0);cpuHistory=cpuHistory.slice(-70);memHistory=memHistory.slice(-70);drawCharts()}
 function renderStatus(s){
- lastStatus=s;const running=s.status==="running",paused=s.observer_paused===true,features=s.features||{},health=s.provider_health||{},providers=Object.values(health),bad=providers.filter(p=>p.state==="degraded").length,deep=s.deep_inventory||{},alerts=Array.isArray(deep.posture_alerts)?deep.posture_alerts:[];
- $("liveBadge").innerHTML=running?'<i class="led"></i>'+(paused?"PAUSED":"LIVE"):'<i class="led" style="background:var(--amber);color:var(--amber)"></i>OFFLINE';
+ lastStatus=s;const running=s.status==="running",paused=s.observer_paused===true,features=s.features||{},health=s.provider_health||{},providers=Object.values(health),bad=providers.filter(p=>p.state==="degraded").length,deep=s.deep_inventory||{},alerts=Array.isArray(deep.posture_alerts)?deep.posture_alerts:[],restart=s.restart||{};
+ if($("restartWatchState"))$("restartWatchState").textContent=restart.watch_status==="watching"?"AUTO RESTART / WATCHING":restart.watch_status==="disabled"?"AUTO RESTART / OFF":String(restart.watch_status||"CHECKING").replaceAll("_"," ").toUpperCase();
+ if($("restartWatchDescription")){
+  $("restartWatchDescription").textContent=restart.reason
+   ?restart.reason+" · "+(restart.watch_status==="restart_pending"||restart.watch_status==="launching"?"Restart in progress.":"Last restart reason.")
+   :"Watches installed AIE Python modules every 2 seconds. Three stable snapshots are required before a code-update restart. It does not pull or install packages.";
+ }
+ $("liveBadge").innerHTML=restart.status==="scheduled"||restart.status==="restarting"
+  ?'<i class="led" style="background:var(--amber);color:var(--amber)"></i>RESTARTING'
+  :running?'<i class="led"></i>'+(paused?"PAUSED":"LIVE"):'<i class="led" style="background:var(--amber);color:var(--amber)"></i>OFFLINE';
  $("railLed").style.background=running?(paused?"var(--amber)":"var(--green)"):"var(--red)";
  $("heroDesc").textContent=paused?"Observation is paused. The dashboard and local evidence vault remain available.":running?"Windows perception is online. Local sensors are sampling approved system metadata; AI is evidence-led and advisory.":"The Sentinel worker is offline. Start it using the AIE CLI, then reopen this command deck.";
  $("pid").textContent=s.pid||"—";$("uptime").textContent=uptime(s.started_at);$("heartbeat").textContent=age(s.heartbeat_at);
@@ -1148,7 +1163,7 @@ async function loadProfile(){try{const r=await request("/api/config");lastConfig
 function renderProfile(p){
  const check=(id,key)=>$(id).checked=p[key]===true;
  const value=(id,v)=>$(id).value=v;
- check("cfgAutomation","automation_enabled");check("cfgInventory","inventory_enabled");
+ check("cfgAutomation","automation_enabled");check("cfgAutoRestart","auto_restart_enabled");check("cfgInventory","inventory_enabled");
  check("cfgNetwork","include_network");check("cfgForeground","include_foreground");check("cfgProcessResources","include_process_resources");
  check("cfgRegistry","registry_enabled");check("cfgDeep","deep_inventory_enabled");check("cfgKnowledge","knowledge_enabled");check("cfgAI","ai_enabled");
  check("cfgPostureReview","auto_review_on_posture_alerts");check("cfgRegistryReview","auto_review_on_registry_changes");
@@ -1189,7 +1204,7 @@ async function saveProfile(){
  const integer=id=>Number.parseInt($(id).value,10),numeric=id=>Number.parseFloat($(id).value);
  const appAllowlist=$("cfgUITreeApps").value.split(",").map(x=>x.trim().toLowerCase()).filter(Boolean);
  const values={
-  automation_enabled:$("cfgAutomation").checked,inventory_enabled:$("cfgInventory").checked,
+  automation_enabled:$("cfgAutomation").checked,auto_restart_enabled:$("cfgAutoRestart").checked,inventory_enabled:$("cfgInventory").checked,
   include_network:$("cfgNetwork").checked,include_foreground:$("cfgForeground").checked,include_process_resources:$("cfgProcessResources").checked,
   sample_interval_seconds:numeric("cfgSampleInterval"),network_interval_seconds:integer("cfgNetworkInterval"),process_resource_interval_seconds:integer("cfgProcessInterval"),
   inventory_interval_seconds:integer("cfgInventoryInterval")*60,
@@ -1209,9 +1224,13 @@ async function saveProfile(){
  $("saveProfile").disabled=true;$("profileSaveState").textContent="SAVING…";
  try{
   const r=await post("/api/config",{values});lastConfig=r.profile;renderProfile(r.profile);
-  $("profileSaveState").textContent="SAVED";
-  $("profileNote").textContent=restartChanged?"Saved successfully. Restart Sentinel to reinitialize the continuous or advanced sensor pipelines. Scheduled job switches and intervals are adopted on the next observer cycle.":"Saved successfully. Scheduled collectors and automation rules will adopt these settings on the next observer cycle.";
-  toast("Sentinel feature profile saved.");
+  $("profileSaveState").textContent=r.restart_scheduled?"RESTART SCHEDULED":"SAVED";
+  $("profileNote").textContent=r.restart_scheduled
+   ?"Saved. Sentinel is gracefully restarting to reinitialize the updated collectors. This dashboard will reconnect and reload automatically."
+   :r.restart_required
+    ?"Saved. These sensor changes require a worker restart. Auto-restart is off; use RESTART in the header when ready."
+    :"Saved successfully. Scheduled collectors and automation rules will adopt these settings on the next observer cycle.";
+  toast(r.restart_scheduled?"Profile saved · Sentinel restart scheduled. The dashboard will reconnect automatically.":"Sentinel feature profile saved.");
  }catch(e){
   $("profileSaveState").textContent="SAVE FAILED";$("profileNote").textContent=e.message;toast("Profile save failed: "+e.message,"error");
  }finally{$("saveProfile").disabled=false}
@@ -1452,13 +1471,56 @@ async function enableNotifications(){
  toast(notifiedReady?"Desktop posture alerts enabled.":"Notification permission was not granted.",notifiedReady?"":"warn");
 }
 function notifyNewPosture(status){const alerts=status.deep_inventory?.posture_alerts||[],keys=alerts.map(a=>[a.severity,a.category,a.title].join("|"));if(lastAlertKeys===null){lastAlertKeys=new Set(keys);return}const newly=alerts.filter(a=>!lastAlertKeys.has([a.severity,a.category,a.title].join("|")));lastAlertKeys=new Set(keys);for(const item of newly){toast(item.title+" · "+(item.detail||""),item.severity==="critical"||item.severity==="high"?"error":"warn");if(notifiedReady&&("Notification"in window))new Notification("Sentinel · "+String(item.severity||"INFO").toUpperCase(),{body:item.title+" — "+(item.detail||"")})}}
-async function refresh(forceInventory=false){try{const s=await request("/api/status");renderStatus(s);notifyNewPosture(s);if(forceInventory||Date.now()-lastInventoryFetch>26000)await loadInventory(true);if(Date.now()-lastEventsFetch>7500||!lastEvents.length)await loadEvents(true);if(currentView==="system"&&lastInventory)renderSystem(lastInventory.data||{});if(currentView==="autonomy")renderAudit(lastEvents);return true}catch(e){$("liveBadge").textContent="RECONNECTING";$("heroDesc").textContent="Unable to contact the local Sentinel worker. Reconnecting…";return false}}
+let lastConnectedWorkerPid=null;
+let dashboardWasDisconnected=false;
+let reconnectReloadTimer=null;
+async function refresh(forceInventory=false){
+ try{
+  const s=await request("/api/status");
+  const nextPid=s.pid==null?null:String(s.pid);
+  const replaced=lastConnectedWorkerPid!==null&&nextPid!==null&&nextPid!==lastConnectedWorkerPid;
+  lastConnectedWorkerPid=nextPid;
+  if(replaced){
+   dashboardWasDisconnected=false;
+   toast("Sentinel restarted · refreshing the updated command interface.");
+   if(reconnectReloadTimer===null)reconnectReloadTimer=setTimeout(()=>location.reload(),650);
+   return true;
+  }
+  if(dashboardWasDisconnected){
+   dashboardWasDisconnected=false;
+   toast("Sentinel connection restored.");
+   await loadProfile();
+   lastModelsFetch=0;
+   if(currentView==="ai"||currentView==="autonomy")await loadModels();
+   forceInventory=true;
+  }
+  renderStatus(s);notifyNewPosture(s);
+  if(forceInventory||Date.now()-lastInventoryFetch>26000)await loadInventory(true);
+  if(Date.now()-lastEventsFetch>7500||!lastEvents.length)await loadEvents(true);
+  if(currentView==="system"&&lastInventory)renderSystem(lastInventory.data||{});
+  if(currentView==="autonomy")renderAudit(lastEvents);
+  return true;
+ }catch(e){
+  dashboardWasDisconnected=true;
+  $("liveBadge").textContent="RECONNECTING";
+  $("heroDesc").textContent="Sentinel is restarting or temporarily unavailable. This dashboard will reconnect automatically.";
+  return false;
+ }
+}
 function bootProgress(value,stage,line){$("bootProgress").style.width=value+"%";$("bootPercent").textContent=String(value).padStart(2,"0")+"%";$("bootStage").textContent=stage;if(line){const row=el("div",null,line);$("bootLog").append(row);while($("bootLog").children.length>4)$("bootLog").firstChild.remove()}}
 function finishBoot(){ $("boot").classList.add("done");$("app").classList.add("ready");setTimeout(()=>$("boot").remove(),950)}
 async function startBoot(){bootProgress(12,"OPENING LOCAL LINK","loopback command channel initializing");await new Promise(r=>setTimeout(r,240));const connected=await refresh(true);if(!connected){bootProgress(100,"WORKER OFFLINE","interface loaded · waiting for Sentinel worker");setTimeout(finishBoot,520);return}bootProgress(66,"MOUNTING EVIDENCE","checking local SQLite event and inventory APIs");await loadProfile();bootProgress(84,"DISCOVERING INTELLIGENCE","checking configured profile and installed local model endpoint");await loadModels();bootProgress(100,"COMMAND DECK READY","dashboard online · subsystem availability is reported independently");setTimeout(finishBoot,520)}
-function drawStars(){const canvas=$("starfield");if(!canvas)return;const ctx=canvas.getContext("2d");let points=[];function resize(){canvas.width=Math.max(320,innerWidth*devicePixelRatio);canvas.height=Math.max(300,innerHeight*devicePixelRatio);points=Array.from({length:72},()=>({x:Math.random()*canvas.width,y:Math.random()*canvas.height,r:Math.random()*1.4+.3,s:Math.random()*.18+.04}))}function paint(move){ctx.clearRect(0,0,canvas.width,canvas.height);for(const p of points){ctx.fillStyle="rgba(139,220,255,.32)";ctx.beginPath();ctx.arc(p.x,p.y,p.r*devicePixelRatio,0,Math.PI*2);ctx.fill();if(move){p.y+=p.s*devicePixelRatio;if(p.y>canvas.height)p.y=0}}if(move)requestAnimationFrame(()=>paint(true))}resize();addEventListener("resize",()=>{resize();paint(false)});paint(!matchMedia("(prefers-reduced-motion: reduce)").matches)}
+function drawStars(){const canvas=$("starfield");if(!canvas)return;const ctx=canvas.getContext("2d");let points=[];function resize(){canvas.width=Math.max(320,innerWidth*devicePixelRatio);canvas.height=Math.max(300,innerHeight*devicePixelRatio);points=Array.from({length:72},()=>({x:Math.random()*canvas.width,y:Math.random()*canvas.height,r:Math.random()*1.4+.3,s:Math.random()*.18+.04}))}function paint(move){ctx.clearRect(0,0,canvas.width,canvas.height);for(const p of points){ctx.fillStyle="rgba(184,230,91,.32)";ctx.beginPath();ctx.arc(p.x,p.y,p.r*devicePixelRatio,0,Math.PI*2);ctx.fill();if(move){p.y+=p.s*devicePixelRatio;if(p.y>canvas.height)p.y=0}}if(move)requestAnimationFrame(()=>paint(true))}resize();addEventListener("resize",()=>{resize();paint(false)});paint(!matchMedia("(prefers-reduced-motion: reduce)").matches)}
 $("pauseBtn").addEventListener("click",async()=>{try{await post("/api/control",{action:"pause"});toast("Sensor pause requested.");refresh()}catch(e){toast(e.message,"error")}});
 $("stopBtn").addEventListener("click",async()=>{if(!confirm("Stop the Sentinel background worker? The dashboard will disconnect until it is started again."))return;try{await post("/api/control",{action:"stop"});toast("Stop request sent. The local dashboard will close when the worker exits.","warn")}catch(e){toast(e.message,"error")}});
+$("restartBtn").addEventListener("click",async()=>{
+ const button=$("restartBtn");button.disabled=true;
+ try{
+  await post("/api/control",{action:"restart"});
+  toast("Graceful restart queued · dashboard will reconnect and refresh automatically.");
+  $("liveBadge").textContent="RESTART SCHEDULED";
+ }catch(e){toast("Restart request failed: "+e.message,"error");button.disabled=false}
+});
 $("resumeBtn").addEventListener("click",async()=>{try{await post("/api/control",{action:"resume"});toast("Sentinel watch resumed.");refresh()}catch(e){toast(e.message,"error")}});
 $("notifyBtn").addEventListener("click",enableNotifications);$("notifyEnable").addEventListener("click",enableNotifications);
 $("refreshBtn").addEventListener("click",()=>refresh(true));$("modelRefresh").addEventListener("click",()=>{lastModelsFetch=0;loadModels()});$("cfgModelRefresh").addEventListener("click",()=>{lastModelsFetch=0;loadModels()});
@@ -1544,7 +1606,9 @@ def make_dashboard_server(
     token: str,
     state_path: Path,
     stop_path: Path,
+    restart_path: Path | None = None,
     db_path: Path,
+
     command_queue: queue.Queue[tuple[str, str]] | None = None,
     config_loader: Callable[[], dict[str, Any]] | None = None,
     config_saver: Callable[[dict[str, Any]], None] | None = None,
@@ -1618,7 +1682,7 @@ def make_dashboard_server(
                         raise RuntimeError("profile provider unavailable")
                     config = config_loader()
                     fields = (
-                        "automation_enabled", "inventory_enabled", "inventory_interval_seconds",
+                        "automation_enabled", "auto_restart_enabled", "inventory_enabled", "inventory_interval_seconds",
                         "sample_interval_seconds", "network_interval_seconds",
                         "process_resource_interval_seconds", "include_network",
                         "include_foreground", "include_process_resources",
@@ -1841,7 +1905,7 @@ def make_dashboard_server(
                     self._json(400, {"error": "profile values are required"})
                     return
                 boolean_fields = {
-                    "automation_enabled", "inventory_enabled",
+                    "automation_enabled", "auto_restart_enabled", "inventory_enabled",
                     "include_network", "include_foreground", "include_process_resources",
                     "include_ui_tree", "registry_enabled", "deep_inventory_enabled", "knowledge_enabled", "ai_enabled",
                     "auto_review_on_posture_alerts", "auto_review_on_registry_changes",
@@ -1909,10 +1973,43 @@ def make_dashboard_server(
                     if config_loader is None or config_saver is None:
                         raise RuntimeError("profile provider unavailable")
                     config = config_loader()
+                    prior = dict(config)
                     config.update(values)
+                    restart_fields = (
+                        "include_network", "include_foreground", "include_process_resources",
+                        "sample_interval_seconds", "network_interval_seconds",
+                        "process_resource_interval_seconds", "include_event_logs", "include_etw",
+                        "include_window_titles", "include_ui_tree",
+                    )
+                    changed_restart_fields = [
+                        key for key in restart_fields if prior.get(key) != config.get(key)
+                    ]
+                    if (prior.get("ui_tree_apps") or []) != (config.get("ui_tree_apps") or []):
+                        changed_restart_fields.append("ui_tree_apps")
+                    restart_required = bool(changed_restart_fields)
                     config_saver(config)
+
+                    restart_scheduled = False
+                    restart_error = None
+                    restart_reason = ""
+                    if restart_required and config.get("auto_restart_enabled", True) and restart_path is not None:
+                        restart_reason = "Feature profile changed: " + ", ".join(changed_restart_fields)
+                        try:
+                            restart_path.write_text(restart_reason, encoding="utf-8")
+                            stop_path.touch(exist_ok=True)
+                            restart_scheduled = True
+                        except OSError as exc:
+                            restart_error = type(exc).__name__
+
                     fields = tuple(boolean_fields | set(integer_ranges) | set(float_ranges) | model_fields | {"ui_tree_apps"})
-                    self._json(200, {"saved": True, "profile": {key: config[key] for key in fields}})
+                    self._json(200, {
+                        "saved": True,
+                        "profile": {key: config[key] for key in fields},
+                        "restart_required": restart_required,
+                        "restart_scheduled": restart_scheduled,
+                        "restart_reason": restart_reason,
+                        "restart_error": restart_error,
+                    })
                 except (OSError, RuntimeError, ValueError):
                     self._json(503, {"error": "Unable to save the Sentinel profile"})
                 return
@@ -1993,7 +2090,24 @@ def make_dashboard_server(
             elif action == "resume":
                 set_observer_paused(False)
             elif action == "stop":
+                if restart_path is not None:
+                    try:
+                        restart_path.unlink()
+                    except FileNotFoundError:
+                        pass
                 stop_path.touch(exist_ok=True)
+            elif action == "restart":
+                if restart_path is None:
+                    self._json(503, {"error": "worker restart is unavailable"})
+                    return
+                try:
+                    restart_path.write_text("Manual restart requested from dashboard", encoding="utf-8")
+                    stop_path.touch(exist_ok=True)
+                except OSError:
+                    self._json(503, {"error": "unable to schedule worker restart"})
+                    return
+                self._json(202, {"accepted": action, "scheduled": True})
+                return
             else:
                 self._json(400, {"error": "unsupported control action"})
                 return
