@@ -354,6 +354,12 @@ def _worker() -> None:
     dashboard_thread = None
     command_queue: queue.Queue[tuple[str, str]] = queue.Queue(maxsize=12)
     started = _now()
+    previous_state = _read_state()
+    previous_history = previous_state.get("task_history", [])
+    preserved_task_history = (
+        [item for item in previous_history if isinstance(item, dict)][-60:]
+        if isinstance(previous_history, list) else []
+    )
     state: dict[str, Any] = {
         "status": "starting",
         "pid": os.getpid(),
@@ -390,6 +396,7 @@ def _worker() -> None:
             "No keylogging, credential capture, screen recording or microphone capture.",
         ],
     }
+    state["task_history"] = preserved_task_history
 
     for port in range(int(config["dashboard_port"]), int(config["dashboard_port"]) + 11):
         try:
@@ -459,7 +466,6 @@ def _worker() -> None:
         "last_snapshot_at": None,
     }
     state["tasks"] = {}
-    state["task_history"] = []
 
     def update_inventory() -> None:
         nonlocal inventory_thread
