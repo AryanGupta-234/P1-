@@ -68,7 +68,7 @@ aie sentinel dashboard
 
 Sentinel runs with limited user privileges at sign-in, stores evidence locally and uses already-installed Ollama models only. See [Sentinel Runtime](docs/SENTINEL.md) for its sensor scope, controls, limitations and opt-in features.
 
-The Titan command deck adds animated live telemetry, deeper storage/driver/PnP/Defender/firewall diagnostics, a locally grounded **Ask Sentinel** panel, on-demand scan/AI/crawl commands, and a live profile editor for the independent collectors. It keeps the same authenticated loopback dashboard and never lets AI execute system changes.
+The Titan command deck adds animated live telemetry, deeper storage/driver/PnP/Defender/firewall diagnostics, a locally grounded **Ask Sentinel** panel, on-demand scan/AI/crawl commands, and a live profile editor for the independent collectors. It keeps the same authenticated loopback dashboard and never lets AI execute system changes. A local posture watch also surfaces new Defender, firewall, storage and device-health findings and can queue a deduplicated evidence review; Secure Boot, BIOS, BitLocker and battery status are included when Windows exposes them.
 
 ### Windows internals and Microsoft knowledge vault
 
