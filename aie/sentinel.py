@@ -763,6 +763,31 @@ def _worker() -> None:
             if auto_review_needed and config["ai_enabled"] and config["auto_review_on_posture_alerts"]:
                 try:
                     command_queue.put_nowait("ai_review_now")
+                    from aie.contracts import AIEEvent, EntityRef
+                    from aie.providers.windows import host_id
+                    store.append(AIEEvent(
+                        host_id=host_id(),
+                        source="aie.sentinel.automation",
+                        event_type="sentinel.automation_triggered",
+                        entity=EntityRef(type="automation_rule", name="new_posture_finding"),
+                        data={
+                            "rule": "auto_review_on_posture_alerts",
+                            "finding_count": len(posture_alerts),
+                            "new_high_critical_findings": sum(
+                                1 for item in posture_alerts
+                                if item.get("severity") in {"high", "critical"}
+                                and (
+                                    str(item.get("severity", "")) + "|" +
+                                    str(item.get("category", "")) + "|" +
+                                    str(item.get("title", "")) not in previous_alert_keys
+                                )
+                            ),
+                            "queued_action": "ai_review_now",
+                        },
+                        sensitivity="internal",
+                        confidence=1.0,
+                        evidence_kind="observed",
+                    ))
                 except queue.Full:
                     with state_lock:
                         state["deep_inventory"]["automatic_ai_review_queued"] = False
@@ -998,7 +1023,33 @@ def _worker() -> None:
                     "accepted_at": _now(),
                     "status": "started" if started_actions else "deferred" if deferred_actions else "busy_or_disabled",
                 }
+                history = state.setdefault("command_history", [])
+                history.append(state["last_command"].copy())
+                state["command_history"] = history[-30:]
                 _write_state(state)
+            try:
+                from aie.contracts import AIEEvent, EntityRef
+                from aie.providers.windows import host_id
+                store.append(AIEEvent(
+                    host_id=host_id(),
+                    source="aie.sentinel.command_deck",
+                    event_type="sentinel.command_dispatched",
+                    entity=EntityRef(type="sentinel_command", name=action),
+                    data={
+                        "action": action,
+                        "started": started_actions,
+                        "deferred": deferred_actions,
+                        "status": "started" if started_actions else "deferred" if deferred_actions else "busy_or_disabled",
+                    },
+                    sensitivity="internal",
+                    confidence=1.0,
+                    evidence_kind="observed",
+                ))
+                with state_lock:
+                    state["event_count"] = store.count()
+                    _write_state(state)
+            except Exception:  # noqa: BLE001 - audit failure must not stop observation.
+                pass
 
         if now_mono >= next_inventory and inventory_lock.acquire(blocking=False):
             next_inventory = now_mono + 900.0
