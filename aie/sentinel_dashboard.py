@@ -36,7 +36,7 @@ main{min-width:0;max-width:1600px;width:100%;margin:auto;padding:27px clamp(18px
 .chart-wrap{height:140px;position:relative}.chart-wrap canvas{width:100%;height:100%}.chart-legend{display:flex;gap:15px;font-size:9px;color:#8ca1b6;margin-top:9px}.legend-dot{display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:5px;background:var(--cyan)}.legend-dot.amber{background:var(--amber)}
 .feed{display:grid;gap:7px;max-height:450px;overflow:auto;padding-right:4px}.event{display:grid;grid-template-columns:34px minmax(0,1fr) auto;gap:10px;align-items:start;padding:10px;border:1px solid #203347;border-radius:12px;background:#0a1420}.event:hover{border-color:#3e657e;background:#0e1d2c}.event-inspect{margin-top:7px;color:#6f91a8;font-size:8px}.event-inspect summary{cursor:pointer;letter-spacing:.12em;user-select:none}.event-json{white-space:pre-wrap;overflow-wrap:anywhere;max-height:230px;overflow:auto;margin:7px 0 0;padding:9px;border:1px solid #20374b;border-radius:8px;background:#07111b;color:#b5cadd;font:9px/1.5 "Cascadia Code",Consolas,monospace}.event-icon{width:32px;height:32px;border-radius:10px;background:#142b3b;color:var(--cyan);display:grid;place-items:center;font-size:13px}.event-name{font-size:10px;font-weight:700;overflow-wrap:anywhere}.event-desc{font-size:9px;color:#8da2b6;margin-top:3px;overflow-wrap:anywhere}.event-time{font:9px "Cascadia Code",Consolas,monospace;color:#6f879d;white-space:nowrap}.empty{padding:28px;text-align:center;color:var(--muted);font-size:11px;border:1px dashed #284056;border-radius:12px}
 .model-box{border:1px solid #294356;background:linear-gradient(135deg,#122838,#0c1926);border-radius:13px;padding:13px;margin-bottom:10px}.model-top{display:flex;align-items:center;justify-content:space-between;gap:8px}.model-name{font-size:10px;font-weight:700}.model-role{color:#8fa9bf;font-size:9px}.model-state{font-size:8px;color:var(--green);letter-spacing:.12em}.model-result{font-size:10px;color:#c5d6e6;margin-top:8px;line-height:1.55;white-space:pre-wrap;overflow-wrap:anywhere}.confidence{font:9px "Cascadia Code",Consolas,monospace;color:var(--amber)}
-.provider-list{display:grid;gap:7px}.provider{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;border-bottom:1px solid #1b2d40;padding:8px 2px}.provider:last-child{border-bottom:0}.provider strong{font-size:10px;font-weight:600}.provider small{display:block;color:var(--muted);font-size:9px;margin-top:2px}.provider-state{font:9px "Cascadia Code",Consolas,monospace;color:var(--green)}.provider-state.degraded{color:var(--amber)}
+.provider-list{display:grid;gap:7px}.knowledge-search{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:7px;margin-top:15px}.knowledge-search input{min-width:0;border:1px solid #2a435a;border-radius:9px;background:#081522;color:var(--ink);padding:9px 10px;font:10px "Segoe UI",sans-serif}.knowledge-search button{border:1px solid #297d8a;border-radius:9px;padding:8px 12px;background:#123441;color:#d8faff;font-size:9px;font-weight:700}.knowledge-results{display:grid;gap:7px;margin-top:9px}.knowledge-result{border:1px solid #20384b;border-radius:10px;padding:9px;background:#0a1622}.knowledge-result strong{display:block;font-size:10px}.knowledge-result p{margin:5px 0;color:#8fa6b9;font-size:9px;line-height:1.5}.knowledge-result a{font-size:9px;color:var(--cyan);overflow-wrap:anywhere}.knowledge-meta{font-size:8px;color:#718ba2;letter-spacing:.08em}.provider{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;border-bottom:1px solid #1b2d40;padding:8px 2px}.provider:last-child{border-bottom:0}.provider strong{font-size:10px;font-weight:600}.provider small{display:block;color:var(--muted);font-size:9px;margin-top:2px}.provider-state{font:9px "Cascadia Code",Consolas,monospace;color:var(--green)}.provider-state.degraded{color:var(--amber)}
 .lower{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(280px,.8fr);gap:14px;margin-top:14px}.privacy-note{font-size:10px;color:#93a9bd;line-height:1.6}.privacy-note b{color:#d4e6f4}.privacy-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-top:12px}.privacy-chip{font-size:9px;padding:8px 9px;border:1px solid #263b4e;border-radius:9px;color:#aec0d0;background:#0b1723}.privacy-chip:before{content:"✓";color:var(--green);margin-right:7px}
 footer{font-size:9px;color:#5e748a;text-align:center;padding:23px 0 0;letter-spacing:.06em}
 @media(max-width:1050px){.shell{grid-template-columns:68px minmax(0,1fr)}.side{padding:22px 10px;align-items:center}.brand{padding:0}.brand-name,.brand-sub,.nav-label,.nav a span:not(.nav-symbol),.side-bottom{display:none}.nav{width:100%}.nav a{justify-content:center;padding:12px 0}.grid-main{grid-template-columns:1fr}.lower{grid-template-columns:1fr}}
@@ -116,8 +116,10 @@ footer{font-size:9px;color:#5e748a;text-align:center;padding:23px 0 0;letter-spa
       <div class="privacy-grid"><div class="privacy-chip">No keylogging or keystroke capture</div><div class="privacy-chip">No password, cookie or token collection</div><div class="privacy-chip">No continuous screenshots or microphone capture</div><div class="privacy-chip">No command lines or executable paths</div><div class="privacy-chip">No cloud upload or remote Ollama fallback</div><div class="privacy-chip">No model-triggered OS actions</div></div>
     </section>
     <section class="panel">
-      <div class="panel-head"><div><div class="panel-title">RUNTIME SNAPSHOT</div><div class="panel-sub">Local host and persistence</div></div></div>
-      <div class="provider-list" id="runtimeList"><div class="provider"><div><strong>Storage</strong><small>SQLite WAL · local profile</small></div><span class="provider-state">LOCAL</span></div><div class="provider"><div><strong>Execution</strong><small>Model has no operating-system tools</small></div><span class="provider-state">LOCKED</span></div><div class="provider"><div><strong>Dashboard</strong><small>127.0.0.1 only</small></div><span class="provider-state">LOOPBACK</span></div></div>
+      <div class="panel-head"><div><div class="panel-title">WINDOWS INTERNALS & KNOWLEDGE</div><div class="panel-sub">Registry · CIM · kernel ETW · Microsoft documentation</div></div></div>
+      <div class="provider-list" id="runtimeList"><div class="empty">Waiting for Windows internal collectors…</div></div>
+      <div class="knowledge-search"><input id="knowledgeQuery" type="search" maxlength="180" placeholder="Search the local Microsoft knowledge vault…"><button id="knowledgeSearchBtn">SEARCH VAULT</button></div>
+      <div class="knowledge-results" id="knowledgeResults"><div class="panel-sub">Searches only the locally indexed documents. It does not call the internet.</div></div>
     </section>
   </div>
   <footer>SENTINEL // AIE · WINDOWS PERCEPTION LAYER · LOCAL-FIRST / EVIDENCE-LED</footer>
@@ -133,11 +135,48 @@ function prettyAge(iso){if(!iso)return"—";const d=Math.max(0,Math.floor((Date.
 function uptime(iso){if(!iso)return"—";let n=Math.max(0,Math.floor((Date.now()-new Date(iso).getTime())/1000));const h=Math.floor(n/3600);n%=3600;const m=Math.floor(n/60);const s=n%60;return h+"h "+m+"m "+s+"s"}
 function setBar(id,v){$(id).style.width=Math.max(0,Math.min(100,Number(v)||0))+"%"}
 function create(tag,cls,text){const el=document.createElement(tag);if(cls)el.className=cls;if(text!==undefined)el.textContent=text;return el}
+function renderInternals(status){
+ const list=$("runtimeList");
+ list.replaceChildren();
+ const registry=status.registry||{};
+ const deep=status.deep_inventory||{};
+ const knowledge=status.knowledge||{};
+ const etw=status.features?.kernel_etw?((status.provider_health||{})["windows.etw.process"]||{}):null;
+ const entries=[
+  {name:"Registry intelligence",description:registry.status==="watching"?(registry.service_count||0)+" service keys · "+(registry.driver_service_count||0)+" driver entries · "+(registry.changed_sections||[]).length+" changed sections":(registry.error||"Read-only allowlisted snapshots"),state:registry.status||"scheduled"},
+  {name:"CIM / driver / PnP inventory",description:deep.status==="available"?(deep.system_driver_count||0)+" system drivers · "+(deep.signed_pnp_driver_count||0)+" signed PnP records · "+(deep.fixed_disk_count||0)+" fixed disks":(deep.error||"Waiting for first inventory pass"),state:deep.status||"scheduled"},
+  {name:"Kernel ETW process stream",description:status.features?.kernel_etw?(etw?.state||"elevated access required"):"Optional · disabled by default",state:status.features?.kernel_etw?(etw?.state||"degraded"):"optional"},
+  {name:"Microsoft knowledge vault",description:(knowledge.documents||0)+" local documents · "+Object.keys(knowledge.sources||{}).length+" source groups · "+(knowledge.last_fetched_at?prettyAge(knowledge.last_fetched_at):"crawl scheduled"),state:knowledge.status||"scheduled"}
+ ];
+ for(const item of entries){
+  const row=create("div","provider"),left=create("div"),name=create("strong",null,item.name),desc=create("small",null,item.description),state=create("span","provider-state"+(["degraded","partial"].includes(item.state)?" degraded":""),String(item.state).toUpperCase());
+  left.append(name,desc);row.append(left,state);list.append(row);
+ }
+}
+function renderKnowledgeResults(results){
+ const target=$("knowledgeResults");target.replaceChildren();
+ if(!results.length){target.append(create("div","panel-sub","No local documents matched. Run the Microsoft knowledge crawl first."));return}
+ for(const item of results){
+  const card=create("div","knowledge-result"),title=create("strong",null,item.title||"Untitled document"),meta=create("div","knowledge-meta",String(item.source||"source").replaceAll("_"," ").toUpperCase()+" · SCORE "+item.score),excerpt=create("p",null,item.excerpt||"");
+  const link=create("a",null,item.url||"");
+  if(item.url){link.href=item.url;link.target="_blank";link.rel="noopener noreferrer"}
+  card.append(title,meta,excerpt,link);target.append(card);
+ }
+}
+async function searchKnowledge(){
+ const query=$("knowledgeQuery").value.trim();
+ if(!query){$("knowledgeQuery").focus();return}
+ const target=$("knowledgeResults");target.replaceChildren(create("div","panel-sub","Searching the local index…"));
+ try{
+  const result=await request("/api/knowledge/search?q="+encodeURIComponent(query)+"&limit=6");
+  renderKnowledgeResults(result.results||[]);
+ }catch(error){target.replaceChildren(create("div","panel-sub","Local knowledge search unavailable: "+error.message))}
+}
 function summaryData(status){const a=status.ai||{};const tri=a.triage||{};const rev=a.review||{};const models=a.models||{};$("triageModel").textContent=models.triage||"Fast model · unavailable";$("reviewModel").textContent=models.review||"Deep model · unavailable";$("triageState").textContent=models.triage?"ANALYZED":"WAITING";$("reviewState").textContent=models.independent_review_completed?"VERIFIED REVIEW":"SINGLE MODEL";$("triageResult").textContent=tri.summary||"Waiting for the next scheduled local assessment.";const assess=rev.assessment||"No independent review has been stored yet.";$("reviewResult").textContent=assess+((rev.confidence)?"  ·  "+rev.confidence.toUpperCase()+" CONFIDENCE":"");$("modelState").textContent=models.inference_mode==="local_ollama_only"?"LOCAL ONLY":"NO MODEL";$("modelNote").textContent=a.error?"Last model pass: "+a.error:"Model inference is advisory and runs serially to protect system memory."}
 function renderProviders(status){const health=status.provider_health||{};const list=$("providerList");list.replaceChildren();const entries=Object.entries(health);if(!entries.length){list.append(create("div","empty","Provider health will appear after the first collection cycle."));return}for(const [name,item] of entries){const row=create("div","provider"),left=create("div"),title=create("strong",null,name.replaceAll("_"," ")),detail=create("small",null,(item.samples_succeeded||0)+"/"+(item.samples_attempted||0)+" samples · "+(item.events_emitted||0)+" events · "+(item.last_latency_ms??"—")+" ms");left.append(title,detail);const state=create("span","provider-state"+(item.state==="degraded"?" degraded":""),(item.state||"unknown").toUpperCase());row.append(left,state);list.append(row)}}
 function renderStatus(s){lastStatus=s;const paused=s.observer_paused===true;const running=s.status==="running";$("liveBadge").innerHTML=running?'<i class="dot"></i><span>'+ (paused?"PAUSED":"LIVE")+'</span>':'<span style="color:var(--amber)">OFFLINE</span>';$("heroTitle").innerHTML="SENTINEL <span>"+(paused?"PAUSED":running?"ONLINE":"OFFLINE")+"</span>";$("heroDesc").textContent=paused?"Observation is paused. The local dashboard and event vault remain available.":running?"A bounded, evidence-first watch over approved Windows signals. Every sensor reports its own health; every inference remains advisory.":"Sentinel worker is not running. Start it from the CLI to resume the background watch.";$("pid").textContent=s.pid||"—";$("uptime").textContent=uptime(s.started_at);$("heartbeat").textContent=prettyAge(s.heartbeat_at);$("pauseBtn").disabled=!running||paused;$("resumeBtn").disabled=!running||!paused;$("stopBtn").disabled=!running;
 const hw=s.hardware||{};const cpu=Number(s.cpu_percent)||0;const total=Number(hw.memory_total_gib)||0;const avail=Number(hw.memory_available_gib)||0;const used=total?Math.max(0,total-avail):0;const memPct=total?used/total*100:0;$("cpu").textContent=cpu.toFixed(0)+"%";$("ram").textContent=avail.toFixed(1)+" GB";$("ramFoot").textContent=used.toFixed(1)+" GB used of "+total.toFixed(1)+" GB";setBar("cpuBar",cpu);setBar("ramBar",memPct);historyCpu.push(cpu);historyMem.push(memPct);historyCpu=historyCpu.slice(-64);historyMem=historyMem.slice(-64);
-$("eventCount").textContent=Number(s.event_count||0).toLocaleString();setBar("eventBar",Math.min(100,Number(s.event_count||0)/100));const providers=Object.values(s.provider_health||{});const bad=providers.filter(x=>x.state==="degraded").length;$("health").textContent=providers.length?(providers.length-bad)+"/"+providers.length:"—";$("healthFoot").textContent=bad?bad+" provider(s) degraded":"No active provider errors";setBar("healthBar",providers.length?(providers.length-bad)/providers.length*100:0);renderProviders(s);summaryData(s)}
+$("eventCount").textContent=Number(s.event_count||0).toLocaleString();setBar("eventBar",Math.min(100,Number(s.event_count||0)/100));const providers=Object.values(s.provider_health||{});const bad=providers.filter(x=>x.state==="degraded").length;$("health").textContent=providers.length?(providers.length-bad)+"/"+providers.length:"—";$("healthFoot").textContent=bad?bad+" provider(s) degraded":"No active provider errors";setBar("healthBar",providers.length?(providers.length-bad)/providers.length*100:0);renderProviders(s);renderInternals(s);summaryData(s)}
 function drawChart(){const canvas=$("resourceChart"),ctx=canvas.getContext("2d");const w=canvas.clientWidth*devicePixelRatio,h=canvas.clientHeight*devicePixelRatio;if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h}ctx.clearRect(0,0,w,h);const pad=12*devicePixelRatio;ctx.strokeStyle="#20374b";ctx.lineWidth=devicePixelRatio;for(let i=0;i<5;i++){const y=pad+(h-2*pad)*i/4;ctx.beginPath();ctx.moveTo(pad,y);ctx.lineTo(w-pad,y);ctx.stroke()}function line(data,color){if(data.length<2)return;ctx.strokeStyle=color;ctx.lineWidth=2*devicePixelRatio;ctx.beginPath();data.forEach((v,i)=>{const x=pad+(w-2*pad)*i/63;const y=h-pad-(h-2*pad)*Math.max(0,Math.min(100,v))/100;if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y)});ctx.stroke()}line(historyCpu,"#53e4f2");line(historyMem,"#ffbd69");requestAnimationFrame(()=>{});}
 function renderEvents(events){
  const feed=$("eventFeed");
@@ -188,6 +227,8 @@ async function request(path,options={}){const response=await fetch(path,{...opti
 async function refresh(){try{const [s,e]=await Promise.all([request("/api/status"),request("/api/events?limit=90")]);renderStatus(s);renderEvents(e.events||[]);drawChart()}catch(err){$("liveBadge").innerHTML='<span style="color:var(--amber)">RECONNECTING</span>'}}
 async function control(action){if(action==="stop"&&!confirm("Stop the Sentinel background worker? You can start it again from the CLI."))return;try{await request("/api/control",{method:"POST",headers:{"Content-Type":"application/json","Origin":location.origin},body:JSON.stringify({action})});setTimeout(refresh,700)}catch(e){alert("Control request failed: "+e.message)}}
 $("pauseBtn").addEventListener("click",()=>control("pause"));$("resumeBtn").addEventListener("click",()=>control("resume"));$("stopBtn").addEventListener("click",()=>control("stop"));
+$("knowledgeSearchBtn").addEventListener("click",searchKnowledge);
+$("knowledgeQuery").addEventListener("keydown",event=>{if(event.key==="Enter")searchKnowledge()});
 $("clock").textContent=new Date().toLocaleTimeString();setInterval(()=>$("clock").textContent=new Date().toLocaleTimeString(),1000);setInterval(refresh,2500);window.addEventListener("resize",drawChart);refresh();
 </script>
 </body></html>"""
@@ -299,6 +340,22 @@ def make_dashboard_server(
                     self._json(200, payload)
                 except (OSError, ValueError, json.JSONDecodeError):
                     self._json(503, {"error": "Sentinel status is not available yet"})
+                return
+            if parsed.path == "/api/knowledge/search":
+                try:
+                    from aie.config import data_dir
+                    from aie.knowledge.crawler import KnowledgeStore
+                    query = parse_qs(parsed.query).get("q", [""])[0].strip()
+                    limit_value = int(parse_qs(parsed.query).get("limit", ["6"])[0])
+                    if not query or len(query) > 180:
+                        self._json(400, {"error": "query must contain 1-180 characters"})
+                        return
+                    results = KnowledgeStore(
+                        data_dir() / "knowledge" / "microsoft-knowledge.sqlite3"
+                    ).search(query, limit=max(1, min(10, limit_value)))
+                    self._json(200, {"results": results})
+                except (OSError, ValueError):
+                    self._json(503, {"error": "Local knowledge index is unavailable"})
                 return
             if parsed.path == "/api/events":
                 try:
