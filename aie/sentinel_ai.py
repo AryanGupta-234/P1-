@@ -13,7 +13,6 @@ from typing import Any
 
 from aie.contracts import AIEEvent, EntityRef
 from aie.hardware import runtime_profile
-from aie.model_policy import choose_local_model
 from aie.models.base import ChatMessage, ModelRequest
 from aie.models.ollama import OllamaClient, OllamaError
 from aie.providers.windows import host_id
@@ -160,17 +159,11 @@ class SentinelModelCollaborator:
 
         if fast_model is not None and available_memory < 4.5:
             fast_model = None
-        if fast_model is None:
-            fast_decision = choose_local_model("routine", installed, available_memory)
-            fast_model = fast_decision.selected_model
         if deep_model is not None and available_memory < 8.0:
             deep_model = None
-        if deep_model is None and available_memory >= 7.5:
-            deep_decision = choose_local_model("complex", installed, available_memory)
-            deep_model = deep_decision.selected_model
 
         if fast_model is None:
-            raise OllamaError("No eligible local fast model is installed for current memory headroom.")
+            raise OllamaError("An installed 4B model and at least 4.5 GiB free RAM are required for Sentinel triage.")
 
         system_triage = (
             "You are Sentinel's local telemetry triage model. Analyze only the supplied "
@@ -224,7 +217,7 @@ class SentinelModelCollaborator:
             review = _parse_json(review_response.content)
         else:
             review = {
-                "assessment": "Independent review model unavailable or withheld by memory policy.",
+                "assessment": "An installed 6B reviewer or 8 GiB free RAM is unavailable; only 4B triage ran.",
                 "confidence": "low",
                 "supported_findings": [],
                 "rejected_claims": [],
