@@ -488,7 +488,7 @@ kbd{font:9px var(--mono);color:#829087;border:1px solid #526158;border-radius:6p
 .ai-suggestion{border:1px solid #405149;border-radius:15px;background:linear-gradient(145deg,#121819,#151d1a);padding:14px}
 .ai-suggestion p{font-size:11px;line-height:1.5;color:#b5c0b9}
 .toast-stack{position:fixed;z-index:1200;right:20px;bottom:20px;display:grid;gap:9px;width:min(390px,calc(100vw - 40px))}
-.toast{border:1px solid #405149;border-left:3px solid var(--lime);border-radius:14px;background:rgba(13,31,49,.97);color:#b8e65b;padding:13px 15px;font-size:12px;box-shadow:0 17px 45px #0008;backdrop-filter:blur(15px);animation:toastIn .2s ease}
+.toast{border:1px solid #405149;border-left:3px solid var(--lime);border-radius:14px;background:rgba(13,17,18,.97);color:#b8e65b;padding:13px 15px;font-size:12px;box-shadow:0 17px 45px #0008;backdrop-filter:blur(15px);animation:toastIn .2s ease}
 .toast.warn{border-left-color:var(--amber)}
 .toast.error{border-left-color:var(--red)}
 /* Searchable command palette */
