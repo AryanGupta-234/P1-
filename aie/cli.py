@@ -32,6 +32,7 @@ from aie.model_policy import choose_local_model, discover_local_models
 from aie.store import EventStore
 from aie.orchestration.cli import plan_app as _plan_app, task_app as _task_app
 from aie.sentinel import sentinel_app
+from aie.knowledge.cli import knowledge_app
 
 app = typer.Typer(no_args_is_help=True, help="AIE Windows-first environment observer.")
 console = Console()
@@ -2231,6 +2232,7 @@ def execute_approved_proposal(
 app.add_typer(_plan_app, name="plan")
 app.add_typer(_task_app, name="task")
 app.add_typer(sentinel_app, name="sentinel")
+app.add_typer(knowledge_app, name="knowledge")
 
 
 if __name__ == "__main__":
