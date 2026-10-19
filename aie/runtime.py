@@ -97,11 +97,16 @@ def observe(
         if include_process_resources
         else None
     )
-    etw_provider = (
-        WindowsETWProcessProvider(max_events_per_poll=etw_max_events_per_poll)
-        if include_etw
-        else None
-    )
+    etw_init_error: str | None = None
+    etw_provider = None
+    if include_etw:
+        try:
+            etw_provider = WindowsETWProcessProvider(
+                max_events_per_poll=etw_max_events_per_poll
+            )
+        except (OSError, PermissionError, RuntimeError, ValueError) as exc:
+            # Optional kernel telemetry must never take down the least-privilege observer.
+            etw_init_error = type(exc).__name__
     event_log_provider = (
         WindowsEventLogProvider(
             channels=event_log_channels,
@@ -131,6 +136,13 @@ def observe(
         else None
     )
     health = ObserverHealthTracker(clock=time.monotonic)
+    if etw_init_error is not None:
+        health.record_sample(
+            "windows.etw.process",
+            elapsed_seconds=0.0,
+            emitted_events=0,
+            error_type=etw_init_error,
+        )
     deadline = time.monotonic() + duration
     next_network = 0.0
     next_event_log = 0.0
