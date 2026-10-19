@@ -381,6 +381,8 @@ def _worker() -> None:
                 stop_path=stop_path,
                 db_path=database_path(),
                 command_queue=command_queue,
+                config_loader=_load_config,
+                config_saver=_save_config,
                 port=port,
             )
             state["dashboard_url"] = f"http://127.0.0.1:{port}/"
