@@ -595,7 +595,7 @@ def make_dashboard_server(
                         "sample_interval_seconds", "network_interval_seconds",
                         "process_resource_interval_seconds", "include_network",
                         "include_foreground", "include_process_resources",
-                        "registry_enabled", "deep_inventory_enabled", "knowledge_enabled",
+                        "include_ui_tree", "registry_enabled", "deep_inventory_enabled", "knowledge_enabled",
                         "ai_enabled", "registry_interval_seconds",
                         "deep_inventory_interval_seconds", "knowledge_interval_seconds",
                         "analysis_interval_seconds", "auto_review_on_posture_alerts",
@@ -816,7 +816,7 @@ def make_dashboard_server(
                 boolean_fields = {
                     "automation_enabled", "inventory_enabled",
                     "include_network", "include_foreground", "include_process_resources",
-                    "registry_enabled", "deep_inventory_enabled", "knowledge_enabled", "ai_enabled",
+                    "include_ui_tree", "registry_enabled", "deep_inventory_enabled", "knowledge_enabled", "ai_enabled",
                     "auto_review_on_posture_alerts", "auto_review_on_registry_changes",
                     "include_event_logs", "include_etw", "include_window_titles",
                 }
@@ -852,6 +852,9 @@ def make_dashboard_server(
                         self._json(400, {"error": "UI Automation allowlist must contain up to 20 executable names such as notepad.exe"})
                         return
                     values["ui_tree_apps"] = sorted({name.casefold() for name in apps})
+                if values.get("include_ui_tree") is True and not values.get("ui_tree_apps", []):
+                    self._json(400, {"error": "Add at least one allowed executable before enabling UI Automation."})
+                    return
                 for key, value in values.items():
                     if key == "ui_tree_apps":
                         continue
