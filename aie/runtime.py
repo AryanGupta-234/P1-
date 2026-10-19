@@ -48,6 +48,8 @@ def observe(
     include_etw: bool = False,
     etw_max_events_per_poll: int = 100,
     health_interval: float = 30.0,
+    stop_file: Path | None = None,
+    on_cycle: Callable[[dict[str, object]], None] | None = None,
 ) -> int:
     """Persist read-only observations and privacy-safe observer health telemetry."""
     if duration < 1:
@@ -137,6 +139,8 @@ def observe(
     total = 0
     etw_paused = False
 
+    cycle_samples: list[dict[str, object]] = []
+
     def collect(
         provider_name: str,
         collector: Callable[[], list[AIEEvent] | tuple[AIEEvent, ...] | object],
@@ -145,12 +149,20 @@ def observe(
         try:
             collected = list(collector())
         except Exception as exc:  # noqa: BLE001 - observation must degrade instead of stopping the runtime.
+            elapsed_ms = max(0.0, time.monotonic() - started) * 1000.0
             health.record_sample(
                 provider_name,
-                elapsed_seconds=max(0.0, time.monotonic() - started),
+                elapsed_seconds=elapsed_ms / 1000.0,
                 emitted_events=0,
                 error_type=type(exc).__name__,
             )
+            cycle_samples.append({
+                "provider": provider_name,
+                "latency_ms": round(elapsed_ms, 2),
+                "events": 0,
+                "state": "degraded",
+                "error_type": type(exc).__name__,
+            })
             return []
         loss_count = 0
         for event in collected:
@@ -161,11 +173,18 @@ def observe(
                 loss_count += dropped
         if loss_count:
             health.record_event_loss(provider_name, loss_count)
+        elapsed_ms = max(0.0, time.monotonic() - started) * 1000.0
         health.record_sample(
             provider_name,
-            elapsed_seconds=max(0.0, time.monotonic() - started),
+            elapsed_seconds=elapsed_ms / 1000.0,
             emitted_events=len(collected),
         )
+        cycle_samples.append({
+            "provider": provider_name,
+            "latency_ms": round(elapsed_ms, 2),
+            "events": len(collected),
+            "state": "ok",
+        })
         return collected
 
     if jsonl_path:
@@ -182,12 +201,24 @@ def observe(
         event_bus.subscribe("jsonl", write_jsonl)
     first_sample = True
     try:
-        while time.monotonic() < deadline:
+        while time.monotonic() < deadline and not (stop_file is not None and stop_file.exists()):
+            cycle_samples.clear()
             if observer_is_paused():
                 if etw_provider is not None and not etw_paused:
                     etw_provider.pause()
                     etw_paused = True
                 remaining = deadline - time.monotonic()
+                if on_cycle is not None:
+                    try:
+                        on_cycle({
+                            "status": "paused",
+                            "timestamp": time.time(),
+                            "provider_health": health.snapshot().get("providers", {}),
+                            "events_collected": 0,
+                            "providers": [],
+                        })
+                    except Exception:  # noqa: BLE001 - status observers must not stop collection.
+                        pass
                 if remaining > 0:
                     time.sleep(min(interval, remaining))
                 continue
@@ -258,6 +289,18 @@ def observe(
             if on_diagnostic is not None:
                 for event in diagnostic_events:
                     on_diagnostic(event)
+
+            if on_cycle is not None:
+                try:
+                    on_cycle({
+                        "status": "running",
+                        "timestamp": time.time(),
+                        "provider_health": health.snapshot().get("providers", {}),
+                        "events_collected": len(events) + len(derived_events),
+                        "providers": list(cycle_samples),
+                    })
+                except Exception:  # noqa: BLE001 - dashboard/telemetry listeners are non-critical.
+                    pass
 
             remaining = deadline - time.monotonic()
             if remaining > 0:
