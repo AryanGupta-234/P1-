@@ -110,9 +110,12 @@ The first persistent Sentinel prototype is integrated on `dev`. It reuses AIE re
 - A detached per-user worker supports manual start/stop and an ONLOGON Task Scheduler entry using LIMITED, interactive-only permissions.
 - A named mutex prevents duplicate worker instances. Pause/resume reuse the global AIE observer pause marker; graceful stop is a worker stop file.
 - A local-only dashboard binds to 127.0.0.1. Its API requires a random per-user token and exposes provider health, system resources, event history and explicit pause/resume/stop controls.
-- A periodic Windows inventory snapshot includes bounded process identity, installed application metadata, service metadata, scheduled-task names/status and network-interface metadata. It does not collect process command lines, executable paths, uninstall commands, scheduled-task XML or network addresses.
+- Periodic Windows inventory snapshots include bounded process identity, installed application metadata, service metadata, scheduled-task names/status and network-interface metadata.
+- The registry sensor reads a curated allowlist of Windows configuration values, service/driver registrations and autorun value names. It compares fingerprints in memory; it does not persist autorun commands or full binary paths and never reads credential hives.
+- The deeper CIM pass reads OS/CPU, system and signed PnP driver, disk, Defender, Firewall and device-health metadata. It is read-only and bounded.
+- The Microsoft knowledge crawler searches fixed Windows topics on Learn and fetches selected Markdown from MicrosoftDocs/win32, MicrosoftDocs/windows-driver-docs and microsoft/Windows-classic-samples. It caches content in local SQLite, validates HTTPS source hosts and exposes local dashboard search. It does not upload machine data.
 - Local Ollama inference requires an installed 4B triage model and uses a separate installed 6B reviewer when memory headroom permits. The stages run sequentially and each model is released after its turn. No unrelated-size substitution or model download occurs. Model results are derived advisory evidence, not actions or policy.
-- ETW process lifecycle capture remains opt-in. The standard background task is deliberately least-privilege; it does not install a custom driver or promise always-on elevated kernel tracing.
+- ETW process lifecycle capture remains opt-in. The standard background task is deliberately least-privilege; it does not install a custom driver or promise always-on elevated kernel tracing. Other kernel categories are not claimed as implemented until the pinned ETW provider's actual event coverage is validated.
 - The browser/video observer remains separately opt-in and uses its existing extension/native-host pipeline.
 
 Reference: [Sentinel Runtime](SENTINEL.md).
