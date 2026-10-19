@@ -120,6 +120,11 @@ body{font-family:"Segoe UI Variable","Aptos","Inter","Segoe UI",Arial,sans-serif
 .model-select-grid label{display:block;font-size:12px;color:#b5c1b6;margin-bottom:6px}
 .feature-command-disabled{opacity:.38!important;filter:saturate(.3);cursor:not-allowed!important;transform:none!important}
 @media(max-width:1100px){.app{grid-template-columns:190px minmax(0,1fr)}.hero{grid-template-columns:1fr}.hero-aside{border-left:0;border-top:1px solid #39463f;padding:16px 0 0}.metric-row{grid-template-columns:repeat(3,minmax(0,1fr))}}
+[data-screen="autonomy"]>.grid{grid-template-columns:minmax(0,1fr)}
+.panel,.metric,.hero,.toggle,.info-card,.interval,.event,.action-tile,.field,.select,.textarea{border-radius:7px}
+.command-line strong,.driver-row strong{font-size:12px}
+.command-line small,.driver-row small{font-size:10px;line-height:1.45}
+.control-footnote code{font:600 11px "Cascadia Code",Consolas,monospace;color:var(--lime);white-space:nowrap}
 @media(max-width:760px){.app{display:block}.rail{position:sticky;top:0;height:auto;display:flex;flex-direction:row;overflow:auto;padding:8px;background:#0c1111;border-right:0;border-bottom:1px solid #283330}.rail-brand,.rail-spacer,.rail-state,.rail-bottom{display:none}.nav-btn{width:auto;min-width:max-content;min-height:43px;padding:0 10px}.nav-btn small{font-size:10px}.topbar{padding:12px 0;align-items:flex-start;flex-direction:column}.top-right{justify-content:flex-start}.section-title{font-size:23px}.hero{padding:19px}.metric-row{grid-template-columns:repeat(2,minmax(0,1fr))}.grid,.grid.equal,.ai-shell{grid-template-columns:1fr}.interval-grid,.control-grid,.model-select-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.control-master{grid-template-columns:1fr}.master-switch{width:100%}main{padding:0 12px 28px}}
 @media(max-width:420px){.interval-grid,.control-grid,.model-select-grid{grid-template-columns:1fr}.metric-row{grid-template-columns:1fr 1fr}.panel{padding:14px}}
 </style>
@@ -273,7 +278,7 @@ body{font-family:"Segoe UI Variable","Aptos","Inter","Segoe UI",Arial,sans-serif
   </section>
 
   <section class="screen" data-screen="autonomy">
-   <div class="section-head"><div><div class="section-label">POLICY / SCHEDULE / AUTOMATION</div><div class="section-title">AUTONOMY CONTROL DECK</div><div class="section-description">Configure background collection and evidence-triggered AI reviews. All automatic intelligence remains advisory.</div></div><span class="tag">LOCAL CONFIG</span></div>
+   <div class="section-head"><div><div class="section-label">SENSOR SETTINGS / SCHEDULES / AUTOMATION</div><div class="section-title">FEATURES &amp; AUTOMATION</div><div class="section-description">Enable or disable each collector, choose when jobs run, configure automatic review triggers, and inspect what Sentinel will do. Background schedules only run while the worker is online and observation is not paused. Sentinel remains read-only and advisory.</div></div><span class="tag">LOCAL CONFIG</span></div>
    <div class="grid">
     <div class="control-stack">
      <section class="panel control-panel">
@@ -391,6 +396,7 @@ body{font-family:"Segoe UI Variable","Aptos","Inter","Segoe UI",Arial,sans-serif
      <div class="note">A queued job may be deferred while its collector or local model is busy. The worker records dispatched actions in the evidence vault.</div>
     </section>
    </div>
+   <div class="control-footnote" style="margin-top:12px">Automatic sign-in startup is separate from the schedule switch. To start Sentinel whenever this Windows user signs in, run <code>aie sentinel install</code> once from PowerShell. It registers a current-user, limited-permission Task Scheduler entry; it does not install a SYSTEM service.</div>
    <section class="panel" style="margin-top:12px"><div class="panel-head"><div><div class="panel-title">AUTOMATION AUDIT TIMELINE</div><div class="panel-sub">Command dispatch and posture automation events</div></div><button class="btn ghost" data-view-jump="evidence">OPEN FULL AUDIT →</button></div><div class="audit-list" id="automationAudit"><div class="empty">No automation records yet.</div></div></section>
   </section>
 
@@ -584,7 +590,7 @@ async function saveProfile(){
   $("profileSaveState").textContent="SAVE FAILED";$("profileNote").textContent=e.message;toast("Profile save failed: "+e.message,"error");
  }finally{$("saveProfile").disabled=false}
 }
-async function renderAutomationState(s){
+function renderAutomationState(s){
  const enabled=lastConfig?lastConfig.automation_enabled===true:s.features?.automation===true;
  const paused=s.observer_paused===true,active=s.status==="running";
  $("automationLive").textContent=!active?"WORKER OFFLINE":paused?"OBSERVER PAUSED":enabled?"SCHEDULES ENABLED":"MANUAL / SENSOR MODE";
@@ -610,7 +616,7 @@ function updateCommandAvailability(){
   else if(button.title.includes("Disabled in Feature Control"))button.removeAttribute("title");
  });
 }
-function runCommand(action){try{const r=await post("/api/command",{action});toast("Command queued · "+r.queued);setTimeout(()=>refresh(false),1100)}catch(e){toast(e.message,"error")}}
+async function runCommand(action){try{const r=await post("/api/command",{action});toast("Command queued · "+r.queued);setTimeout(()=>refresh(false),1100)}catch(e){toast(e.message,"error")}}
 let catalogKind="processes";
 async function loadCatalog(kind=catalogKind){
  catalogKind=kind;
