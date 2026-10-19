@@ -4,6 +4,7 @@ from __future__ import annotations
 import hmac
 import json
 import queue
+import re
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -567,7 +568,8 @@ def make_dashboard_server(
                         "deep_inventory_interval_seconds", "knowledge_interval_seconds",
                         "analysis_interval_seconds", "auto_review_on_posture_alerts",
                         "auto_review_on_registry_changes", "low_disk_alert_percent",
-                        "low_battery_alert_percent",
+                        "low_battery_alert_percent", "include_event_logs",
+                        "include_etw", "include_window_titles", "ui_tree_apps",
                     )
                     self._json(200, {"profile": {key: config[key] for key in fields}})
                 except (OSError, RuntimeError, ValueError):
@@ -734,6 +736,7 @@ def make_dashboard_server(
                 boolean_fields = {
                     "registry_enabled", "deep_inventory_enabled", "knowledge_enabled", "ai_enabled",
                     "auto_review_on_posture_alerts", "auto_review_on_registry_changes",
+                    "include_event_logs", "include_etw", "include_window_titles",
                 }
                 integer_ranges = {
                     "registry_interval_seconds": (60, 3600),
@@ -743,10 +746,26 @@ def make_dashboard_server(
                     "low_disk_alert_percent": (1, 30),
                     "low_battery_alert_percent": (5, 40),
                 }
-                if any(key not in boolean_fields and key not in integer_ranges for key in values):
+                if any(key not in boolean_fields and key not in integer_ranges and key != "ui_tree_apps" for key in values):
                     self._json(400, {"error": "profile contains an unsupported setting"})
                     return
+                if "ui_tree_apps" in values:
+                    apps = values["ui_tree_apps"]
+                    if (
+                        not isinstance(apps, list)
+                        or len(apps) > 20
+                        or any(
+                            not isinstance(name, str)
+                            or not re.fullmatch(r"[A-Za-z0-9_.-]{1,64}\.exe", name, re.IGNORECASE)
+                            for name in apps
+                        )
+                    ):
+                        self._json(400, {"error": "UI Automation allowlist must contain up to 20 executable names such as notepad.exe"})
+                        return
+                    values["ui_tree_apps"] = sorted({name.casefold() for name in apps})
                 for key, value in values.items():
+                    if key == "ui_tree_apps":
+                        continue
                     if key in boolean_fields:
                         if not isinstance(value, bool):
                             self._json(400, {"error": "boolean setting has an invalid value"})
@@ -762,7 +781,7 @@ def make_dashboard_server(
                     config = config_loader()
                     config.update(values)
                     config_saver(config)
-                    fields = tuple(boolean_fields | set(integer_ranges))
+                    fields = tuple(boolean_fields | set(integer_ranges) | {"ui_tree_apps"})
                     self._json(200, {"saved": True, "profile": {key: config[key] for key in fields}})
                 except (OSError, RuntimeError, ValueError):
                     self._json(503, {"error": "Unable to save the Sentinel profile"})
