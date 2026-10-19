@@ -617,6 +617,7 @@ def _worker() -> None:
                     },
                     "logical_processors": computer.get("NumberOfLogicalProcessors") if isinstance(computer, dict) else None,
                     "physical_memory_bytes": computer.get("TotalPhysicalMemory") if isinstance(computer, dict) else None,
+                    "hypervisor_present": computer.get("HypervisorPresent") if isinstance(computer, dict) else None,
                     "disks": disk_summary,
                 }
                 state["event_count"] = store.count()
