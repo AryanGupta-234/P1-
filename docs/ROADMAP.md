@@ -4,7 +4,7 @@ Statuses: DONE / IN_PROGRESS / BLOCKED / PLANNED. Mark DONE only with code, test
 
 Development ownership and branch rules are defined in [Development Streams](DEVELOPMENT_STREAMS.md). M1.5 browser/video work is tracked independently on `browser-video-intelligence`; ecosystem and shared-integration work remains on `dev`. The existing browser/video foundation is present in the integrated baseline, but new browser/video progress must stay isolated until a reviewed milestone is ready.
 
-**Last updated:** 2026-10-12 | **Ecosystem branch:** `dev` | **Browser/video branch:** `browser-video-intelligence` | **Stable release:** `main`
+**Last updated:** 2026-10-19 | **Ecosystem branch:** `dev` | **Browser/video branch:** `browser-video-intelligence` | **Stable release:** `main`
 
 | ID | Workstream | Status | Exit criteria |
 |---|---|---|---|
@@ -16,7 +16,7 @@ Development ownership and branch rules are defined in [Development Streams](DEVE
 | M4 | Persistent memory and learning | IN_PROGRESS | Provenance-aware memory, retrieval, consolidation and feedback |
 | M5 | Controlled autonomy | IN_PROGRESS | Capability policy, audit, executor, sandbox and recovery |
 | M6 | Generalization research | PLANNED | Held-out task transfer, robustness and reproducible benchmarks |
-| M7 | Personal assistant experience | PLANNED | Tray app, alerts, controls and explainability |
+| M7 | Persistent Sentinel experience | IN_PROGRESS | Background worker, per-user startup, live local dashboard, event inspection and local model review |
 
 ## M0 — Foundation
 - [x] Windows-only architecture and boundaries.
@@ -47,7 +47,8 @@ Development ownership and branch rules are defined in [Development Streams](DEVE
 - [x] `aie health` CLI view for provider errors, latency and event-loss counters.
 - [x] Explicit JSONL export and confirm-only delete-all controls; sensitive export requires an explicit opt-in.
 - [ ] Rich observer health desktop UI.
-- [ ] Validate ETW elevation, Event Log/UIA permissions and data collection on the target Windows desktop.
+- [x] Periodic bounded system inventory event for processes, applications, services, scheduled tasks and interfaces, with local event inspection in the Sentinel dashboard.
+- [ ] Validate ETW elevation, Event Log/UIA permissions and inventory accuracy on the target Windows desktop.
 
 ## M1.5 — Video intelligence
 - [x] Opt-in Chrome/Edge MV3 HTML-video observer, disabled by default.
@@ -145,7 +146,14 @@ Development ownership and branch rules are defined in [Development Streams](DEVE
 - [ ] Calibration, robustness, forgetting and recovery metrics.
 - [ ] Reproducible experiment manifests; no benchmark presented as proof of AGI.
 
-## M7 — Personal assistant experience
+## M7 — Persistent Sentinel experience
+- [x] Detached per-user worker with duplicate-process protection, stop marker, heartbeat and bounded rotating log.
+- [x] Current-user ONLOGON Task Scheduler registration using interactive-only, LIMITED permissions; no SYSTEM service.
+- [x] Local loopback dashboard with token-protected API, live host resource chart, provider health, event stream and pause/resume/stop controls.
+- [x] Expandable event inspection and periodic Windows metadata inventory snapshots.
+- [x] Local two-stage Ollama 4B/6B evidence triage/review with memory checks, sequential model use and no auto-pull or cloud fallback.
+- [ ] Exercise sign-in startup, dashboard controls, inventory refresh and Ollama inference on the target Windows 11 desktop.
+- [ ] Add signed installer/shortcut and polished native desktop shell after validating the local dashboard prototype.
 - [x] User-started Windows tray prototype with pause/resume and minimal local status dialog; target-desktop usability/runtime validation remains pending.
 - [x] Generic local notification prototype with explicit opt-in, quiet hours, pause suppression and no event details in the balloon. Target-desktop behavior and full notification categories remain pending.
 - [x] Capability permission inspection and enable/disable controls for registered adapters; enabling cannot remove required review or enable autonomy.
