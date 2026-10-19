@@ -176,3 +176,20 @@ The Task Manager reports real managed worker jobs, trigger origin, start/finish 
 Ask Sentinel has a Maintenance & Settings Advisor mode. It receives the same bounded local evidence projection used by other Ask modes: internal/public events only, private fields recursively filtered, at most 20 records, and local Ollama inference. It may return proposed changes only for an allowlist of Sentinel profile booleans. Suggestions are evidence-ID filtered and staged into Feature Control for user review; they are not saved automatically. The advisor may explain manual Windows remediation but cannot emit shell scripts/registry edits or execute arbitrary operating-system actions. Privacy-sensitive collectors are not suggested for automatic enablement.
 
 Validation boundary: source-level wiring has been inspected. Target Windows 11 desktop runtime, visual usability, Ollama response quality and end-to-end feature-toggle behavior remain pending; do not infer those outcomes from this implementation alone.
+
+## Sentinel Prime interface redesign — 19 October 2026
+
+The dashboard presentation layer has been consolidated into one coherent design system while retaining the existing navy, cyan and coral palette. This replaces the prior stacked stylesheet overrides rather than adding another theme layer.
+
+The operator experience now includes:
+- A grouped workspace rail for Workspace, Intelligence and Operations.
+- A consistent page header and responsive layout across all eight views.
+- Larger typography, rounded layered surfaces, clearer spacing and stronger information hierarchy.
+- Restrained motion for screen transitions, interactive cards and the animated system-core graphic; the interface honors `prefers-reduced-motion`.
+- A searchable command palette opened with `Ctrl+K`. It can navigate to any workspace or dispatch the existing five allowlisted Sentinel jobs. Disabled jobs remain unavailable in the palette when Feature Control has disabled them.
+- Keyboard workspace shortcuts `Ctrl+Shift+1` through `Ctrl+Shift+8`.
+- Keyboard-accessible cockpit metric drill-downs to Telemetry, Evidence Vault, Feature Control and System Intelligence.
+
+The palette dispatches through the existing dashboard command handlers and authenticated loopback API; it introduces no new operating-system execution capability or remote UI dependency. Feature switches, task scheduling and AI settings retain their existing approval and privacy boundaries.
+
+Validation boundary: source-level navigation, DOM-ID, command-target and CSS-balance checks were inspected after the change. Browser/WebView rendering, animation smoothness, keyboard operation and full interaction checks still require validation on the target Windows 11 desktop.
