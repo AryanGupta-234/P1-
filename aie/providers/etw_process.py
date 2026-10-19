@@ -112,13 +112,16 @@ class WindowsETWProcessProvider:
     @staticmethod
     def _default_session_factory() -> KernelSessionLike:
         try:
-            from pyetwkit._core import PyKernelFlags, PyKernelSession
+            # pyetwkit 3.2.0 exports KernelSession and its explicit enable_* methods.
+            # Do not use the older PyKernelFlags/PyKernelSession names.
+            from pyetwkit._core import KernelSession
         except ImportError as exc:
             raise RuntimeError(
                 "Install ETW support with: python -m pip install -e '.[windows]'"
             ) from exc
-        flags = PyKernelFlags().with_process()
-        return PyKernelSession(flags)
+        session = KernelSession()
+        session.enable_process()
+        return session
 
     def _start(self) -> None:
         with self._lock:
