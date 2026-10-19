@@ -366,7 +366,8 @@ function renderDeepDiagnostics(status){
  if(!batteries.length)batteryTarget.append(create("div","panel-sub","No battery telemetry is available."));
  for(const battery of batteries){
   const row=create("div","security-row"),name=create("strong",null,battery.name||"Battery"),statusText=create("span","provider-state",battery.charge_percent==null?"UNKNOWN":battery.charge_percent+"%");
-  row.append(name,statusText,battery.estimated_runtime_minutes==null?create("small","health-detail",battery.health_status||""):create("small","health-detail","Estimated runtime "+battery.estimated_runtime_minutes+" min"));batteryTarget.append(row);
+  const batteryDetails=[battery.health_status||"",battery.capacity_health_percent==null?"":"Capacity retention ~"+battery.capacity_health_percent+"%",battery.estimated_runtime_minutes==null?"":"~"+battery.estimated_runtime_minutes+" min remaining"].filter(Boolean).join(" · ");
+  row.append(name,statusText,create("small","health-detail",batteryDetails||"No additional battery metrics exposed"));batteryTarget.append(row);
  }
  const disks=$("diskList");disks.replaceChildren();
  const diskItems=Array.isArray(deep.disks)?deep.disks:[];
