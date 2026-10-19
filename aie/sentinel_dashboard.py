@@ -8,7 +8,7 @@ import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
-from typing import Any
+from typing import Any, Callable
 
 from aie.config import set_observer_paused
 from aie.store import EventStore
@@ -548,6 +548,8 @@ def make_dashboard_server(
     stop_path: Path,
     db_path: Path,
     command_queue: queue.Queue[str] | None = None,
+    config_loader: Callable[[], dict[str, Any]] | None = None,
+    config_saver: Callable[[dict[str, Any]], None] | None = None,
     port: int = 8765,
 ) -> ThreadingHTTPServer:
     if not isinstance(token, str) or len(token) < 32:
@@ -611,8 +613,9 @@ def make_dashboard_server(
                 return
             if parsed.path == "/api/config":
                 try:
-                    from aie.sentinel import _load_config
-                    config = _load_config()
+                    if config_loader is None:
+                        raise RuntimeError("profile provider unavailable")
+                    config = config_loader()
                     fields = (
                         "registry_enabled", "deep_inventory_enabled", "knowledge_enabled",
                         "ai_enabled", "registry_interval_seconds",
@@ -712,10 +715,11 @@ def make_dashboard_server(
                             self._json(400, {"error": "interval is outside its supported range"})
                             return
                 try:
-                    from aie.sentinel import _load_config, _save_config
-                    config = _load_config()
+                    if config_loader is None or config_saver is None:
+                        raise RuntimeError("profile provider unavailable")
+                    config = config_loader()
                     config.update(values)
-                    _save_config(config)
+                    config_saver(config)
                     fields = tuple(boolean_fields | set(integer_ranges))
                     self._json(200, {"saved": True, "profile": {key: config[key] for key in fields}})
                 except (OSError, RuntimeError, ValueError):
