@@ -334,7 +334,9 @@ function renderDeepDiagnostics(status){
  const physicalTarget=$("physicalHealthList");physicalTarget.replaceChildren();
  if(!physical.length)physicalTarget.append(create("div","panel-sub","Physical disk health is not exposed by this Windows configuration."));
  for(const disk of physical){
-  const row=create("div","disk-row"),top=create("div","disk-top"),name=create("strong",null,disk.name||"Physical disk"),state=create("small","health-"+(String(disk.health||"").toLowerCase()==="healthy"?"good":String(disk.health||"").toLowerCase()==="warning"?"warn":"bad"),String(disk.health||"UNKNOWN").toUpperCase());
+  const health=String(disk.health||"UNKNOWN").toLowerCase();
+  const healthClass=health==="healthy"?"good":health==="warning"?"warn":health==="unhealthy"||health==="critical"?"bad":"";
+  const row=create("div","disk-row"),top=create("div","disk-top"),name=create("strong",null,disk.name||"Physical disk"),state=create("small",healthClass?"health-"+healthClass:"",health.toUpperCase());
   top.append(name,state);row.append(top,create("div","health-detail",(disk.media_type||"—")+" · "+(disk.bus_type||"—")+" · "+(disk.operational||"—")+" · "+(disk.size_gib||0)+" GiB"));physicalTarget.append(row);
  }
  const encryptionTarget=$("encryptionList");encryptionTarget.replaceChildren();
@@ -708,7 +710,8 @@ def make_dashboard_server(
                         return
                     raw_drivers = latest.data.get("signed_pnp_drivers", [])
                     drivers = []
-                    for item in raw_drivers if isinstance(raw_drivers, list) else []:
+                    driver_records = raw_drivers if isinstance(raw_drivers, list) else []
+                    for item in driver_records:
                         if not isinstance(item, dict):
                             continue
                         device = str(item.get("DeviceName") or "Unknown device")[:140]
