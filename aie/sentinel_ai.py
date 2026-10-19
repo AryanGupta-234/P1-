@@ -471,11 +471,17 @@ class SentinelModelCollaborator:
                     evidence = item.get("evidence_ids", [])
                     if not isinstance(evidence, list):
                         evidence = []
+                    supported_evidence = [
+                        entry for entry in evidence
+                        if isinstance(entry, str) and entry in allowed_ids
+                    ][:6]
+                    if not supported_evidence:
+                        continue
                     profile_suggestions.append({
                         "setting": setting,
                         "value": value,
                         "reason": str(item.get("reason") or "No rationale provided.")[:320],
-                        "evidence_ids": [entry for entry in evidence if isinstance(entry, str) and entry in allowed_ids][:6],
+                        "evidence_ids": supported_evidence,
                         "requires_restart": setting in {"include_network", "include_foreground", "include_process_resources"},
                     })
         return {
