@@ -34,7 +34,7 @@ main{min-width:0;max-width:1600px;width:100%;margin:auto;padding:27px clamp(18px
 .stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:15px 0}.stat{border:1px solid var(--line);border-radius:15px;background:linear-gradient(145deg,#101d2b,#0c1622);padding:15px 17px;min-width:0}.stat-top{display:flex;align-items:center;justify-content:space-between}.stat-label{color:#8ba1b7;font-size:9px;letter-spacing:.14em}.stat-icon{color:var(--cyan);font-size:15px}.stat-value{font:25px "Cascadia Code",Consolas,monospace;margin:9px 0 2px;white-space:nowrap}.stat-foot{font-size:9px;color:#70879d}.stat-meter{height:3px;background:#24384a;border-radius:10px;margin-top:10px;overflow:hidden}.stat-meter i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--blue),var(--cyan));box-shadow:0 0 9px var(--cyan)}
 .grid-main{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(300px,.9fr);gap:14px}.panel{border:1px solid var(--line);border-radius:var(--radius);background:linear-gradient(145deg,#101d2b,#0c1622);padding:17px;min-width:0}.panel-head{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:14px}.panel-title{font-size:12px;font-weight:700;letter-spacing:.07em}.panel-sub{font-size:9px;color:var(--muted);margin-top:3px}.tag{font:9px "Cascadia Code",Consolas,monospace;color:var(--cyan);border:1px solid #2b5362;background:#102632;border-radius:20px;padding:4px 8px;white-space:nowrap}
 .chart-wrap{height:140px;position:relative}.chart-wrap canvas{width:100%;height:100%}.chart-legend{display:flex;gap:15px;font-size:9px;color:#8ca1b6;margin-top:9px}.legend-dot{display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:5px;background:var(--cyan)}.legend-dot.amber{background:var(--amber)}
-.feed{display:grid;gap:7px;max-height:450px;overflow:auto;padding-right:4px}.event{display:grid;grid-template-columns:34px minmax(0,1fr) auto;gap:10px;align-items:start;padding:10px;border:1px solid #203347;border-radius:12px;background:#0a1420}.event:hover{border-color:#3e657e;background:#0e1d2c}.event-icon{width:32px;height:32px;border-radius:10px;background:#142b3b;color:var(--cyan);display:grid;place-items:center;font-size:13px}.event-name{font-size:10px;font-weight:700;overflow-wrap:anywhere}.event-desc{font-size:9px;color:#8da2b6;margin-top:3px;overflow-wrap:anywhere}.event-time{font:9px "Cascadia Code",Consolas,monospace;color:#6f879d;white-space:nowrap}.empty{padding:28px;text-align:center;color:var(--muted);font-size:11px;border:1px dashed #284056;border-radius:12px}
+.feed{display:grid;gap:7px;max-height:450px;overflow:auto;padding-right:4px}.event{display:grid;grid-template-columns:34px minmax(0,1fr) auto;gap:10px;align-items:start;padding:10px;border:1px solid #203347;border-radius:12px;background:#0a1420}.event:hover{border-color:#3e657e;background:#0e1d2c}.event-inspect{margin-top:7px;color:#6f91a8;font-size:8px}.event-inspect summary{cursor:pointer;letter-spacing:.12em;user-select:none}.event-json{white-space:pre-wrap;overflow-wrap:anywhere;max-height:230px;overflow:auto;margin:7px 0 0;padding:9px;border:1px solid #20374b;border-radius:8px;background:#07111b;color:#b5cadd;font:9px/1.5 "Cascadia Code",Consolas,monospace}.event-icon{width:32px;height:32px;border-radius:10px;background:#142b3b;color:var(--cyan);display:grid;place-items:center;font-size:13px}.event-name{font-size:10px;font-weight:700;overflow-wrap:anywhere}.event-desc{font-size:9px;color:#8da2b6;margin-top:3px;overflow-wrap:anywhere}.event-time{font:9px "Cascadia Code",Consolas,monospace;color:#6f879d;white-space:nowrap}.empty{padding:28px;text-align:center;color:var(--muted);font-size:11px;border:1px dashed #284056;border-radius:12px}
 .model-box{border:1px solid #294356;background:linear-gradient(135deg,#122838,#0c1926);border-radius:13px;padding:13px;margin-bottom:10px}.model-top{display:flex;align-items:center;justify-content:space-between;gap:8px}.model-name{font-size:10px;font-weight:700}.model-role{color:#8fa9bf;font-size:9px}.model-state{font-size:8px;color:var(--green);letter-spacing:.12em}.model-result{font-size:10px;color:#c5d6e6;margin-top:8px;line-height:1.55;white-space:pre-wrap;overflow-wrap:anywhere}.confidence{font:9px "Cascadia Code",Consolas,monospace;color:var(--amber)}
 .provider-list{display:grid;gap:7px}.provider{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;border-bottom:1px solid #1b2d40;padding:8px 2px}.provider:last-child{border-bottom:0}.provider strong{font-size:10px;font-weight:600}.provider small{display:block;color:var(--muted);font-size:9px;margin-top:2px}.provider-state{font:9px "Cascadia Code",Consolas,monospace;color:var(--green)}.provider-state.degraded{color:var(--amber)}
 .lower{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(280px,.8fr);gap:14px;margin-top:14px}.privacy-note{font-size:10px;color:#93a9bd;line-height:1.6}.privacy-note b{color:#d4e6f4}.privacy-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-top:12px}.privacy-chip{font-size:9px;padding:8px 9px;border:1px solid #263b4e;border-radius:9px;color:#aec0d0;background:#0b1723}.privacy-chip:before{content:"✓";color:var(--green);margin-right:7px}
@@ -138,7 +138,51 @@ function renderStatus(s){lastStatus=s;const paused=s.observer_paused===true;cons
 const hw=s.hardware||{};const cpu=Number(s.cpu_percent)||0;const total=Number(hw.memory_total_gib)||0;const avail=Number(hw.memory_available_gib)||0;const used=total?Math.max(0,total-avail):0;const memPct=total?used/total*100:0;$("cpu").textContent=cpu.toFixed(0)+"%";$("ram").textContent=avail.toFixed(1)+" GB";$("ramFoot").textContent=used.toFixed(1)+" GB used of "+total.toFixed(1)+" GB";setBar("cpuBar",cpu);setBar("ramBar",memPct);historyCpu.push(cpu);historyMem.push(memPct);historyCpu=historyCpu.slice(-64);historyMem=historyMem.slice(-64);
 $("eventCount").textContent=Number(s.event_count||0).toLocaleString();setBar("eventBar",Math.min(100,Number(s.event_count||0)/100));const providers=Object.values(s.provider_health||{});const bad=providers.filter(x=>x.state==="degraded").length;$("health").textContent=providers.length?(providers.length-bad)+"/"+providers.length:"—";$("healthFoot").textContent=bad?bad+" provider(s) degraded":"No active provider errors";setBar("healthBar",providers.length?(providers.length-bad)/providers.length*100:0);renderProviders(s);summaryData(s)}
 function drawChart(){const canvas=$("resourceChart"),ctx=canvas.getContext("2d");const w=canvas.clientWidth*devicePixelRatio,h=canvas.clientHeight*devicePixelRatio;if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h}ctx.clearRect(0,0,w,h);const pad=12*devicePixelRatio;ctx.strokeStyle="#20374b";ctx.lineWidth=devicePixelRatio;for(let i=0;i<5;i++){const y=pad+(h-2*pad)*i/4;ctx.beginPath();ctx.moveTo(pad,y);ctx.lineTo(w-pad,y);ctx.stroke()}function line(data,color){if(data.length<2)return;ctx.strokeStyle=color;ctx.lineWidth=2*devicePixelRatio;ctx.beginPath();data.forEach((v,i)=>{const x=pad+(w-2*pad)*i/63;const y=h-pad-(h-2*pad)*Math.max(0,Math.min(100,v))/100;if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y)});ctx.stroke()}line(historyCpu,"#53e4f2");line(historyMem,"#ffbd69");requestAnimationFrame(()=>{});}
-function renderEvents(events){const feed=$("eventFeed");feed.replaceChildren();$("feedCount").textContent=events.length+" RECORDS";if(!events.length){feed.append(create("div","empty","No events yet. The observer stream will appear here as Sentinel samples Windows."));return}for(const ev of events){const row=create("article","event"),icon=create("div","event-icon",ev.event_type?.includes("network")?"⌁":ev.event_type?.includes("process")?"◉":ev.event_type?.includes("model")?"⟡":"◇"),body=create("div"),name=create("div","event-name",ev.event_type||"event"),entity=ev.entity?.name||ev.source||"system";let desc=entity;const d=ev.data||{};if(ev.event_type==="observer.cycle"){const samples=d.providers||[];desc="Collected "+(d.events_collected||0)+" observations · "+samples.map(x=>x.provider).join(" / ")}else if(d.process_name){desc=d.process_name+(d.pid?" · PID "+d.pid:"")}else if(d.summary){desc=d.summary}else if(d.message){desc="Local event"}const detail=create("div","event-desc",desc);body.append(name,detail);const time=create("div","event-time",prettyAge(ev.timestamp));row.append(icon,body,time);feed.append(row)}}
+function renderEvents(events){
+ const feed=$("eventFeed");
+ feed.replaceChildren();
+ $("feedCount").textContent=events.length+" RECORDS";
+ if(!events.length){
+  feed.append(create("div","empty","No events yet. The observer stream will appear here as Sentinel samples Windows."));
+  return;
+ }
+ for(const ev of events){
+  const row=create("article","event");
+  const icon=create("div","event-icon",ev.event_type?.includes("network")?"⌁":ev.event_type?.includes("process")?"◉":ev.event_type?.includes("model")?"⟡":"◇");
+  const body=create("div");
+  const name=create("div","event-name",ev.event_type||"event");
+  let desc=ev.entity?.name||ev.source||"system";
+  const data=ev.data||{};
+  if(ev.event_type==="observer.cycle"){
+   const samples=data.providers||[];
+   desc="Collected "+(data.events_collected||0)+" observations · "+samples.map(x=>x.provider).join(" / ");
+  }else if(ev.event_type==="windows.system_inventory"){
+   desc=(data.process_count||0)+" processes · "+(data.installed_application_count||0)+" apps · "+(data.service_count||0)+" services · "+(data.scheduled_task_count||0)+" scheduled tasks";
+  }else if(ev.event_type==="sentinel.local_model_assessment"){
+   desc="Local model review · "+(data.models?.triage||"triage model")+(data.models?.review?" + "+data.models.review:"");
+  }else if(data.process_name){
+   desc=data.process_name+(data.pid?" · PID "+data.pid:"");
+  }else if(data.summary){
+   desc=String(data.summary).slice(0,180);
+  }
+  const detail=create("div","event-desc",desc);
+  const inspect=create("details","event-inspect");
+  const inspectLabel=create("summary",null,"INSPECT EVENT DATA");
+  const pre=create("pre","event-json",JSON.stringify({
+   time:ev.timestamp,
+   source:ev.source,
+   type:ev.event_type,
+   entity:ev.entity,
+   confidence:ev.confidence,
+   data:data
+  },null,2).slice(0,12000));
+  inspect.append(inspectLabel,pre);
+  body.append(name,detail,inspect);
+  const time=create("div","event-time",prettyAge(ev.timestamp));
+  row.append(icon,body,time);
+  feed.append(row);
+ }
+}
 async function request(path,options={}){const response=await fetch(path,{...options,headers:{...headers,...(options.headers||{})},cache:"no-store"});if(!response.ok)throw new Error("Local API "+response.status);return response.json()}
 async function refresh(){try{const [s,e]=await Promise.all([request("/api/status"),request("/api/events?limit=90")]);renderStatus(s);renderEvents(e.events||[]);drawChart()}catch(err){$("liveBadge").innerHTML='<span style="color:var(--amber)">RECONNECTING</span>'}}
 async function control(action){if(action==="stop"&&!confirm("Stop the Sentinel background worker? You can start it again from the CLI."))return;try{await request("/api/control",{method:"POST",headers:{"Content-Type":"application/json","Origin":location.origin},body:JSON.stringify({action})});setTimeout(refresh,700)}catch(e){alert("Control request failed: "+e.message)}}
@@ -156,7 +200,7 @@ def _safe_json_value(value: Any, *, depth: int = 0) -> Any:
     if isinstance(value, str):
         return value[:200]
     if isinstance(value, list):
-        return [_safe_json_value(item, depth=depth + 1) for item in value[:12]]
+        return [_safe_json_value(item, depth=depth + 1) for item in value[:100]]
     if isinstance(value, dict):
         blocked = (
             "password", "token", "secret", "command_line", "executable_path",
