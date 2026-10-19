@@ -25,6 +25,12 @@ $result.os = Safe-Query { Get-CimInstance -ClassName Win32_OperatingSystem |
 $result.computer = Safe-Query { Get-CimInstance -ClassName Win32_ComputerSystem |
     Select-Object Manufacturer, Model, NumberOfProcessors,
                   NumberOfLogicalProcessors, TotalPhysicalMemory, HypervisorPresent }
+$result.bios = Safe-Query { Get-CimInstance -ClassName Win32_BIOS |
+    Select-Object Manufacturer, SMBIOSBIOSVersion, ReleaseDate }
+$result.secure_boot = Safe-Query {
+    $enabled = Confirm-SecureBootUEFI -ErrorAction Stop
+    [pscustomobject]@{ supported = $true; enabled = [bool]$enabled }
+}
 $result.processors = Safe-Query { Get-CimInstance -ClassName Win32_Processor |
     Select-Object -First 8 Name, Manufacturer, NumberOfCores,
                   NumberOfLogicalProcessors, MaxClockSpeed }
@@ -162,6 +168,14 @@ def collect_windows_deep_inventory() -> AIEEvent:
         ("Name", "Manufacturer", "NumberOfCores", "NumberOfLogicalProcessors", "MaxClockSpeed"),
         8,
     )
+    bios = _pick(
+        next(iter(_as_objects(raw.get("bios"), limit=1)), {}),
+        ("Manufacturer", "SMBIOSBIOSVersion", "ReleaseDate"),
+    )
+    secure_boot = _pick(
+        next(iter(_as_objects(raw.get("secure_boot"), limit=1)), {}),
+        ("supported", "enabled"),
+    )
     drivers = _clean_section(
         raw, "system_drivers",
         ("Name", "DisplayName", "State", "Started", "StartMode", "ServiceType"),
@@ -214,6 +228,8 @@ def collect_windows_deep_inventory() -> AIEEvent:
     data = {
         "operating_system": os_info,
         "computer": computer,
+        "bios": bios,
+        "secure_boot": secure_boot,
         "processors": processors,
         "system_driver_count": len(drivers),
         "system_drivers": drivers,
@@ -238,6 +254,8 @@ def collect_windows_deep_inventory() -> AIEEvent:
                 "physical disk health metadata (where the Storage module is available)",
                 "BitLocker volume encryption status (where the module is available; no recovery keys)",
                 "battery charge/status metadata",
+                "BIOS firmware vendor/version metadata (no serial numbers)",
+                "UEFI Secure Boot state where the platform supports it",
             ],
             "command_lines_collected": False,
             "executable_paths_collected": False,
