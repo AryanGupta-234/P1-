@@ -14,7 +14,7 @@ Add a default-enabled `auto_restart_enabled` Sentinel profile setting.
 
 The worker hashes its installed AIE Python modules (plus the project `pyproject.toml`, when present) every two seconds. A change is accepted only after three consecutive identical snapshots. This debounce avoids restarting during partial file replacement or an in-progress repository/package update. The watcher observes local files only; it does not run `git pull`, install packages, fetch remote code or mutate the operating system.
 
-The authenticated dashboard config endpoint compares saved settings against the continuous/advanced sensor restart allowlist. When one of those values changes and auto-restart is enabled, it schedules a restart after returning the save response. If auto-restart is disabled, the API reports that a restart is required but leaves the worker running.
+The authenticated dashboard config endpoint compares saved settings against the continuous/advanced sensor restart allowlist. When one of those values changes and auto-restart is enabled, it schedules a restart after returning the save response. The worker also watches the restart-sensitive keys in the local profile file, with the same three-snapshot debounce, so a direct local profile edit is detected. If auto-restart is disabled, automatic triggers are suppressed; the API reports that a restart is required but leaves the worker running.
 
 Provide a global manual Restart action regardless of the auto-restart setting. Manual Stop removes a pending restart marker.
 
