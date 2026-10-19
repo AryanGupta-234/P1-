@@ -197,6 +197,6 @@ Development ownership and branch rules are defined in [Development Streams](DEVE
 
 ## Sentinel Prime UI delivery note — 19 October 2026
 
-The interface redesign is implemented on `dev`: the earlier navy/cyan/coral palette is retained, the accumulated CSS overrides are replaced by one responsive design system, navigation is grouped, and the new `Ctrl+K` command palette exposes existing workspace and job actions. Cockpit resource/evidence/sensor/posture metrics now provide keyboard-accessible drill-downs.
+The interface redesign is implemented on `dev`: the original gunmetal/steel palette with lime and orange accents is restored, the accumulated CSS overrides are replaced by one responsive design system, navigation is grouped, and the new `Ctrl+K` command palette exposes existing workspace and job actions. Cockpit resource/evidence/sensor/posture metrics now provide keyboard-accessible drill-downs.
 
 **Still open:** target Windows 11 visual QA, animation performance, keyboard/focus behavior, command-palette dispatch, all eight workspace layouts, and repeated Feature Control enable/disable cycles. Do not mark the desktop-validation item complete until it has been exercised on the target machine.
