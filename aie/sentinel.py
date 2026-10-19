@@ -633,7 +633,22 @@ def _worker() -> None:
                         "detail": str(volume.get("mount") or "Volume") + " · " + str(volume.get("volume_status") or "status unavailable"),
                     })
             posture_alerts = posture_alerts[:16]
+            alert_keys = [
+                str(item.get("severity", "")) + "|" + str(item.get("category", "")) + "|" + str(item.get("title", ""))
+                for item in posture_alerts
+                if isinstance(item, dict)
+            ]
             with state_lock:
+                previous_alert_keys = set(state.get("deep_inventory", {}).get("alert_keys", []))
+                auto_review_needed = any(
+                    item.get("severity") in {"high", "critical"}
+                    and (
+                        str(item.get("severity", "")) + "|" +
+                        str(item.get("category", "")) + "|" +
+                        str(item.get("title", "")) not in previous_alert_keys
+                    )
+                    for item in posture_alerts
+                )
                 state["deep_inventory"] = {
                     "enabled": True,
                     "status": "available",
@@ -663,6 +678,8 @@ def _worker() -> None:
                     "battery_count": len(battery_summary),
                     "posture_alerts": posture_alerts,
                     "posture_alert_count": len(posture_alerts),
+                    "alert_keys": alert_keys,
+                    "automatic_ai_review_queued": bool(auto_review_needed and config["ai_enabled"]),
                     "operating_system": {
                         key: operating_system.get(key)
                         for key in ("Caption", "Version", "BuildNumber", "OSArchitecture")
@@ -675,6 +692,14 @@ def _worker() -> None:
                 }
                 state["event_count"] = store.count()
                 _write_state(state)
+            if auto_review_needed and config["ai_enabled"]:
+                try:
+                    command_queue.put_nowait("ai_review_now")
+                except queue.Full:
+                    with state_lock:
+                        state["deep_inventory"]["automatic_ai_review_queued"] = False
+                        state["deep_inventory"]["automatic_ai_review_error"] = "command_queue_full"
+                        _write_state(state)
         except Exception as exc:  # noqa: BLE001 - optional CIM inventory is isolated.
             with state_lock:
                 state["deep_inventory"] = {
