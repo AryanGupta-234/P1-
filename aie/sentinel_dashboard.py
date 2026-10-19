@@ -892,7 +892,7 @@ function renderTaskManager(s){
   const task=s.tasks?.[key]||{},enabled=lastConfig?lastConfig[meta[3]]!==false:true;
   const row=el("article","task-row"),top=el("div","task-row-head"),left=el("div");
   left.append(el("strong",null,meta[0]),el("small",null,meta[2]));
-  const state=task.status||(enabled?(s.features?.automation===false?"manual only":"scheduled"):"disabled");
+  const state=task.status==="running"?"running":!enabled?"disabled":task.status||(s.features?.automation===false?"manual only":"scheduled");
   top.append(left,el("span","task-pill "+String(state).replaceAll("_","-"),String(state).replaceAll("_"," ").toUpperCase()));row.append(top);
   const details=[
    task.trigger?"Trigger: "+task.trigger:null,
@@ -950,7 +950,7 @@ async function setTaskFeature(setting,enabled){
   $("profileSaveState").textContent="PROFILE SAVED FROM TASK MANAGER";
   updateCommandAvailability();
   if(lastStatus)renderTaskManager(lastStatus);
-  toast((setting.replaceAll("_"," "))+ (enabled?" enabled.":" disabled."));
+  toast(setting.replaceAll("_"," ")+(enabled?" enabled":" disabled")+" · saved for the next observer cycle.");
  }catch(error){toast("Feature update failed: "+error.message,"error")}
 }
 async function loadTaskProcesses(){
