@@ -100,6 +100,13 @@ body:after{content:"";position:fixed;inset:0;z-index:0;pointer-events:none;opaci
 .pnp-pills{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
 .driver-list{display:grid;gap:6px;margin-top:8px;max-height:290px;overflow:auto;padding-right:3px}
 .health-good{color:#75e8c4!important}.health-warn{color:#ffcb79!important}.health-bad{color:#ff93a4!important}
+.alert-card{border:1px solid #3a4c5e;background:linear-gradient(110deg,#0d1925,#132333);border-radius:10px;padding:10px}
+.alert-card.high{border-left:3px solid #ffbd69}.alert-card.critical{border-left:3px solid #ff536d}.alert-card.info{border-left:3px solid #6dcfee}
+.alert-top{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.alert-top strong{font-size:9px}.alert-severity{font:8px "Cascadia Code",Consolas,monospace;color:#ffcc84;letter-spacing:.1em}
+.alert-card.critical .alert-severity{color:#ff8da0}.alert-card.info .alert-severity{color:#80dfff}
+.alert-card p{margin:5px 0 0;color:#9bb1c4;font-size:9px;line-height:1.5}
+
 .health-detail{font-size:8px;color:#819bb0;margin-top:4px;line-height:1.45}
 
 .driver-row{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,.8fr) auto;gap:8px;align-items:center;border:1px solid #243e53;border-radius:9px;padding:8px;background:#0a1723}
@@ -255,7 +262,10 @@ body:after{content:"";position:fixed;inset:0;z-index:0;pointer-events:none;opaci
       </div>
     </section>
     <section class="panel" id="insights">
-      <div class="panel-head"><div><div class="panel-title">AI SIGNAL INTELLIGENCE</div><div class="panel-sub">Hypotheses · corroboration · uncertainty</div></div><span class="tag">ADVISORY ONLY</span></div>
+      <div class="panel-head"><div><div class="panel-title">AUTONOMOUS HEALTH WATCH</div><div class="panel-sub">Rule-based posture alerts · local AI corroboration</div></div><span class="tag">ADVISORY ONLY</span></div>
+      <div class="deep-subhead">WINDOWS POSTURE ALERTS</div>
+      <div class="insight-list" id="healthAlerts"><div class="empty">Waiting for a deep system snapshot.</div></div>
+      <div class="deep-subhead" style="margin-top:15px">LOCAL AI CORROBORATION</div>
       <div class="insight-list" id="aiInsights"><div class="empty">Waiting for the next local model assessment.</div></div>
       <div class="profile-note">The model cannot run commands, alter Windows settings or remediate automatically. Every signal is shown as a hypothesis unless supported by collected evidence.</div>
     </section>
@@ -380,6 +390,17 @@ function renderDeepDiagnostics(status){
   pnp.append(pill);
  }
 }
+function renderHealthAlerts(status){
+ const target=$("healthAlerts"),deep=status.deep_inventory||{},alerts=Array.isArray(deep.posture_alerts)?deep.posture_alerts:[];
+ target.replaceChildren();
+ if(!deep.last_snapshot_at){target.append(create("div","empty","A posture snapshot has not completed yet."));return}
+ if(!alerts.length){target.append(create("div","alert-card info", "No rule-based alerts in the latest snapshot. This is not a guarantee of security."));return}
+ for(const item of alerts.slice(0,12)){
+  const severity=["critical","high","info"].includes(String(item.severity||"").toLowerCase())?String(item.severity).toLowerCase():"info";
+  const card=create("article","alert-card "+severity),top=create("div","alert-top"),title=create("strong",null,item.title||"System posture signal"),badge=create("span","alert-severity",severity.toUpperCase()+" · "+String(item.category||"SYSTEM").toUpperCase()),detail=create("p",null,item.detail||"");
+  top.append(title,badge);card.append(top,detail);target.append(card);
+ }
+}
 function renderAIInsights(status){
  const target=$("aiInsights");target.replaceChildren();
  const ai=status.ai||{},tri=ai.triage||{},review=ai.review||{};
@@ -502,7 +523,7 @@ function summaryData(status){const a=status.ai||{};const tri=a.triage||{};const 
 function renderProviders(status){const health=status.provider_health||{};const list=$("providerList");list.replaceChildren();const entries=Object.entries(health);if(!entries.length){list.append(create("div","empty","Provider health will appear after the first collection cycle."));return}for(const [name,item] of entries){const row=create("div","provider"),left=create("div"),title=create("strong",null,name.replaceAll("_"," ")),detail=create("small",null,(item.samples_succeeded||0)+"/"+(item.samples_attempted||0)+" samples · "+(item.events_emitted||0)+" events · "+(item.last_latency_ms??"—")+" ms");left.append(title,detail);const state=create("span","provider-state"+(item.state==="degraded"?" degraded":""),(item.state||"unknown").toUpperCase());row.append(left,state);list.append(row)}}
 function renderStatus(s){lastStatus=s;const paused=s.observer_paused===true;const running=s.status==="running";$("liveBadge").innerHTML=running?'<i class="dot"></i><span>'+ (paused?"PAUSED":"LIVE")+'</span>':'<span style="color:var(--amber)">OFFLINE</span>';$("heroTitle").innerHTML="SENTINEL <span>"+(paused?"PAUSED":running?"ONLINE":"OFFLINE")+"</span>";$("heroDesc").textContent=paused?"Observation is paused. The local dashboard and event vault remain available.":running?"A bounded, evidence-first watch over approved Windows signals. Every sensor reports its own health; every inference remains advisory.":"Sentinel worker is not running. Start it from the CLI to resume the background watch.";$("pid").textContent=s.pid||"—";$("uptime").textContent=uptime(s.started_at);$("heartbeat").textContent=prettyAge(s.heartbeat_at);$("pauseBtn").disabled=!running||paused;$("resumeBtn").disabled=!running||!paused;$("stopBtn").disabled=!running;
 const hw=s.hardware||{};const cpu=Number(s.cpu_percent)||0;const total=Number(hw.memory_total_gib)||0;const avail=Number(hw.memory_available_gib)||0;const used=total?Math.max(0,total-avail):0;const memPct=total?used/total*100:0;$("cpu").textContent=cpu.toFixed(0)+"%";$("ram").textContent=avail.toFixed(1)+" GB";$("ramFoot").textContent=used.toFixed(1)+" GB used of "+total.toFixed(1)+" GB";setBar("cpuBar",cpu);setBar("ramBar",memPct);historyCpu.push(cpu);historyMem.push(memPct);historyCpu=historyCpu.slice(-64);historyMem=historyMem.slice(-64);
-$("eventCount").textContent=Number(s.event_count||0).toLocaleString();setBar("eventBar",Math.min(100,Number(s.event_count||0)/100));const providers=Object.values(s.provider_health||{});const bad=providers.filter(x=>x.state==="degraded").length;$("health").textContent=providers.length?(providers.length-bad)+"/"+providers.length:"—";$("healthFoot").textContent=bad?bad+" provider(s) degraded":"No active provider errors";setBar("healthBar",providers.length?(providers.length-bad)/providers.length*100:0);renderProviders(s);renderInternals(s);summaryData(s);renderDeepDiagnostics(s);renderAIInsights(s);if(s.last_command){const cmd=s.last_command;notifyCommand(String(cmd.action||'Command').replaceAll('_',' ').toUpperCase()+' · '+String(cmd.status||'queued').toUpperCase(),cmd.status==='started')}}
+$("eventCount").textContent=Number(s.event_count||0).toLocaleString();setBar("eventBar",Math.min(100,Number(s.event_count||0)/100));const providers=Object.values(s.provider_health||{});const bad=providers.filter(x=>x.state==="degraded").length;$("health").textContent=providers.length?(providers.length-bad)+"/"+providers.length:"—";$("healthFoot").textContent=bad?bad+" provider(s) degraded":"No active provider errors";setBar("healthBar",providers.length?(providers.length-bad)/providers.length*100:0);renderProviders(s);renderInternals(s);summaryData(s);renderDeepDiagnostics(s);renderHealthAlerts(s);renderAIInsights(s);if(s.last_command){const cmd=s.last_command;notifyCommand(String(cmd.action||'Command').replaceAll('_',' ').toUpperCase()+' · '+String(cmd.status||'queued').toUpperCase(),cmd.status==='started')}}
 function drawChart(){const canvas=$("resourceChart"),ctx=canvas.getContext("2d");const w=canvas.clientWidth*devicePixelRatio,h=canvas.clientHeight*devicePixelRatio;if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h}ctx.clearRect(0,0,w,h);const pad=12*devicePixelRatio;ctx.strokeStyle="#20374b";ctx.lineWidth=devicePixelRatio;for(let i=0;i<5;i++){const y=pad+(h-2*pad)*i/4;ctx.beginPath();ctx.moveTo(pad,y);ctx.lineTo(w-pad,y);ctx.stroke()}function line(data,color){if(data.length<2)return;ctx.strokeStyle=color;ctx.lineWidth=2*devicePixelRatio;ctx.beginPath();data.forEach((v,i)=>{const x=pad+(w-2*pad)*i/63;const y=h-pad-(h-2*pad)*Math.max(0,Math.min(100,v))/100;if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y)});ctx.stroke()}line(historyCpu,"#53e4f2");line(historyMem,"#ffbd69");requestAnimationFrame(()=>{});}
 function renderEvents(events){
  const feed=$("eventFeed");
