@@ -16,7 +16,7 @@ Development ownership and branch rules are defined in [Development Streams](DEVE
 | M4 | Persistent memory and learning | IN_PROGRESS | Provenance-aware memory, retrieval, consolidation and feedback |
 | M5 | Controlled autonomy | IN_PROGRESS | Capability policy, audit, executor, sandbox and recovery |
 | M6 | Generalization research | PLANNED | Held-out task transfer, robustness and reproducible benchmarks |
-| M7 | Persistent Sentinel experience | IN_PROGRESS | Background worker, per-user startup, live local dashboard, event inspection and local model review |
+| M7 | Persistent Sentinel experience | IN_PROGRESS | Per-user background worker, animated Titan command deck, live collector profiles, on-demand scans, local Ask Sentinel, posture watchtower and evidence-triggered AI review |
 
 ## M0 — Foundation
 - [x] Windows-only architecture and boundaries.
@@ -46,10 +46,12 @@ Development ownership and branch rules are defined in [Development Streams](DEVE
 - [x] Privacy-safe observer health telemetry with provider latency/error counters and event-loss hooks.
 - [x] `aie health` CLI view for provider errors, latency and event-loss counters.
 - [x] Explicit JSONL export and confirm-only delete-all controls; sensitive export requires an explicit opt-in.
-- [ ] Rich observer health desktop UI.
+- [x] Rich live Sentinel command-deck UI with live resource telemetry, provider matrix, event vault, model fusion and pause/resume/stop controls.
 - [x] Periodic bounded system inventory event for processes, applications, services, scheduled tasks and interfaces, with local event inspection in the Sentinel dashboard.
 - [x] Allowlisted read-only registry configuration snapshots with service/driver registration and Run/RunOnce name-change detection.
-- [x] Deeper CIM inventory for OS, CPU, system drivers, signed PnP drivers, fixed disks, Defender, Firewall and device health.
+- [x] Deeper CIM inventory for OS/CPU/firmware, Secure Boot, system and signed PnP drivers, fixed/physical disks, BitLocker status, battery, Defender, Firewall and device health.
+- [x] Local rule-based posture watch for Defender, Firewall, physical-disk health, PnP errors and BitLocker/Secure Boot status; new high/critical findings can request a deduplicated local AI review.
+- [x] Titan dashboard includes a filterable signed-PnP driver explorer, storage/BitLocker/battery/firmware panels, local Ask Sentinel, live sensor profile controls and on-demand scan/crawl/review actions.
 - [x] Local Microsoft Learn and Microsoft-owned GitHub Markdown crawler with bounded sources, local SQLite indexing and dashboard search.
 - [ ] Validate registry ACLs, CIM/Defender/PnP visibility, Learn crawler compatibility and inventory accuracy on the target Windows desktop.
 
