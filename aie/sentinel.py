@@ -582,6 +582,57 @@ def _worker() -> None:
                 for item in data.get("batteries", [])[:8]
                 if isinstance(item, dict)
             ]
+            posture_alerts: list[dict[str, str]] = []
+            if defender.get("AntivirusEnabled") is False:
+                posture_alerts.append({
+                    "severity": "high",
+                    "category": "DEFENDER",
+                    "title": "Microsoft Defender antivirus reports disabled",
+                    "detail": "The latest Windows security status reports AntivirusEnabled=false.",
+                })
+            if defender.get("RealTimeProtectionEnabled") is False:
+                posture_alerts.append({
+                    "severity": "high",
+                    "category": "DEFENDER",
+                    "title": "Real-time protection reports disabled",
+                    "detail": "The latest Windows security status reports RealTimeProtectionEnabled=false.",
+                })
+            for profile in firewall_summary:
+                if profile.get("enabled") is False:
+                    posture_alerts.append({
+                        "severity": "high",
+                        "category": "FIREWALL",
+                        "title": "Windows Firewall profile reports disabled",
+                        "detail": str(profile.get("name") or "Profile")[:40] + " profile is disabled.",
+                    })
+            for disk in physical_disk_summary:
+                health = str(disk.get("health") or "").casefold()
+                if health in {"warning", "unhealthy", "critical"}:
+                    posture_alerts.append({
+                        "severity": "critical" if health in {"unhealthy", "critical"} else "high",
+                        "category": "STORAGE",
+                        "title": "Physical disk reports " + health.upper(),
+                        "detail": str(disk.get("name") or "A physical disk")[:90],
+                    })
+            for item in pnp_summary:
+                status_name = str(item.get("status") or "").casefold()
+                if status_name in {"error", "degraded"} and int(item.get("count") or 0) > 0:
+                    posture_alerts.append({
+                        "severity": "high",
+                        "category": "DEVICE",
+                        "title": "PnP devices report " + status_name.upper(),
+                        "detail": str(item.get("count")) + " present device(s) reported this status.",
+                    })
+            for volume in bitlocker_summary:
+                protection = str(volume.get("protection") or "").casefold()
+                if protection in {"off", "0", "false"}:
+                    posture_alerts.append({
+                        "severity": "info",
+                        "category": "BITLOCKER",
+                        "title": "BitLocker protection is off or suspended",
+                        "detail": str(volume.get("mount") or "Volume") + " · " + str(volume.get("volume_status") or "status unavailable"),
+                    })
+            posture_alerts = posture_alerts[:16]
             with state_lock:
                 state["deep_inventory"] = {
                     "enabled": True,
@@ -610,6 +661,8 @@ def _worker() -> None:
                     "bitlocker_volume_count": len(bitlocker_summary),
                     "batteries": battery_summary,
                     "battery_count": len(battery_summary),
+                    "posture_alerts": posture_alerts,
+                    "posture_alert_count": len(posture_alerts),
                     "operating_system": {
                         key: operating_system.get(key)
                         for key in ("Caption", "Version", "BuildNumber", "OSArchitecture")
