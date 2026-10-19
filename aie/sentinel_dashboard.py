@@ -611,7 +611,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 
      <div class="grid equal">
       <section class="panel control-panel">
-       <div class="panel-head"><div><div class="panel-title">LOCAL MODEL ROUTING</div><div class="panel-sub">Select already-installed Ollama models. Sentinel never downloads a model automatically.</div></div><button class="btn ghost" id="modelRefresh">↻ DISCOVER MODELS</button></div>
+       <div class="panel-head"><div><div class="panel-title">LOCAL MODEL ROUTING</div><div class="panel-sub">Select already-installed Ollama models. Sentinel never downloads a model automatically.</div></div><button class="btn ghost" id="cfgModelRefresh">↻ DISCOVER MODELS</button></div>
        <div class="model-select-grid">
         <div><label for="cfgFastModel">FAST MODEL — ASK / TRIAGE</label><select class="select" id="cfgFastModel"><option value="">Automatic — best compatible installed model</option></select><div class="note">Prefer a compatible 3B/4B model. Ask and scheduled triage need available memory.</div></div>
         <div><label for="cfgDeepModel">INDEPENDENT REVIEW MODEL</label><select class="select" id="cfgDeepModel"><option value="">Automatic — best compatible reviewer</option></select><div class="note">Prefer a distinct 6B+ model when memory permits. Review can remain unavailable on a constrained machine.</div></div>
@@ -1101,7 +1101,7 @@ $("pauseBtn").addEventListener("click",async()=>{try{await post("/api/control",{
 $("stopBtn").addEventListener("click",async()=>{if(!confirm("Stop the Sentinel background worker? The dashboard will disconnect until it is started again."))return;try{await post("/api/control",{action:"stop"});toast("Stop request sent. The local dashboard will close when the worker exits.","warn")}catch(e){toast(e.message,"error")}});
 $("resumeBtn").addEventListener("click",async()=>{try{await post("/api/control",{action:"resume"});toast("Sentinel watch resumed.");refresh()}catch(e){toast(e.message,"error")}});
 $("notifyBtn").addEventListener("click",enableNotifications);$("notifyEnable").addEventListener("click",enableNotifications);
-$("refreshBtn").addEventListener("click",()=>refresh(true));$("modelRefresh").addEventListener("click",()=>{lastModelsFetch=0;loadModels()});
+$("refreshBtn").addEventListener("click",()=>refresh(true));$("modelRefresh").addEventListener("click",()=>{lastModelsFetch=0;loadModels()});$("cfgModelRefresh").addEventListener("click",()=>{lastModelsFetch=0;loadModels()});
 $("saveProfile").addEventListener("click",saveProfile);$("reloadProfile").addEventListener("click",loadProfile);
 document.querySelectorAll("[data-preset]").forEach(button=>button.addEventListener("click",()=>applyPreset(button.dataset.preset)));
 $("askBtn").addEventListener("click",askSentinel);$("aiQuestion").addEventListener("keydown",e=>{if(e.key==="Enter")askSentinel()});
