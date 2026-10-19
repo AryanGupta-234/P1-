@@ -5,6 +5,7 @@ import ctypes
 import importlib.util
 import json
 import os
+import queue
 import secrets
 import shutil
 import subprocess
@@ -336,6 +337,7 @@ def _worker() -> None:
     token = _ensure_token()
     server = None
     dashboard_thread = None
+    command_queue: queue.Queue[str] = queue.Queue(maxsize=12)
     started = _now()
     state: dict[str, Any] = {
         "status": "starting",
@@ -378,6 +380,7 @@ def _worker() -> None:
                 state_path=paths["state"],
                 stop_path=stop_path,
                 db_path=database_path(),
+                command_queue=command_queue,
                 port=port,
             )
             state["dashboard_url"] = f"http://127.0.0.1:{port}/"
@@ -399,12 +402,11 @@ def _worker() -> None:
     next_inventory = time.monotonic() + 5.0
     registry_provider = None
     registry_init_error: str | None = None
-    if config["registry_enabled"]:
-        try:
-            from aie.providers.registry import WindowsRegistryProvider
-            registry_provider = WindowsRegistryProvider()
-        except Exception as exc:  # noqa: BLE001 - optional registry collector degrades independently.
-            registry_init_error = type(exc).__name__
+    try:
+        from aie.providers.registry import WindowsRegistryProvider
+        registry_provider = WindowsRegistryProvider()
+    except Exception as exc:  # noqa: BLE001 - optional registry collector degrades independently.
+        registry_init_error = type(exc).__name__
     registry_lock = threading.Lock()
     registry_thread: threading.Thread | None = None
     next_registry = time.monotonic() + 4.0
@@ -502,6 +504,40 @@ def _worker() -> None:
             event = collect_windows_deep_inventory()
             store.append(event)
             data = event.data
+            operating_system = data.get("operating_system", {})
+            computer = data.get("computer", {})
+            defender = data.get("defender_status", {})
+            disk_summary = []
+            for disk in data.get("fixed_disks", [])[:16]:
+                if not isinstance(disk, dict):
+                    continue
+                try:
+                    size = int(disk.get("Size") or 0)
+                    free = int(disk.get("FreeSpace") or 0)
+                except (TypeError, ValueError):
+                    continue
+                disk_summary.append({
+                    "drive": str(disk.get("DeviceID") or "Drive")[:12],
+                    "filesystem": str(disk.get("FileSystem") or "—")[:16],
+                    "size_gib": round(size / (1024 ** 3), 1),
+                    "free_gib": round(free / (1024 ** 3), 1),
+                    "used_percent": round(max(0, min(100, (size - free) / size * 100)), 1) if size else 0,
+                })
+            firewall_summary = [
+                {
+                    "name": str(item.get("Name") or "Profile")[:24],
+                    "enabled": item.get("Enabled") is True,
+                    "inbound": str(item.get("DefaultInboundAction") or "—")[:20],
+                    "outbound": str(item.get("DefaultOutboundAction") or "—")[:20],
+                }
+                for item in data.get("firewall_profiles", [])[:8]
+                if isinstance(item, dict)
+            ]
+            pnp_summary = [
+                {"status": str(item.get("status") or "unknown")[:24], "count": int(item.get("count") or 0)}
+                for item in data.get("pnp_status_counts", [])[:16]
+                if isinstance(item, dict)
+            ]
             with state_lock:
                 state["deep_inventory"] = {
                     "enabled": True,
@@ -509,10 +545,29 @@ def _worker() -> None:
                     "last_snapshot_at": event.timestamp.isoformat(),
                     "system_driver_count": data.get("system_driver_count", 0),
                     "signed_pnp_driver_count": data.get("signed_pnp_driver_count", 0),
-                    "fixed_disk_count": len(data.get("fixed_disks", [])),
+                    "fixed_disk_count": len(disk_summary),
                     "pnp_device_count": data.get("pnp_device_count"),
-                    "defender_status_available": bool(data.get("defender_status")),
-                    "firewall_profile_count": len(data.get("firewall_profiles", [])),
+                    "pnp_status_counts": pnp_summary,
+                    "defender_status_available": bool(defender),
+                    "defender": {
+                        key: defender.get(key)
+                        for key in (
+                            "AMServiceEnabled", "AntivirusEnabled",
+                            "RealTimeProtectionEnabled", "BehaviorMonitorEnabled",
+                            "NISEnabled",
+                        )
+                        if key in defender
+                    } if isinstance(defender, dict) else {},
+                    "firewall_profile_count": len(firewall_summary),
+                    "firewall_profiles": firewall_summary,
+                    "operating_system": {
+                        key: operating_system.get(key)
+                        for key in ("Caption", "Version", "BuildNumber", "OSArchitecture")
+                        if isinstance(operating_system, dict) and key in operating_system
+                    },
+                    "logical_processors": computer.get("NumberOfLogicalProcessors") if isinstance(computer, dict) else None,
+                    "physical_memory_bytes": computer.get("TotalPhysicalMemory") if isinstance(computer, dict) else None,
+                    "disks": disk_summary,
                 }
                 state["event_count"] = store.count()
                 _write_state(state)
@@ -630,8 +685,27 @@ def _worker() -> None:
         nonlocal next_analysis, last_count_update, last_cycle_event, next_inventory, next_registry, next_deep_inventory, next_knowledge
         nonlocal ai_thread, inventory_thread, registry_thread, deep_inventory_thread, knowledge_thread
         now_mono = time.monotonic()
+        try:
+            # Dashboard profile changes are persisted atomically and become live on this cycle.
+            config.update(_load_config())
+        except (OSError, RuntimeError, ValueError):
+            pass  # Keep the last known-good in-memory profile if a concurrent edit is incomplete.
         with state_lock:
             state["status"] = "running"
+            state["features"].update({
+                "registry": bool(config["registry_enabled"]),
+                "deep_windows_inventory": bool(config["deep_inventory_enabled"]),
+                "microsoft_knowledge_crawler": bool(config["knowledge_enabled"]),
+            })
+            state["ai"]["enabled"] = bool(config["ai_enabled"])
+            if not config["registry_enabled"] and not registry_lock.locked():
+                state["registry"].update({"enabled": False, "status": "disabled"})
+            if not config["deep_inventory_enabled"] and not deep_inventory_lock.locked():
+                state["deep_inventory"].update({"enabled": False, "status": "disabled"})
+            if not config["knowledge_enabled"] and not knowledge_lock.locked():
+                state["knowledge"].update({"enabled": False, "status": "disabled"})
+            if not config["ai_enabled"]:
+                state["ai"]["status"] = "disabled"
             state["heartbeat_at"] = _now()
             state["observer_paused"] = observer_is_paused()
             state["last_cycle"] = cycle
@@ -665,6 +739,62 @@ def _worker() -> None:
                     ))
                 last_cycle_event = now_mono
             _write_state(state)
+
+        while True:
+            try:
+                action = command_queue.get_nowait()
+            except queue.Empty:
+                break
+
+            started_actions: list[str] = []
+            if action in {"scan_now", "deep_scan_now"} and deep_inventory_lock.acquire(blocking=False):
+                deep_inventory_thread = threading.Thread(
+                    target=update_deep_inventory,
+                    name="aie-sentinel-deep-scan-on-demand",
+                    daemon=True,
+                )
+                deep_inventory_thread.start()
+                started_actions.append("deep_inventory")
+            if action == "scan_now" and inventory_lock.acquire(blocking=False):
+                inventory_thread = threading.Thread(
+                    target=update_inventory,
+                    name="aie-sentinel-inventory-on-demand",
+                    daemon=True,
+                )
+                inventory_thread.start()
+                started_actions.append("system_inventory")
+            if action in {"scan_now", "registry_scan_now"} and config["registry_enabled"] and registry_lock.acquire(blocking=False):
+                registry_thread = threading.Thread(
+                    target=update_registry,
+                    name="aie-sentinel-registry-scan-on-demand",
+                    daemon=True,
+                )
+                registry_thread.start()
+                started_actions.append("registry")
+            if action == "knowledge_crawl_now" and config["knowledge_enabled"] and knowledge_lock.acquire(blocking=False):
+                knowledge_thread = threading.Thread(
+                    target=update_knowledge,
+                    name="aie-sentinel-knowledge-crawl-on-demand",
+                    daemon=True,
+                )
+                knowledge_thread.start()
+                started_actions.append("knowledge_crawl")
+            if action == "ai_review_now" and config["ai_enabled"] and ai_lock.acquire(blocking=False):
+                ai_thread = threading.Thread(
+                    target=update_ai,
+                    name="aie-sentinel-ai-review-on-demand",
+                    daemon=True,
+                )
+                ai_thread.start()
+                started_actions.append("ai_review")
+            with state_lock:
+                state["last_command"] = {
+                    "action": action,
+                    "started": started_actions,
+                    "accepted_at": _now(),
+                    "status": "started" if started_actions else "busy_or_disabled",
+                }
+                _write_state(state)
 
         if now_mono >= next_inventory and inventory_lock.acquire(blocking=False):
             next_inventory = now_mono + 900.0
