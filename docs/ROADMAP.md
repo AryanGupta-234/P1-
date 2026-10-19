@@ -163,6 +163,7 @@ Development ownership and branch rules are defined in [Development Streams](DEVE
 - [x] Live Windows-internals dashboard panel and local Microsoft knowledge search.
 - [x] Local two-stage Ollama 4B/6B evidence triage/review with memory checks, sequential model use and no auto-pull or cloud fallback.
 - [ ] Exercise sign-in startup, dashboard controls, registry/CIM inventory, Microsoft crawler refresh and Ollama inference on the target Windows 11 desktop.
+- [ ] Validate the Sentinel Prime operator console, eight-workspace navigation, Task Manager job history, direct feature switches and staged Maintenance Advisor suggestions on the target Windows 11 desktop.
 - [ ] Add signed installer/shortcut and polished native desktop shell after validating the local dashboard prototype.
 - [x] User-started Windows tray prototype with pause/resume and minimal local status dialog; target-desktop usability/runtime validation remains pending.
 - [x] Generic local notification prototype with explicit opt-in, quiet hours, pause suppression and no event details in the balloon. Target-desktop behavior and full notification categories remain pending.
@@ -175,6 +176,7 @@ Development ownership and branch rules are defined in [Development Streams](DEVE
 
 ## Immediate dev sprint
 1. Validate the native tray, balloon notification behavior, browser/native-host, UIA, Event Log, registry, CIM and elevated ETW on the actual target desktop; hosted CI cannot validate interactive desktop behavior.
+2. Validate the Sentinel Prime dashboard and Task Manager on the target Windows 11 desktop, including repeated feature enable/disable cycles, graceful worker pause/stop, Ollama maintenance suggestions and task-history persistence.
 2. Verify Microsoft Learn search response stability, Microsoft GitHub repository refreshes, local indexing and dashboard retrieval.
 3. Extend ETW only after validating the pinned provider's real category support and event coverage; do not mark thread/file/network/registry ETW complete based on API surface alone.
 3. Evaluate freshness/contradiction signals and add calibrated confidence metrics without treating heuristics as probabilities.
