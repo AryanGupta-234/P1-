@@ -111,6 +111,8 @@ The deep diagnostics view additionally queries Windows Storage cmdlets for bound
 
 Ask Sentinel and the scheduled two-stage 4B/6B analysis share one inference lock. A Q&A request receives a busy response rather than launching a competing model while another inference is running, helping avoid unnecessary concurrent model memory use.
 
+A local posture watch evaluates the latest snapshot for explicit signals: Defender antivirus or real-time protection reporting disabled; a firewall profile reporting disabled; physical storage reporting Warning/Unhealthy/Critical; PnP groups reporting Error/Degraded; and BitLocker protection reporting Off (shown as informational because protection may be temporarily suspended). A newly observed high/critical signal queues one local model review; repeated copies of the same finding are deduplicated. This automation is analysis-only and never changes Windows settings or starts remediation.
+
 
 
 ## Local Ollama collaboration
