@@ -21,7 +21,7 @@ DASHBOARD_HTML = r"""<!doctype html>
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="color-scheme" content="dark">
-<title>AIE // SENTINEL TITAN</title>
+<title>AIE // SENTINEL FIELD SYSTEM</title>
 <style>
 :root{--bg:#080b0c;--bg2:#0d1112;--panel:#121819;--panel2:#171f20;--line:#2a3735;--line2:#405149;--text:#e4e9e3;--soft:#b5c0b9;--muted:#718079;--orange:#ff6b38;--orange2:#c94c2c;--lime:#b8e65b;--red:#f05252;--amber:#eab45e;--green:#7cd59c;--mono:"Cascadia Code",Consolas,monospace;--display:"Bahnschrift SemiCondensed","Arial Narrow","Segoe UI",sans-serif;--radius:3px}
 *{box-sizing:border-box}html{scroll-behavior:smooth;background:var(--bg)}body{margin:0;min-height:100vh;overflow-x:hidden;background:var(--bg);color:var(--text);font:13px/1.5 "Segoe UI",Arial,sans-serif}button,input,select,textarea{font:inherit}button{cursor:pointer}button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--lime);outline-offset:3px}a{color:var(--lime);text-decoration:none}
