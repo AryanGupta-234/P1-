@@ -24,7 +24,7 @@ from urllib.request import Request, urlopen
 LEARN_HOST = "learn.microsoft.com"
 GITHUB_API_HOST = "api.github.com"
 GITHUB_RAW_HOST = "raw.githubusercontent.com"
-_ALLOWED_HOSTS = {LEARN_HOST, GITHUB_API_HOST, GITHUB_RAW_HOST}
+_ALLOWED_HOSTS = {LEARN_HOST, GITHUB_API_HOST, GITHUB_RAW_HOST, "github.com"}
 _USER_AGENT = "AIE-Sentinel-Microsoft-Knowledge/1.0"
 MAX_DOCUMENT_BYTES = 320_000
 MAX_DOCUMENT_CHARS = 90_000
