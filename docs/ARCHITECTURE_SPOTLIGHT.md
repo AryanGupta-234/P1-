@@ -111,7 +111,7 @@ The first persistent Sentinel prototype is integrated on `dev`. It reuses AIE re
 - A named mutex prevents duplicate worker instances. Pause/resume reuse the global AIE observer pause marker; graceful stop is a worker stop file.
 - A local-only dashboard binds to 127.0.0.1. Its API requires a random per-user token and exposes provider health, system resources, event history and explicit pause/resume/stop controls.
 - A periodic Windows inventory snapshot includes bounded process identity, installed application metadata, service metadata, scheduled-task names/status and network-interface metadata. It does not collect process command lines, executable paths, uninstall commands, scheduled-task XML or network addresses.
-- Local Ollama inference runs a fast 4B triage pass followed sequentially by an independent 6B review when installed and memory headroom permits. Each stage releases its model afterwards. Model results are derived advisory evidence, not actions or policy.
+- Local Ollama inference requires an installed 4B triage model and uses a separate installed 6B reviewer when memory headroom permits. The stages run sequentially and each model is released after its turn. No unrelated-size substitution or model download occurs. Model results are derived advisory evidence, not actions or policy.
 - ETW process lifecycle capture remains opt-in. The standard background task is deliberately least-privilege; it does not install a custom driver or promise always-on elevated kernel tracing.
 - The browser/video observer remains separately opt-in and uses its existing extension/native-host pipeline.
 
