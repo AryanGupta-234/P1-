@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import hmac
 import json
+import queue
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -295,6 +296,7 @@ def make_dashboard_server(
     state_path: Path,
     stop_path: Path,
     db_path: Path,
+    command_queue: queue.Queue[str] | None = None,
     port: int = 8765,
 ) -> ThreadingHTTPServer:
     if not isinstance(token, str) or len(token) < 32:
@@ -356,6 +358,20 @@ def make_dashboard_server(
                 except (OSError, ValueError, json.JSONDecodeError):
                     self._json(503, {"error": "Sentinel status is not available yet"})
                 return
+            if parsed.path == "/api/config":
+                try:
+                    from aie.sentinel import _load_config
+                    config = _load_config()
+                    fields = (
+                        "registry_enabled", "deep_inventory_enabled", "knowledge_enabled",
+                        "ai_enabled", "registry_interval_seconds",
+                        "deep_inventory_interval_seconds", "knowledge_interval_seconds",
+                        "analysis_interval_seconds",
+                    )
+                    self._json(200, {"profile": {key: config[key] for key in fields}})
+                except (OSError, RuntimeError, ValueError):
+                    self._json(503, {"error": "Sentinel profile is unavailable"})
+                return
             if parsed.path == "/api/knowledge/search":
                 try:
                     from aie.config import data_dir
@@ -396,7 +412,8 @@ def make_dashboard_server(
             if self.headers.get("Origin") != expected_origin or not self._authorized():
                 self._json(403, {"error": "origin or token rejected"})
                 return
-            if urlparse(self.path).path != "/api/control":
+            path = urlparse(self.path).path
+            if path not in {"/api/control", "/api/config", "/api/command", "/api/ask"}:
                 self._json(404, {"error": "not found"})
                 return
             raw_length = self.headers.get("Content-Length", "0")
@@ -404,7 +421,7 @@ def make_dashboard_server(
                 length = int(raw_length)
             except ValueError:
                 length = 0
-            if not 1 <= length <= 1024:
+            if not 1 <= length <= 4096:
                 self._json(400, {"error": "invalid request size"})
                 return
             try:
@@ -412,7 +429,82 @@ def make_dashboard_server(
             except (UnicodeError, json.JSONDecodeError):
                 self._json(400, {"error": "invalid JSON"})
                 return
-            action = body.get("action") if isinstance(body, dict) else None
+            if not isinstance(body, dict):
+                self._json(400, {"error": "JSON object required"})
+                return
+
+            if path == "/api/config":
+                values = body.get("values")
+                if not isinstance(values, dict) or not values:
+                    self._json(400, {"error": "profile values are required"})
+                    return
+                boolean_fields = {
+                    "registry_enabled", "deep_inventory_enabled", "knowledge_enabled", "ai_enabled"
+                }
+                integer_ranges = {
+                    "registry_interval_seconds": (60, 3600),
+                    "deep_inventory_interval_seconds": (300, 7200),
+                    "knowledge_interval_seconds": (3600, 604800),
+                    "analysis_interval_seconds": (60, 3600),
+                }
+                if any(key not in boolean_fields and key not in integer_ranges for key in values):
+                    self._json(400, {"error": "profile contains an unsupported setting"})
+                    return
+                for key, value in values.items():
+                    if key in boolean_fields:
+                        if not isinstance(value, bool):
+                            self._json(400, {"error": "boolean setting has an invalid value"})
+                            return
+                    else:
+                        minimum, maximum = integer_ranges[key]
+                        if isinstance(value, bool) or not isinstance(value, int) or not minimum <= value <= maximum:
+                            self._json(400, {"error": "interval is outside its supported range"})
+                            return
+                try:
+                    from aie.sentinel import _load_config, _save_config
+                    config = _load_config()
+                    config.update(values)
+                    _save_config(config)
+                    fields = tuple(boolean_fields | set(integer_ranges))
+                    self._json(200, {"saved": True, "profile": {key: config[key] for key in fields}})
+                except (OSError, RuntimeError, ValueError):
+                    self._json(503, {"error": "Unable to save the Sentinel profile"})
+                return
+
+            if path == "/api/command":
+                action = body.get("action")
+                allowed = {
+                    "scan_now", "deep_scan_now", "registry_scan_now",
+                    "ai_review_now", "knowledge_crawl_now",
+                }
+                if action not in allowed or command_queue is None:
+                    self._json(400, {"error": "unsupported command"})
+                    return
+                try:
+                    command_queue.put_nowait(action)
+                except queue.Full:
+                    self._json(429, {"error": "Sentinel command queue is busy"})
+                    return
+                self._json(202, {"queued": action})
+                return
+
+            if path == "/api/ask":
+                question = body.get("question")
+                if not isinstance(question, str) or not question.strip() or len(question) > 500:
+                    self._json(400, {"error": "question must contain 1-500 characters"})
+                    return
+                try:
+                    from aie.sentinel_ai import SentinelModelCollaborator
+                    answer = SentinelModelCollaborator().ask(
+                        question,
+                        EventStore(db_path).recent(120),
+                    )
+                    self._json(200, answer)
+                except Exception as exc:  # noqa: BLE001 - local inference errors stay within this request.
+                    self._json(503, {"error": type(exc).__name__})
+                return
+
+            action = body.get("action")
             if action == "pause":
                 set_observer_paused(True)
             elif action == "resume":
