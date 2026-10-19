@@ -179,7 +179,7 @@ Validation boundary: source-level wiring has been inspected. Target Windows 11 d
 
 ## Sentinel Prime interface redesign — 19 October 2026
 
-The dashboard presentation layer has been consolidated into one coherent design system while retaining the existing navy, cyan and coral palette. This replaces the prior stacked stylesheet overrides rather than adding another theme layer.
+The dashboard presentation layer has been consolidated into one coherent design system while restoring the original gunmetal/steel palette with its lime and orange accents. This replaces the prior stacked stylesheet overrides rather than adding another theme layer.
 
 The operator experience now includes:
 - A grouped workspace rail for Workspace, Intelligence and Operations.
