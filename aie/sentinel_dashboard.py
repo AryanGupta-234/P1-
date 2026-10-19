@@ -513,10 +513,10 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
    <div class="section-head"><div><div class="section-label">LOCAL MODEL ORCHESTRATION</div><div class="section-title">SENTINEL AI LAB</div><div class="section-description">Ask specialist questions, inspect installed Ollama models, launch evidence reviews and read the latest AI findings.</div></div><button class="btn primary" data-command="ai_review_now">✳ RUN EVIDENCE REVIEW</button></div>
    <div class="ai-shell">
     <section class="panel"><div class="panel-head"><div><div class="panel-title">ASK SENTINEL / SPECIALIST MODE</div><div class="panel-sub">Local 3B/4B model · evidence packet · local Microsoft knowledge references</div></div><span class="tag">NO CLOUD FALLBACK</span></div>
-     <div class="form-grid"><div><label class="panel-sub" for="aiMode">DIAGNOSTIC SPECIALIST</label><select class="select" id="aiMode"><option value="general">General Windows analyst</option><option value="security">Security & protection analyst</option><option value="performance">Performance engineer</option><option value="drivers">Drivers & Plug-and-Play</option><option value="storage">Storage & battery specialist</option><option value="network">Network diagnostician</option></select></div><div><label class="panel-sub" for="aiQuestion">PROMPT</label><input class="field" id="aiQuestion" maxlength="500" placeholder="What should Sentinel investigate?"></div></div>
+     <div class="form-grid"><div><label class="panel-sub" for="aiMode">DIAGNOSTIC SPECIALIST</label><select class="select" id="aiMode"><option value="general">General Windows analyst</option><option value="security">Security & protection analyst</option><option value="performance">Performance engineer</option><option value="drivers">Drivers & Plug-and-Play</option><option value="storage">Storage & battery specialist</option><option value="network">Network diagnostician</option><option value="maintenance">Maintenance &amp; settings advisor</option></select></div><div><label class="panel-sub" for="aiQuestion">PROMPT</label><input class="field" id="aiQuestion" maxlength="500" placeholder="What should Sentinel investigate?"></div></div>
      <div class="button-row" style="margin-top:10px"><button class="btn primary" id="askBtn">✳ ASK LOCAL AI</button><span class="panel-sub" id="aiRequestState">Inference shares one memory lock with scheduled AI analysis.</span></div>
      <div class="ai-answer" id="aiAnswer" style="margin-top:12px">Select a specialist and ask a question about your machine's observed metadata.</div>
-     <div id="aiReferences" class="result-list" style="margin-top:9px"></div>
+     <div id="aiReferences" class="result-list" style="margin-top:9px"></div><div class="control-footnote warning">Maintenance mode can suggest Sentinel profile changes for you to review and save. Windows security settings, registry values, services and processes are never changed automatically.</div>
     </section>
     <section class="panel"><div class="panel-head"><div><div class="panel-title">LOCAL MODEL INVENTORY</div><div class="panel-sub">Installed models only · discovered from local Ollama</div></div><button class="btn ghost" id="modelRefresh">↻ DISCOVER</button></div><div class="result-list" id="modelList"><div class="empty">Discovering installed Ollama models…</div></div><div class="note" id="modelMemory">RAM profile unavailable.</div></section>
    </div>
@@ -707,7 +707,7 @@ function setMeter(id,value){const node=$(id);if(node)node.style.width=Math.max(0
 function statusTone(value){const s=String(value||"unknown").toLowerCase();return ["degraded","partial","warning","disabled","unavailable","critical"].includes(s)?"degraded":s==="available"||s==="watching"||s==="running"||s==="ok"?"":"optional"}
 async function request(path,options={}){const response=await fetch(path,{...options,headers:{...headers,...(options.headers||{})},cache:"no-store"});let payload={};try{payload=await response.json()}catch{}if(!response.ok)throw new Error(payload.error||("Local API "+response.status));return payload}
 function post(path,data){return request(path,{method:"POST",headers:{"Content-Type":"application/json","Origin":location.origin},body:JSON.stringify(data)})}
-function switchView(view){if(!titles[view])return;currentView=view;document.querySelectorAll("[data-screen]").forEach(n=>n.classList.toggle("active",n.dataset.screen===view));document.querySelectorAll(".nav-btn").forEach(n=>n.classList.toggle("active",n.dataset.view===view));$("viewTitle").textContent=titles[view];if(view==="ai")loadModels();if(view==="autonomy"){loadProfile();loadModels()}if(view==="tasks"){refresh(false);loadTaskProcesses()}if(view==="system"){loadInventory(true);loadCatalog("processes");}if(view==="evidence")loadEvents(true);if(view==="knowledge")renderKnowledgeStats()}
+function switchView(view){if(!titles[view])return;currentView=view;document.querySelectorAll("[data-screen]").forEach(n=>n.classList.toggle("active",n.dataset.screen===view));document.querySelectorAll(".nav-btn").forEach(n=>n.classList.toggle("active",n.dataset.view===view));$("viewTitle").textContent=titles[view];if(view==="ai")loadModels();if(view==="autonomy"){if(lastConfig===null)loadProfile();loadModels()}if(view==="tasks"){refresh(false);loadTaskProcesses()}if(view==="system"){loadInventory(true);loadCatalog("processes");}if(view==="evidence")loadEvents(true);if(view==="knowledge")renderKnowledgeStats()}
 document.querySelectorAll(".nav-btn").forEach(n=>n.addEventListener("click",()=>switchView(n.dataset.view)));
 document.querySelectorAll("[data-view-jump]").forEach(n=>n.addEventListener("click",()=>switchView(n.dataset.viewJump)));
 function drawCanvas(id,dataA,dataB){const canvas=$(id);if(!canvas)return;const rect=canvas.getBoundingClientRect();const w=Math.max(320,Math.round(rect.width*devicePixelRatio)),h=Math.max(150,Math.round(rect.height*devicePixelRatio));if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h}const ctx=canvas.getContext("2d");ctx.clearRect(0,0,w,h);const pad=18*devicePixelRatio;ctx.strokeStyle="#303c35";ctx.lineWidth=devicePixelRatio;for(let i=0;i<=4;i++){const y=pad+(h-2*pad)*i/4;ctx.beginPath();ctx.moveTo(pad,y);ctx.lineTo(w-pad,y);ctx.stroke()}function line(values,color){if(values.length<2)return;ctx.beginPath();ctx.strokeStyle=color;ctx.lineWidth=2*devicePixelRatio;ctx.shadowBlur=8*devicePixelRatio;ctx.shadowColor=color;values.forEach((value,index)=>{const x=pad+(w-2*pad)*index/Math.max(1,values.length-1);const y=h-pad-(h-2*pad)*Math.max(0,Math.min(100,Number(value)||0))/100;if(index===0)ctx.moveTo(x,y);else ctx.lineTo(x,y)});ctx.stroke();ctx.shadowBlur=0}line(dataA,"#b8e65b");line(dataB,"#ff6b38")}
@@ -1030,7 +1030,55 @@ async function loadModels(){
   target.replaceChildren(el("div","empty","Local Ollama discovery failed: "+e.message));
  }
 }
-async function askSentinel(){const question=$("aiQuestion").value.trim(),mode=$("aiMode").value;if(!question){$("aiQuestion").focus();return}const btn=$("askBtn");btn.disabled=true;btn.textContent="RUNNING LOCAL INFERENCE…";$("aiAnswer").textContent="Preparing the bounded evidence packet and local reference context. Waiting for local Ollama…";$("aiReferences").replaceChildren();try{const r=await post("/api/ask",{question,mode});$("aiAnswer").textContent=r.answer||"No answer returned.";const meta=el("div","panel-sub","SPECIALIST "+String(r.specialist_mode||mode).toUpperCase()+" · "+String(r.model||"LOCAL MODEL")+" · "+String(r.confidence||"low").toUpperCase()+" CONFIDENCE · "+(r.evidence_ids||[]).length+" EVIDENCE IDS");$("aiReferences").append(meta);if(r.evidence_ids?.length)$("aiReferences").append(el("div","panel-sub","EVIDENCE IDS · "+r.evidence_ids.join(", ")));for(const ref of r.references||[]){try{const url=new URL(ref.url);if(url.protocol==="https:"&&["learn.microsoft.com","github.com"].includes(url.hostname)){const a=el("a","ai-reference",ref.title||url.hostname);a.href=url.href;a.target="_blank";a.rel="noopener noreferrer";$("aiReferences").append(a)}}catch{}}toast("Local specialist response ready.")}catch(e){$("aiAnswer").textContent="Sentinel AI unavailable: "+e.message;toast(e.message,"error")}finally{btn.disabled=false;btn.textContent="✳ ASK LOCAL AI"}}
+const aiSuggestionControls={
+ automation_enabled:"cfgAutomation",inventory_enabled:"cfgInventory",registry_enabled:"cfgRegistry",
+ deep_inventory_enabled:"cfgDeep",knowledge_enabled:"cfgKnowledge",ai_enabled:"cfgAI",
+ auto_review_on_posture_alerts:"cfgPostureReview",auto_review_on_registry_changes:"cfgRegistryReview",
+ include_network:"cfgNetwork",include_foreground:"cfgForeground",include_process_resources:"cfgProcessResources"
+};
+async function stageProfileSuggestion(setting,value){
+ const inputId=aiSuggestionControls[setting];
+ if(!inputId||typeof value!=="boolean"){toast("This suggestion is not an approved Sentinel profile setting.","error");return}
+ if(lastConfig===null)await loadProfile();
+ switchView("autonomy");
+ const input=$(inputId);
+ if(!input){toast("The profile control was not found.","error");return}
+ input.checked=value;
+ $("profileSaveState").textContent="UNSAVED AI SUGGESTION";
+ $("presetNote").textContent="An AI suggestion has been staged. Review the surrounding settings and save only if you agree.";
+ $("profileNote").textContent="This change is only in the form. Nothing has been applied yet.";
+ toast("Suggestion staged · review it and press SAVE ALL SETTINGS.");
+}
+async function askSentinel(){
+ const question=$("aiQuestion").value.trim(),mode=$("aiMode").value;
+ if(!question){$("aiQuestion").focus();return}
+ const btn=$("askBtn");btn.disabled=true;btn.textContent="ANALYSING LOCAL EVIDENCE…";
+ $("aiAnswer").textContent="Preparing the bounded, redacted evidence packet and local Microsoft references. Waiting for Ollama…";
+ $("aiReferences").replaceChildren();
+ try{
+  const r=await post("/api/ask",{question,mode});
+  $("aiAnswer").textContent=r.answer||"No answer returned.";
+  const meta=el("div","panel-sub","SPECIALIST "+String(r.specialist_mode||mode).toUpperCase()+" · "+String(r.model||"LOCAL MODEL")+" · "+String(r.confidence||"low").toUpperCase()+" CONFIDENCE · "+(r.evidence_ids||[]).length+" EVIDENCE IDS");
+  $("aiReferences").append(meta);
+  if(r.evidence_ids?.length)$("aiReferences").append(el("div","panel-sub","EVIDENCE IDS · "+r.evidence_ids.join(", ")));
+  for(const ref of r.references||[]){
+   try{const url=new URL(ref.url);if(url.protocol==="https:"&&["learn.microsoft.com","github.com"].includes(url.hostname)){const a=el("a","ai-reference",ref.title||url.hostname);a.href=url.href;a.target="_blank";a.rel="noopener noreferrer";$("aiReferences").append(a)}}catch{}
+  }
+  const suggestions=Array.isArray(r.profile_suggestions)?r.profile_suggestions:[];
+  if(mode==="maintenance"){
+   $("aiReferences").append(el("div","control-group-title","Suggested Sentinel settings · review before applying"));
+   if(!suggestions.length)$("aiReferences").append(el("div","empty","No Sentinel profile change is justified by the returned evidence. Follow the manual remediation guidance above."));
+   for(const suggestion of suggestions){
+    const card=el("div","ai-suggestion"),body=el("div"),title=el("strong",null,String(suggestion.setting||"Setting").replaceAll("_"," ")),value=el("span","task-pill",suggestion.value?"ENABLE":"DISABLE");
+    body.append(title,el("p",null,String(suggestion.reason||"No rationale provided.")),el("small",null,(suggestion.requires_restart?"Worker restart required after saving":"Applied on the next observer cycle")+(suggestion.evidence_ids?.length?" · Evidence "+suggestion.evidence_ids.join(", "):"")));
+    const top=el("div","task-row-head");top.append(body,value);card.append(top);
+    const stage=el("button","btn primary","STAGE IN FEATURE CONTROL");stage.type="button";stage.addEventListener("click",()=>stageProfileSuggestion(suggestion.setting,suggestion.value));card.append(stage);$("aiReferences").append(card);
+   }
+  }
+  toast("Local specialist response ready.");
+ }catch(e){$("aiAnswer").textContent="Sentinel AI unavailable: "+e.message;toast(e.message,"error")}
+ finally{btn.disabled=false;btn.textContent="✳ ASK LOCAL AI"}
+}
 async function searchKnowledge(){const q=$("knowledgeQuery").value.trim();if(!q){$("knowledgeQuery").focus();return}const target=$("knowledgeResults");target.replaceChildren(el("div","empty","Searching local documentation index…"));try{const r=await request("/api/knowledge/search?q="+encodeURIComponent(q)+"&limit=8");target.replaceChildren();if(!r.results?.length){target.append(el("div","empty","No indexed document matched. Run a knowledge sync."));return}for(const item of r.results){const card=el("div","knowledge-card"),title=el("strong",null,item.title||"Untitled document"),meta=el("small",null,String(item.source||"").toUpperCase()+" · SCORE "+item.score),p=el("p",null,item.excerpt||""),a=el("a","ai-reference",item.url||"");if(item.url){a.href=item.url;a.target="_blank";a.rel="noopener noreferrer"}card.append(title,meta,p,a);target.append(card)}}catch(e){target.replaceChildren(el("div","empty",e.message))}}
 let notifiedReady=("Notification" in window)&&Notification.permission==="granted";
 async function enableNotifications(){
@@ -1547,7 +1595,7 @@ def make_dashboard_server(
             if path == "/api/ask":
                 question = body.get("question")
                 mode = body.get("mode", "general")
-                allowed_modes = {"general", "security", "performance", "drivers", "storage", "network"}
+                allowed_modes = {"general", "security", "performance", "drivers", "storage", "network", "maintenance"}
                 if not isinstance(question, str) or not question.strip() or len(question) > 500:
                     self._json(400, {"error": "question must contain 1-500 characters"})
                     return
