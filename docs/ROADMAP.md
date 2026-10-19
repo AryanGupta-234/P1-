@@ -48,7 +48,10 @@ Development ownership and branch rules are defined in [Development Streams](DEVE
 - [x] Explicit JSONL export and confirm-only delete-all controls; sensitive export requires an explicit opt-in.
 - [ ] Rich observer health desktop UI.
 - [x] Periodic bounded system inventory event for processes, applications, services, scheduled tasks and interfaces, with local event inspection in the Sentinel dashboard.
-- [ ] Validate ETW elevation, Event Log/UIA permissions and inventory accuracy on the target Windows desktop.
+- [x] Allowlisted read-only registry configuration snapshots with service/driver registration and Run/RunOnce name-change detection.
+- [x] Deeper CIM inventory for OS, CPU, system drivers, signed PnP drivers, fixed disks, Defender, Firewall and device health.
+- [x] Local Microsoft Learn and Microsoft-owned GitHub Markdown crawler with bounded sources, local SQLite indexing and dashboard search.
+- [ ] Validate registry ACLs, CIM/Defender/PnP visibility, Learn crawler compatibility and inventory accuracy on the target Windows desktop.
 
 ## M1.5 — Video intelligence
 - [x] Opt-in Chrome/Edge MV3 HTML-video observer, disabled by default.
@@ -151,8 +154,9 @@ Development ownership and branch rules are defined in [Development Streams](DEVE
 - [x] Current-user ONLOGON Task Scheduler registration using interactive-only, LIMITED permissions; no SYSTEM service.
 - [x] Local loopback dashboard with token-protected API, live host resource chart, provider health, event stream and pause/resume/stop controls.
 - [x] Expandable event inspection and periodic Windows metadata inventory snapshots.
+- [x] Live Windows-internals dashboard panel and local Microsoft knowledge search.
 - [x] Local two-stage Ollama 4B/6B evidence triage/review with memory checks, sequential model use and no auto-pull or cloud fallback.
-- [ ] Exercise sign-in startup, dashboard controls, inventory refresh and Ollama inference on the target Windows 11 desktop.
+- [ ] Exercise sign-in startup, dashboard controls, registry/CIM inventory, Microsoft crawler refresh and Ollama inference on the target Windows 11 desktop.
 - [ ] Add signed installer/shortcut and polished native desktop shell after validating the local dashboard prototype.
 - [x] User-started Windows tray prototype with pause/resume and minimal local status dialog; target-desktop usability/runtime validation remains pending.
 - [x] Generic local notification prototype with explicit opt-in, quiet hours, pause suppression and no event details in the balloon. Target-desktop behavior and full notification categories remain pending.
@@ -164,8 +168,9 @@ Development ownership and branch rules are defined in [Development Streams](DEVE
 - [x] One-command local agent entry point combining local planning, validation, durable run creation and bounded advancement; policy/input gates stop progression.
 
 ## Immediate dev sprint
-1. Validate the native tray, balloon notification behavior, browser/native-host, UIA, Event Log and elevated ETW on the actual target desktop; hosted CI cannot validate interactive desktop behavior.
-2. Extend ETW from process lifecycle into explicitly selected thread/file/network categories with coverage reporting.
+1. Validate the native tray, balloon notification behavior, browser/native-host, UIA, Event Log, registry, CIM and elevated ETW on the actual target desktop; hosted CI cannot validate interactive desktop behavior.
+2. Verify Microsoft Learn search response stability, Microsoft GitHub repository refreshes, local indexing and dashboard retrieval.
+3. Extend ETW only after validating the pinned provider's real category support and event coverage; do not mark thread/file/network/registry ETW complete based on API surface alone.
 3. Evaluate freshness/contradiction signals and add calibrated confidence metrics without treating heuristics as probabilities.
 4. Evaluate semantic memory retrieval, reviewed merges, retention and temporal contradiction handling on held-out queries.
 5. Add process isolation and adapter-specific postcondition verifiers before expanding the narrow Windows Settings adapter.
