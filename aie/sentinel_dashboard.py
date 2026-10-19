@@ -98,6 +98,13 @@ body:after{content:"";position:fixed;inset:0;z-index:0;pointer-events:none;opaci
 .disk-meter{height:4px;background:#26394b;border-radius:9px;margin:8px 0 5px;overflow:hidden}
 .disk-meter i{display:block;height:100%;background:linear-gradient(90deg,#438dba,#67eaff,#ff7587);box-shadow:0 0 10px #5fe5ff55}
 .pnp-pills{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.driver-list{display:grid;gap:6px;margin-top:8px;max-height:290px;overflow:auto;padding-right:3px}
+.driver-row{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,.8fr) auto;gap:8px;align-items:center;border:1px solid #243e53;border-radius:9px;padding:8px;background:#0a1723}
+.driver-row strong{display:block;font-size:9px;overflow-wrap:anywhere}
+.driver-row small{display:block;color:#7f9bb1;font-size:8px;margin-top:3px;overflow-wrap:anywhere}
+.driver-state{font:8px "Cascadia Code",Consolas,monospace;color:#72e6c4}
+.driver-state.unsigned{color:#ff9cad}
+
 .pnp-pill{font-size:8px;padding:5px 8px;border-radius:20px;background:#142a3b;border:1px solid #35546b;color:#b6d2e4}
 .pnp-pill.bad{border-color:#8b4957;color:#ffabb7;background:#301c27}
 .profile-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
@@ -229,7 +236,11 @@ body:after{content:"";position:fixed;inset:0;z-index:0;pointer-events:none;opaci
         <div class="metric-tile"><small>WINDOWS BUILD</small><strong id="metricBuild">—</strong></div>
       </div>
       <div class="deep-columns">
-        <div><div class="deep-subhead">FIXED STORAGE</div><div id="diskList" class="disk-list"><div class="panel-sub">Waiting for a CIM snapshot.</div></div></div>
+        <div><div class="deep-subhead">FIXED STORAGE</div><div id="diskList" class="disk-list"><div class="panel-sub">Waiting for a CIM snapshot.</div></div>
+          <div class="deep-subhead" style="margin-top:16px">SIGNED DRIVER / DEVICE EXPLORER</div>
+          <div class="knowledge-search"><input id="driverQuery" type="search" maxlength="100" placeholder="Filter device or driver provider…"><button id="driverSearchBtn">FILTER</button></div>
+          <div class="driver-list" id="driverResults"><div class="panel-sub">Searches the latest local signed-PnP inventory snapshot.</div></div>
+        </div>
         <div><div class="deep-subhead">SECURITY & DEVICE HEALTH</div><div id="securityList" class="security-list"><div class="panel-sub">Waiting for Defender / firewall status.</div></div><div id="pnpSummary" class="pnp-pills"></div></div>
       </div>
     </section>
@@ -279,6 +290,20 @@ function prettyAge(iso){if(!iso)return"—";const d=Math.max(0,Math.floor((Date.
 function uptime(iso){if(!iso)return"—";let n=Math.max(0,Math.floor((Date.now()-new Date(iso).getTime())/1000));const h=Math.floor(n/3600);n%=3600;const m=Math.floor(n/60);const s=n%60;return h+"h "+m+"m "+s+"s"}
 function setBar(id,v){$(id).style.width=Math.max(0,Math.min(100,Number(v)||0))+"%"}
 function create(tag,cls,text){const el=document.createElement(tag);if(cls)el.className=cls;if(text!==undefined)el.textContent=text;return el}
+async function searchDrivers(){
+ const query=$("driverQuery").value.trim(),target=$("driverResults");
+ target.replaceChildren(create("div","panel-sub","Searching the latest local driver snapshot…"));
+ try{
+  const result=await request("/api/drivers?q="+encodeURIComponent(query));
+  target.replaceChildren();
+  if(!result.drivers?.length){target.append(create("div","panel-sub",result.snapshot_at?"No signed-PnP records matched this filter.":"Run a deep system scan to collect driver metadata."));return}
+  for(const item of result.drivers){
+   const row=create("div","driver-row"),left=create("div"),name=create("strong",null,item.device),sub=create("small",null,item.provider+" · "+item.version),date=create("small",null,item.driver_date),signature=create("span","driver-state"+(item.signed===false?" unsigned":""),item.signed===true?"SIGNED":item.signed===false?"UNSIGNED":"UNKNOWN");
+   left.append(name,sub);row.append(left,date,signature);target.append(row);
+  }
+  const meta=create("div","knowledge-meta","MATCHED "+result.matched+" / "+result.total+" · SNAPSHOT "+prettyAge(result.snapshot_at));meta.style.marginTop="7px";target.prepend(meta);
+ }catch(error){target.replaceChildren(create("div","panel-sub","Driver lookup unavailable: "+error.message))}
+}
 function renderDeepDiagnostics(status){
  const inv=status.inventory_summary||{},deep=status.deep_inventory||{},osInfo=deep.operating_system||{},defender=deep.defender||{};
  $("metricProcesses").textContent=inv.processes??"—";
@@ -498,6 +523,8 @@ $("crawlNowBtn").addEventListener("click",()=>runCommand("knowledge_crawl_now"))
 $("saveProfileBtn").addEventListener("click",saveProfile);
 $("reloadProfileBtn").addEventListener("click",loadProfile);
 $("askButton").addEventListener("click",askSentinel);
+$("driverSearchBtn").addEventListener("click",searchDrivers);
+$("driverQuery").addEventListener("keydown",event=>{if(event.key==="Enter")searchDrivers()});
 $("askQuestion").addEventListener("keydown",event=>{if(event.key==="Enter"&&(event.ctrlKey||event.metaKey))askSentinel()});
 $("knowledgeQuery").addEventListener("keydown",event=>{if(event.key==="Enter")searchKnowledge()});
 $("clock").textContent=new Date().toLocaleTimeString();setInterval(()=>$("clock").textContent=new Date().toLocaleTimeString(),1000);setInterval(refresh,2500);loadProfile();window.addEventListener("resize",drawChart);refresh();
@@ -630,6 +657,45 @@ def make_dashboard_server(
                     self._json(200, {"profile": {key: config[key] for key in fields}})
                 except (OSError, RuntimeError, ValueError):
                     self._json(503, {"error": "Sentinel profile is unavailable"})
+                return
+            if parsed.path == "/api/drivers":
+                try:
+                    query = parse_qs(parsed.query).get("q", [""])[0].strip().casefold()[:100]
+                    latest = next(
+                        (
+                            event for event in EventStore(db_path).recent(1000)
+                            if event.event_type == "windows.deep_inventory"
+                        ),
+                        None,
+                    )
+                    if latest is None:
+                        self._json(200, {"snapshot_at": None, "total": 0, "drivers": []})
+                        return
+                    raw_drivers = latest.data.get("signed_pnp_drivers", [])
+                    drivers = []
+                    for item in raw_drivers if isinstance(raw_drivers, list) else []:
+                        if not isinstance(item, dict):
+                            continue
+                        device = str(item.get("DeviceName") or "Unknown device")[:140]
+                        provider = str(item.get("DriverProviderName") or "Unknown provider")[:100]
+                        version = str(item.get("DriverVersion") or "—")[:60]
+                        if query and query not in " ".join((device, provider, version)).casefold():
+                            continue
+                        drivers.append({
+                            "device": device,
+                            "provider": provider,
+                            "version": version,
+                            "signed": item.get("IsSigned") if isinstance(item.get("IsSigned"), bool) else None,
+                            "driver_date": str(item.get("DriverDate") or "—")[:32],
+                        })
+                    self._json(200, {
+                        "snapshot_at": latest.timestamp.isoformat(),
+                        "total": len(raw_drivers) if isinstance(raw_drivers, list) else 0,
+                        "matched": len(drivers),
+                        "drivers": drivers[:80],
+                    })
+                except (OSError, ValueError):
+                    self._json(503, {"error": "Local driver inventory is unavailable"})
                 return
             if parsed.path == "/api/knowledge/search":
                 try:
