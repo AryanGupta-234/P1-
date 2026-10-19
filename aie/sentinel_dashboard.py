@@ -241,6 +241,14 @@ main{min-width:0;padding:18px clamp(14px,2.1vw,32px) 40px;max-width:1900px;width
     <section class="panel"><div class="panel-head"><div><div class="panel-title">BITLOCKER / BATTERY</div><div class="panel-sub">Encryption status and battery telemetry where available</div></div></div><div class="result-list" id="encryptionBattery"><div class="empty">Waiting for device metadata.</div></div></section>
    </div>
    <section class="panel" style="margin-top:12px"><div class="panel-head"><div><div class="panel-title">SIGNED DRIVER INTELLIGENCE</div><div class="panel-sub">Search the last local PnP driver snapshot; this is inventory, not a compatibility verdict.</div></div><span class="tag" id="driverCount">NO SNAPSHOT</span></div><div class="search-row"><input class="field" id="driverQuery" maxlength="100" placeholder="Search device name, provider or version…"><button class="btn" id="driverSearch">FILTER DRIVERS</button></div><div class="driver-list scroll-list" id="driverResults"><div class="empty">Run a deep system scan to populate the driver explorer.</div></div></section>
+   <section class="panel" style="margin-top:12px"><div class="panel-head"><div><div class="panel-title">SYSTEM INVENTORY EXPLORER</div><div class="panel-sub">Bounded local records · process, application, service, task and interface catalogs</div></div><span class="tag" id="catalogSnapshot">NO SNAPSHOT</span></div>
+    <div class="button-row" style="margin-bottom:10px" id="catalogKinds">
+     <button class="btn active" data-catalog="processes">PROCESSES</button><button class="btn" data-catalog="applications">APPLICATIONS</button><button class="btn" data-catalog="services">SERVICES</button><button class="btn" data-catalog="tasks">SCHEDULED TASKS</button><button class="btn" data-catalog="interfaces">INTERFACES</button>
+    </div>
+    <div class="search-row"><input class="field" id="catalogQuery" maxlength="100" placeholder="Filter this inventory catalog…"><button class="btn" id="catalogSearch">SEARCH</button></div>
+    <div class="panel-sub" id="catalogMeta">Select a catalog to inspect the latest inventory snapshot.</div>
+    <div class="result-list scroll-list" id="catalogResults" style="margin-top:9px"><div class="empty">No inventory catalog loaded yet.</div></div>
+   </section>
   </section>
 
   <section class="screen" data-screen="telemetry">
@@ -352,7 +360,7 @@ function setMeter(id,value){const node=$(id);if(node)node.style.width=Math.max(0
 function statusTone(value){const s=String(value||"unknown").toLowerCase();return ["degraded","partial","warning","disabled","unavailable","critical"].includes(s)?"degraded":s==="available"||s==="watching"||s==="running"||s==="ok"?"":"optional"}
 async function request(path,options={}){const response=await fetch(path,{...options,headers:{...headers,...(options.headers||{})},cache:"no-store"});let payload={};try{payload=await response.json()}catch{}if(!response.ok)throw new Error(payload.error||("Local API "+response.status));return payload}
 function post(path,data){return request(path,{method:"POST",headers:{"Content-Type":"application/json","Origin":location.origin},body:JSON.stringify(data)})}
-function switchView(view){if(!titles[view])return;currentView=view;document.querySelectorAll("[data-screen]").forEach(n=>n.classList.toggle("active",n.dataset.screen===view));document.querySelectorAll(".nav-btn").forEach(n=>n.classList.toggle("active",n.dataset.view===view));$("viewTitle").textContent=titles[view];if(view==="ai")loadModels();if(view==="autonomy")loadProfile();if(view==="system")loadInventory(true);if(view==="evidence")loadEvents(true);if(view==="knowledge")renderKnowledgeStats()}
+function switchView(view){if(!titles[view])return;currentView=view;document.querySelectorAll("[data-screen]").forEach(n=>n.classList.toggle("active",n.dataset.screen===view));document.querySelectorAll(".nav-btn").forEach(n=>n.classList.toggle("active",n.dataset.view===view));$("viewTitle").textContent=titles[view];if(view==="ai")loadModels();if(view==="autonomy")loadProfile();if(view==="system"){loadInventory(true);loadCatalog("processes");}if(view==="evidence")loadEvents(true);if(view==="knowledge")renderKnowledgeStats()}
 document.querySelectorAll(".nav-btn").forEach(n=>n.addEventListener("click",()=>switchView(n.dataset.view)));
 document.querySelectorAll("[data-view-jump]").forEach(n=>n.addEventListener("click",()=>switchView(n.dataset.viewJump)));
 function drawCanvas(id,dataA,dataB){const canvas=$(id);if(!canvas)return;const rect=canvas.getBoundingClientRect();const w=Math.max(320,Math.round(rect.width*devicePixelRatio)),h=Math.max(150,Math.round(rect.height*devicePixelRatio));if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h}const ctx=canvas.getContext("2d");ctx.clearRect(0,0,w,h);const pad=18*devicePixelRatio;ctx.strokeStyle="#264257";ctx.lineWidth=devicePixelRatio;for(let i=0;i<=4;i++){const y=pad+(h-2*pad)*i/4;ctx.beginPath();ctx.moveTo(pad,y);ctx.lineTo(w-pad,y);ctx.stroke()}function line(values,color){if(values.length<2)return;ctx.beginPath();ctx.strokeStyle=color;ctx.lineWidth=2*devicePixelRatio;ctx.shadowBlur=8*devicePixelRatio;ctx.shadowColor=color;values.forEach((value,index)=>{const x=pad+(w-2*pad)*index/Math.max(1,values.length-1);const y=h-pad-(h-2*pad)*Math.max(0,Math.min(100,Number(value)||0))/100;if(index===0)ctx.moveTo(x,y);else ctx.lineTo(x,y)});ctx.stroke();ctx.shadowBlur=0}line(dataA,"#70eaff");line(dataB,"#ff637b")}
@@ -425,6 +433,30 @@ async function saveProfile(){const integer=id=>Number.parseInt($(id).value,10);c
  ui_tree_apps:$("cfgUITreeApps").value.split(",").map(x=>x.trim().toLowerCase()).filter(Boolean)
 };const prior=lastConfig||{};const advancedChanged=["include_event_logs","include_etw","include_window_titles"].some(k=>prior[k]!==values[k])||JSON.stringify(prior.ui_tree_apps||[])!==JSON.stringify(values.ui_tree_apps);$("saveProfile").disabled=true;try{const r=await post("/api/config",{values});lastConfig=r.profile;renderProfile(r.profile);$("profileNote").textContent=advancedChanged?"Profile saved. Advanced sensor changes require aie sentinel stop then aie sentinel start to reinitialize collectors.":"Profile saved to the local AIE config. Scheduler and automation rules will be adopted on the next observer cycle.";toast("Automation profile saved.");}catch(e){$("profileNote").textContent=e.message;toast("Profile save failed: "+e.message,"error")}finally{$("saveProfile").disabled=false}}
 async function runCommand(action){try{const r=await post("/api/command",{action});toast("Command accepted · "+r.queued);setTimeout(()=>refresh(false),1100)}catch(e){toast(e.message,"error")}}
+let catalogKind="processes";
+async function loadCatalog(kind=catalogKind){
+ catalogKind=kind;
+ document.querySelectorAll("[data-catalog]").forEach(button=>button.classList.toggle("active",button.dataset.catalog===kind));
+ const query=$("catalogQuery").value.trim(),target=$("catalogResults");
+ target.replaceChildren(el("div","empty","Querying the latest local inventory…"));
+ try{
+  const result=await request("/api/catalog?kind="+encodeURIComponent(kind)+"&q="+encodeURIComponent(query)+"&limit=120");
+  target.replaceChildren();
+  $("catalogSnapshot").textContent=result.snapshot_at?"SNAPSHOT "+age(result.snapshot_at).toUpperCase():"NO SNAPSHOT";
+  $("catalogMeta").textContent=result.available?(result.matched+" displayed / "+result.total+" records · "+(result.truncated||0)+" omitted by collector bounds"):"Run a full system scan to populate this catalog.";
+  if(!result.items?.length){target.append(el("div","empty","No records match this filter."));return}
+  for(const item of result.items){
+   const card=el("div","info-card");
+   const entries=Object.entries(item).filter(([key,value])=>value!==null&&value!==undefined);
+   const first=entries[0]||["Record","—"];
+   const title=el("small",null,String(first[0]).replaceAll("_"," ").toUpperCase());
+   const strong=el("strong",null,String(first[1]));
+   const detail=entries.slice(1).map(([key,value])=>key.replaceAll("_"," ")+": "+String(value)).join(" · ");
+   const p=el("p",null,detail);
+   card.append(title,strong,p);target.append(card);
+  }
+ }catch(error){target.replaceChildren(el("div","empty",error.message))}
+}
 async function searchDrivers(){const q=$("driverQuery").value.trim();const target=$("driverResults");target.replaceChildren(el("div","empty","Searching local signed-PnP snapshot…"));try{const r=await request("/api/drivers?q="+encodeURIComponent(q));target.replaceChildren();$("driverCount").textContent=(r.total||0)+" TOTAL / "+(r.matched||0)+" MATCHED";if(!r.drivers?.length){target.append(el("div","empty","No driver records matched. Run a deep scan first."));return}for(const d of r.drivers){const row=el("div","driver-row"),left=el("div"),name=el("strong",null,d.device),sub=el("small",null,d.provider+" · "+d.version),date=el("small",null,d.driver_date),signed=el("span","driver-state"+(d.signed===false?" unsigned":""),d.signed===true?"SIGNED":d.signed===false?"UNSIGNED":"UNKNOWN");left.append(name,sub);row.append(left,date,signed);target.append(row)}}catch(e){target.replaceChildren(el("div","empty",e.message))}}
 async function loadModels(){if(Date.now()-lastModelsFetch<10000)return;lastModelsFetch=Date.now();const target=$("modelList");target.replaceChildren(el("div","empty","Discovering locally installed Ollama models…"));try{const r=await request("/api/ai/models");target.replaceChildren();$("modelMemory").textContent="Available system RAM: "+(r.memory_available_gib??"—")+" GiB · local-only inference";if(!r.models?.length){target.append(el("div","empty",r.error||"No installed local Ollama models were discovered."));return}for(const m of r.models){const item=el("div","model-card"),name=el("strong",null,m),detail=el("small",null,(r.triage_candidates.includes(m)?"3B/4B Ask + triage candidate · ":"")+(r.review_candidates.includes(m)?"6B/7B reviewer candidate":"Installed local model"));item.append(name,detail);target.append(item)}}catch(e){target.replaceChildren(el("div","empty",e.message))}}
 async function askSentinel(){const question=$("aiQuestion").value.trim(),mode=$("aiMode").value;if(!question){$("aiQuestion").focus();return}const btn=$("askBtn");btn.disabled=true;btn.textContent="RUNNING LOCAL INFERENCE…";$("aiAnswer").textContent="Preparing the bounded evidence packet and local reference context. Waiting for local Ollama…";$("aiReferences").replaceChildren();try{const r=await post("/api/ask",{question,mode});$("aiAnswer").textContent=r.answer||"No answer returned.";const meta=el("div","panel-sub","SPECIALIST "+String(r.specialist_mode||mode).toUpperCase()+" · "+String(r.model||"LOCAL MODEL")+" · "+String(r.confidence||"low").toUpperCase()+" CONFIDENCE · "+(r.evidence_ids||[]).length+" EVIDENCE IDS");$("aiReferences").append(meta);if(r.evidence_ids?.length)$("aiReferences").append(el("div","panel-sub","EVIDENCE IDS · "+r.evidence_ids.join(", ")));for(const ref of r.references||[]){try{const url=new URL(ref.url);if(url.protocol==="https:"&&["learn.microsoft.com","github.com"].includes(url.hostname)){const a=el("a","ai-reference",ref.title||url.hostname);a.href=url.href;a.target="_blank";a.rel="noopener noreferrer";$("aiReferences").append(a)}}catch{}}toast("Local specialist response ready.")}catch(e){$("aiAnswer").textContent="Sentinel AI unavailable: "+e.message;toast(e.message,"error")}finally{btn.disabled=false;btn.textContent="✳ ASK LOCAL AI"}}
@@ -445,6 +477,9 @@ $("refreshBtn").addEventListener("click",()=>refresh(true));$("modelRefresh").ad
 $("saveProfile").addEventListener("click",saveProfile);$("reloadProfile").addEventListener("click",loadProfile);
 $("askBtn").addEventListener("click",askSentinel);$("aiQuestion").addEventListener("keydown",e=>{if(e.key==="Enter")askSentinel()});
 $("driverSearch").addEventListener("click",searchDrivers);$("driverQuery").addEventListener("keydown",e=>{if(e.key==="Enter")searchDrivers()});
+$("catalogSearch").addEventListener("click",()=>loadCatalog());
+$("catalogQuery").addEventListener("keydown",e=>{if(e.key==="Enter")loadCatalog()});
+document.querySelectorAll("[data-catalog]").forEach(button=>button.addEventListener("click",()=>loadCatalog(button.dataset.catalog)));
 $("knowledgeSearch").addEventListener("click",searchKnowledge);$("knowledgeQuery").addEventListener("keydown",e=>{if(e.key==="Enter")searchKnowledge()});
 $("eventSearch").addEventListener("click",async()=>{const q=$("eventQuery").value.trim(),type=$("eventTypeFilter").value;try{const r=await request("/api/events?limit=250&q="+encodeURIComponent(q)+"&type="+encodeURIComponent(type));lastEvents=r.events||[];$("eventMeta").textContent=(r.returned||0)+" matches in the recent searchable window";renderEvents(lastEvents)}catch(e){toast(e.message,"error")}});
 $("eventRefresh").addEventListener("click",()=>loadEvents(true));
@@ -625,6 +660,63 @@ def make_dashboard_server(
                     })
                 except (OSError, ValueError):
                     self._json(503, {"error": "Local driver inventory is unavailable"})
+                return
+            if parsed.path == "/api/catalog":
+                try:
+                    params = parse_qs(parsed.query)
+                    kind = params.get("kind", ["services"])[0].strip().casefold()
+                    allowed = {
+                        "processes": "processes",
+                        "applications": "installed_applications",
+                        "services": "services",
+                        "tasks": "scheduled_tasks",
+                        "interfaces": "network_interfaces",
+                    }
+                    if kind not in allowed:
+                        self._json(400, {"error": "unsupported inventory catalog"})
+                        return
+                    query = params.get("q", [""])[0].strip().casefold()[:100]
+                    limit = max(1, min(200, int(params.get("limit", ["80"])[0])))
+                    latest = next(
+                        (
+                            event for event in EventStore(db_path).recent(1500)
+                            if event.event_type == "windows.system_inventory"
+                        ),
+                        None,
+                    )
+                    if latest is None:
+                        self._json(200, {"available": False, "snapshot_at": None, "total": 0, "matched": 0, "items": []})
+                        return
+                    records = latest.data.get(allowed[kind], [])
+                    records = records if isinstance(records, list) else []
+                    matched = []
+                    for record in records:
+                        if not isinstance(record, dict):
+                            continue
+                        if query and query not in json.dumps(record, ensure_ascii=True).casefold():
+                            continue
+                        matched.append(_safe_json_value(record))
+                        if len(matched) >= limit:
+                            break
+                    truncated = latest.data.get("truncated", {})
+                    self._json(200, {
+                        "available": True,
+                        "snapshot_at": latest.timestamp.isoformat(),
+                        "kind": kind,
+                        "total": len(records),
+                        "matched": len(matched),
+                        "items": matched,
+                        "truncated": truncated.get(kind, 0) if isinstance(truncated, dict) else 0,
+                        "inventory_summary": {
+                            "processes": latest.data.get("process_count", 0),
+                            "applications": latest.data.get("installed_application_count", 0),
+                            "services": latest.data.get("service_count", 0),
+                            "scheduled_tasks": latest.data.get("scheduled_task_count", 0),
+                            "interfaces": len(latest.data.get("network_interfaces", [])) if isinstance(latest.data.get("network_interfaces"), list) else 0,
+                        },
+                    })
+                except (OSError, ValueError):
+                    self._json(503, {"error": "System inventory catalog is unavailable"})
                 return
             if parsed.path == "/api/ai/models":
                 try:
