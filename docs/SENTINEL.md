@@ -50,15 +50,54 @@ Stopping the worker does not remove the logon task. Uninstall stops the worker a
 | Process resource sampling | On | Bounded CPU, working-set, thread and I/O counters; top consumers only |
 | Network telemetry | On | Interface counters and bounded DNS/TCP-connect diagnostics; no packet capture, browsing history or payload inspection |
 | System inventory | Every 15 minutes | Bounded process, installed-application, service, scheduled-task and interface metadata |
+| Registry intelligence | Every 3 minutes | Read-only, allowlisted Windows configuration keys; service/driver metadata and autorun name/change detection |
+| Deep Windows inventory | Every 15 minutes | CIM OS/CPU/driver/disk/PnP metadata, Defender status and firewall profiles |
+| Microsoft knowledge crawler | Every 6 hours | Fixed Windows topics from Learn plus selected MicrosoftDocs/classic-samples Markdown; locally indexed |
 | Application/System Event Log | Off | Metadata-only reader; no event message text, XML or Security log |
 | UI Automation structure | Off | Requires an explicit executable allowlist; does not read control text, values or passwords |
-| Kernel ETW process events | Off | Existing bounded process-lifecycle provider; elevated access may be required |
+| Kernel ETW process events | Off | Bounded process-lifecycle provider; elevated access may be required |
 | Window titles | Off | Marked sensitive when enabled |
 | Browser video intelligence | Separate opt-in | Existing browser extension/native-host workflow; playback/performance metadata only |
 
 The inventory pass excludes install/uninstall command strings, full executable paths, environment variables, IP/MAC addresses, scheduled-task XML, and process command lines. The API response filters sensitive event classes and sensitive field names before data is sent to the dashboard.
 
 The existing Windows provider also reads application metadata from the uninstall registry and task names/status from the built-in schtasks query interface. These are read-only queries; Sentinel does not start, stop, install, disable or reconfigure the discovered items.
+
+The registry sensor is an allowlisted configuration observer, not a recursive hive dump. It reads selected OS/build, UAC, Device Guard/HVCI, Secure Boot, crash configuration, selected Defender policy and Remote Desktop configuration values, plus bounded service-registration metadata. It watches Run/RunOnce entry names and compares in-memory fingerprints to detect changes; it does not persist autorun command strings or full image paths. It does not read SAM, SECURITY, LSA secrets, credential stores, user secrets, or protected process memory. It opens keys for read access only.
+
+The deeper CIM snapshot queries documented Windows management providers for OS/computer/CPU information, system-driver and signed PnP driver metadata, fixed-disk capacity, present PnP status counts, Microsoft Defender status and Windows Firewall profile state. It does not collect serial numbers, device instance IDs, process command lines, executable paths or event-message content. Some Defender or PnP classes may be unavailable on a given Windows edition or configuration; an unavailable subsystem is reported as a degraded inventory pass rather than treated as an empty successful result.
+
+This is not literal read-every-byte-of-the-kernel monitoring. Sentinel does not map kernel memory, dump arbitrary process memory, attach a debugger, install a custom kernel driver, or bypass Windows access controls. ETW remains the supported kernel tracing interface; the current adapter is narrowly limited to process lifecycle metadata. Thread, image-load, registry and other ETW categories are not claimed as active until the pinned provider implementation and coverage are separately validated.
+
+## Microsoft technical knowledge crawler
+
+The crawler is read-only and uses outbound HTTPS GET requests only. It searches a fixed set of Windows engineering topics on Microsoft Learn and reads selected Markdown files from these Microsoft-owned repositories:
+
+- MicrosoftDocs/win32
+- MicrosoftDocs/windows-driver-docs
+- microsoft/Windows-classic-samples
+
+Repository trees are ranked by Windows-internals topics before a small fixed number of Markdown files is fetched. The crawler validates allowed source hosts after redirects, caps response sizes and stores page text in %LOCALAPPDATA%\AIE\knowledge\microsoft-knowledge.sqlite3. The corpus is local; it does not upload machine inventory, event data or personal files. The Microsoft Learn search endpoint is a public site endpoint rather than a guaranteed stable product API, so failures are isolated and the crawler may need maintenance if Learn changes it.
+
+Use the local knowledge CLI:
+
+    aie knowledge crawl
+    aie knowledge status
+    aie knowledge search "kernel ETW registry"
+
+Sentinel performs an initial knowledge crawl after it starts collecting and repeats on the configured cadence (default six hours). Tune or disable this background activity with:
+
+    aie sentinel configure --knowledge-interval 21600
+    aie sentinel configure --no-knowledge
+
+Registry and deep inventory controls:
+
+    aie sentinel configure --registry-interval 180
+    aie sentinel configure --no-registry
+    aie sentinel configure --deep-inventory-interval 900
+    aie sentinel configure --no-deep-inventory
+
+Configuration changes are applied after restarting Sentinel. The dashboard includes live registry/CIM/ETW/knowledge status and a search field backed only by the local knowledge database.
 
 ## Local Ollama collaboration
 
@@ -94,6 +133,7 @@ Events are retained in the existing local AIE SQLite database. Use the existing 
 ## Prototype limits
 
 - The dashboard and background worker are implemented in the repository, but they have not been installed or exercised on the target Windows desktop from this development session.
-- The Windows CI build is not proof of Task Scheduler, ETW elevation, UI Automation, live browser bridge, or Ollama runtime behavior on the target machine.
+- The Windows CI build is not proof of Task Scheduler, ETW elevation, Registry ACLs, CIM inventory, Defender cmdlets, PnP visibility, live browser bridge, or Ollama runtime behavior on the target machine.
+- The Microsoft Learn search endpoint is not a contractual API; crawler compatibility must be monitored and maintained.
 - The inventory and provider sets are bounded and intentionally omit private payloads; “watch everything” is not interpreted as permission to collect secrets or all user content.
-- Kernel ETW support is optional process lifecycle tracing, not a custom driver and not a complete kernel activity recorder.
+- Kernel ETW support is optional process lifecycle tracing, not a custom driver and not a complete kernel activity recorder. Registry/CIM collectors are selected configuration snapshots and do not claim exhaustive system-state coverage.
