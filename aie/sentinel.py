@@ -541,6 +541,47 @@ def _worker() -> None:
                 for item in data.get("pnp_status_counts", [])[:16]
                 if isinstance(item, dict)
             ]
+            physical_disk_summary = [
+                {
+                    "name": str(item.get("FriendlyName") or "Physical disk")[:90],
+                    "media_type": str(item.get("MediaType") or "—")[:24],
+                    "bus_type": str(item.get("BusType") or "—")[:24],
+                    "health": str(item.get("HealthStatus") or "Unknown")[:24],
+                    "operational": str(item.get("OperationalStatus") or "Unknown")[:48],
+                    "size_gib": round(int(item.get("Size") or 0) / (1024 ** 3), 1),
+                }
+                for item in data.get("physical_disks", [])[:32]
+                if isinstance(item, dict)
+            ]
+            bitlocker_summary = [
+                {
+                    "mount": str(item.get("MountPoint") or "Volume")[:16],
+                    "volume_status": str(item.get("VolumeStatus") or "Unknown")[:32],
+                    "protection": str(item.get("ProtectionStatus") or "Unknown")[:24],
+                    "encryption_percent": item.get("EncryptionPercentage"),
+                    "method": str(item.get("EncryptionMethod") or "—")[:32],
+                }
+                for item in data.get("bitlocker_volumes", [])[:32]
+                if isinstance(item, dict)
+            ]
+            battery_summary = [
+                {
+                    "name": str(item.get("Name") or "Battery")[:80],
+                    "charge_percent": item.get("EstimatedChargeRemaining"),
+                    "battery_status": item.get("BatteryStatus"),
+                    "health_status": str(item.get("Status") or "Unknown")[:24],
+                    "estimated_runtime_minutes": (
+                        round(float(item.get("EstimatedRunTime")) / 60, 0)
+                        if isinstance(item.get("EstimatedRunTime"), (int, float))
+                        and not isinstance(item.get("EstimatedRunTime"), bool)
+                        and item.get("EstimatedRunTime") >= 0
+                        and item.get("EstimatedRunTime") < 2**31
+                        else None
+                    ),
+                }
+                for item in data.get("batteries", [])[:8]
+                if isinstance(item, dict)
+            ]
             with state_lock:
                 state["deep_inventory"] = {
                     "enabled": True,
@@ -563,6 +604,12 @@ def _worker() -> None:
                     } if isinstance(defender, dict) else {},
                     "firewall_profile_count": len(firewall_summary),
                     "firewall_profiles": firewall_summary,
+                    "physical_disks": physical_disk_summary,
+                    "physical_disk_count": len(physical_disk_summary),
+                    "bitlocker_volumes": bitlocker_summary,
+                    "bitlocker_volume_count": len(bitlocker_summary),
+                    "batteries": battery_summary,
+                    "battery_count": len(battery_summary),
                     "operating_system": {
                         key: operating_system.get(key)
                         for key in ("Caption", "Version", "BuildNumber", "OSArchitecture")
