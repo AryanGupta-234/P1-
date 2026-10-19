@@ -207,6 +207,20 @@ def _source_snapshot() -> dict[str, str] | None:
     return snapshot or None
 
 
+
+
+
+def _restartable_config_snapshot(config: dict[str, Any]) -> dict[str, Any]:
+    """Select only settings whose change requires rebuilding the active collectors."""
+    keys = (
+        "include_network", "include_foreground", "include_process_resources",
+        "sample_interval_seconds", "network_interval_seconds",
+        "process_resource_interval_seconds", "include_event_logs", "include_etw",
+        "include_window_titles", "include_ui_tree", "ui_tree_apps",
+    )
+    return {key: config.get(key) for key in keys}
+
+
 def _spawn_worker_process(log_path: Path) -> subprocess.Popen[Any]:
     """Launch a detached worker using the currently installed AIE source."""
     _rotate_log(log_path)
@@ -1284,21 +1298,35 @@ def _worker() -> None:
 
     def watch_agent_source_updates() -> None:
         baseline = _source_snapshot()
+        try:
+            baseline_config = _restartable_config_snapshot(_load_config())
+        except (OSError, RuntimeError, ValueError):
+            baseline_config = _restartable_config_snapshot(config)
         if baseline is None:
             with state_lock:
                 state["restart"]["watch_status"] = "unavailable"
                 _write_state(state)
             return
 
-        candidate: dict[str, str] | None = None
-        stable_scans = 0
+        candidate_source: dict[str, str] | None = None
+        stable_source_scans = 0
+        candidate_config: dict[str, Any] | None = None
+        stable_config_scans = 0
         last_reported_status = state["restart"]["watch_status"]
 
         while not source_watch_stop.wait(2.0):
             if stop_path.exists():
                 return
 
-            enabled = bool(config.get("auto_restart_enabled", True))
+            try:
+                live_config = _load_config()
+            except (OSError, RuntimeError, ValueError):
+                # Ignore an incomplete or invalid profile while it is being replaced.
+                candidate_config = None
+                stable_config_scans = 0
+                continue
+
+            enabled = bool(live_config.get("auto_restart_enabled", True))
             watch_status = "watching" if enabled else "disabled"
             if watch_status != last_reported_status:
                 with state_lock:
@@ -1308,47 +1336,66 @@ def _worker() -> None:
                 last_reported_status = watch_status
 
             if not enabled:
-                candidate = None
-                stable_scans = 0
+                candidate_source = None
+                stable_source_scans = 0
+                candidate_config = None
+                stable_config_scans = 0
                 continue
 
-            current = _source_snapshot()
-            if current is None:
+            current_source = _source_snapshot()
+            if current_source is None:
                 # Ignore transient reads while git/pip is replacing package files.
-                candidate = None
-                stable_scans = 0
-                continue
-            if current == baseline:
-                candidate = None
-                stable_scans = 0
-                continue
-            if current == candidate:
-                stable_scans += 1
+                candidate_source = None
+                stable_source_scans = 0
+            elif current_source == baseline:
+                candidate_source = None
+                stable_source_scans = 0
+            elif current_source == candidate_source:
+                stable_source_scans += 1
             else:
-                candidate = current
-                stable_scans = 1
+                candidate_source = current_source
+                stable_source_scans = 1
 
-            if stable_scans < 3:
+            current_config = _restartable_config_snapshot(live_config)
+            if current_config == baseline_config:
+                candidate_config = None
+                stable_config_scans = 0
+            elif current_config == candidate_config:
+                stable_config_scans += 1
+            else:
+                candidate_config = current_config
+                stable_config_scans = 1
+
+            source_changed = stable_source_scans >= 3 and current_source is not None
+            config_changed = stable_config_scans >= 3
+            if not source_changed and not config_changed:
                 continue
 
             changed_files = sorted(
-                name for name in set(baseline) | set(current)
-                if baseline.get(name) != current.get(name)
-            )
-            preview = changed_files[:12]
-            reason = "Stable AIE source update detected"
-            if preview:
-                reason += ": " + ", ".join(preview[:5])
+                name for name in set(baseline) | set(current_source or {})
+                if baseline.get(name) != (current_source or {}).get(name)
+            ) if source_changed else []
+            changed_settings = sorted(
+                key for key in set(baseline_config) | set(current_config)
+                if baseline_config.get(key) != current_config.get(key)
+            ) if config_changed else []
+            reasons = []
+            if changed_files:
+                reasons.append("agent source: " + ", ".join(changed_files[:5]))
                 if len(changed_files) > 5:
-                    reason += f" (+{len(changed_files) - 5} more)"
+                    reasons[-1] += f" (+{len(changed_files) - 5} more)"
+            if changed_settings:
+                reasons.append("collector settings: " + ", ".join(changed_settings))
+            reason = "Stable AIE update detected — " + "; ".join(reasons)
 
             with state_lock:
                 state["restart"] = {
                     "auto_enabled": True,
                     "watch_status": "restart_pending",
                     "status": "scheduled",
-                    "reason": reason,
-                    "changed_files": preview,
+                    "reason": reason[:800],
+                    "changed_files": changed_files[:12],
+                    "changed_settings": changed_settings,
                     "changed_file_count": len(changed_files),
                     "requested_at": _now(),
                     "scan_interval_seconds": 2,
@@ -1357,7 +1404,7 @@ def _worker() -> None:
                 _write_state(state)
 
             try:
-                restart_path.write_text(reason, encoding="utf-8")
+                restart_path.write_text(reason[:800], encoding="utf-8")
                 stop_path.touch(exist_ok=True)
             except OSError as exc:
                 with state_lock:
