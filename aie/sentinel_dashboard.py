@@ -43,6 +43,83 @@ footer{font-size:9px;color:#5e748a;text-align:center;padding:23px 0 0;letter-spa
 @media(max-width:1050px){.shell{grid-template-columns:68px minmax(0,1fr)}.side{padding:22px 10px;align-items:center}.brand{padding:0}.brand-name,.brand-sub,.nav-label,.nav a span:not(.nav-symbol),.side-bottom{display:none}.nav{width:100%}.nav a{justify-content:center;padding:12px 0}.grid-main{grid-template-columns:1fr}.lower{grid-template-columns:1fr}}
 @media(max-width:680px){.shell{display:block}.side{position:relative;width:100%;height:auto;flex-direction:row;justify-content:space-between;padding:10px 15px;border-right:0;border-bottom:1px solid var(--line)}.brand-name,.brand-sub{display:block}.nav{display:flex;width:auto;gap:3px}.nav a{padding:9px}.nav a span:not(.nav-symbol){display:none}.topbar{margin-bottom:16px}.top-right .clock{display:none}main{padding:18px 13px 30px}.hero{grid-template-columns:1fr}.hero-copy{padding:22px}.hero-core{display:none}.hero h1{font-size:26px}.stats{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.stat{padding:12px}.stat-value{font-size:21px}.lower{grid-template-columns:1fr}.event{grid-template-columns:30px minmax(0,1fr)}.event-time{grid-column:2}.event-icon{width:29px;height:29px}}
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{animation:none!important;scroll-behavior:auto!important;transition:none!important}}
+
+/* TITAN DECK visual system — cinematic motion, readable data, reduced-motion safe. */
+:root{--red:#ff526d;--steel:#a9c4d7;--electric:#69e8ff;--line:#25435a}
+body{background:radial-gradient(ellipse at 74% -10%,#1c3e58 0,transparent 40%),radial-gradient(ellipse at 8% 28%,#36192555 0,transparent 34%),linear-gradient(145deg,#050a12,#0a1725 56%,#080e18)}
+body:after{content:"";position:fixed;inset:0;z-index:0;pointer-events:none;opacity:.075;background:repeating-linear-gradient(0deg,transparent 0 3px,#a7efff 4px,transparent 5px);mix-blend-mode:screen;animation:scan-drift 14s linear infinite}
+.shell{z-index:1}
+.side{background:linear-gradient(180deg,#0a1522ed,#080e19f2);border-right-color:#2a4053;box-shadow:12px 0 38px #0004}
+.brand-mark{border-radius:10px;background:linear-gradient(145deg,#152d40,#07111c);box-shadow:0 0 30px #55dff12b,inset 0 0 24px #e0f9ff18}
+.brand-mark:after{content:"";position:absolute;inset:5px;border:1px solid #ff64764c;transform:rotate(45deg)}
+.nav a.active{background:linear-gradient(90deg,#163449,#172438);box-shadow:inset 2px 0 0 var(--electric),0 8px 24px #0004}
+.hero{background:linear-gradient(112deg,#172b3d 0%,#0c1b2a 48%,#191925 100%);border-color:#42627a;box-shadow:0 22px 70px #0008,inset 0 1px #b2eaff12}
+.hero:before{content:"";position:absolute;inset:0;pointer-events:none;background:linear-gradient(110deg,transparent 22%,#9beeff09 42%,transparent 60%);background-size:220% 100%;animation:armor-sheen 9s ease-in-out infinite}
+.hero:after{border-color:#83eaff24;box-shadow:0 0 0 32px #58dff20d,0 0 0 70px #ff536d08,0 0 55px #5fe8ff0b}
+.hero h1{letter-spacing:.12em;text-shadow:0 3px 24px #0008}
+.hero h1 span{color:#8cecff;text-shadow:0 0 20px #5fe7ff77}
+.hero-kicker{color:#ff8192}
+.core{width:168px;height:168px;border-color:#8cecffaa;box-shadow:0 0 48px #48dffa38,inset 0 0 45px #55dff52c,0 0 0 1px #ff536d1c;animation:reactor-breathe 4s ease-in-out infinite}
+.core:before{border-top-color:#ff687d;border-bottom-color:#78eaff;inset:-12px;animation-duration:10s}
+.core:after{inset:-24px;border-width:2px;border-color:#6ce8ff75 transparent #ff647655;animation-duration:17s}
+.core-eye{border-radius:17px 17px 17px 5px;background:linear-gradient(145deg,#29495b,#0b1b2a);box-shadow:0 0 28px #53e4f255,inset 0 0 14px #ff5f7522}
+.core-eye span{width:28px;height:28px;box-shadow:0 0 24px #63efff,0 0 48px #ff526d4d;animation:optic-pulse 2.8s ease-in-out infinite}
+.panel,.stat{background:linear-gradient(145deg,#132334ed,#0a1421f5);border-color:#29465d;box-shadow:0 12px 34px #0003,inset 0 1px #d3f6ff0a;transition:transform .25s ease,border-color .25s ease,box-shadow .25s ease}
+.panel{position:relative;overflow:hidden}
+.panel:before{content:"";position:absolute;left:18px;right:18px;top:0;height:1px;background:linear-gradient(90deg,transparent,#81e9ff88,#ff637355,transparent);opacity:.55}
+.panel:hover,.stat:hover{transform:translateY(-2px);border-color:#4a7896;box-shadow:0 16px 38px #0005,0 0 20px #57dff20b}
+.stat-value{letter-spacing:-.04em;text-shadow:0 0 18px #63ddff18}
+.btn{border-color:#456077;background:linear-gradient(145deg,#1a3348,#102236);box-shadow:inset 0 1px #e7f9ff16,0 4px 12px #0003}
+.btn.primary{background:linear-gradient(120deg,#167a92,#234f78 62%,#713847);border-color:#67dff0;box-shadow:0 0 20px #54def52b,inset 0 1px #fff4}
+.btn.warn{background:linear-gradient(120deg,#3a1b2a,#251522);border-color:#8d4658}
+.tag{color:#a9f2ff;border-color:#3f7181;background:#102b39}
+.command-strip{display:grid;grid-template-columns:minmax(180px,.75fr) minmax(0,1.8fr);gap:16px;align-items:center;padding:15px 18px;margin:14px 0;border:1px solid #375970;border-radius:17px;background:linear-gradient(105deg,#101f30,#142a3b 54%,#241a27);box-shadow:0 10px 30px #0005;position:relative;overflow:hidden}
+.command-strip:after{content:"";position:absolute;right:-60px;top:-95px;width:230px;height:230px;border:1px solid #65e5ff27;border-radius:50%;box-shadow:0 0 0 22px #65e5ff08,0 0 0 48px #ff536d08;pointer-events:none}
+.command-heading{font-size:10px;font-weight:800;letter-spacing:.18em;color:#c9e7f8}
+.command-caption{font-size:9px;color:#8ca9bf;margin-top:4px;line-height:1.5}
+.command-actions{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;z-index:1}
+.command-feedback{grid-column:1/-1;font-size:9px;color:#87dcec;min-height:13px;letter-spacing:.06em}
+.feature-grid{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(290px,.85fr);gap:14px;margin-top:14px}
+.metric-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:8px 0 13px}
+.metric-tile{padding:11px;border:1px solid #29455b;border-radius:11px;background:#0a1724}
+.metric-tile small{display:block;color:#7f9bb1;font-size:8px;letter-spacing:.13em}
+.metric-tile strong{display:block;color:#e5f6ff;font:17px "Cascadia Code",Consolas,monospace;margin-top:5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.deep-columns{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.deep-subhead{font-size:9px;color:#91b4c8;letter-spacing:.12em;margin:5px 0 8px}
+.disk-list,.security-list,.insight-list{display:grid;gap:7px}
+.disk-row,.security-row,.insight-item{border:1px solid #243e53;background:#0b1825;border-radius:10px;padding:9px}
+.disk-top,.security-row{display:flex;align-items:center;justify-content:space-between;gap:9px}
+.disk-top strong,.security-row strong{font-size:9px}
+.disk-top small,.security-row span{font:9px "Cascadia Code",Consolas,monospace;color:#8ca9bf}
+.disk-meter{height:4px;background:#26394b;border-radius:9px;margin:8px 0 5px;overflow:hidden}
+.disk-meter i{display:block;height:100%;background:linear-gradient(90deg,#438dba,#67eaff,#ff7587);box-shadow:0 0 10px #5fe5ff55}
+.pnp-pills{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.pnp-pill{font-size:8px;padding:5px 8px;border-radius:20px;background:#142a3b;border:1px solid #35546b;color:#b6d2e4}
+.pnp-pill.bad{border-color:#8b4957;color:#ffabb7;background:#301c27}
+.profile-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.profile-toggle{display:flex;align-items:flex-start;gap:9px;border:1px solid #29445a;border-radius:10px;background:#0b1825;padding:10px}
+.profile-toggle input{accent-color:#65e8ff;margin-top:2px}
+.profile-toggle strong{display:block;font-size:9px}
+.profile-toggle small{display:block;color:#819cb1;font-size:8px;margin-top:3px;line-height:1.45}
+.interval-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:13px 0}
+.interval-field label{display:block;font-size:8px;color:#8ba6bb;margin-bottom:5px}
+.interval-field input{width:100%;min-width:0;padding:8px 7px;border:1px solid #304b61;border-radius:8px;background:#07131f;color:#e5f4ff;font:10px "Cascadia Code",Consolas,monospace}
+.profile-note{font-size:9px;color:#7f9cb2;line-height:1.55;margin-top:10px}
+.ask-form{display:grid;gap:8px}
+.ask-form textarea{width:100%;min-height:75px;resize:vertical;background:#07131f;border:1px solid #35536b;border-radius:10px;color:#e9f7ff;padding:10px;font:11px/1.5 "Segoe UI",sans-serif}
+.ask-result{margin-top:11px;padding:11px;border:1px solid #29465c;border-radius:11px;background:#0a1724;min-height:45px;color:#bfd4e5;font-size:10px;line-height:1.6;white-space:pre-wrap;overflow-wrap:anywhere}
+.ask-result a{display:block;color:#7beaff;margin-top:6px;font-size:9px;overflow-wrap:anywhere}
+.insight-item strong{display:block;font-size:9px;color:#d7edfa}
+.insight-item p{margin:5px 0 0;font-size:9px;color:#93aec1;line-height:1.5}
+.command-feedback.good{color:#76e8c1}.command-feedback.bad{color:#ff9bab}
+@keyframes scan-drift{to{transform:translateY(9px)}}
+@keyframes armor-sheen{0%,100%{background-position:120% 0}50%{background-position:-30% 0}}
+@keyframes reactor-breathe{50%{box-shadow:0 0 68px #48dffa52,inset 0 0 50px #55dff548,0 0 0 1px #ff536d33}}
+@keyframes optic-pulse{50%{transform:scale(1.17);opacity:.78}}
+@media(max-width:1050px){.feature-grid{grid-template-columns:1fr}.interval-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:680px){.command-strip{grid-template-columns:1fr}.command-actions{justify-content:flex-start}.metric-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.deep-columns{grid-template-columns:1fr}.profile-grid{grid-template-columns:1fr}.interval-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(prefers-reduced-motion:reduce){body:after{animation:none}.core,.core-eye span{animation:none}.hero:before{animation:none}.panel,.stat{transition:none}}
+
 </style>
 </head>
 <body>
@@ -52,11 +129,13 @@ footer{font-size:9px;color:#5e748a;text-align:center;padding:23px 0 0;letter-spa
   <div style="width:100%">
     <div class="nav-label">COMMAND DECK</div>
     <nav class="nav">
-      <a class="active" href="#overview"><span class="nav-symbol">◈</span><span>Overview</span></a>
+      <a class="active" href="#overview"><span class="nav-symbol">◈</span><span>Command center</span></a>
+      <a href="#deepdiagnostics"><span class="nav-symbol">⌖</span><span>Deep diagnostics</span></a>
       <a href="#activity"><span class="nav-symbol">⌁</span><span>Activity stream</span></a>
-      <a href="#models"><span class="nav-symbol">⟡</span><span>Model fusion</span></a>
-      <a href="#sensors"><span class="nav-symbol">⌖</span><span>Sensor matrix</span></a>
-      <a href="#privacy"><span class="nav-symbol">◇</span><span>Privacy & control</span></a>
+      <a href="#models"><span class="nav-symbol">⟡</span><span>AI fusion</span></a>
+      <a href="#ask"><span class="nav-symbol">✳</span><span>Ask Sentinel</span></a>
+      <a href="#profile"><span class="nav-symbol">⚙</span><span>Autonomous profile</span></a>
+      <a href="#privacy"><span class="nav-symbol">◇</span><span>Privacy</span></a>
     </nav>
   </div>
   <div class="side-bottom"><small>LOCAL INTELLIGENCE</small><strong>Private by architecture</strong><p>Loopback inference · Local event store · No cloud telemetry</p></div>
@@ -80,6 +159,15 @@ footer{font-size:9px;color:#5e748a;text-align:center;padding:23px 0 0;letter-spa
       </div>
     </div>
     <div class="hero-core"><div class="core"><div class="core-eye"><span></span></div></div></div>
+  </section>
+  <section class="command-strip" id="autopilot">
+    <div><div class="command-heading">MISSION CONTROL // LIVE OPERATIONS</div><div class="command-caption">Queue bounded diagnostics, request an evidence review or refresh the local knowledge vault. Actions stay local and advisory.</div></div>
+    <div class="command-actions">
+      <button class="btn primary" id="scanNowBtn">◈ &nbsp; FULL SYSTEM SCAN</button>
+      <button class="btn" id="aiNowBtn">✳ &nbsp; AI REVIEW NOW</button>
+      <button class="btn" id="crawlNowBtn">⌁ &nbsp; SYNC KNOWLEDGE</button>
+    </div>
+    <div class="command-feedback" id="commandFeedback">COMMAND CHANNEL READY · LOCAL QUEUE</div>
   </section>
   <section class="stats">
     <div class="stat"><div class="stat-top"><div class="stat-label">CPU LOAD</div><div class="stat-icon">⌁</div></div><div class="stat-value" id="cpu">—%</div><div class="stat-foot">Host processor utilization</div><div class="stat-meter"><i id="cpuBar"></i></div></div>
@@ -123,6 +211,57 @@ footer{font-size:9px;color:#5e748a;text-align:center;padding:23px 0 0;letter-spa
       <div class="knowledge-results" id="knowledgeResults"><div class="panel-sub">Searches only the locally indexed documents. It does not call the internet.</div></div>
     </section>
   </div>
+  <div class="feature-grid">
+    <section class="panel" id="deepdiagnostics">
+      <div class="panel-head"><div><div class="panel-title">DEEP SYSTEM DIAGNOSTICS</div><div class="panel-sub">CIM · storage · drivers · PnP · Defender · firewall</div></div><span class="tag">WINDOWS INTERNALS</span></div>
+      <div class="metric-grid">
+        <div class="metric-tile"><small>PROCESSES</small><strong id="metricProcesses">—</strong></div>
+        <div class="metric-tile"><small>INSTALLED APPS</small><strong id="metricApps">—</strong></div>
+        <div class="metric-tile"><small>SERVICES</small><strong id="metricServices">—</strong></div>
+        <div class="metric-tile"><small>SCHEDULED TASKS</small><strong id="metricTasks">—</strong></div>
+        <div class="metric-tile"><small>DRIVER CATALOG</small><strong id="metricDrivers">—</strong></div>
+        <div class="metric-tile"><small>PNP DEVICES</small><strong id="metricPnp">—</strong></div>
+        <div class="metric-tile"><small>FIREWALL PROFILES</small><strong id="metricFirewall">—</strong></div>
+        <div class="metric-tile"><small>WINDOWS BUILD</small><strong id="metricBuild">—</strong></div>
+      </div>
+      <div class="deep-columns">
+        <div><div class="deep-subhead">FIXED STORAGE</div><div id="diskList" class="disk-list"><div class="panel-sub">Waiting for a CIM snapshot.</div></div></div>
+        <div><div class="deep-subhead">SECURITY & DEVICE HEALTH</div><div id="securityList" class="security-list"><div class="panel-sub">Waiting for Defender / firewall status.</div></div><div id="pnpSummary" class="pnp-pills"></div></div>
+      </div>
+    </section>
+    <section class="panel" id="insights">
+      <div class="panel-head"><div><div class="panel-title">AI SIGNAL INTELLIGENCE</div><div class="panel-sub">Hypotheses · corroboration · uncertainty</div></div><span class="tag">ADVISORY ONLY</span></div>
+      <div class="insight-list" id="aiInsights"><div class="empty">Waiting for the next local model assessment.</div></div>
+      <div class="profile-note">The model cannot run commands, alter Windows settings or remediate automatically. Every signal is shown as a hypothesis unless supported by collected evidence.</div>
+    </section>
+  </div>
+  <div class="feature-grid">
+    <section class="panel" id="ask">
+      <div class="panel-head"><div><div class="panel-title">ASK SENTINEL // LOCAL AI</div><div class="panel-sub">Ask about the latest approved telemetry and indexed Microsoft references</div></div><span class="tag">OLLAMA / LOCAL</span></div>
+      <div class="ask-form">
+        <textarea id="askQuestion" maxlength="500" placeholder="Example: What changed in the last registry snapshot, and what evidence supports it?"></textarea>
+        <div class="actions"><button class="btn primary" id="askButton">✳ &nbsp; ASK LOCAL SENTINEL</button><span class="panel-sub" id="askMeta">Uses an installed 3B/4B model; no cloud fallback or model download.</span></div>
+      </div>
+      <div class="ask-result" id="askResult">Your answer will appear here with evidence IDs and any matching local Microsoft references.</div>
+    </section>
+    <section class="panel" id="profile">
+      <div class="panel-head"><div><div class="panel-title">AUTONOMOUS SENSOR PROFILE</div><div class="panel-sub">Live controls · saved locally · applied on next observer cycle</div></div><span class="tag">PROFILE CONTROL</span></div>
+      <div class="profile-grid">
+        <label class="profile-toggle"><input type="checkbox" id="cfgRegistry"><span><strong>Registry intelligence</strong><small>Allowlisted read-only registry snapshots and autorun change detection</small></span></label>
+        <label class="profile-toggle"><input type="checkbox" id="cfgDeep"><span><strong>Deep Windows inventory</strong><small>Drivers, signed PnP, storage, Defender and firewall metadata</small></span></label>
+        <label class="profile-toggle"><input type="checkbox" id="cfgKnowledge"><span><strong>Microsoft knowledge crawler</strong><small>Public Learn and selected Microsoft GitHub docs, indexed locally</small></span></label>
+        <label class="profile-toggle"><input type="checkbox" id="cfgAI"><span><strong>Local AI analysis</strong><small>Scheduled 4B triage / independent reviewer when resources permit</small></span></label>
+      </div>
+      <div class="interval-grid">
+        <div class="interval-field"><label for="cfgRegistryInterval">REGISTRY SEC</label><input id="cfgRegistryInterval" type="number" min="60" max="3600" step="30"></div>
+        <div class="interval-field"><label for="cfgDeepInterval">DEEP SCAN SEC</label><input id="cfgDeepInterval" type="number" min="300" max="7200" step="60"></div>
+        <div class="interval-field"><label for="cfgKnowledgeInterval">KNOWLEDGE SEC</label><input id="cfgKnowledgeInterval" type="number" min="3600" max="604800" step="1800"></div>
+        <div class="interval-field"><label for="cfgAIInterval">AI REVIEW SEC</label><input id="cfgAIInterval" type="number" min="60" max="3600" step="30"></div>
+      </div>
+      <div class="actions"><button class="btn primary" id="saveProfileBtn">SAVE & APPLY PROFILE</button><button class="btn" id="reloadProfileBtn">RELOAD SAVED</button></div>
+      <div class="profile-note" id="profileNote">Sensitive foreground titles, Event Log, UI Automation and ETW remain opt-in through the CLI. These controls do not silently enable them.</div>
+    </section>
+  </div>
   <footer>SENTINEL // AIE · WINDOWS PERCEPTION LAYER · LOCAL-FIRST / EVIDENCE-LED</footer>
 </main>
 </div>
@@ -136,6 +275,111 @@ function prettyAge(iso){if(!iso)return"—";const d=Math.max(0,Math.floor((Date.
 function uptime(iso){if(!iso)return"—";let n=Math.max(0,Math.floor((Date.now()-new Date(iso).getTime())/1000));const h=Math.floor(n/3600);n%=3600;const m=Math.floor(n/60);const s=n%60;return h+"h "+m+"m "+s+"s"}
 function setBar(id,v){$(id).style.width=Math.max(0,Math.min(100,Number(v)||0))+"%"}
 function create(tag,cls,text){const el=document.createElement(tag);if(cls)el.className=cls;if(text!==undefined)el.textContent=text;return el}
+function renderDeepDiagnostics(status){
+ const inv=status.inventory_summary||{},deep=status.deep_inventory||{},osInfo=deep.operating_system||{},defender=deep.defender||{};
+ $("metricProcesses").textContent=inv.processes??"—";
+ $("metricApps").textContent=inv.applications??"—";
+ $("metricServices").textContent=inv.services??"—";
+ $("metricTasks").textContent=inv.scheduled_tasks??"—";
+ $("metricDrivers").textContent=deep.system_driver_count??"—";
+ $("metricPnp").textContent=deep.pnp_device_count??"—";
+ $("metricFirewall").textContent=deep.firewall_profile_count??"—";
+ $("metricBuild").textContent=osInfo.BuildNumber||"—";
+ const disks=$("diskList");disks.replaceChildren();
+ const diskItems=Array.isArray(deep.disks)?deep.disks:[];
+ if(!diskItems.length)disks.append(create("div","panel-sub","Disk inventory will appear after the next CIM scan."));
+ for(const disk of diskItems){
+  const row=create("div","disk-row"),top=create("div","disk-top"),name=create("strong",null,(disk.drive||"Drive")+" · "+(disk.filesystem||"—")),detail=create("small",null,(disk.free_gib??"—")+" / "+(disk.size_gib??"—")+" GB free");
+  const meter=create("div","disk-meter"),bar=create("i");bar.style.width=Math.max(0,Math.min(100,Number(disk.used_percent)||0))+"%";meter.append(bar);
+  top.append(name,detail);row.append(top,meter,create("div","panel-sub",(Number(disk.used_percent)||0).toFixed(1)+"% used"));disks.append(row);
+ }
+ const security=$("securityList");security.replaceChildren();
+ const securityItems=[
+  ["Microsoft Defender",defender.AntivirusEnabled],
+  ["Real-time protection",defender.RealTimeProtectionEnabled],
+  ["Behavior monitoring",defender.BehaviorMonitorEnabled],
+  ["Network inspection",defender.NISEnabled]
+ ];
+ const firewall=Array.isArray(deep.firewall_profiles)?deep.firewall_profiles:[];
+ for(const item of firewall)securityItems.push(["Firewall "+(item.name||"profile"),item.enabled]);
+ if(!securityItems.length)security.append(create("div","panel-sub","Security status is not yet available."));
+ for(const item of securityItems){
+  const row=create("div","security-row"),label=create("strong",null,item[0]),state=create("span",null,item[1]===true?"ENABLED":item[1]===false?"DISABLED":"UNKNOWN");
+  if(item[1]===false)state.style.color="var(--red)";
+  row.append(label,state);security.append(row);
+ }
+ const pnp=$("pnpSummary");pnp.replaceChildren();
+ for(const item of (Array.isArray(deep.pnp_status_counts)?deep.pnp_status_counts:[]).slice(0,8)){
+  const statusName=String(item.status||"unknown"),pill=create("span","pnp-pill"+(statusName.toLowerCase()!=="ok"&&statusName.toLowerCase()!=="unknown"?" bad":""),statusName.toUpperCase()+" · "+item.count);
+  pnp.append(pill);
+ }
+}
+function renderAIInsights(status){
+ const target=$("aiInsights");target.replaceChildren();
+ const ai=status.ai||{},tri=ai.triage||{},review=ai.review||{};
+ const entries=[];
+ for(const item of (Array.isArray(tri.signals)?tri.signals:[]).slice(0,3))entries.push({title:"OBSERVED SIGNAL",body:typeof item==="string"?item:JSON.stringify(item)});
+ for(const item of (Array.isArray(tri.hypotheses)?tri.hypotheses:[]).slice(0,3))entries.push({title:"MODEL HYPOTHESIS",body:typeof item==="string"?item:JSON.stringify(item)});
+ for(const item of (Array.isArray(review.uncertainties)?review.uncertainties:[]).slice(0,2))entries.push({title:"REVIEW UNCERTAINTY",body:typeof item==="string"?item:JSON.stringify(item)});
+ if(!entries.length){target.append(create("div","empty",ai.error?"Local AI unavailable: "+ai.error:"No AI findings have been stored yet."));return}
+ for(const entry of entries){const card=create("div","insight-item"),title=create("strong",null,entry.title),body=create("p",null,entry.body.slice(0,500));card.append(title,body);target.append(card)}
+}
+function renderProfile(profile){
+ if(!profile)return;
+ $("cfgRegistry").checked=profile.registry_enabled===true;
+ $("cfgDeep").checked=profile.deep_inventory_enabled===true;
+ $("cfgKnowledge").checked=profile.knowledge_enabled===true;
+ $("cfgAI").checked=profile.ai_enabled===true;
+ $("cfgRegistryInterval").value=profile.registry_interval_seconds??180;
+ $("cfgDeepInterval").value=profile.deep_inventory_interval_seconds??900;
+ $("cfgKnowledgeInterval").value=profile.knowledge_interval_seconds??21600;
+ $("cfgAIInterval").value=profile.analysis_interval_seconds??300;
+}
+async function loadProfile(){
+ try{const result=await request("/api/config");renderProfile(result.profile);$("profileNote").textContent="Saved profile loaded · changes apply on the next observer cycle."}
+ catch(error){$("profileNote").textContent="Profile unavailable: "+error.message}
+}
+async function saveProfile(){
+ const integer=id=>Number.parseInt($(id).value,10);
+ const values={
+  registry_enabled:$("cfgRegistry").checked,
+  deep_inventory_enabled:$("cfgDeep").checked,
+  knowledge_enabled:$("cfgKnowledge").checked,
+  ai_enabled:$("cfgAI").checked,
+  registry_interval_seconds:integer("cfgRegistryInterval"),
+  deep_inventory_interval_seconds:integer("cfgDeepInterval"),
+  knowledge_interval_seconds:integer("cfgKnowledgeInterval"),
+  analysis_interval_seconds:integer("cfgAIInterval")
+ };
+ $("saveProfileBtn").disabled=true;
+ try{
+  const result=await request("/api/config",{method:"POST",headers:{"Content-Type":"application/json","Origin":location.origin},body:JSON.stringify({values})});
+  renderProfile(result.profile);$("profileNote").textContent="PROFILE SAVED · SENTINEL WILL APPLY IT ON THE NEXT OBSERVER CYCLE";notifyCommand("Autonomous sensor profile saved and queued for live application.",true);
+ }catch(error){$("profileNote").textContent="Save failed: "+error.message;notifyCommand("Profile save failed: "+error.message,false)}
+ finally{$("saveProfileBtn").disabled=false}
+}
+function notifyCommand(message,good){
+ const target=$("commandFeedback");target.textContent=message;target.className="command-feedback "+(good?"good":"bad");
+}
+async function runCommand(action){
+ const labels={scan_now:"Full system scan",ai_review_now:"Local AI review",knowledge_crawl_now:"Microsoft knowledge crawl",deep_scan_now:"Deep CIM scan",registry_scan_now:"Registry scan"};
+ try{const result=await request("/api/command",{method:"POST",headers:{"Content-Type":"application/json","Origin":location.origin},body:JSON.stringify({action})});notifyCommand((labels[action]||"Command")+" queued · "+(result.queued||action),true);setTimeout(refresh,1200)}
+ catch(error){notifyCommand("Command rejected: "+error.message,false)}
+}
+async function askSentinel(){
+ const question=$("askQuestion").value.trim();if(!question){$("askQuestion").focus();return}
+ const button=$("askButton"),target=$("askResult");button.disabled=true;button.textContent="PROCESSING LOCALLY…";target.textContent="Running local inference against bounded event evidence and the local Microsoft index. This may take a little while.";
+ try{
+  const result=await request("/api/ask",{method:"POST",headers:{"Content-Type":"application/json","Origin":location.origin},body:JSON.stringify({question})});
+  target.replaceChildren();
+  const answer=create("div",null,result.answer||"No answer returned.");target.append(answer);
+  const meta=create("div","knowledge-meta","CONFIDENCE "+String(result.confidence||"low").toUpperCase()+" · "+(result.model||"LOCAL MODEL")+" · "+(result.evidence_ids||[]).length+" EVIDENCE IDS");meta.style.marginTop="9px";target.append(meta);
+  if((result.evidence_ids||[]).length){const ids=create("div","knowledge-meta","EVIDENCE: "+result.evidence_ids.join(", "));ids.style.marginTop="5px";target.append(ids)}
+  for(const ref of (result.references||[])){try{const url=new URL(ref.url);if(url.protocol==="https:"&&["learn.microsoft.com","github.com"].includes(url.hostname)){const link=create("a",null,ref.title||url.hostname);link.href=url.href;link.target="_blank";link.rel="noopener noreferrer";target.append(link)}}catch{}}
+  $("askMeta").textContent="Answered locally · no remote inference or automatic remediation.";
+ }catch(error){target.textContent="Ask Sentinel unavailable: "+error.message+" · Confirm Ollama is running and a 3B/4B model is already installed."}
+ finally{button.disabled=false;button.textContent="✳  ASK LOCAL SENTINEL"}
+}
 function renderInternals(status){
  const list=$("runtimeList");
  list.replaceChildren();
@@ -192,7 +436,7 @@ function summaryData(status){const a=status.ai||{};const tri=a.triage||{};const 
 function renderProviders(status){const health=status.provider_health||{};const list=$("providerList");list.replaceChildren();const entries=Object.entries(health);if(!entries.length){list.append(create("div","empty","Provider health will appear after the first collection cycle."));return}for(const [name,item] of entries){const row=create("div","provider"),left=create("div"),title=create("strong",null,name.replaceAll("_"," ")),detail=create("small",null,(item.samples_succeeded||0)+"/"+(item.samples_attempted||0)+" samples · "+(item.events_emitted||0)+" events · "+(item.last_latency_ms??"—")+" ms");left.append(title,detail);const state=create("span","provider-state"+(item.state==="degraded"?" degraded":""),(item.state||"unknown").toUpperCase());row.append(left,state);list.append(row)}}
 function renderStatus(s){lastStatus=s;const paused=s.observer_paused===true;const running=s.status==="running";$("liveBadge").innerHTML=running?'<i class="dot"></i><span>'+ (paused?"PAUSED":"LIVE")+'</span>':'<span style="color:var(--amber)">OFFLINE</span>';$("heroTitle").innerHTML="SENTINEL <span>"+(paused?"PAUSED":running?"ONLINE":"OFFLINE")+"</span>";$("heroDesc").textContent=paused?"Observation is paused. The local dashboard and event vault remain available.":running?"A bounded, evidence-first watch over approved Windows signals. Every sensor reports its own health; every inference remains advisory.":"Sentinel worker is not running. Start it from the CLI to resume the background watch.";$("pid").textContent=s.pid||"—";$("uptime").textContent=uptime(s.started_at);$("heartbeat").textContent=prettyAge(s.heartbeat_at);$("pauseBtn").disabled=!running||paused;$("resumeBtn").disabled=!running||!paused;$("stopBtn").disabled=!running;
 const hw=s.hardware||{};const cpu=Number(s.cpu_percent)||0;const total=Number(hw.memory_total_gib)||0;const avail=Number(hw.memory_available_gib)||0;const used=total?Math.max(0,total-avail):0;const memPct=total?used/total*100:0;$("cpu").textContent=cpu.toFixed(0)+"%";$("ram").textContent=avail.toFixed(1)+" GB";$("ramFoot").textContent=used.toFixed(1)+" GB used of "+total.toFixed(1)+" GB";setBar("cpuBar",cpu);setBar("ramBar",memPct);historyCpu.push(cpu);historyMem.push(memPct);historyCpu=historyCpu.slice(-64);historyMem=historyMem.slice(-64);
-$("eventCount").textContent=Number(s.event_count||0).toLocaleString();setBar("eventBar",Math.min(100,Number(s.event_count||0)/100));const providers=Object.values(s.provider_health||{});const bad=providers.filter(x=>x.state==="degraded").length;$("health").textContent=providers.length?(providers.length-bad)+"/"+providers.length:"—";$("healthFoot").textContent=bad?bad+" provider(s) degraded":"No active provider errors";setBar("healthBar",providers.length?(providers.length-bad)/providers.length*100:0);renderProviders(s);renderInternals(s);summaryData(s)}
+$("eventCount").textContent=Number(s.event_count||0).toLocaleString();setBar("eventBar",Math.min(100,Number(s.event_count||0)/100));const providers=Object.values(s.provider_health||{});const bad=providers.filter(x=>x.state==="degraded").length;$("health").textContent=providers.length?(providers.length-bad)+"/"+providers.length:"—";$("healthFoot").textContent=bad?bad+" provider(s) degraded":"No active provider errors";setBar("healthBar",providers.length?(providers.length-bad)/providers.length*100:0);renderProviders(s);renderInternals(s);summaryData(s);renderDeepDiagnostics(s);renderAIInsights(s);if(s.last_command){const cmd=s.last_command;notifyCommand(String(cmd.action||'Command').replaceAll('_',' ').toUpperCase()+' · '+String(cmd.status||'queued').toUpperCase(),cmd.status==='started')}}
 function drawChart(){const canvas=$("resourceChart"),ctx=canvas.getContext("2d");const w=canvas.clientWidth*devicePixelRatio,h=canvas.clientHeight*devicePixelRatio;if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h}ctx.clearRect(0,0,w,h);const pad=12*devicePixelRatio;ctx.strokeStyle="#20374b";ctx.lineWidth=devicePixelRatio;for(let i=0;i<5;i++){const y=pad+(h-2*pad)*i/4;ctx.beginPath();ctx.moveTo(pad,y);ctx.lineTo(w-pad,y);ctx.stroke()}function line(data,color){if(data.length<2)return;ctx.strokeStyle=color;ctx.lineWidth=2*devicePixelRatio;ctx.beginPath();data.forEach((v,i)=>{const x=pad+(w-2*pad)*i/63;const y=h-pad-(h-2*pad)*Math.max(0,Math.min(100,v))/100;if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y)});ctx.stroke()}line(historyCpu,"#53e4f2");line(historyMem,"#ffbd69");requestAnimationFrame(()=>{});}
 function renderEvents(events){
  const feed=$("eventFeed");
@@ -244,8 +488,15 @@ async function refresh(){try{const [s,e]=await Promise.all([request("/api/status
 async function control(action){if(action==="stop"&&!confirm("Stop the Sentinel background worker? You can start it again from the CLI."))return;try{await request("/api/control",{method:"POST",headers:{"Content-Type":"application/json","Origin":location.origin},body:JSON.stringify({action})});setTimeout(refresh,700)}catch(e){alert("Control request failed: "+e.message)}}
 $("pauseBtn").addEventListener("click",()=>control("pause"));$("resumeBtn").addEventListener("click",()=>control("resume"));$("stopBtn").addEventListener("click",()=>control("stop"));
 $("knowledgeSearchBtn").addEventListener("click",searchKnowledge);
+$("scanNowBtn").addEventListener("click",()=>runCommand("scan_now"));
+$("aiNowBtn").addEventListener("click",()=>runCommand("ai_review_now"));
+$("crawlNowBtn").addEventListener("click",()=>runCommand("knowledge_crawl_now"));
+$("saveProfileBtn").addEventListener("click",saveProfile);
+$("reloadProfileBtn").addEventListener("click",loadProfile);
+$("askButton").addEventListener("click",askSentinel);
+$("askQuestion").addEventListener("keydown",event=>{if(event.key==="Enter"&&(event.ctrlKey||event.metaKey))askSentinel()});
 $("knowledgeQuery").addEventListener("keydown",event=>{if(event.key==="Enter")searchKnowledge()});
-$("clock").textContent=new Date().toLocaleTimeString();setInterval(()=>$("clock").textContent=new Date().toLocaleTimeString(),1000);setInterval(refresh,2500);window.addEventListener("resize",drawChart);refresh();
+$("clock").textContent=new Date().toLocaleTimeString();setInterval(()=>$("clock").textContent=new Date().toLocaleTimeString(),1000);setInterval(refresh,2500);loadProfile();window.addEventListener("resize",drawChart);refresh();
 </script>
 </body></html>"""
 
