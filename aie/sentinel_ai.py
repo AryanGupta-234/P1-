@@ -113,6 +113,13 @@ def _attach_local_knowledge(packet: dict[str, Any]) -> dict[str, Any]:
                 for token in re.split(r"[^a-z0-9]+", value.casefold()):
                     if token in known_topics:
                         terms.add(token)
+        data = record.get("data")
+        if isinstance(data, dict):
+            for key in data:
+                if isinstance(key, str):
+                    for token in re.split(r"[^a-z0-9]+", key.casefold()):
+                        if token in known_topics:
+                            terms.add(token)
     query = "Windows " + " ".join(sorted(terms))
     if len(terms) == 0:
         query = "Windows system diagnostics"
