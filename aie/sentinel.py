@@ -53,6 +53,10 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "knowledge_interval_seconds": 21600,
     "knowledge_learn_top_per_query": 4,
     "knowledge_github_files_per_repo": 8,
+    "auto_review_on_posture_alerts": True,
+    "auto_review_on_registry_changes": False,
+    "low_disk_alert_percent": 10,
+    "low_battery_alert_percent": 15,
 }
 
 
@@ -113,6 +117,8 @@ def _load_config() -> dict[str, Any]:
     for key, minimum, maximum in (
         ("knowledge_learn_top_per_query", 1, 10),
         ("knowledge_github_files_per_repo", 1, 20),
+        ("low_disk_alert_percent", 1, 30),
+        ("low_battery_alert_percent", 5, 40),
     ):
         value = config[key]
         if isinstance(value, bool) or not isinstance(value, int) or not minimum <= value <= maximum:
@@ -123,6 +129,7 @@ def _load_config() -> dict[str, Any]:
         "include_network", "include_foreground", "include_process_resources",
         "include_event_logs", "include_etw", "include_window_titles", "ai_enabled",
         "registry_enabled", "deep_inventory_enabled", "knowledge_enabled",
+        "auto_review_on_posture_alerts", "auto_review_on_registry_changes",
     ):
         if not isinstance(config[key], bool):
             raise RuntimeError(f"{key} must be a boolean.")
@@ -469,6 +476,16 @@ def _worker() -> None:
             events = registry_provider.collect_snapshot()
             added = store.append_many(events)
             latest = events[-1] if events else None
+            if (
+                latest is not None
+                and latest.event_type == "registry.configuration_changed"
+                and config["ai_enabled"]
+                and config["auto_review_on_registry_changes"]
+            ):
+                try:
+                    command_queue.put_nowait("ai_review_now")
+                except queue.Full:
+                    pass
             with state_lock:
                 if latest is not None:
                     data = latest.data
@@ -653,7 +670,27 @@ def _worker() -> None:
                         "title": "BitLocker protection is off or suspended",
                         "detail": str(volume.get("mount") or "Volume") + " · " + str(volume.get("volume_status") or "status unavailable"),
                     })
-            posture_alerts = posture_alerts[:16]
+            for disk in disk_summary:
+                total = float(disk.get("size_gib") or 0)
+                free = float(disk.get("free_gib") or 0)
+                free_percent = (free / total * 100) if total > 0 else None
+                if free_percent is not None and free_percent <= int(config["low_disk_alert_percent"]):
+                    posture_alerts.append({
+                        "severity": "high" if free_percent <= 5 else "medium",
+                        "category": "STORAGE",
+                        "title": "Low free space on " + str(disk.get("drive") or "system volume"),
+                        "detail": f"{free_percent:.1f}% free · {free:.1f} GiB remaining · threshold {config['low_disk_alert_percent']}%",
+                    })
+            for battery in battery_summary:
+                charge = battery.get("charge_percent")
+                if isinstance(charge, (int, float)) and not isinstance(charge, bool) and charge <= int(config["low_battery_alert_percent"]):
+                    posture_alerts.append({
+                        "severity": "medium",
+                        "category": "BATTERY",
+                        "title": "Battery charge is low",
+                        "detail": f"{charge}% remaining · threshold {config['low_battery_alert_percent']}%",
+                    })
+            posture_alerts = posture_alerts[:24]
             alert_keys = [
                 str(item.get("severity", "")) + "|" + str(item.get("category", "")) + "|" + str(item.get("title", ""))
                 for item in posture_alerts
@@ -723,7 +760,7 @@ def _worker() -> None:
                 }
                 state["event_count"] = store.count()
                 _write_state(state)
-            if auto_review_needed and config["ai_enabled"]:
+            if auto_review_needed and config["ai_enabled"] and config["auto_review_on_posture_alerts"]:
                 try:
                     command_queue.put_nowait("ai_review_now")
                 except queue.Full:
