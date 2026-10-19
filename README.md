@@ -14,6 +14,7 @@ The project has two active development tracks:
 - [Roadmap and task tracker](docs/ROADMAP.md)
 - [Development Streams](docs/DEVELOPMENT_STREAMS.md)
 - [Video Intelligence](docs/VIDEO_INTELLIGENCE.md)
+- [Sentinel Runtime](docs/SENTINEL.md)
 - [Architecture](docs/ARCHITECTURE.md)
 - [Security and Privacy](docs/SECURITY_AND_PRIVACY.md)
 - [Contributing](CONTRIBUTING.md)
@@ -55,6 +56,17 @@ python -m pytest
 python -m ruff check .
 ```
 Foundation works without models or internet. Local events are stored under `%LOCALAPPDATA%\AIE`.
+
+## Persistent Sentinel agent
+Install the background observer for the current Windows user, then open the live local console:
+
+```powershell
+aie sentinel install
+aie sentinel status
+aie sentinel dashboard
+```
+
+Sentinel runs with limited user privileges at sign-in, stores evidence locally and uses already-installed Ollama models only. See [Sentinel Runtime](docs/SENTINEL.md) for its sensor scope, controls, limitations and opt-in features.
 
 ## Development workflow
 
