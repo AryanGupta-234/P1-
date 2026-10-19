@@ -10,6 +10,7 @@ import json
 import re
 from datetime import datetime, timezone
 from typing import Any
+from urllib.parse import urlparse
 
 from aie.contracts import AIEEvent, EntityRef
 from aie.config import data_dir
@@ -326,10 +327,12 @@ class SentinelModelCollaborator:
             )
             for item in local_store.search(cleaned_question, limit=4):
                 url = item.get("url")
-                if not isinstance(url, str) or not (
-                    url.startswith("https://learn.microsoft.com/")
-                    or url.startswith("https://github.com/")
-                ):
+                if not isinstance(url, str):
+                    continue
+                parsed_url = urlparse(url)
+                if parsed_url.scheme != "https" or parsed_url.hostname not in {
+                    "learn.microsoft.com", "github.com"
+                }:
                     continue
                 if not any(existing.get("url") == url for existing in references):
                     references.append({
