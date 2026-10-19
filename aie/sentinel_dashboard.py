@@ -727,7 +727,9 @@ def make_dashboard_server(
                         "registry_enabled", "deep_inventory_enabled", "knowledge_enabled",
                         "ai_enabled", "registry_interval_seconds",
                         "deep_inventory_interval_seconds", "knowledge_interval_seconds",
-                        "analysis_interval_seconds",
+                        "analysis_interval_seconds", "auto_review_on_posture_alerts",
+                        "auto_review_on_registry_changes", "low_disk_alert_percent",
+                        "low_battery_alert_percent",
                     )
                     self._json(200, {"profile": {key: config[key] for key in fields}})
                 except (OSError, RuntimeError, ValueError):
@@ -773,6 +775,43 @@ def make_dashboard_server(
                 except (OSError, ValueError):
                     self._json(503, {"error": "Local driver inventory is unavailable"})
                 return
+            if parsed.path == "/api/ai/models":
+                try:
+                    from aie.models.ollama import OllamaClient
+                    from aie.hardware import runtime_profile
+                    models = OllamaClient(default_timeout=8.0).list_models(timeout=5.0)
+                    profile = runtime_profile()
+                    self._json(200, {
+                        "available": bool(models),
+                        "models": models[:40],
+                        "memory_available_gib": profile.get("memory_available_gib"),
+                        "triage_candidates": [name for name in models if any(token in name.casefold() for token in ("3b", "4b"))],
+                        "review_candidates": [name for name in models if any(token in name.casefold() for token in ("6b", "7b", "8b"))],
+                        "inference_mode": "local_ollama_only",
+                    })
+                except Exception as exc:  # noqa: BLE001 - discovery is an optional dashboard surface.
+                    self._json(200, {"available": False, "models": [], "error": type(exc).__name__})
+                return
+            if parsed.path == "/api/inventory":
+                try:
+                    latest = next(
+                        (
+                            event for event in EventStore(db_path).recent(1500)
+                            if event.event_type == "windows.deep_inventory"
+                        ),
+                        None,
+                    )
+                    if latest is None:
+                        self._json(200, {"available": False, "snapshot_at": None, "data": {}})
+                        return
+                    self._json(200, {
+                        "available": True,
+                        "snapshot_at": latest.timestamp.isoformat(),
+                        "data": _safe_json_value(latest.data),
+                    })
+                except (OSError, ValueError):
+                    self._json(503, {"error": "Deep inventory snapshot is unavailable"})
+                return
             if parsed.path == "/api/knowledge/search":
                 try:
                     from aie.config import data_dir
@@ -791,14 +830,29 @@ def make_dashboard_server(
                 return
             if parsed.path == "/api/events":
                 try:
-                    values = parse_qs(parsed.query).get("limit", ["90"])
-                    limit = max(1, min(200, int(values[0])))
+                    params = parse_qs(parsed.query)
+                    limit = max(1, min(250, int(params.get("limit", ["120"])[0])))
+                    query = params.get("q", [""])[0].strip().casefold()[:120]
+                    event_type = params.get("type", [""])[0].strip().casefold()[:100]
                     store = EventStore(db_path)
-                    events = [
-                        value for event in store.recent(min(1000, limit * 2))
-                        if (value := _event_payload(event)) is not None
-                    ][:limit]
-                    self._json(200, {"events": events})
+                    events = []
+                    for event in store.recent(min(1500, limit * 5)):
+                        payload = _event_payload(event)
+                        if payload is None:
+                            continue
+                        if event_type and event_type not in event.event_type.casefold():
+                            continue
+                        if query:
+                            haystack = " ".join((
+                                event.event_type, event.source, event.entity.name,
+                                json.dumps(payload["data"], ensure_ascii=True),
+                            )).casefold()
+                            if query not in haystack:
+                                continue
+                        events.append(payload)
+                        if len(events) >= limit:
+                            break
+                    self._json(200, {"events": events, "returned": len(events), "query": query})
                 except (OSError, ValueError):
                     self._json(503, {"error": "Event store is not available"})
                 return
@@ -840,13 +894,16 @@ def make_dashboard_server(
                     self._json(400, {"error": "profile values are required"})
                     return
                 boolean_fields = {
-                    "registry_enabled", "deep_inventory_enabled", "knowledge_enabled", "ai_enabled"
+                    "registry_enabled", "deep_inventory_enabled", "knowledge_enabled", "ai_enabled",
+                    "auto_review_on_posture_alerts", "auto_review_on_registry_changes",
                 }
                 integer_ranges = {
                     "registry_interval_seconds": (60, 3600),
                     "deep_inventory_interval_seconds": (300, 7200),
                     "knowledge_interval_seconds": (3600, 604800),
                     "analysis_interval_seconds": (60, 3600),
+                    "low_disk_alert_percent": (1, 30),
+                    "low_battery_alert_percent": (5, 40),
                 }
                 if any(key not in boolean_fields and key not in integer_ranges for key in values):
                     self._json(400, {"error": "profile contains an unsupported setting"})
@@ -906,8 +963,13 @@ def make_dashboard_server(
 
             if path == "/api/ask":
                 question = body.get("question")
+                mode = body.get("mode", "general")
+                allowed_modes = {"general", "security", "performance", "drivers", "storage", "network"}
                 if not isinstance(question, str) or not question.strip() or len(question) > 500:
                     self._json(400, {"error": "question must contain 1-500 characters"})
+                    return
+                if not isinstance(mode, str) or mode not in allowed_modes:
+                    self._json(400, {"error": "unsupported diagnostic specialist"})
                     return
                 acquired = False
                 try:
@@ -919,7 +981,8 @@ def make_dashboard_server(
                     from aie.sentinel_ai import SentinelModelCollaborator
                     answer = SentinelModelCollaborator().ask(
                         question,
-                        EventStore(db_path).recent(120),
+                        EventStore(db_path).recent(160),
+                        mode=mode,
                     )
                     self._json(200, answer)
                 except Exception as exc:  # noqa: BLE001 - local inference errors stay within this request.
