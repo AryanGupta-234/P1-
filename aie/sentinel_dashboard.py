@@ -124,7 +124,8 @@ footer{font-size:9px;color:#5e748a;text-align:center;padding:23px 0 0;letter-spa
 </main>
 </div>
 <script>
-const token=new URLSearchParams(location.search).get("token")||"";
+const token=new URLSearchParams(location.hash.slice(1)).get("token")||"";
+if(location.hash)history.replaceState(null,"",location.pathname+location.search);
 const $=id=>document.getElementById(id);
 let lastStatus=null,historyCpu=[],historyMem=[];
 const headers={"X-AIE-Token":token};
