@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import ctypes
+import hashlib
 import importlib.util
 import json
 import os
@@ -33,6 +34,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "sample_interval_seconds": 2.0,
     "network_interval_seconds": 30.0,
     "automation_enabled": True,
+    "auto_restart_enabled": True,
     "inventory_enabled": True,
     "inventory_interval_seconds": 900,
     "include_network": True,
@@ -71,6 +73,7 @@ def _paths() -> dict[str, Path]:
         "config": root / "sentinel-config.json",
         "state": root / "sentinel-state.json",
         "stop": root / "sentinel.stop",
+        "restart": root / "sentinel.restart",
         "token": root / "sentinel-dashboard.token",
         "log": root / "sentinel.log",
     }
@@ -133,7 +136,7 @@ def _load_config() -> dict[str, Any]:
     if not isinstance(config["ui_tree_apps"], list) or any(not isinstance(item, str) for item in config["ui_tree_apps"]):
         raise RuntimeError("ui_tree_apps must be a list of executable names.")
     for key in (
-        "automation_enabled", "inventory_enabled",
+        "automation_enabled", "auto_restart_enabled", "inventory_enabled",
         "include_network", "include_foreground", "include_process_resources",
         "include_event_logs", "include_etw", "include_window_titles", "include_ui_tree", "ai_enabled",
         "registry_enabled", "deep_inventory_enabled", "knowledge_enabled",
@@ -180,6 +183,50 @@ def _write_state(state: dict[str, Any]) -> None:
     temporary.replace(path)
 
 
+
+
+def _source_snapshot() -> dict[str, str] | None:
+    """Hash installed AIE Python modules so completed source updates can be detected."""
+    package_root = Path(__file__).resolve().parent
+    project_root = package_root.parent
+    candidates = list(package_root.rglob("*.py"))
+    project_manifest = project_root / "pyproject.toml"
+    if project_manifest.is_file():
+        candidates.append(project_manifest)
+
+    snapshot: dict[str, str] = {}
+    for path in sorted(set(candidates)):
+        if "__pycache__" in path.parts or not path.is_file():
+            continue
+        try:
+            relative = path.relative_to(project_root).as_posix()
+            snapshot[relative] = hashlib.sha256(path.read_bytes()).hexdigest()
+        except OSError:
+            # A file being replaced by an updater is not a complete snapshot.
+            return None
+    return snapshot or None
+
+
+def _spawn_worker_process(log_path: Path) -> subprocess.Popen[Any]:
+    """Launch a detached worker using the currently installed AIE source."""
+    _rotate_log(log_path)
+    flags = (
+        getattr(subprocess, "DETACHED_PROCESS", 0x00000008)
+        | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0x00000200)
+        | getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000)
+    )
+    with log_path.open("a", encoding="utf-8") as log:
+        return subprocess.Popen(
+            [sys.executable, "-m", "aie.sentinel", "worker"],
+            stdin=subprocess.DEVNULL,
+            stdout=log,
+            stderr=subprocess.STDOUT,
+            cwd=str(Path.cwd()),
+            creationflags=flags,
+            close_fds=True,
+        )
+
+
 def _pid_is_sentinel(pid: object) -> bool:
     if isinstance(pid, bool) or not isinstance(pid, int) or pid <= 0:
         return False
@@ -214,26 +261,12 @@ def _start_worker() -> bool:
     if _pid_is_sentinel(state.get("pid")):
         return False
     paths = _paths()
-    try:
-        paths["stop"].unlink()
-    except FileNotFoundError:
-        pass
-    _rotate_log(paths["log"])
-    flags = (
-        getattr(subprocess, "DETACHED_PROCESS", 0x00000008)
-        | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0x00000200)
-        | getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000)
-    )
-    with paths["log"].open("a", encoding="utf-8") as log:
-        process = subprocess.Popen(
-            [sys.executable, "-m", "aie.sentinel", "worker"],
-            stdin=subprocess.DEVNULL,
-            stdout=log,
-            stderr=subprocess.STDOUT,
-            cwd=str(Path.cwd()),
-            creationflags=flags,
-            close_fds=True,
-        )
+    for marker_name in ("stop", "restart"):
+        try:
+            paths[marker_name].unlink()
+        except FileNotFoundError:
+            pass
+    process = _spawn_worker_process(paths["log"])
     state.update({
         "status": "starting",
         "pid": process.pid,
@@ -294,6 +327,11 @@ def _delete_logon_task() -> bool:
 
 def _request_stop(timeout_seconds: float = 12.0) -> bool:
     _require_windows()
+    restart_marker = _paths()["restart"]
+    try:
+        restart_marker.unlink()
+    except FileNotFoundError:
+        pass
     _paths()["stop"].touch(exist_ok=True)
     deadline = time.monotonic() + max(0.0, min(timeout_seconds, 30.0))
     while time.monotonic() < deadline:
@@ -345,6 +383,7 @@ def _worker() -> None:
 
     paths = _paths()
     stop_path = paths["stop"]
+    restart_path = paths["restart"]
     config = _load_config()
     store = EventStore(database_path())
     state_lock = threading.RLock()
@@ -360,6 +399,7 @@ def _worker() -> None:
         [item for item in previous_history if isinstance(item, dict)][-60:]
         if isinstance(previous_history, list) else []
     )
+    previous_restart = previous_state.get("restart", {})
     state: dict[str, Any] = {
         "status": "starting",
         "pid": os.getpid(),
@@ -377,6 +417,7 @@ def _worker() -> None:
         },
         "features": {
             "automation": config["automation_enabled"],
+            "auto_restart": config["auto_restart_enabled"],
             "inventory": config["inventory_enabled"],
             "network": config["include_network"],
             "foreground": config["include_foreground"],
@@ -397,6 +438,14 @@ def _worker() -> None:
         ],
     }
     state["task_history"] = preserved_task_history
+    state["restart"] = {
+        "auto_enabled": bool(config["auto_restart_enabled"]),
+        "watch_status": "starting" if config["auto_restart_enabled"] else "disabled",
+        "last_reason": previous_restart.get("reason") if isinstance(previous_restart, dict) else None,
+        "last_restart_at": previous_restart.get("requested_at") if isinstance(previous_restart, dict) else None,
+        "scan_interval_seconds": 2,
+        "stable_scans_required": 3,
+    }
 
     for port in range(int(config["dashboard_port"]), int(config["dashboard_port"]) + 11):
         try:
@@ -404,6 +453,7 @@ def _worker() -> None:
                 token=token,
                 state_path=paths["state"],
                 stop_path=stop_path,
+                restart_path=restart_path,
                 db_path=database_path(),
                 command_queue=command_queue,
                 config_loader=_load_config,
@@ -1229,6 +1279,100 @@ def _worker() -> None:
             )
             ai_thread.start()
 
+    source_watch_stop = threading.Event()
+    source_watch_thread: threading.Thread | None = None
+
+    def watch_agent_source_updates() -> None:
+        baseline = _source_snapshot()
+        if baseline is None:
+            with state_lock:
+                state["restart"]["watch_status"] = "unavailable"
+                _write_state(state)
+            return
+
+        candidate: dict[str, str] | None = None
+        stable_scans = 0
+        last_reported_status = state["restart"]["watch_status"]
+
+        while not source_watch_stop.wait(2.0):
+            if stop_path.exists():
+                return
+
+            enabled = bool(config.get("auto_restart_enabled", True))
+            watch_status = "watching" if enabled else "disabled"
+            if watch_status != last_reported_status:
+                with state_lock:
+                    state["restart"]["auto_enabled"] = enabled
+                    state["restart"]["watch_status"] = watch_status
+                    _write_state(state)
+                last_reported_status = watch_status
+
+            if not enabled:
+                candidate = None
+                stable_scans = 0
+                continue
+
+            current = _source_snapshot()
+            if current is None:
+                # Ignore transient reads while git/pip is replacing package files.
+                candidate = None
+                stable_scans = 0
+                continue
+            if current == baseline:
+                candidate = None
+                stable_scans = 0
+                continue
+            if current == candidate:
+                stable_scans += 1
+            else:
+                candidate = current
+                stable_scans = 1
+
+            if stable_scans < 3:
+                continue
+
+            changed_files = sorted(
+                name for name in set(baseline) | set(current)
+                if baseline.get(name) != current.get(name)
+            )
+            preview = changed_files[:12]
+            reason = "Stable AIE source update detected"
+            if preview:
+                reason += ": " + ", ".join(preview[:5])
+                if len(changed_files) > 5:
+                    reason += f" (+{len(changed_files) - 5} more)"
+
+            with state_lock:
+                state["restart"] = {
+                    "auto_enabled": True,
+                    "watch_status": "restart_pending",
+                    "status": "scheduled",
+                    "reason": reason,
+                    "changed_files": preview,
+                    "changed_file_count": len(changed_files),
+                    "requested_at": _now(),
+                    "scan_interval_seconds": 2,
+                    "stable_scans_required": 3,
+                }
+                _write_state(state)
+
+            try:
+                restart_path.write_text(reason, encoding="utf-8")
+                stop_path.touch(exist_ok=True)
+            except OSError as exc:
+                with state_lock:
+                    state["restart"]["watch_status"] = "error"
+                    state["restart"]["error_type"] = type(exc).__name__
+                    _write_state(state)
+            return
+
+    source_watch_thread = threading.Thread(
+        target=watch_agent_source_updates,
+        name="aie-sentinel-source-watch",
+        daemon=True,
+    )
+    source_watch_thread.start()
+
     try:
         while not stop_path.exists():
             config = _load_config()
@@ -1262,6 +1406,9 @@ def _worker() -> None:
                 break
             time.sleep(1.0)
     finally:
+        source_watch_stop.set()
+        if source_watch_thread is not None:
+            source_watch_thread.join(timeout=3.0)
         if server is not None:
             server.shutdown()
             server.server_close()
@@ -1275,16 +1422,52 @@ def _worker() -> None:
             deep_inventory_thread.join(timeout=2.0)
         if knowledge_thread is not None:
             knowledge_thread.join(timeout=2.0)
+        restart_requested = restart_path.exists()
+        restart_reason = "Manual restart requested"
+        if restart_requested:
+            try:
+                marker_reason = restart_path.read_text(encoding="utf-8").strip()
+                if marker_reason:
+                    restart_reason = marker_reason[:800]
+            except OSError:
+                pass
         with state_lock:
-            state["status"] = "stopped"
+            state["status"] = "restarting" if restart_requested else "stopped"
             state["stopped_at"] = _now()
             state["heartbeat_at"] = _now()
+            if restart_requested:
+                previous_info = state.get("restart", {})
+                state["restart"] = {
+                    **(previous_info if isinstance(previous_info, dict) else {}),
+                    "auto_enabled": bool(config.get("auto_restart_enabled", True)),
+                    "watch_status": "launching",
+                    "status": "restarting",
+                    "reason": restart_reason,
+                    "requested_at": _now(),
+                }
             _write_state(state)
         kernel32, handle = mutex
         try:
             kernel32.ReleaseMutex(handle)
         finally:
             kernel32.CloseHandle(handle)
+
+        if restart_requested:
+            # The named mutex is released before the replacement worker is launched.
+            for marker in (stop_path, restart_path):
+                try:
+                    marker.unlink()
+                except FileNotFoundError:
+                    pass
+            try:
+                _spawn_worker_process(paths["log"])
+            except Exception as exc:  # noqa: BLE001 - leave a visible failure state for the dashboard.
+                with state_lock:
+                    state["status"] = "restart_failed"
+                    state["restart"]["watch_status"] = "failed"
+                    state["restart"]["error_type"] = type(exc).__name__
+                    state["heartbeat_at"] = _now()
+                    _write_state(state)
 
 
 @sentinel_app.command("start")
