@@ -106,6 +106,7 @@ main{min-width:0;padding:18px clamp(14px,2.1vw,32px) 40px;max-width:1900px;width
 .helmet-mask:before{content:"";position:absolute;left:44%;top:5px;width:6px;height:28px;background:linear-gradient(var(--red),#0b1522);box-shadow:0 0 8px #ff5a72}
 .btn{border:1px solid #3c5c73;border-radius:9px;background:linear-gradient(145deg,#1a3549,#102235);color:#dcedf8;padding:8px 12px;font-size:9px;font-weight:750;letter-spacing:.08em;box-shadow:inset 0 1px #efffff14,0 4px 14px #0004;transition:.2s}
 .btn:hover{transform:translateY(-2px);border-color:var(--cyan);box-shadow:0 7px 20px #52def51c,inset 0 1px #fff2}.btn.primary{background:linear-gradient(115deg,#126e83,#1a4d70 65%,#633347);border-color:#5ddbf0;box-shadow:0 0 23px #5edff329}.btn.danger{color:#ffacb7;border-color:#864555;background:linear-gradient(120deg,#3b1b2a,#211520)}.btn.ghost{background:transparent;border-color:#365168;color:#a8c1d2}.btn:disabled{opacity:.38;cursor:not-allowed;transform:none}
+.btn.active{border-color:var(--cyan);color:var(--ice);background:linear-gradient(120deg,#17445a,#172d40);box-shadow:0 0 14px #61dff51d}
 .metric-row{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;margin:13px 0}
 .metric{position:relative;border:1px solid #29475e;border-radius:13px;background:linear-gradient(145deg,#14283b,#0a1623);padding:13px 14px;min-width:0;overflow:hidden;box-shadow:0 9px 28px #0003,inset 0 1px #fff1;transition:.2s}
 .metric:hover{border-color:#63dced;transform:translateY(-3px)}.metric:after{content:"";position:absolute;right:-30px;top:-30px;width:80px;height:80px;border:1px solid #6feaff18;border-radius:50%;box-shadow:0 0 0 14px #6feaff08}
@@ -699,6 +700,13 @@ def make_dashboard_server(
                         if len(matched) >= limit:
                             break
                     truncated = latest.data.get("truncated", {})
+                    truncated_key = {
+                        "processes": "processes",
+                        "applications": "applications",
+                        "services": "services",
+                        "tasks": "scheduled_tasks",
+                        "interfaces": "network_interfaces",
+                    }[kind]
                     self._json(200, {
                         "available": True,
                         "snapshot_at": latest.timestamp.isoformat(),
@@ -706,7 +714,7 @@ def make_dashboard_server(
                         "total": len(records),
                         "matched": len(matched),
                         "items": matched,
-                        "truncated": truncated.get(kind, 0) if isinstance(truncated, dict) else 0,
+                        "truncated": truncated.get(truncated_key, 0) if isinstance(truncated, dict) else 0,
                         "inventory_summary": {
                             "processes": latest.data.get("process_count", 0),
                             "applications": latest.data.get("installed_application_count", 0),
