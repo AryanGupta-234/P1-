@@ -26,6 +26,10 @@ _PRIVATE_KEYS = (
 )
 
 
+def _has_model_size(name: str, size: int) -> bool:
+    return any(int(float(match.group(1))) == size for match in _MODEL_SIZE.finditer(name))
+
+
 def _model_for_size(models: list[str], size: int) -> str | None:
     matches: list[tuple[int, str]] = []
     for name in models:
@@ -143,8 +147,16 @@ class SentinelModelCollaborator:
             raise OllamaError("No installed local Ollama models are available.")
 
         available_memory = float(runtime_profile()["memory_available_gib"])
-        fast_model = self.fast_model if self.fast_model in installed else _model_for_size(installed, 4)
-        deep_model = self.deep_model if self.deep_model in installed else _model_for_size(installed, 6)
+        fast_model = (
+            self.fast_model
+            if self.fast_model in installed and _has_model_size(self.fast_model, 4)
+            else _model_for_size(installed, 4)
+        )
+        deep_model = (
+            self.deep_model
+            if self.deep_model in installed and _has_model_size(self.deep_model, 6)
+            else _model_for_size(installed, 6)
+        )
 
         if fast_model is not None and available_memory < 4.5:
             fast_model = None
