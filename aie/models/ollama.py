@@ -179,6 +179,7 @@ class OllamaClient:
         *,
         model: str,
         installed_models: list[str] | set[str] | None = None,
+        keep_alive: str | int | None = "5m",
     ) -> ModelResponse:
         """Run a non-streaming chat request against an installed model only."""
         if not model or not isinstance(model, str):
@@ -200,7 +201,7 @@ class OllamaClient:
                 for message in request.messages
             ],
             "stream": False,
-            "keep_alive": "5m",
+            "keep_alive": keep_alive,
             "options": {
                 "temperature": request.temperature,
                 "num_predict": request.max_output_tokens,
