@@ -606,6 +606,7 @@ def _worker() -> None:
                         "models": data.get("models", {}),
                         "triage": data.get("triage", {}),
                         "review": data.get("review", {}),
+                        "knowledge_references": data.get("knowledge_references", []),
                         "last_assessment_at": assessment.timestamp.isoformat(),
                         "input_event_count": data.get("input_event_count", 0),
                         "automatic_actions_taken": False,
