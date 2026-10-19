@@ -300,13 +300,23 @@ function renderStatus(s){
  $("eventValue").textContent=Number(s.event_count||0).toLocaleString();$("sensorValue").textContent=providers.length?((providers.length-bad)+"/"+providers.length):"—";$("sensorSub").textContent=bad?bad+" degraded":"Provider heartbeat";
  $("alertValue").textContent=deep.last_snapshot_at?String(alerts.length):"—";$("alertSub").textContent=deep.last_snapshot_at?(alerts.filter(a=>a.severity==="critical").length+" critical · "+alerts.filter(a=>a.severity==="high").length+" high"):"No deep snapshot";
  setMeter("cpuMeter",cpu);setMeter("ramMeter",memPct);setMeter("eventMeter",Math.min(100,Number(s.event_count||0)/250));setMeter("sensorMeter",providers.length?(providers.length-bad)/providers.length*100:0);setMeter("alertMeter",Math.min(100,alerts.length*12));
- addSample(s);renderSensors(s);renderAlerts(alerts);renderAI(s.ai||{});renderCommand(s.last_command||null);renderKnowledgeStats();
+ addSample(s);renderSensors(s);renderProviderDetails(s);renderWatchers(s);renderRuntime(s);renderAlerts(alerts);renderAI(s.ai||{});renderCommand(s.last_command||null);renderKnowledgeStats();
  $("telemetryFreshness").textContent="HEARTBEAT "+age(s.heartbeat_at).toUpperCase();
  if(currentView==="autonomy")renderAudit(lastEvents);
 }
 function renderSensors(s){const health=s.provider_health||{},entries=Object.entries(health);const target=$("sensorGrid");target.replaceChildren();if(!entries.length){target.append(el("div","empty","Provider heartbeats will appear after the first collection cycle."));return}for(const [name,item] of entries.slice(0,14)){const row=el("div","sensor"),left=el("div"),strong=el("strong",null,name.replaceAll("_"," ").toUpperCase()),detail=el("small",null,(item.samples_succeeded||0)+"/"+(item.samples_attempted||0)+" samples · "+(item.last_latency_ms??"—")+" ms"),state=el("span","sensor-state "+statusTone(item.state),String(item.state||"unknown").toUpperCase());left.append(strong,detail);row.append(left,state);target.append(row)}}
 function renderAlerts(alerts){const targets=[$("cockpitAlerts")];targets.forEach(target=>{target.replaceChildren();if(!alerts.length){target.append(el("div","empty","No rule-based posture alerts in the latest snapshot. This is not a guarantee of security."));return}for(const item of alerts.slice(0,5)){const card=el("article","alert-card "+String(item.severity||"info")),top=el("div","alert-row"),title=el("strong",null,item.title||"System finding"),sev=el("span","alert-sev",String(item.severity||"info").toUpperCase()+" · "+String(item.category||"SYSTEM").toUpperCase()),body=el("p",null,item.detail||"");top.append(title,sev);card.append(top,body);target.append(card)}});if(lastInventory)renderSystem(lastInventory.data||{})}
-function renderAI(ai){const models=ai.models||{},tri=ai.triage||{},rev=ai.review||{};$("triageModel").textContent=models.triage||"No triage model recorded";$("reviewModel").textContent=models.review||"No independent reviewer recorded";$("triageState").textContent=models.triage?"ANALYZED":"IDLE";$("reviewState").textContent=models.independent_review_completed?"REVIEW COMPLETED":"REVIEW UNAVAILABLE";$("triageResult").textContent=tri.summary||"Waiting for the next local evidence review.";const items=[];for(const item of (tri.signals||[]).slice(0,4))items.push("SIGNAL · "+(typeof item==="string"?item:JSON.stringify(item)));for(const item of (tri.hypotheses||[]).slice(0,4))items.push("HYPOTHESIS · "+(typeof item==="string"?item:JSON.stringify(item)));$("reviewResult").textContent=(rev.assessment||"The independent reviewer has not completed a pass.")+(rev.confidence?" · "+rev.confidence.toUpperCase()+" CONFIDENCE":"");}
+function renderAI(ai){
+ const models=ai.models||{},tri=ai.triage||{},rev=ai.review||{};
+ $("triageModel").textContent=models.triage||"No triage model recorded";
+ $("reviewModel").textContent=models.review||"No independent reviewer recorded";
+ $("triageState").textContent=models.triage?"ANALYZED":"IDLE";
+ $("reviewState").textContent=models.independent_review_completed?"REVIEW COMPLETED":"REVIEW UNAVAILABLE";
+ const describe=item=>typeof item==="string"?item:JSON.stringify(item);
+ const section=(label,values)=>Array.isArray(values)&&values.length?label+"\n"+values.slice(0,4).map(value=>"• "+describe(value)).join("\n"):"";
+ $("triageResult").textContent=[tri.summary||"Waiting for the next local evidence review.",section("SIGNALS",tri.signals),section("HYPOTHESES",tri.hypotheses),section("UNCERTAINTIES",tri.uncertainties)].filter(Boolean).join("\n\n");
+ $("reviewResult").textContent=[(rev.assessment||"The independent reviewer has not completed a pass.")+(rev.confidence?" · "+String(rev.confidence).toUpperCase()+" CONFIDENCE":""),section("SUPPORTED FINDINGS",rev.supported_findings),section("REJECTED CLAIMS",rev.rejected_claims),section("UNCERTAINTIES",rev.uncertainties)].filter(Boolean).join("\n\n");
+}
 function infoCard(label,value,detail=""){const card=el("div","info-card"),small=el("small",null,label),strong=el("strong",null,value==null||value===""?"Unavailable":String(value)),p=el("p",null,detail);card.append(small,strong,p);return card}
 function renderSystem(data){
  const os=data.operating_system||{},computer=data.computer||{},bios=data.bios||{},secure=data.secure_boot||{},def=data.defender_status||{};
@@ -337,6 +347,22 @@ function renderEvents(events,targetId="eventList"){const target=$(targetId);if(!
 async function loadEvents(force=false){if(!force&&Date.now()-lastEventsFetch<7500)return;lastEventsFetch=Date.now();try{const r=await request("/api/events?limit=220");lastEvents=r.events||[];$("vaultCount").textContent=(r.returned??lastEvents.length)+" RECORDS";renderEvents(lastEvents,"eventList");renderEvents(lastEvents.slice(0,5),"cockpitEvents");renderAudit(lastEvents)}catch(e){toast("Event vault: "+e.message,"warn")}}
 function renderAudit(events){const target=$("automationAudit");if(!target)return;target.replaceChildren();const rows=(events||[]).filter(e=>e.event_type?.includes("command_dispatched")||e.event_type?.includes("automation_triggered")).slice(0,12);if(!rows.length){target.append(el("div","empty","Automation and command dispatch events will appear here."));return}for(const ev of rows){const row=el("div","command-line"),left=el("strong",null,ev.event_type.replaceAll("."," / ").toUpperCase()+" · "+(ev.entity?.name||"")),right=el("small",null,age(ev.timestamp));row.append(left,right);target.append(row)}}
 function renderCommand(command){if(!command)return;$("lastCommandState").textContent=String(command.status||"queued").toUpperCase();$("lastCommand").textContent=JSON.stringify(command,null,2)}
+function renderProviderDetails(s){
+ const target=$("providerDetails"),health=s.provider_health||{},entries=Object.entries(health);
+ target.replaceChildren();
+ if(!entries.length){target.append(el("div","empty","Provider samples have not been reported yet."));return}
+ entries.sort((a,b)=>String(a[0]).localeCompare(String(b[0])));
+ for(const [name,item] of entries){
+  const row=el("div","command-line"),left=el("div"),title=el("strong",null,name.replaceAll("_"," ").toUpperCase());
+  const details=[String(item.samples_succeeded??0)+"/"+String(item.samples_attempted??0)+" successful samples",String(item.errors??0)+" errors",String(item.event_loss??0)+" lost events",item.average_latency_ms==null?"average latency —":Number(item.average_latency_ms).toFixed(1)+" ms average"];
+  const note=el("small",null,details.join(" · "));left.append(title,note);
+  const state=el("small",null,String(item.state||"unknown").toUpperCase());
+  if(item.state==="degraded")state.style.color="var(--red)";
+  row.append(left,state);
+  if(item.last_error_type)row.title="Last provider error: "+String(item.last_error_type);
+  target.append(row);
+ }
+}
 function renderWatchers(s){const target=$("internalWatchers");target.replaceChildren();const rows=[
  ["Registry observer",s.registry],["Deep CIM / device inventory",s.deep_inventory],["Microsoft knowledge crawler",s.knowledge],
  ["ETW process provider",(s.provider_health||{})["windows.etw.process"]]
@@ -396,8 +422,13 @@ async function searchDrivers(){const q=$("driverQuery").value.trim();const targe
 async function loadModels(){if(Date.now()-lastModelsFetch<10000)return;lastModelsFetch=Date.now();const target=$("modelList");target.replaceChildren(el("div","empty","Discovering locally installed Ollama models…"));try{const r=await request("/api/ai/models");target.replaceChildren();$("modelMemory").textContent="Available system RAM: "+(r.memory_available_gib??"—")+" GiB · local-only inference";if(!r.models?.length){target.append(el("div","empty",r.error||"No installed local Ollama models were discovered."));return}for(const m of r.models){const item=el("div","model-card"),name=el("strong",null,m),detail=el("small",null,(r.triage_candidates.includes(m)?"3B/4B Ask + triage candidate · ":"")+(r.review_candidates.includes(m)?"6B/7B reviewer candidate":"Installed local model"));item.append(name,detail);target.append(item)}}catch(e){target.replaceChildren(el("div","empty",e.message))}}
 async function askSentinel(){const question=$("aiQuestion").value.trim(),mode=$("aiMode").value;if(!question){$("aiQuestion").focus();return}const btn=$("askBtn");btn.disabled=true;btn.textContent="RUNNING LOCAL INFERENCE…";$("aiAnswer").textContent="Preparing the bounded evidence packet and local reference context. Waiting for local Ollama…";$("aiReferences").replaceChildren();try{const r=await post("/api/ask",{question,mode});$("aiAnswer").textContent=r.answer||"No answer returned.";const meta=el("div","panel-sub","SPECIALIST "+String(r.specialist_mode||mode).toUpperCase()+" · "+String(r.model||"LOCAL MODEL")+" · "+String(r.confidence||"low").toUpperCase()+" CONFIDENCE · "+(r.evidence_ids||[]).length+" EVIDENCE IDS");$("aiReferences").append(meta);if(r.evidence_ids?.length)$("aiReferences").append(el("div","panel-sub","EVIDENCE IDS · "+r.evidence_ids.join(", ")));for(const ref of r.references||[]){try{const url=new URL(ref.url);if(url.protocol==="https:"&&["learn.microsoft.com","github.com"].includes(url.hostname)){const a=el("a","ai-reference",ref.title||url.hostname);a.href=url.href;a.target="_blank";a.rel="noopener noreferrer";$("aiReferences").append(a)}}catch{}}toast("Local specialist response ready.")}catch(e){$("aiAnswer").textContent="Sentinel AI unavailable: "+e.message;toast(e.message,"error")}finally{btn.disabled=false;btn.textContent="✳ ASK LOCAL AI"}}
 async function searchKnowledge(){const q=$("knowledgeQuery").value.trim();if(!q){$("knowledgeQuery").focus();return}const target=$("knowledgeResults");target.replaceChildren(el("div","empty","Searching local documentation index…"));try{const r=await request("/api/knowledge/search?q="+encodeURIComponent(q)+"&limit=8");target.replaceChildren();if(!r.results?.length){target.append(el("div","empty","No indexed document matched. Run a knowledge sync."));return}for(const item of r.results){const card=el("div","knowledge-card"),title=el("strong",null,item.title||"Untitled document"),meta=el("small",null,String(item.source||"").toUpperCase()+" · SCORE "+item.score),p=el("p",null,item.excerpt||""),a=el("a","ai-reference",item.url||"");if(item.url){a.href=item.url;a.target="_blank";a.rel="noopener noreferrer"}card.append(title,meta,p,a);target.append(card)}}catch(e){target.replaceChildren(el("div","empty",e.message))}}
-let notifiedReady=false;
-async function enableNotifications(){if(!("Notification"in window)){toast("This browser does not support desktop notifications.","warn");return}const result=await Notification.requestPermission();notifiedReady=result==="granted";toast(notifiedReady?"Desktop posture alerts enabled.":"Notification permission was not granted.",notifiedReady?"":"warn")}
+let notifiedReady=("Notification" in window)&&Notification.permission==="granted";
+async function enableNotifications(){
+ if(!("Notification"in window)){toast("This browser does not support desktop notifications.","warn");return}
+ const result=Notification.permission==="granted"?"granted":await Notification.requestPermission();
+ notifiedReady=result==="granted";
+ toast(notifiedReady?"Desktop posture alerts enabled.":"Notification permission was not granted.",notifiedReady?"":"warn");
+}
 function notifyNewPosture(status){const alerts=status.deep_inventory?.posture_alerts||[],keys=alerts.map(a=>[a.severity,a.category,a.title].join("|"));if(lastAlertKeys===null){lastAlertKeys=new Set(keys);return}const newly=alerts.filter(a=>!lastAlertKeys.has([a.severity,a.category,a.title].join("|")));lastAlertKeys=new Set(keys);for(const item of newly){toast(item.title+" · "+(item.detail||""),item.severity==="critical"||item.severity==="high"?"error":"warn");if(notifiedReady&&("Notification"in window))new Notification("Sentinel · "+String(item.severity||"INFO").toUpperCase(),{body:item.title+" — "+(item.detail||"")})}}
 async function refresh(forceInventory=false){try{const s=await request("/api/status");renderStatus(s);notifyNewPosture(s);if(forceInventory||Date.now()-lastInventoryFetch>26000)await loadInventory(true);if(Date.now()-lastEventsFetch>7500||!lastEvents.length)await loadEvents(true);if(currentView==="system"&&lastInventory)renderSystem(lastInventory.data||{});if(currentView==="autonomy")renderAudit(lastEvents);return true}catch(e){$("liveBadge").textContent="RECONNECTING";$("heroDesc").textContent="Unable to contact the local Sentinel worker. Reconnecting…";return false}}
 function bootProgress(value,stage,line){$("bootProgress").style.width=value+"%";$("bootPercent").textContent=String(value).padStart(2,"0")+"%";$("bootStage").textContent=stage;if(line){const row=el("div",null,line);$("bootLog").append(row);while($("bootLog").children.length>4)$("bootLog").firstChild.remove()}}
@@ -417,7 +448,16 @@ $("catalogSearch").addEventListener("click",()=>loadCatalog());
 $("catalogQuery").addEventListener("keydown",e=>{if(e.key==="Enter")loadCatalog()});
 document.querySelectorAll("[data-catalog]").forEach(button=>button.addEventListener("click",()=>loadCatalog(button.dataset.catalog)));
 $("knowledgeSearch").addEventListener("click",searchKnowledge);$("knowledgeQuery").addEventListener("keydown",e=>{if(e.key==="Enter")searchKnowledge()});
-$("eventSearch").addEventListener("click",async()=>{const q=$("eventQuery").value.trim(),type=$("eventTypeFilter").value;try{const r=await request("/api/events?limit=250&q="+encodeURIComponent(q)+"&type="+encodeURIComponent(type));lastEvents=r.events||[];$("eventMeta").textContent=(r.returned||0)+" matches in the recent searchable window";renderEvents(lastEvents)}catch(e){toast(e.message,"error")}});
+$("eventSearch").addEventListener("click",async()=>{
+ const q=$("eventQuery").value.trim(),type=$("eventTypeFilter").value;
+ try{
+  const r=await request("/api/events?limit=250&q="+encodeURIComponent(q)+"&type="+encodeURIComponent(type));
+  const filteredEvents=r.events||[];
+  $("vaultCount").textContent=(r.returned||filteredEvents.length)+" MATCHES";
+  $("eventMeta").textContent=(r.returned||0)+" matches in the recent searchable window";
+  renderEvents(filteredEvents,"eventList");
+ }catch(e){toast(e.message,"error")}
+});
 $("eventRefresh").addEventListener("click",()=>loadEvents(true));
 document.querySelectorAll("[data-command]").forEach(n=>n.addEventListener("click",()=>runCommand(n.dataset.command)));
 $("clock").textContent=new Date().toLocaleTimeString();setInterval(()=>$("clock").textContent=new Date().toLocaleTimeString(),1000);
