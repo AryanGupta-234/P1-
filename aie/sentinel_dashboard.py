@@ -153,7 +153,8 @@ body{font-family:"Segoe UI Variable","Aptos","Inter","Segoe UI",Arial,sans-serif
   <button class="nav-btn" data-view="evidence" title="Evidence Vault"><span class="nav-icon">04</span><small>EVIDENCE VAULT</small></button>
   <button class="nav-btn" data-view="ai" title="AI Laboratory"><span class="nav-icon">05</span><small>AI LABORATORY</small></button>
   <button class="nav-btn" data-view="autonomy" title="Feature controls and automation"><span class="nav-icon">06</span><small>FEATURE CONTROL</small></button>
-  <button class="nav-btn" data-view="knowledge" title="Knowledge"><span class="nav-icon">07</span><small>KNOWLEDGE BASE</small></button>
+  <button class="nav-btn" data-view="tasks" title="Agent Task Manager"><span class="nav-icon">07</span><small>TASK MANAGER</small></button>
+  <button class="nav-btn" data-view="knowledge" title="Knowledge"><span class="nav-icon">08</span><small>KNOWLEDGE BASE</small></button>
   <div class="rail-spacer"></div><div class="rail-state" id="railLed"></div><div class="rail-bottom">WINDOWS 11 / LOCAL EXECUTION / USER CONTROL</div>
  </aside>
  <main>
@@ -400,6 +401,34 @@ body{font-family:"Segoe UI Variable","Aptos","Inter","Segoe UI",Arial,sans-serif
    <section class="panel" style="margin-top:12px"><div class="panel-head"><div><div class="panel-title">AUTOMATION AUDIT TIMELINE</div><div class="panel-sub">Command dispatch and posture automation events</div></div><button class="btn ghost" data-view-jump="evidence">OPEN FULL AUDIT →</button></div><div class="audit-list" id="automationAudit"><div class="empty">No automation records yet.</div></div></section>
   </section>
 
+  <section class="screen" data-screen="tasks">
+   <div class="section-head"><div><div class="section-label">AGENT RUNTIME / INTERNAL TOOLS / JOB CONTROL</div><div class="section-title">TASK MANAGER</div><div class="section-description">Live view of actual Sentinel worker jobs, the Windows sensor/provider matrix, job history, and the latest bounded process inventory. Runtime states are recorded by the worker; progress is never simulated.</div></div><div class="button-row"><button class="btn ghost" id="taskRefresh">↻ REFRESH TASKS</button><button class="btn" data-view-jump="autonomy">FEATURE CONTROL →</button></div></div>
+   <div class="metric-row">
+    <div class="metric"><div class="metric-label">ACTIVE JOBS</div><div class="metric-value" id="taskActiveCount">—</div><div class="metric-foot">Background jobs running now</div></div>
+    <div class="metric"><div class="metric-label">AVAILABLE TOOLS</div><div class="metric-value" id="taskToolCount">—</div><div class="metric-foot">Registered Windows providers</div></div>
+    <div class="metric"><div class="metric-label">RECENT RUNS</div><div class="metric-value" id="taskRunCount">—</div><div class="metric-foot">Retained worker task records</div></div>
+    <div class="metric"><div class="metric-label">QUEUED COMMANDS</div><div class="metric-value" id="taskQueueCount">—</div><div class="metric-foot">Awaiting observer dispatch</div></div>
+   </div>
+   <div class="grid equal task-layout">
+    <section class="panel"><div class="panel-head"><div><div class="panel-title">LIVE AGENT JOBS</div><div class="panel-sub">Real worker threads · one active run per collector</div></div><span class="tag" id="taskWorkerState">WORKER STATE UNKNOWN</span></div><div class="task-list" id="taskLiveList"><div class="empty">Waiting for worker task state.</div></div></section>
+    <section class="panel"><div class="panel-head"><div><div class="panel-title">INTERNAL SENSOR / TOOL MATRIX</div><div class="panel-sub">Collectors and providers reported by the active Windows observer</div></div><span class="tag" id="taskProviderState">NO PROVIDER DATA</span></div><div class="task-list" id="taskToolsList"><div class="empty">Provider details will appear after the first observer cycle.</div></div></section>
+   </div>
+   <div class="grid equal" style="margin-top:14px">
+    <section class="panel"><div class="panel-head"><div><div class="panel-title">TASK RUN HISTORY</div><div class="panel-sub">Last 60 completed and failed worker jobs</div></div><select id="taskHistoryFilter" class="select" style="max-width:190px"><option value="all">All runs</option><option value="completed">Completed</option><option value="warnings">Warnings</option><option value="failed">Failed</option></select></div><div class="task-list scroll-list" id="taskHistoryList"><div class="empty">No task runs have been recorded yet.</div></div></section>
+    <section class="panel"><div class="panel-head"><div><div class="panel-title">WINDOWS PROCESS SNAPSHOT</div><div class="panel-sub">Read-only inventory · process name and PID only</div></div><span class="tag" id="processSnapshotTag">NO SNAPSHOT</span></div><div class="search-row"><input class="field" id="taskProcessQuery" maxlength="100" placeholder="Filter by process name or PID"><button class="btn primary" id="taskProcessSearch">SEARCH</button></div><div class="panel-sub" id="taskProcessMeta">Run a system inventory to populate this list.</div><div class="task-list scroll-list" id="taskProcessList"><div class="empty">Process catalog not loaded.</div></div><div class="control-footnote">This is not a process-kill console. Only a bounded, privacy-filtered snapshot is shown; no command lines, paths, environment variables or process memory are exposed.</div></section>
+   </div>
+   <section class="panel" style="margin-top:14px"><div class="panel-head"><div><div class="panel-title">QUICK JOB DISPATCH</div><div class="panel-sub">Launch a one-time job. Its feature must be enabled in Feature Control.</div></div><span class="tag">MANUAL RUN</span></div>
+    <div class="action-grid">
+     <button class="action-tile" data-command="scan_now"><b>◈ SYSTEM INVENTORY</b><small>Processes, applications, services and scheduled tasks</small></button>
+     <button class="action-tile" data-command="deep_scan_now"><b>⌖ DEEP WINDOWS SCAN</b><small>Hardware, drivers, storage and security posture</small></button>
+     <button class="action-tile" data-command="registry_scan_now"><b>▤ REGISTRY SNAPSHOT</b><small>Read-only configuration and change detection</small></button>
+     <button class="action-tile" data-command="ai_review_now"><b>✳ LOCAL AI REVIEW</b><small>Evidence triage using installed Ollama models</small></button>
+     <button class="action-tile" data-command="knowledge_crawl_now"><b>⌘ KNOWLEDGE REFRESH</b><small>Fetch allowlisted public Microsoft references</small></button>
+    </div>
+    <div class="control-footnote warning">Active Python threads are not force-killed from this screen. Disable a feature to prevent its next scheduled run; a job already in progress is allowed to finish. Pause Watch stops observer-driven schedules, and Stop Worker shuts down Sentinel gracefully.</div>
+   </section>
+  </section>
+
   <section class="screen" data-screen="knowledge">
    <div class="section-head"><div><div class="section-label">MICROSOFT LEARN / MICROSOFTDOCS / LOCAL SQLITE</div><div class="section-title">TECHNICAL CODEX</div><div class="section-description">Search locally indexed Windows engineering references; refresh the bounded public-source crawler from the command deck.</div></div><button class="btn primary" data-command="knowledge_crawl_now">⌘ SYNC CODEX</button></div>
    <div class="grid">
@@ -421,7 +450,7 @@ const $=id=>document.getElementById(id);
 const headers={"X-AIE-Token":token};
 let currentView="cockpit",lastStatus=null,lastInventory=null,lastEvents=[],lastConfig=null,lastAlertKeys=null;
 let cpuHistory=[],memHistory=[],lastInventoryFetch=0,lastEventsFetch=0,lastModelsFetch=0;
-const titles={cockpit:"COMMAND CENTER",system:"SYSTEM DEEP DIVE",telemetry:"TELEMETRY MATRIX",evidence:"EVIDENCE VAULT",ai:"SENTINEL AI LAB",autonomy:"FEATURES & AUTOMATION",knowledge:"TECHNICAL CODEX"};
+const titles={cockpit:"COMMAND CENTER",system:"SYSTEM DEEP DIVE",telemetry:"TELEMETRY MATRIX",evidence:"EVIDENCE VAULT",ai:"SENTINEL AI LAB",autonomy:"FEATURES & AUTOMATION",tasks:"TASK MANAGER",knowledge:"TECHNICAL CODEX"};
 function el(tag,cls,text){const n=document.createElement(tag);if(cls)n.className=cls;if(text!==undefined)n.textContent=text;return n}
 function toast(message,kind=""){const stack=$("toastStack"),box=el("div","toast "+kind,message);stack.append(box);setTimeout(()=>box.remove(),5200)}
 function age(iso){if(!iso)return"—";const t=new Date(iso).getTime();if(!Number.isFinite(t))return"—";const s=Math.max(0,Math.floor((Date.now()-t)/1000));return s<60?s+"s ago":s<3600?Math.floor(s/60)+"m ago":Math.floor(s/3600)+"h ago"}
@@ -430,7 +459,7 @@ function setMeter(id,value){const node=$(id);if(node)node.style.width=Math.max(0
 function statusTone(value){const s=String(value||"unknown").toLowerCase();return ["degraded","partial","warning","disabled","unavailable","critical"].includes(s)?"degraded":s==="available"||s==="watching"||s==="running"||s==="ok"?"":"optional"}
 async function request(path,options={}){const response=await fetch(path,{...options,headers:{...headers,...(options.headers||{})},cache:"no-store"});let payload={};try{payload=await response.json()}catch{}if(!response.ok)throw new Error(payload.error||("Local API "+response.status));return payload}
 function post(path,data){return request(path,{method:"POST",headers:{"Content-Type":"application/json","Origin":location.origin},body:JSON.stringify(data)})}
-function switchView(view){if(!titles[view])return;currentView=view;document.querySelectorAll("[data-screen]").forEach(n=>n.classList.toggle("active",n.dataset.screen===view));document.querySelectorAll(".nav-btn").forEach(n=>n.classList.toggle("active",n.dataset.view===view));$("viewTitle").textContent=titles[view];if(view==="ai")loadModels();if(view==="autonomy"){loadProfile();loadModels()}if(view==="system"){loadInventory(true);loadCatalog("processes");}if(view==="evidence")loadEvents(true);if(view==="knowledge")renderKnowledgeStats()}
+function switchView(view){if(!titles[view])return;currentView=view;document.querySelectorAll("[data-screen]").forEach(n=>n.classList.toggle("active",n.dataset.screen===view));document.querySelectorAll(".nav-btn").forEach(n=>n.classList.toggle("active",n.dataset.view===view));$("viewTitle").textContent=titles[view];if(view==="ai")loadModels();if(view==="autonomy"){loadProfile();loadModels()}if(view==="tasks"){refresh(false);loadTaskProcesses()}if(view==="system"){loadInventory(true);loadCatalog("processes");}if(view==="evidence")loadEvents(true);if(view==="knowledge")renderKnowledgeStats()}
 document.querySelectorAll(".nav-btn").forEach(n=>n.addEventListener("click",()=>switchView(n.dataset.view)));
 document.querySelectorAll("[data-view-jump]").forEach(n=>n.addEventListener("click",()=>switchView(n.dataset.viewJump)));
 function drawCanvas(id,dataA,dataB){const canvas=$(id);if(!canvas)return;const rect=canvas.getBoundingClientRect();const w=Math.max(320,Math.round(rect.width*devicePixelRatio)),h=Math.max(150,Math.round(rect.height*devicePixelRatio));if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h}const ctx=canvas.getContext("2d");ctx.clearRect(0,0,w,h);const pad=18*devicePixelRatio;ctx.strokeStyle="#303c35";ctx.lineWidth=devicePixelRatio;for(let i=0;i<=4;i++){const y=pad+(h-2*pad)*i/4;ctx.beginPath();ctx.moveTo(pad,y);ctx.lineTo(w-pad,y);ctx.stroke()}function line(values,color){if(values.length<2)return;ctx.beginPath();ctx.strokeStyle=color;ctx.lineWidth=2*devicePixelRatio;ctx.shadowBlur=8*devicePixelRatio;ctx.shadowColor=color;values.forEach((value,index)=>{const x=pad+(w-2*pad)*index/Math.max(1,values.length-1);const y=h-pad-(h-2*pad)*Math.max(0,Math.min(100,Number(value)||0))/100;if(index===0)ctx.moveTo(x,y);else ctx.lineTo(x,y)});ctx.stroke();ctx.shadowBlur=0}line(dataA,"#b8e65b");line(dataB,"#ff6b38")}
@@ -452,6 +481,7 @@ function renderStatus(s){
  addSample(s);renderSensors(s);renderProviderDetails(s);renderWatchers(s);renderRuntime(s);renderAlerts(alerts);renderAI(s.ai||{});renderCommand(s.last_command||null);renderKnowledgeStats();renderAutomationState(s);
  $("telemetryFreshness").textContent="HEARTBEAT "+age(s.heartbeat_at).toUpperCase();
  if(currentView==="autonomy")renderAudit(lastEvents);
+ if(currentView==="tasks")renderTaskManager(s);
 }
 function renderSensors(s){const health=s.provider_health||{},entries=Object.entries(health);const target=$("sensorGrid");target.replaceChildren();if(!entries.length){target.append(el("div","empty","Provider heartbeats will appear after the first collection cycle."));return}for(const [name,item] of entries.slice(0,14)){const row=el("div","sensor"),left=el("div"),strong=el("strong",null,name.replaceAll("_"," ").toUpperCase()),detail=el("small",null,(item.samples_succeeded||0)+"/"+(item.samples_attempted||0)+" samples · "+(item.last_latency_ms??"—")+" ms"),state=el("span","sensor-state "+statusTone(item.state),String(item.state||"unknown").toUpperCase());left.append(strong,detail);row.append(left,state);target.append(row)}}
 function renderAlerts(alerts){const targets=[$("cockpitAlerts")];targets.forEach(target=>{target.replaceChildren();if(!alerts.length){target.append(el("div","empty","No rule-based posture alerts in the latest snapshot. This is not a guarantee of security."));return}for(const item of alerts.slice(0,5)){const card=el("article","alert-card "+String(item.severity||"info")),top=el("div","alert-row"),title=el("strong",null,item.title||"System finding"),sev=el("span","alert-sev",String(item.severity||"info").toUpperCase()+" · "+String(item.category||"SYSTEM").toUpperCase()),body=el("p",null,item.detail||"");top.append(title,sev);card.append(top,body);target.append(card)}});if(lastInventory)renderSystem(lastInventory.data||{})}
@@ -590,6 +620,82 @@ async function saveProfile(){
   $("profileSaveState").textContent="SAVE FAILED";$("profileNote").textContent=e.message;toast("Profile save failed: "+e.message,"error");
  }finally{$("saveProfile").disabled=false}
 }
+function renderTaskManager(s){
+ const history=Array.isArray(s.task_history)?s.task_history.slice().reverse():[];
+ const health=s.provider_health||{},providers=Object.entries(health);
+ const active=Object.values(s.tasks||{}).filter(task=>task.status==="running");
+ $("taskActiveCount").textContent=active.length;$("taskToolCount").textContent=providers.length;
+ $("taskRunCount").textContent=history.length;$("taskQueueCount").textContent=s.command_queue_depth??"—";
+ $("taskWorkerState").textContent=s.status==="running"?(s.observer_paused?"OBSERVER PAUSED":"WORKER ONLINE"):"WORKER OFFLINE";
+ $("taskProviderState").textContent=providers.length?providers.length+" PROVIDERS":"NO PROVIDER DATA";
+ const definitions={
+  inventory:["System inventory","scan_now","Processes, applications, services and scheduled tasks","inventory_enabled"],
+  registry:["Registry intelligence","registry_scan_now","Read-only registry configuration snapshot","registry_enabled"],
+  deep_inventory:["Deep Windows inventory","deep_scan_now","CIM, drivers, PnP, storage and security posture","deep_inventory_enabled"],
+  knowledge:["Microsoft knowledge sync","knowledge_crawl_now","Allowlisted Microsoft documentation ingestion","knowledge_enabled"],
+  ai_review:["Local AI evidence review","ai_review_now","Ollama evidence triage and independent review","ai_enabled"]
+ };
+ const live=$("taskLiveList");live.replaceChildren();
+ for(const [key,meta] of Object.entries(definitions)){
+  const task=s.tasks?.[key]||{},enabled=lastConfig?lastConfig[meta[3]]!==false:true;
+  const row=el("article","task-row"),top=el("div","task-row-head"),left=el("div");
+  left.append(el("strong",null,meta[0]),el("small",null,meta[2]));
+  const state=task.status||(enabled?(s.features?.automation===false?"manual only":"scheduled"):"disabled");
+  top.append(left,el("span","task-pill "+String(state).replaceAll("_","-"),String(state).replaceAll("_"," ").toUpperCase()));row.append(top);
+  const details=[
+   task.trigger?"Trigger: "+task.trigger:null,
+   task.started_at?"Started: "+new Date(task.started_at).toLocaleString():null,
+   task.finished_at?"Finished: "+new Date(task.finished_at).toLocaleString():null,
+   task.duration_seconds!=null?"Duration: "+task.duration_seconds+" s":null,
+   task.error_type?"Error: "+task.error_type:null
+  ].filter(Boolean);
+  row.append(el("div","task-meta",details.join(" · ")||"No run recorded in this worker session."));
+  const actions=el("div","task-actions"),run=el("button","btn",task.status==="running"?"RUNNING":"RUN NOW"),settings=el("button","btn ghost","SETTINGS");
+  run.type="button";run.disabled=!enabled||task.status==="running";run.addEventListener("click",()=>runCommand(meta[1]));
+  settings.type="button";settings.addEventListener("click",()=>switchView("autonomy"));
+  actions.append(run,settings);row.append(actions);live.append(row);
+ }
+ const toolList=$("taskToolsList");toolList.replaceChildren();
+ if(!providers.length)toolList.append(el("div","empty","No provider-health metrics have been reported yet."));
+ for(const [name,item] of providers.sort((a,b)=>a[0].localeCompare(b[0]))){
+  const row=el("details","task-tool"),summary=el("summary"),heading=el("strong",null,name.replaceAll("."," / ").replaceAll("_"," "));
+  summary.append(heading,el("span","task-pill "+String(item.state||"unknown"),String(item.state||"UNKNOWN").toUpperCase()));
+  const values=[
+   "Samples "+String(item.samples_succeeded??0)+"/"+String(item.samples_attempted??0),
+   "Errors "+String(item.errors??0),"Event loss "+String(item.event_loss??0),
+   "Last latency "+String(item.last_latency_ms??"—")+" ms",
+   "Average "+(item.average_latency_ms==null?"—":Number(item.average_latency_ms).toFixed(1)+" ms"),
+   item.last_error_type?"Last error "+item.last_error_type:"No last error"
+  ];
+  row.append(summary,el("div","task-tool-meta",values.join(" · ")));toolList.append(row);
+ }
+ const historyTarget=$("taskHistoryList"),filter=$("taskHistoryFilter").value;historyTarget.replaceChildren();
+ const filtered=history.filter(item=>filter==="all"||(filter==="warnings"&&item.status==="completed_with_warnings")||item.status===filter);
+ if(!filtered.length)historyTarget.append(el("div","empty","No runs match this filter."));
+ for(const item of filtered.slice(0,60)){
+  const row=el("article","task-history-row"),left=el("div");
+  left.append(el("strong",null,item.name||item.key),el("small",null,(item.trigger||"worker")+" · "+(item.started_at?new Date(item.started_at).toLocaleString():"time unavailable")));
+  row.append(left,el("span","task-pill "+String(item.status||"unknown").replaceAll("_","-"),String(item.status||"UNKNOWN").replaceAll("_"," ").toUpperCase()));
+  if(item.duration_seconds!=null)row.append(el("small","task-duration",item.duration_seconds+" s"));
+  historyTarget.append(row);
+ }
+}
+async function loadTaskProcesses(){
+ const target=$("taskProcessList"),query=$("taskProcessQuery")?.value.trim()||"";
+ if(!target)return;target.replaceChildren(el("div","empty","Loading latest bounded process snapshot…"));
+ try{
+  const result=await request("/api/catalog?kind=processes&q="+encodeURIComponent(query)+"&limit=120");
+  $("processSnapshotTag").textContent=result.snapshot_at?"SNAPSHOT "+age(result.snapshot_at).toUpperCase():"NO SNAPSHOT";
+  $("taskProcessMeta").textContent=result.available?String(result.matched)+" shown / "+String(result.total)+" processes · metadata only":"No system inventory snapshot yet. Run System Inventory.";
+  target.replaceChildren();
+  if(!result.items?.length){target.append(el("div","empty","No process rows found. Run an inventory or change the filter."));return}
+  for(const process of result.items){
+   const row=el("div","process-row"),left=el("div");
+   left.append(el("strong",null,String(process.name||"Unknown process")),el("small",null,"PID "+String(process.pid??"—")));
+   row.append(left,el("small",null,process.create_time?"Started "+new Date(process.create_time*1000).toLocaleString():"Start time unavailable"));target.append(row);
+  }
+ }catch(error){target.replaceChildren(el("div","empty","Process inventory unavailable: "+error.message))}
+}
 function renderAutomationState(s){
  const enabled=lastConfig?lastConfig.automation_enabled===true:s.features?.automation===true;
  const paused=s.observer_paused===true,active=s.status==="running";
@@ -699,6 +805,9 @@ $("catalogSearch").addEventListener("click",()=>loadCatalog());
 $("catalogQuery").addEventListener("keydown",e=>{if(e.key==="Enter")loadCatalog()});
 document.querySelectorAll("[data-catalog]").forEach(button=>button.addEventListener("click",()=>loadCatalog(button.dataset.catalog)));
 $("knowledgeSearch").addEventListener("click",searchKnowledge);$("knowledgeQuery").addEventListener("keydown",e=>{if(e.key==="Enter")searchKnowledge()});
+$("taskRefresh").addEventListener("click",()=>{refresh(true);loadTaskProcesses()});
+$("taskProcessSearch").addEventListener("click",loadTaskProcesses);$("taskProcessQuery").addEventListener("keydown",e=>{if(e.key==="Enter")loadTaskProcesses()});
+$("taskHistoryFilter").addEventListener("change",()=>{if(lastStatus)renderTaskManager(lastStatus)});
 $("eventSearch").addEventListener("click",async()=>{
  const q=$("eventQuery").value.trim(),type=$("eventTypeFilter").value;
  try{
