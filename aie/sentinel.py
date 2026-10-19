@@ -509,6 +509,8 @@ def _worker() -> None:
             data = event.data
             operating_system = data.get("operating_system", {})
             computer = data.get("computer", {})
+            bios = data.get("bios", {})
+            secure_boot = data.get("secure_boot", {})
             defender = data.get("defender_status", {})
             disk_summary = []
             for disk in data.get("fixed_disks", [])[:16]:
@@ -583,6 +585,13 @@ def _worker() -> None:
                 if isinstance(item, dict)
             ]
             posture_alerts: list[dict[str, str]] = []
+            if secure_boot.get("supported") is True and secure_boot.get("enabled") is False:
+                posture_alerts.append({
+                    "severity": "info",
+                    "category": "BOOT",
+                    "title": "UEFI Secure Boot reports disabled",
+                    "detail": "Secure Boot is supported on this platform but reports disabled.",
+                })
             if defender.get("AntivirusEnabled") is False:
                 posture_alerts.append({
                     "severity": "high",
@@ -684,6 +693,16 @@ def _worker() -> None:
                         key: operating_system.get(key)
                         for key in ("Caption", "Version", "BuildNumber", "OSArchitecture")
                         if isinstance(operating_system, dict) and key in operating_system
+                    },
+                    "bios": {
+                        key: bios.get(key)
+                        for key in ("Manufacturer", "SMBIOSBIOSVersion", "ReleaseDate")
+                        if isinstance(bios, dict) and key in bios
+                    },
+                    "secure_boot": {
+                        key: secure_boot.get(key)
+                        for key in ("supported", "enabled")
+                        if isinstance(secure_boot, dict) and key in secure_boot
                     },
                     "logical_processors": computer.get("NumberOfLogicalProcessors") if isinstance(computer, dict) else None,
                     "physical_memory_bytes": computer.get("TotalPhysicalMemory") if isinstance(computer, dict) else None,
