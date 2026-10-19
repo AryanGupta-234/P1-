@@ -68,6 +68,8 @@ aie sentinel dashboard
 
 Sentinel runs with limited user privileges at sign-in, stores evidence locally and uses already-installed Ollama models only. See [Sentinel Runtime](docs/SENTINEL.md) for its sensor scope, controls, limitations and opt-in features.
 
+The Titan command deck adds animated live telemetry, deeper storage/driver/PnP/Defender/firewall diagnostics, a locally grounded **Ask Sentinel** panel, on-demand scan/AI/crawl commands, and a live profile editor for the independent collectors. It keeps the same authenticated loopback dashboard and never lets AI execute system changes.
+
 ### Windows internals and Microsoft knowledge vault
 
 Sentinel also runs allowlisted read-only registry snapshots and deeper CIM inventory for Windows drivers, PnP devices, disks, Defender and firewall state. The Microsoft knowledge crawler indexes selected Learn pages and Microsoft-owned Windows documentation/sample repositories into a local SQLite vault. It does not collect credentials or kernel memory.
