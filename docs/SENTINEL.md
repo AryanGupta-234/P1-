@@ -99,6 +99,15 @@ Registry and deep inventory controls:
 
 Configuration changes are applied after restarting Sentinel. The dashboard includes live registry/CIM/ETW/knowledge status and a search field backed only by the local knowledge database.
 
+The Sentinel command deck also exposes live, authenticated controls for the independent registry, deep-CIM, Microsoft knowledge and local-AI schedules. Profile changes are validated against a fixed allowlist, written atomically to the local config file and loaded by the worker on its next observer cycle. The UI does not expose sensitive opt-ins such as foreground window titles, Event Log, UI Automation or ETW; those remain explicit CLI choices.
+
+The command deck can queue a bounded system inventory scan, a deep CIM scan, a registry snapshot, a local AI review or a Microsoft knowledge crawl. Requests enter a small in-process queue and are dispatched by the worker; duplicate work is skipped while that collector is already busy. The dashboard reports the latest command state and the resulting events remain in the local event vault.
+
+Ask Sentinel is a user-triggered local Q&A surface. It builds a bounded packet from recent non-sensitive events, retrieves a few relevant documents from the local Microsoft knowledge index, and calls only an already-installed local 3B or 4B Ollama model when at least 3.5 GiB of RAM is available. It returns bounded evidence IDs and validated Microsoft reference links. There is no cloud fallback, automatic model pull, command execution, remediation or privileged action. An unavailable Ollama service is reported as an unavailable local AI request.
+
+The redesigned Titan command deck surfaces system inventory counts, Windows build metadata, bounded fixed-disk capacity/free-space values, Defender booleans, firewall profile status, PnP health counts and the latest triage hypotheses/reviewer uncertainties. It uses the same loopback-only API, token and local SQLite store as the existing dashboard. Live resource charts continue to display sampled CPU and RAM; decorative motion does not generate or simulate telemetry.
+
+
 ## Local Ollama collaboration
 
 Sentinel can run a two-stage analysis against the already-installed local Ollama models:
