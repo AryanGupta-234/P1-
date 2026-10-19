@@ -44,6 +44,14 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "fast_model": None,
     "deep_model": None,
     "dashboard_port": 8765,
+    "registry_enabled": True,
+    "registry_interval_seconds": 180,
+    "deep_inventory_enabled": True,
+    "deep_inventory_interval_seconds": 900,
+    "knowledge_enabled": True,
+    "knowledge_interval_seconds": 21600,
+    "knowledge_learn_top_per_query": 4,
+    "knowledge_github_files_per_repo": 8,
 }
 
 
@@ -91,13 +99,29 @@ def _load_config() -> dict[str, Any]:
         value = config[key]
         if isinstance(value, bool) or not isinstance(value, (int, float)) or not minimum <= value <= maximum:
             raise RuntimeError(f"{key} must be between {minimum} and {maximum}.")
-    if not isinstance(config["analysis_interval_seconds"], int) or not 60 <= config["analysis_interval_seconds"] <= 3600:
+    if not isinstance(config["analysis_interval_seconds"], int) or isinstance(config["analysis_interval_seconds"], bool) or not 60 <= config["analysis_interval_seconds"] <= 3600:
         raise RuntimeError("analysis_interval_seconds must be between 60 and 3600.")
+    for key, minimum, maximum in (
+        ("registry_interval_seconds", 60, 3600),
+        ("deep_inventory_interval_seconds", 300, 7200),
+        ("knowledge_interval_seconds", 3600, 604800),
+    ):
+        value = config[key]
+        if isinstance(value, bool) or not isinstance(value, int) or not minimum <= value <= maximum:
+            raise RuntimeError(f"{key} must be between {minimum} and {maximum}.")
+    for key, minimum, maximum in (
+        ("knowledge_learn_top_per_query", 1, 10),
+        ("knowledge_github_files_per_repo", 1, 20),
+    ):
+        value = config[key]
+        if isinstance(value, bool) or not isinstance(value, int) or not minimum <= value <= maximum:
+            raise RuntimeError(f"{key} must be between {minimum} and {maximum}.")
     if not isinstance(config["ui_tree_apps"], list) or any(not isinstance(item, str) for item in config["ui_tree_apps"]):
         raise RuntimeError("ui_tree_apps must be a list of executable names.")
     for key in (
         "include_network", "include_foreground", "include_process_resources",
         "include_event_logs", "include_etw", "include_window_titles", "ai_enabled",
+        "registry_enabled", "deep_inventory_enabled", "knowledge_enabled",
     ):
         if not isinstance(config[key], bool):
             raise RuntimeError(f"{key} must be a boolean.")
@@ -336,6 +360,9 @@ def _worker() -> None:
             "kernel_etw": config["include_etw"],
             "window_titles": config["include_window_titles"],
             "ui_tree_allowlist_count": len(config["ui_tree_apps"]),
+            "registry": config["registry_enabled"],
+            "deep_windows_inventory": config["deep_inventory_enabled"],
+            "microsoft_knowledge_crawler": config["knowledge_enabled"],
         },
         "limitations": [
             "No custom kernel driver is installed.",
@@ -370,6 +397,39 @@ def _worker() -> None:
     inventory_lock = threading.Lock()
     inventory_thread: threading.Thread | None = None
     next_inventory = time.monotonic() + 5.0
+    registry_provider = None
+    registry_init_error: str | None = None
+    if config["registry_enabled"]:
+        try:
+            from aie.providers.registry import WindowsRegistryProvider
+            registry_provider = WindowsRegistryProvider()
+        except Exception as exc:  # noqa: BLE001 - optional registry collector degrades independently.
+            registry_init_error = type(exc).__name__
+    registry_lock = threading.Lock()
+    registry_thread: threading.Thread | None = None
+    next_registry = time.monotonic() + 4.0
+    deep_inventory_lock = threading.Lock()
+    deep_inventory_thread: threading.Thread | None = None
+    next_deep_inventory = time.monotonic() + 20.0
+    knowledge_lock = threading.Lock()
+    knowledge_thread: threading.Thread | None = None
+    next_knowledge = time.monotonic() + 60.0
+    state["registry"] = {
+        "enabled": bool(config["registry_enabled"]),
+        "status": "degraded" if registry_init_error else ("starting" if config["registry_enabled"] else "disabled"),
+        "error": registry_init_error,
+        "last_snapshot_at": None,
+    }
+    state["deep_inventory"] = {
+        "enabled": bool(config["deep_inventory_enabled"]),
+        "status": "scheduled" if config["deep_inventory_enabled"] else "disabled",
+        "last_snapshot_at": None,
+    }
+    state["knowledge"] = {
+        "enabled": bool(config["knowledge_enabled"]),
+        "status": "scheduled" if config["knowledge_enabled"] else "disabled",
+        "documents": 0,
+    }
 
     def update_inventory() -> None:
         nonlocal inventory_thread
@@ -395,6 +455,138 @@ def _worker() -> None:
         finally:
             inventory_lock.release()
             inventory_thread = None
+
+    def update_registry() -> None:
+        nonlocal registry_thread
+        try:
+            if registry_provider is None:
+                raise RuntimeError(registry_init_error or "registry_provider_unavailable")
+            events = registry_provider.collect_snapshot()
+            added = store.append_many(events)
+            latest = events[-1] if events else None
+            with state_lock:
+                if latest is not None:
+                    data = latest.data
+                    state["registry"] = {
+                        "enabled": True,
+                        "status": "watching",
+                        "last_snapshot_at": latest.timestamp.isoformat(),
+                        "event_type": latest.event_type,
+                        "changed_sections": data.get("changed_sections", []),
+                        "service_count": data.get("service_catalog", {}).get("service_registry_count_sampled", 0),
+                        "driver_service_count": data.get("service_catalog", {}).get("driver_service_count_sampled", 0),
+                    }
+                else:
+                    state["registry"]["status"] = "watching"
+                state["registry"]["last_poll_at"] = _now()
+                state["registry"]["events_added"] = int(state["registry"].get("events_added", 0)) + added
+                state["event_count"] = store.count()
+                _write_state(state)
+        except Exception as exc:  # noqa: BLE001 - registry access errors do not stop other sensors.
+            with state_lock:
+                state["registry"] = {
+                    "enabled": True,
+                    "status": "degraded",
+                    "error": type(exc).__name__,
+                    "last_poll_at": _now(),
+                }
+                _write_state(state)
+        finally:
+            registry_lock.release()
+            registry_thread = None
+
+    def update_deep_inventory() -> None:
+        nonlocal deep_inventory_thread
+        try:
+            from aie.providers.windows_internal import collect_windows_deep_inventory
+            event = collect_windows_deep_inventory()
+            store.append(event)
+            data = event.data
+            with state_lock:
+                state["deep_inventory"] = {
+                    "enabled": True,
+                    "status": "available",
+                    "last_snapshot_at": event.timestamp.isoformat(),
+                    "system_driver_count": data.get("system_driver_count", 0),
+                    "signed_pnp_driver_count": data.get("signed_pnp_driver_count", 0),
+                    "fixed_disk_count": len(data.get("fixed_disks", [])),
+                    "pnp_device_count": data.get("pnp_device_count"),
+                    "defender_status_available": bool(data.get("defender_status")),
+                    "firewall_profile_count": len(data.get("firewall_profiles", [])),
+                }
+                state["event_count"] = store.count()
+                _write_state(state)
+        except Exception as exc:  # noqa: BLE001 - optional CIM inventory is isolated.
+            with state_lock:
+                state["deep_inventory"] = {
+                    "enabled": True,
+                    "status": "degraded",
+                    "error": type(exc).__name__,
+                    "last_attempt_at": _now(),
+                }
+                _write_state(state)
+        finally:
+            deep_inventory_lock.release()
+            deep_inventory_thread = None
+
+    def update_knowledge() -> None:
+        nonlocal knowledge_thread
+        try:
+            from aie.knowledge.crawler import KnowledgeStore, MicrosoftKnowledgeCrawler
+            from aie.contracts import AIEEvent, EntityRef
+            from aie.providers.windows import host_id
+            knowledge_path = data_dir() / "knowledge" / "microsoft-knowledge.sqlite3"
+            knowledge_store = KnowledgeStore(knowledge_path)
+            result = MicrosoftKnowledgeCrawler(knowledge_store).crawl(
+                learn_top_per_query=int(config["knowledge_learn_top_per_query"]),
+                github_files_per_repo=int(config["knowledge_github_files_per_repo"]),
+            )
+            stats = knowledge_store.stats()
+            store.append(AIEEvent(
+                host_id=host_id(),
+                source="aie.knowledge.crawler",
+                event_type="knowledge.crawl_completed",
+                entity=EntityRef(type="knowledge_corpus", name="microsoft_windows"),
+                data={
+                    "learn_queries": result.learn_queries,
+                    "learn_documents": result.learn_documents,
+                    "github_repositories": result.github_repositories,
+                    "github_documents": result.github_documents,
+                    "documents_added": result.documents_added,
+                    "documents_updated": result.documents_updated,
+                    "unchanged": result.unchanged,
+                    "failures": result.failures,
+                    "elapsed_seconds": result.elapsed_seconds,
+                    "total_documents": stats["documents"],
+                    "sources": stats["sources"],
+                    "network_scope": "approved_microsoft_public_sources_only",
+                    "local_content_index": True,
+                },
+                sensitivity="internal",
+                confidence=1.0,
+                evidence_kind="observed",
+            ))
+            with state_lock:
+                state["knowledge"] = {
+                    "enabled": True,
+                    "status": "available" if result.failures == 0 else "partial",
+                    **result.to_dict(),
+                    **stats,
+                }
+                state["event_count"] = store.count()
+                _write_state(state)
+        except Exception as exc:  # noqa: BLE001 - network crawling cannot stop local observation.
+            with state_lock:
+                state["knowledge"] = {
+                    "enabled": True,
+                    "status": "degraded",
+                    "error": type(exc).__name__,
+                    "last_attempt_at": _now(),
+                }
+                _write_state(state)
+        finally:
+            knowledge_lock.release()
+            knowledge_thread = None
 
     def update_ai() -> None:
         nonlocal ai_thread
@@ -434,7 +626,8 @@ def _worker() -> None:
             ai_thread = None
 
     def on_cycle(cycle: dict[str, object]) -> None:
-        nonlocal next_analysis, last_count_update, last_cycle_event, next_inventory, ai_thread, inventory_thread
+        nonlocal next_analysis, last_count_update, last_cycle_event, next_inventory, next_registry, next_deep_inventory, next_knowledge
+        nonlocal ai_thread, inventory_thread, registry_thread, deep_inventory_thread, knowledge_thread
         now_mono = time.monotonic()
         with state_lock:
             state["status"] = "running"
@@ -480,6 +673,36 @@ def _worker() -> None:
                 daemon=True,
             )
             inventory_thread.start()
+
+        if cycle.get("status") == "running" and config["registry_enabled"] and registry_provider is not None:
+            if now_mono >= next_registry and registry_lock.acquire(blocking=False):
+                next_registry = now_mono + int(config["registry_interval_seconds"])
+                registry_thread = threading.Thread(
+                    target=update_registry,
+                    name="aie-sentinel-registry-observer",
+                    daemon=True,
+                )
+                registry_thread.start()
+
+        if cycle.get("status") == "running" and config["deep_inventory_enabled"]:
+            if now_mono >= next_deep_inventory and deep_inventory_lock.acquire(blocking=False):
+                next_deep_inventory = now_mono + int(config["deep_inventory_interval_seconds"])
+                deep_inventory_thread = threading.Thread(
+                    target=update_deep_inventory,
+                    name="aie-sentinel-deep-windows-inventory",
+                    daemon=True,
+                )
+                deep_inventory_thread.start()
+
+        if cycle.get("status") == "running" and config["knowledge_enabled"]:
+            if now_mono >= next_knowledge and knowledge_lock.acquire(blocking=False):
+                next_knowledge = now_mono + int(config["knowledge_interval_seconds"])
+                knowledge_thread = threading.Thread(
+                    target=update_knowledge,
+                    name="aie-sentinel-microsoft-knowledge-crawler",
+                    daemon=True,
+                )
+                knowledge_thread.start()
 
         if (
             config["ai_enabled"]
@@ -535,6 +758,12 @@ def _worker() -> None:
             dashboard_thread.join(timeout=2.0)
         if inventory_thread is not None:
             inventory_thread.join(timeout=2.0)
+        if registry_thread is not None:
+            registry_thread.join(timeout=2.0)
+        if deep_inventory_thread is not None:
+            deep_inventory_thread.join(timeout=2.0)
+        if knowledge_thread is not None:
+            knowledge_thread.join(timeout=2.0)
         with state_lock:
             state["status"] = "stopped"
             state["stopped_at"] = _now()
@@ -646,10 +875,26 @@ def sentinel_configure(
     deep_model: str | None = typer.Option(None, "--deep-model", help="Exact installed 6B review model tag."),
     analysis_interval: int | None = typer.Option(None, "--analysis-interval", min=60, max=3600),
     ui_tree_apps: str | None = typer.Option(None, "--ui-tree-apps", help="Opt in to structural UIA for comma-separated app executable names."),
+    enable_registry: bool = typer.Option(False, "--registry", help="Enable bounded read-only registry change monitoring."),
+    disable_registry: bool = typer.Option(False, "--no-registry", help="Disable registry monitoring."),
+    enable_deep_inventory: bool = typer.Option(False, "--deep-inventory", help="Enable deeper CIM, driver, disk, PnP, Defender and firewall inventory."),
+    disable_deep_inventory: bool = typer.Option(False, "--no-deep-inventory", help="Disable deeper Windows inventory."),
+    enable_knowledge: bool = typer.Option(False, "--knowledge", help="Enable periodic Microsoft documentation crawling."),
+    disable_knowledge: bool = typer.Option(False, "--no-knowledge", help="Disable the Microsoft knowledge crawler."),
+    registry_interval: int | None = typer.Option(None, "--registry-interval", min=60, max=3600),
+    deep_inventory_interval: int | None = typer.Option(None, "--deep-inventory-interval", min=300, max=7200),
+    knowledge_interval: int | None = typer.Option(None, "--knowledge-interval", min=3600, max=604800),
 ) -> None:
     """Configure approved Windows sensors and exact local model tags."""
     _require_windows()
-    if (enable_event_logs and disable_event_logs) or (enable_etw and disable_etw) or (include_titles and disable_titles):
+    if (
+        (enable_event_logs and disable_event_logs)
+        or (enable_etw and disable_etw)
+        or (include_titles and disable_titles)
+        or (enable_registry and disable_registry)
+        or (enable_deep_inventory and disable_deep_inventory)
+        or (enable_knowledge and disable_knowledge)
+    ):
         raise typer.BadParameter("Do not enable and disable the same option in one call.")
     config = dict(DEFAULT_CONFIG) if reset else _load_config()
     if reset:
@@ -674,6 +919,24 @@ def sentinel_configure(
         config["include_window_titles"] = False
     if disable_ai:
         config["ai_enabled"] = False
+    if enable_registry:
+        config["registry_enabled"] = True
+    if disable_registry:
+        config["registry_enabled"] = False
+    if enable_deep_inventory:
+        config["deep_inventory_enabled"] = True
+    if disable_deep_inventory:
+        config["deep_inventory_enabled"] = False
+    if enable_knowledge:
+        config["knowledge_enabled"] = True
+    if disable_knowledge:
+        config["knowledge_enabled"] = False
+    if registry_interval is not None:
+        config["registry_interval_seconds"] = registry_interval
+    if deep_inventory_interval is not None:
+        config["deep_inventory_interval_seconds"] = deep_inventory_interval
+    if knowledge_interval is not None:
+        config["knowledge_interval_seconds"] = knowledge_interval
     if fast_model:
         config["fast_model"] = fast_model.strip()
     if deep_model:
