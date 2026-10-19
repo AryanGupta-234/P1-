@@ -68,7 +68,7 @@ aie sentinel dashboard
 
 Sentinel runs with limited user privileges at sign-in, stores evidence locally and uses already-installed Ollama models only. See [Sentinel Runtime](docs/SENTINEL.md) for its sensor scope, controls, limitations and opt-in features.
 
-Sentinel now opens into an animated Titan command deck with seven workspaces: Cockpit, System, Telemetry, Evidence Vault, AI Lab, Autonomy and Knowledge. It includes deeper Windows inventory, a searchable event/audit vault, local Ollama discovery, six specialist AI modes, local Microsoft knowledge search, advanced collector opt-ins and configurable posture automations. Manual commands and automatic-review dispatches are recorded locally. The interface remains loopback-only and AI never executes operating-system changes.
+Sentinel now opens into an animated Titan command deck with seven workspaces: Cockpit, System, Telemetry, Evidence Vault, AI Lab, Autonomy and Knowledge. It includes deeper Windows inventory, a searchable event/audit vault, local Ollama discovery, six specialist AI modes, local Microsoft knowledge search, advanced collector opt-ins and configurable posture automations. Manual commands and automatic-review dispatches are recorded locally. The interface remains loopback-only and AI never executes operating-system changes. The System workspace drills into bounded process, app, service, scheduled-task and network-interface catalogs; Autonomy offers Deep Watch, Balanced and Low Impact presets alongside custom thresholds.
 
 ### Windows internals and Microsoft knowledge vault
 
