@@ -68,6 +68,18 @@ aie sentinel dashboard
 
 Sentinel runs with limited user privileges at sign-in, stores evidence locally and uses already-installed Ollama models only. See [Sentinel Runtime](docs/SENTINEL.md) for its sensor scope, controls, limitations and opt-in features.
 
+### Windows internals and Microsoft knowledge vault
+
+Sentinel also runs allowlisted read-only registry snapshots and deeper CIM inventory for Windows drivers, PnP devices, disks, Defender and firewall state. The Microsoft knowledge crawler indexes selected Learn pages and Microsoft-owned Windows documentation/sample repositories into a local SQLite vault. It does not collect credentials or kernel memory.
+
+```powershell
+aie knowledge crawl
+aie knowledge status
+aie knowledge search "Windows kernel ETW registry"
+```
+
+Use the dashboard's Windows Internals & Knowledge panel to inspect collector health and search the local documentation vault. See [Sentinel Runtime](docs/SENTINEL.md) for precise collection boundaries.
+
 ## Development workflow
 
 Use only the two long-lived work branches for active development:
