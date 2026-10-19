@@ -19,7 +19,7 @@ from aie.models.ollama import OllamaClient, OllamaError
 from aie.providers.windows import host_id
 
 
-_MODEL_SIZE = re.compile(r"(?:^|[:._-])(\\d+(?:\\.\\d+)?)b(?:$|[:._-])", re.IGNORECASE)
+_MODEL_SIZE = re.compile(r"(?:^|[:._-])(\d+(?:\.\d+)?)b(?:$|[:._-])", re.IGNORECASE)
 _PRIVATE_KEYS = (
     "command", "path", "title", "text", "content", "message", "xml",
     "password", "token", "secret", "clipboard", "email", "url", "address",
@@ -107,7 +107,7 @@ def _parse_json(content: str) -> dict[str, Any]:
         candidate = candidate[3:]
         if candidate.lstrip().lower().startswith("json"):
             candidate = candidate.lstrip()[4:]
-        candidate = candidate.lstrip("\\r\\n")
+        candidate = candidate.lstrip("\r\n")
         if candidate.rstrip().endswith("```"):
             candidate = candidate.rstrip()[:-3].rstrip()
     try:
@@ -122,8 +122,16 @@ def _parse_json(content: str) -> dict[str, Any]:
 class SentinelModelCollaborator:
     """Run fast triage and deep review serially through the local Ollama endpoint."""
 
-    def __init__(self, client: OllamaClient | None = None) -> None:
+    def __init__(
+        self,
+        client: OllamaClient | None = None,
+        *,
+        fast_model: str | None = None,
+        deep_model: str | None = None,
+    ) -> None:
         self.client = client or OllamaClient(default_timeout=150.0)
+        self.fast_model = fast_model
+        self.deep_model = deep_model
 
     def analyze(self, events: list[AIEEvent]) -> AIEEvent | None:
         packet = build_evidence_packet(events)
@@ -135,13 +143,17 @@ class SentinelModelCollaborator:
             raise OllamaError("No installed local Ollama models are available.")
 
         available_memory = float(runtime_profile()["memory_available_gib"])
-        fast_model = _model_for_size(installed, 4)
-        deep_model = _model_for_size(installed, 6)
+        fast_model = self.fast_model if self.fast_model in installed else _model_for_size(installed, 4)
+        deep_model = self.deep_model if self.deep_model in installed else _model_for_size(installed, 6)
 
+        if fast_model is not None and available_memory < 4.5:
+            fast_model = None
         if fast_model is None:
             fast_decision = choose_local_model("routine", installed, available_memory)
             fast_model = fast_decision.selected_model
-        if deep_model is None:
+        if deep_model is not None and available_memory < 8.0:
+            deep_model = None
+        if deep_model is None and available_memory >= 7.5:
             deep_decision = choose_local_model("complex", installed, available_memory)
             deep_model = deep_decision.selected_model
 
@@ -166,6 +178,7 @@ class SentinelModelCollaborator:
             ),
             model=fast_model,
             installed_models=installed,
+            keep_alive=0,
         )
         triage = _parse_json(triage_response.content)
 
@@ -194,6 +207,7 @@ class SentinelModelCollaborator:
                 ),
                 model=review_model,
                 installed_models=installed,
+                keep_alive=0,
             )
             review = _parse_json(review_response.content)
         else:
