@@ -200,3 +200,15 @@ Development ownership and branch rules are defined in [Development Streams](DEVE
 The interface redesign is implemented on `dev`: the original gunmetal/steel palette with lime and orange accents is restored, the accumulated CSS overrides are replaced by one responsive design system, navigation is grouped, and the new `Ctrl+K` command palette exposes existing workspace and job actions. Cockpit resource/evidence/sensor/posture metrics now provide keyboard-accessible drill-downs.
 
 **Still open:** target Windows 11 visual QA, animation performance, keyboard/focus behavior, command-palette dispatch, all eight workspace layouts, and repeated Feature Control enable/disable cycles. Do not mark the desktop-validation item complete until it has been exercised on the target machine.
+
+## Sentinel auto-restart delivery note — 19 October 2026
+
+Implemented on `dev`:
+- Default-enabled `auto_restart_enabled` profile setting and Feature Control toggle.
+- Worker source watcher for installed AIE Python modules with three stable snapshots at 2-second intervals before restarting.
+- Automatic graceful restart when saved continuous/advanced sensor settings require collector reinitialization.
+- Shared restart marker, graceful observer/dashboard shutdown, single-instance mutex release and detached worker relaunch.
+- Global dashboard **RESTART** action and automatic reconnect/reload when the replacement worker PID appears.
+- Restart status/reason surfaced in worker state and Feature Control.
+
+**Still open:** target Windows 11 validation of source-update detection during a real `git pull`, configuration-triggered restart, manual restart, dashboard reconnect/reload, restart failure recovery and no-restart behaviour while the setting is disabled. The watcher does not fetch or install updates.
