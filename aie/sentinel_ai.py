@@ -69,7 +69,7 @@ def build_evidence_packet(events: list[AIEEvent], *, limit: int = 30) -> dict[st
     selected = [
         event for event in events
         if event.sensitivity in {"internal", "public"}
-        and event.event_type not in {"observer.health", "observer.cycle"}
+        and event.event_type not in {"observer.health", "observer.cycle", "sentinel.local_model_assessment"}
     ][:limit]
     records: list[dict[str, Any]] = []
     for event in selected:
