@@ -273,10 +273,12 @@ def _acquire_mutex() -> tuple[Any, Any] | None:
     kernel32.CreateMutexW.restype = wintypes.HANDLE
     kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
     kernel32.ReleaseMutex.argtypes = [wintypes.HANDLE]
+    ctypes.set_last_error(0)
     handle = kernel32.CreateMutexW(None, True, "Local\\AIE.Sentinel.Background")
+    last_error = ctypes.get_last_error()
     if not handle:
-        raise ctypes.WinError(ctypes.get_last_error())
-    if ctypes.get_last_error() == 183:
+        raise ctypes.WinError(last_error)
+    if last_error == 183:
         kernel32.CloseHandle(handle)
         return None
     return kernel32, handle
@@ -365,6 +367,34 @@ def _worker() -> None:
     last_count_update = 0.0
     last_cycle_event = 0.0
     ai_thread: threading.Thread | None = None
+    inventory_lock = threading.Lock()
+    inventory_thread: threading.Thread | None = None
+    next_inventory = time.monotonic() + 5.0
+
+    def update_inventory() -> None:
+        nonlocal inventory_thread
+        try:
+            from aie.sentinel_inventory import collect_system_inventory
+            event = collect_system_inventory()
+            store.append(event)
+            data = event.data
+            with state_lock:
+                state["last_inventory_at"] = event.timestamp.isoformat()
+                state["inventory_summary"] = {
+                    "processes": data.get("process_count", 0),
+                    "applications": data.get("installed_application_count", 0),
+                    "services": data.get("service_count", 0),
+                    "scheduled_tasks": data.get("scheduled_task_count", 0),
+                }
+                state["event_count"] = store.count()
+                _write_state(state)
+        except Exception as exc:  # noqa: BLE001 - inventory refresh cannot stop observation.
+            with state_lock:
+                state["inventory_error"] = type(exc).__name__
+                _write_state(state)
+        finally:
+            inventory_lock.release()
+            inventory_thread = None
 
     def update_ai() -> None:
         nonlocal ai_thread
@@ -442,6 +472,15 @@ def _worker() -> None:
                 last_cycle_event = now_mono
             _write_state(state)
 
+        if now_mono >= next_inventory and inventory_lock.acquire(blocking=False):
+            next_inventory = now_mono + 900.0
+            inventory_thread = threading.Thread(
+                target=update_inventory,
+                name="aie-sentinel-windows-inventory",
+                daemon=True,
+            )
+            inventory_thread.start()
+
         if (
             config["ai_enabled"]
             and cycle.get("status") == "running"
@@ -494,6 +533,8 @@ def _worker() -> None:
             server.server_close()
         if dashboard_thread is not None:
             dashboard_thread.join(timeout=2.0)
+        if inventory_thread is not None:
+            inventory_thread.join(timeout=2.0)
         with state_lock:
             state["status"] = "stopped"
             state["stopped_at"] = _now()
