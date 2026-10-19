@@ -876,6 +876,7 @@ def _worker() -> None:
                 break
 
             started_actions: list[str] = []
+            deferred_actions: list[str] = []
             if action in {"scan_now", "deep_scan_now"} and deep_inventory_lock.acquire(blocking=False):
                 deep_inventory_thread = threading.Thread(
                     target=update_deep_inventory,
@@ -908,20 +909,26 @@ def _worker() -> None:
                 )
                 knowledge_thread.start()
                 started_actions.append("knowledge_crawl")
-            if action == "ai_review_now" and config["ai_enabled"] and ai_lock.acquire(blocking=False):
-                ai_thread = threading.Thread(
-                    target=update_ai,
-                    name="aie-sentinel-ai-review-on-demand",
-                    daemon=True,
-                )
-                ai_thread.start()
-                started_actions.append("ai_review")
+            if action == "ai_review_now" and config["ai_enabled"]:
+                if ai_lock.acquire(blocking=False):
+                    next_analysis = now_mono + int(config["analysis_interval_seconds"])
+                    ai_thread = threading.Thread(
+                        target=update_ai,
+                        name="aie-sentinel-ai-review-on-demand",
+                        daemon=True,
+                    )
+                    ai_thread.start()
+                    started_actions.append("ai_review")
+                else:
+                    next_analysis = min(next_analysis, now_mono + 20.0)
+                    deferred_actions.append("ai_review")
             with state_lock:
                 state["last_command"] = {
                     "action": action,
                     "started": started_actions,
+                    "deferred": deferred_actions,
                     "accepted_at": _now(),
-                    "status": "started" if started_actions else "busy_or_disabled",
+                    "status": "started" if started_actions else "deferred" if deferred_actions else "busy_or_disabled",
                 }
                 _write_state(state)
 
