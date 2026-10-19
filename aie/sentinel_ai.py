@@ -104,8 +104,12 @@ def _request(system: str, user: str, *, task: str, timeout: float) -> ModelReque
 def _parse_json(content: str) -> dict[str, Any]:
     candidate = content.strip()
     if candidate.startswith("```"):
-        candidate = re.sub(r"^\\`\\`\\`(?:json)?\\s*", "", candidate)
-        candidate = re.sub(r"\\s*\\`\\`\\`$", "", candidate)
+        candidate = candidate[3:]
+        if candidate.lstrip().lower().startswith("json"):
+            candidate = candidate.lstrip()[4:]
+        candidate = candidate.lstrip("\\r\\n")
+        if candidate.rstrip().endswith("```"):
+            candidate = candidate.rstrip()[:-3].rstrip()
     try:
         parsed = json.loads(candidate)
     except json.JSONDecodeError:
