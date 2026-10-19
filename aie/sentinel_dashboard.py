@@ -54,6 +54,74 @@ main{min-width:0;width:100%;max-width:1840px;margin:0 auto;padding:0 clamp(15px,
 @media(max-width:900px){.app{grid-template-columns:76px minmax(0,1fr)}.rail{padding:13px 8px}.rail-brand{justify-content:center;padding:5px 0 13px}.brand-lockup{display:none}.nav-btn{justify-content:center;padding:0 6px}.nav-btn .nav-icon{width:auto;flex:0 0 auto;text-align:center}.nav-btn small{display:none}.rail-bottom{writing-mode:vertical-rl;transform:rotate(180deg);padding:8px 0}.hero{grid-template-columns:1fr}.hero-aside{display:none}.grid,.grid.equal,.ai-shell{grid-template-columns:1fr}.interval-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:650px){.app{display:block;padding-bottom:68px}.rail{position:fixed;bottom:0;top:auto;left:0;right:0;width:100%;height:64px;flex-direction:row;justify-content:space-around;gap:2px;padding:5px 4px;border-right:0;border-top:1px solid #3a4940}.rail-brand,.rail-spacer,.rail-state,.rail-bottom{display:none}.nav-btn{width:auto;min-width:0;min-height:51px;flex:1;display:flex;flex-direction:column;justify-content:center;gap:3px;padding:4px;border:0;border-top:2px solid transparent}.nav-btn.active{border:0;border-top:2px solid var(--orange)}.nav-btn .nav-icon{font-size:9px}.nav-btn small{display:block;font-size:7px;letter-spacing:.04em}.topbar{min-height:62px;align-items:flex-start;padding:10px 0;margin-bottom:13px}.top-right{gap:5px}.clock{display:none}.icon-btn{padding:7px;font-size:8px}.system-badge{padding:6px 7px;font-size:8px}.view-title{font-size:16px}main{padding:0 11px 25px}.hero{min-height:0;padding:18px 17px}.hero h1{font-size:36px}.hero-meta{gap:13px}.metric-row{grid-template-columns:repeat(2,minmax(0,1fr))}.metric:last-child{grid-column:span 2}.grid,.grid.equal,.grid.triple,.ai-shell{grid-template-columns:1fr}.form-grid,.system-cards{grid-template-columns:1fr}.section-head{align-items:flex-start;flex-direction:column}.section-title{font-size:19px}.section-head .btn{width:100%}.panel{padding:11px}.event{grid-template-columns:24px minmax(0,1fr)}.event-time{grid-column:2}.driver-row{grid-template-columns:minmax(0,1fr) auto}.driver-row>small{grid-column:1}.boot-card{padding:24px 20px}.boot-emblem{width:64px;height:64px}.action-grid{grid-template-columns:1fr}.interval-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;scroll-behavior:auto!important;transition-duration:.01ms!important}}
+
+/* Readability pass: use native, high-legibility Windows UI fonts and larger copy. */
+:root{--display:"Segoe UI Variable Display","Aptos Display","Segoe UI",Arial,sans-serif;--mono:"Cascadia Code","Consolas",monospace}
+body{font-family:"Segoe UI Variable","Aptos","Inter","Segoe UI",Arial,sans-serif;font-size:14px;line-height:1.62}
+.eyebrow,.section-label{font-size:10px;letter-spacing:.13em}
+.view-title{font-size:22px;letter-spacing:.055em}
+.nav-btn{min-height:50px}
+.nav-btn small{font-size:11px;letter-spacing:.1em}
+.nav-btn .nav-icon{font-size:11px}
+.section-title{font-size:27px;letter-spacing:.035em}
+.section-description{font-size:13px;line-height:1.55;max-width:820px;color:#aab7ad}
+.panel{padding:19px}
+.panel-title{font-size:13px;letter-spacing:.075em}
+.panel-sub{font-size:12px;line-height:1.5;color:#a0ada3}
+.tag{font-size:10px;letter-spacing:.07em;padding:6px 9px}
+.btn,.icon-btn{font-size:11px;letter-spacing:.055em;padding:10px 13px}
+.metric-label{font-size:10px;letter-spacing:.075em}
+.metric-foot{font-size:10px}
+.hero p{font-size:14px;line-height:1.62}
+.hero-kicker{font-size:10px}
+.meta-item small{font-size:9px}.meta-item b{font-size:11px}
+.sensor strong,.alert-row strong{font-size:11px}
+.sensor small,.alert-card p{font-size:10px}
+.event-name{font-size:11px}.event-desc{font-size:10px}.event-time{font-size:9px}
+.event details{font-size:10px}.event pre{font-size:10px}
+.field,.select,.textarea{font-size:13px;padding:11px 12px}
+.info-card small{font-size:9px}.info-card strong{font-size:13px}.info-card p{font-size:11px;line-height:1.5}
+.toggle{padding:13px;gap:12px}
+.toggle input{width:16px;height:16px;flex:0 0 16px;margin-top:3px}
+.toggle strong{font:700 13px/1.3 "Segoe UI Variable","Aptos","Segoe UI",sans-serif;letter-spacing:0}
+.toggle small{font-size:11px;line-height:1.55;color:#a4b2a8}
+.interval-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:9px}
+.interval{padding:11px}
+.interval label{font:700 10px/1.4 "Segoe UI Variable","Aptos","Segoe UI",sans-serif;letter-spacing:.025em;color:#a5b2a8}
+.interval input{font:13px "Cascadia Code",Consolas,monospace;padding:9px}
+.note{font-size:11px;line-height:1.65;color:#a0ada3}
+.action-tile{min-height:88px;padding:13px}
+.action-tile b{font-size:12px;letter-spacing:.04em}
+.action-tile small{font-size:10px;line-height:1.5}
+.empty{font-size:11px;line-height:1.55}
+.ai-answer{font-size:12px;line-height:1.7}
+.ai-reference{font-size:11px}
+.model-card strong{font-size:12px}
+.model-card small{font-size:10px}
+.control-stack{display:grid;gap:12px}
+.control-panel{padding:20px}
+.control-panel .panel-head{margin-bottom:14px}
+.control-master{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:18px;align-items:center;padding:17px;border:1px solid #53634f;border-left:4px solid var(--lime);background:linear-gradient(110deg,#1a241e,#111815)}
+.control-master h3{font:700 19px/1.2 "Segoe UI Variable Display","Aptos Display","Segoe UI",sans-serif;margin:6px 0}
+.control-master p{font-size:12px;line-height:1.6;color:#acb8ae;margin:0;max-width:780px}
+.master-switch{display:flex;align-items:center;gap:12px;min-width:150px;padding:12px 15px;border:1px solid #46564c;background:#0e1511}
+.master-switch input{width:20px;height:20px;accent-color:var(--lime)}
+.master-switch span{font:700 12px "Segoe UI Variable","Aptos","Segoe UI",sans-serif;letter-spacing:.05em}
+.control-copy{color:#a1afa5;font-size:12px;line-height:1.6}
+.control-divider{height:1px;background:#2e3c34;margin:15px 0}
+.control-group-title{font:700 11px "Segoe UI Variable","Aptos","Segoe UI",sans-serif;letter-spacing:.08em;color:var(--orange);text-transform:uppercase;margin:15px 0 8px}
+.control-footnote{border-left:3px solid #6b7c6c;background:#141d18;padding:11px 13px;color:#aab7ad;font-size:11px;line-height:1.6;margin-top:12px}
+.control-footnote.warning{border-left-color:var(--amber)}
+.control-footnote.privacy{border-left-color:var(--orange)}
+.control-status{font:10px "Cascadia Code",Consolas,monospace;color:var(--lime);letter-spacing:.04em}
+.control-savebar{display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap}
+.control-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.model-select-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.model-select-grid label{display:block;font-size:12px;color:#b5c1b6;margin-bottom:6px}
+.feature-command-disabled{opacity:.38!important;filter:saturate(.3);cursor:not-allowed!important;transform:none!important}
+@media(max-width:1100px){.app{grid-template-columns:190px minmax(0,1fr)}.hero{grid-template-columns:1fr}.hero-aside{border-left:0;border-top:1px solid #39463f;padding:16px 0 0}.metric-row{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:760px){.app{display:block}.rail{position:sticky;top:0;height:auto;display:flex;flex-direction:row;overflow:auto;padding:8px;background:#0c1111;border-right:0;border-bottom:1px solid #283330}.rail-brand,.rail-spacer,.rail-state,.rail-bottom{display:none}.nav-btn{width:auto;min-width:max-content;min-height:43px;padding:0 10px}.nav-btn small{font-size:10px}.topbar{padding:12px 0;align-items:flex-start;flex-direction:column}.top-right{justify-content:flex-start}.section-title{font-size:23px}.hero{padding:19px}.metric-row{grid-template-columns:repeat(2,minmax(0,1fr))}.grid,.grid.equal,.ai-shell{grid-template-columns:1fr}.interval-grid,.control-grid,.model-select-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.control-master{grid-template-columns:1fr}.master-switch{width:100%}main{padding:0 12px 28px}}
+@media(max-width:420px){.interval-grid,.control-grid,.model-select-grid{grid-template-columns:1fr}.metric-row{grid-template-columns:1fr 1fr}.panel{padding:14px}}
 </style>
 </head>
 <body>
@@ -79,7 +147,7 @@ main{min-width:0;width:100%;max-width:1840px;margin:0 auto;padding:0 clamp(15px,
   <button class="nav-btn" data-view="telemetry" title="Telemetry"><span class="nav-icon">03</span><small>TELEMETRY</small></button>
   <button class="nav-btn" data-view="evidence" title="Evidence Vault"><span class="nav-icon">04</span><small>EVIDENCE VAULT</small></button>
   <button class="nav-btn" data-view="ai" title="AI Laboratory"><span class="nav-icon">05</span><small>AI LABORATORY</small></button>
-  <button class="nav-btn" data-view="autonomy" title="Automation"><span class="nav-icon">06</span><small>AUTONOMY</small></button>
+  <button class="nav-btn" data-view="autonomy" title="Feature controls and automation"><span class="nav-icon">06</span><small>FEATURE CONTROL</small></button>
   <button class="nav-btn" data-view="knowledge" title="Knowledge"><span class="nav-icon">07</span><small>KNOWLEDGE BASE</small></button>
   <div class="rail-spacer"></div><div class="rail-state" id="railLed"></div><div class="rail-bottom">WINDOWS 11 / LOCAL EXECUTION / USER CONTROL</div>
  </aside>
@@ -207,35 +275,110 @@ main{min-width:0;width:100%;max-width:1840px;margin:0 auto;padding:0 clamp(15px,
   <section class="screen" data-screen="autonomy">
    <div class="section-head"><div><div class="section-label">POLICY / SCHEDULE / AUTOMATION</div><div class="section-title">AUTONOMY CONTROL DECK</div><div class="section-description">Configure background collection and evidence-triggered AI reviews. All automatic intelligence remains advisory.</div></div><span class="tag">LOCAL CONFIG</span></div>
    <div class="grid">
-    <section class="panel"><div class="panel-head"><div><div class="panel-title">AUTOMATED SENSOR PROFILE</div><div class="panel-sub">Saved locally and applied by the Sentinel worker</div></div><span class="tag">PROFILE / v2</span></div>
-     <div class="button-row" style="margin-bottom:12px"><button class="btn" data-preset="deep">⚡ DEEP WATCH</button><button class="btn" data-preset="balanced">◈ BALANCED</button><button class="btn" data-preset="quiet">◌ LOW IMPACT</button></div>
-     <div class="note" id="presetNote">A preset updates the form only. Review and save before the worker applies it.</div>
-     <div class="form-grid">
-      <label class="toggle"><input type="checkbox" id="cfgRegistry"><span><strong>Registry intelligence</strong><small>Read-only key snapshots, autorun-name changes and service metadata</small></span></label>
-      <label class="toggle"><input type="checkbox" id="cfgDeep"><span><strong>Deep Windows inventory</strong><small>Drivers, devices, disks, Defender, firewall, BitLocker and firmware</small></span></label>
-      <label class="toggle"><input type="checkbox" id="cfgKnowledge"><span><strong>Microsoft knowledge crawler</strong><small>Learn and approved Microsoft GitHub sources, indexed locally</small></span></label>
-      <label class="toggle"><input type="checkbox" id="cfgAI"><span><strong>Scheduled local AI review</strong><small>Local 4B triage and optional independent 6B reviewer</small></span></label>
-      <label class="toggle"><input type="checkbox" id="cfgPostureReview"><span><strong>Auto-review posture findings</strong><small>Queue local AI review when a new high/critical system finding appears</small></span></label>
-      <label class="toggle"><input type="checkbox" id="cfgRegistryReview"><span><strong>Review registry changes</strong><small>Queue local AI review after a configuration-change event</small></span></label>
+    <div class="control-stack">
+     <section class="panel control-panel">
+      <div class="panel-head"><div><div class="panel-title">AUTOMATION MASTER CONTROL</div><div class="panel-sub">One switch for scheduled jobs and event-driven AI reviews. Baseline sensors remain governed by their own switches.</div></div><span class="tag" id="automationLive">CHECKING PROFILE</span></div>
+      <div class="control-master">
+       <div><div class="section-label">AUTONOMOUS OPERATION</div><h3>Let Sentinel run its scheduled work</h3><p>When enabled, Sentinel runs the configured inventory, registry, deep Windows, knowledge and local AI schedules. New qualifying posture or registry findings can also queue an AI review when their individual trigger switches are enabled.</p></div>
+       <label class="master-switch"><input type="checkbox" id="cfgAutomation"><span id="automationSwitchText">AUTOMATION ON</span></label>
+      </div>
+      <div class="control-footnote" id="automationExplanation">Turning this master switch off stops periodic jobs and automatic review triggers. The live observer and enabled baseline sensors continue; you can still launch allowed one-time jobs manually.</div>
+     </section>
+
+     <div class="grid equal">
+      <section class="panel control-panel">
+       <div class="panel-head"><div><div class="panel-title">CONTINUOUS WINDOWS SENSORS</div><div class="panel-sub">These collectors observe system metadata during the active Sentinel worker session.</div></div><span class="tag">WORKER RESTART</span></div>
+       <div class="form-grid">
+        <label class="toggle"><input type="checkbox" id="cfgNetwork"><span><strong>Network telemetry</strong><small>Interface counters, TCP connection-establishment timing and DNS timing. No packet payload capture.</small></span></label>
+        <label class="toggle"><input type="checkbox" id="cfgForeground"><span><strong>Foreground application changes</strong><small>Observe foreground application transitions. Window titles are a separate sensitive opt-in below.</small></span></label>
+        <label class="toggle"><input type="checkbox" id="cfgProcessResources"><span><strong>Process resource sampling</strong><small>Bounded CPU, memory, thread and I/O metadata. No command lines or executable paths.</small></span></label>
+       </div>
+       <div class="control-group-title">Sampling cadence</div>
+       <div class="interval-grid">
+        <div class="interval"><label for="cfgSampleInterval">OBSERVER SAMPLE / SECONDS</label><input id="cfgSampleInterval" type="number" min="1" max="30" step="1"></div>
+        <div class="interval"><label for="cfgNetworkInterval">NETWORK SAMPLE / SECONDS</label><input id="cfgNetworkInterval" type="number" min="5" max="300" step="5"></div>
+        <div class="interval"><label for="cfgProcessInterval">PROCESS SAMPLE / SECONDS</label><input id="cfgProcessInterval" type="number" min="2" max="300" step="1"></div>
+       </div>
+       <div class="control-footnote warning">Changes to continuous sensor switches or sampling intervals require a Sentinel worker restart. Save first, then restart Sentinel so the collector pipelines are re-created with the new settings.</div>
+      </section>
+
+      <section class="panel control-panel">
+       <div class="panel-head"><div><div class="panel-title">SCHEDULED INTELLIGENCE JOBS</div><div class="panel-sub">Each job can be enabled independently. The master switch above controls whether any schedule fires.</div></div><span class="tag">LIVE PROFILE</span></div>
+       <div class="form-grid">
+        <label class="toggle"><input type="checkbox" id="cfgInventory"><span><strong>System inventory</strong><small>Processes, installed applications, services, scheduled tasks and network interfaces.</small></span></label>
+        <label class="toggle"><input type="checkbox" id="cfgRegistry"><span><strong>Registry intelligence</strong><small>Read-only allowlisted configuration snapshots and change detection.</small></span></label>
+        <label class="toggle"><input type="checkbox" id="cfgDeep"><span><strong>Deep Windows inventory</strong><small>CIM, firmware, drivers, PnP, disks, BitLocker, Defender and firewall posture.</small></span></label>
+        <label class="toggle"><input type="checkbox" id="cfgKnowledge"><span><strong>Microsoft knowledge crawler</strong><small>Refresh approved Microsoft Learn and Microsoft-owned GitHub references into local SQLite.</small></span></label>
+        <label class="toggle"><input type="checkbox" id="cfgAI"><span><strong>Scheduled local AI review</strong><small>Evidence triage and optional independent reviewer using installed local Ollama models only.</small></span></label>
+       </div>
+       <div class="control-group-title">Run intervals — use minutes or hours, not raw seconds</div>
+       <div class="interval-grid">
+        <div class="interval"><label for="cfgInventoryInterval">SYSTEM INVENTORY / MIN</label><input id="cfgInventoryInterval" type="number" min="5" max="120" step="5"></div>
+        <div class="interval"><label for="cfgRegistryInterval">REGISTRY SNAPSHOT / MIN</label><input id="cfgRegistryInterval" type="number" min="1" max="60" step="1"></div>
+        <div class="interval"><label for="cfgDeepInterval">DEEP INVENTORY / MIN</label><input id="cfgDeepInterval" type="number" min="5" max="120" step="5"></div>
+        <div class="interval"><label for="cfgKnowledgeInterval">KNOWLEDGE REFRESH / HOURS</label><input id="cfgKnowledgeInterval" type="number" min="1" max="168" step="1"></div>
+        <div class="interval"><label for="cfgAIInterval">LOCAL AI REVIEW / MIN</label><input id="cfgAIInterval" type="number" min="1" max="60" step="1"></div>
+       </div>
+       <div class="control-footnote">Schedules are adopted on the next observer cycle. Jobs are bounded and independent; a busy collector is not started twice. Knowledge refresh needs outbound internet access. AI jobs need a compatible installed model and sufficient free RAM.</div>
+      </section>
      </div>
-     <div class="interval-grid">
-      <div class="interval"><label>REGISTRY / SEC</label><input id="cfgRegistryInterval" type="number" min="60" max="3600" step="30"></div>
-      <div class="interval"><label>DEEP SCAN / SEC</label><input id="cfgDeepInterval" type="number" min="300" max="7200" step="60"></div>
-      <div class="interval"><label>KNOWLEDGE / SEC</label><input id="cfgKnowledgeInterval" type="number" min="3600" max="604800" step="1800"></div>
-      <div class="interval"><label>AI REVIEW / SEC</label><input id="cfgAIInterval" type="number" min="60" max="3600" step="30"></div>
-      <div class="interval"><label>LOW DISK / FREE %</label><input id="cfgDiskThreshold" type="number" min="1" max="30"></div>
-      <div class="interval"><label>LOW BATTERY / %</label><input id="cfgBatteryThreshold" type="number" min="5" max="40"></div>
+
+     <div class="grid equal">
+      <section class="panel control-panel">
+       <div class="panel-head"><div><div class="panel-title">AUTOMATIC TRIGGER RULES</div><div class="panel-sub">Event-driven rules can queue local AI analysis. They do not repair or modify Windows.</div></div><span class="tag">ADVISORY ONLY</span></div>
+       <div class="form-grid">
+        <label class="toggle"><input type="checkbox" id="cfgPostureReview"><span><strong>Review new posture findings</strong><small>Queue an AI review when the deep inventory identifies new high or critical posture findings.</small></span></label>
+        <label class="toggle"><input type="checkbox" id="cfgRegistryReview"><span><strong>Review registry configuration changes</strong><small>Queue an AI review when the registry observer reports a configuration-change event.</small></span></label>
+       </div>
+       <div class="control-group-title">Local posture thresholds</div>
+       <div class="interval-grid">
+        <div class="interval"><label for="cfgDiskThreshold">LOW DISK — FREE SPACE / %</label><input id="cfgDiskThreshold" type="number" min="1" max="30" step="1"></div>
+        <div class="interval"><label for="cfgBatteryThreshold">LOW BATTERY / %</label><input id="cfgBatteryThreshold" type="number" min="5" max="40" step="1"></div>
+       </div>
+       <div class="control-footnote">A trigger only runs when Automation Master and Local AI are both enabled. Findings remain evidence-backed suggestions. No automatic remediation is performed.</div>
+      </section>
+
+      <section class="panel control-panel">
+       <div class="panel-head"><div><div class="panel-title">ADVANCED / PRIVACY-SENSITIVE SENSORS</div><div class="panel-sub">Explicit opt-in only. All four controls require a worker restart after saving.</div></div><span class="tag">OPT-IN / RESTART</span></div>
+       <div class="form-grid">
+        <label class="toggle"><input type="checkbox" id="cfgEventLogs"><span><strong>Application and System Event Logs</strong><small>Metadata from allowlisted Application/System channels. No Security log, event message text or XML.</small></span></label>
+        <label class="toggle"><input type="checkbox" id="cfgEtw"><span><strong>ETW process lifecycle</strong><small>Process start/stop metadata only. Availability can depend on ETW permissions and installed dependency.</small></span></label>
+        <label class="toggle"><input type="checkbox" id="cfgWindowTitles"><span><strong>Foreground window titles</strong><small>Potentially sensitive title text. Disabled by default; app names alone remain separate.</small></span></label>
+        <label class="toggle"><input type="checkbox" id="cfgUITree"><span><strong>UI Automation structure</strong><small>Read structural metadata only for the executable allowlist below. No control text, values or passwords.</small></span></label>
+       </div>
+       <div><label class="panel-sub" for="cfgUITreeApps">ALLOWED APPLICATION EXECUTABLES</label><input class="field" id="cfgUITreeApps" maxlength="300" placeholder="notepad.exe, explorer.exe"><div class="note">Use executable names only, separated by commas. Up to 20 names. The UI Automation switch stays off unless at least one allowed executable is supplied.</div></div>
+       <div class="control-footnote privacy">Sentinel does not capture keystrokes, screenshots, clipboard contents, passwords, cookies, form values or window text. Keep these sensors off unless their specific metadata is needed.</div>
+      </section>
      </div>
-     <div class="panel-head" style="margin-top:15px"><div><div class="panel-title">ADVANCED WINDOWS SENSORS</div><div class="panel-sub">Explicit opt-in collection · stored for the next worker restart</div></div><span class="tag">RESTART REQUIRED</span></div>
-     <div class="form-grid">
-      <label class="toggle"><input type="checkbox" id="cfgEventLogs"><span><strong>Application / System Event Log</strong><small>Metadata only; no message text, XML or Security log.</small></span></label>
-      <label class="toggle"><input type="checkbox" id="cfgEtw"><span><strong>ETW process lifecycle</strong><small>Process lifecycle provider only; elevation may be required.</small></span></label>
-      <label class="toggle"><input type="checkbox" id="cfgWindowTitles"><span><strong>Foreground window titles</strong><small>Sensitive data. Disabled unless explicitly enabled here.</small></span></label>
-      <div><label class="panel-sub" for="cfgUITreeApps">UI AUTOMATION APP ALLOWLIST</label><input class="field" id="cfgUITreeApps" maxlength="300" placeholder="notepad.exe, explorer.exe"><div class="note">Structural metadata for named applications only; no control text, values or passwords.</div></div>
+
+     <div class="grid equal">
+      <section class="panel control-panel">
+       <div class="panel-head"><div><div class="panel-title">LOCAL MODEL ROUTING</div><div class="panel-sub">Select already-installed Ollama models. Sentinel never downloads a model automatically.</div></div><button class="btn ghost" id="modelRefresh">↻ DISCOVER MODELS</button></div>
+       <div class="model-select-grid">
+        <div><label for="cfgFastModel">FAST MODEL — ASK / TRIAGE</label><select class="select" id="cfgFastModel"><option value="">Automatic — best compatible installed model</option></select><div class="note">Prefer a compatible 3B/4B model. Ask and scheduled triage need available memory.</div></div>
+        <div><label for="cfgDeepModel">INDEPENDENT REVIEW MODEL</label><select class="select" id="cfgDeepModel"><option value="">Automatic — best compatible reviewer</option></select><div class="note">Prefer a distinct 6B+ model when memory permits. Review can remain unavailable on a constrained machine.</div></div>
+       </div>
+       <div class="control-footnote">Model availability is discovered from the local Ollama endpoint. Choosing a model does not install it or guarantee that it will fit in currently available RAM.</div>
+      </section>
+      <section class="panel control-panel">
+       <div class="panel-head"><div><div class="panel-title">KNOWLEDGE CRAWLER BOUNDS</div><div class="panel-sub">Tune the size of each scheduled public-reference crawl.</div></div><span class="tag">ALLOWLISTED SOURCES</span></div>
+       <div class="interval-grid">
+        <div class="interval"><label for="cfgKnowledgeLearnTop">LEARN RESULTS / QUERY</label><input id="cfgKnowledgeLearnTop" type="number" min="1" max="10" step="1"></div>
+        <div class="interval"><label for="cfgKnowledgeGithubFiles">GITHUB FILES / REPO</label><input id="cfgKnowledgeGithubFiles" type="number" min="1" max="20" step="1"></div>
+       </div>
+       <div class="control-footnote">The crawler only reads approved Microsoft Learn and Microsoft-owned GitHub content. Retrieved pages are indexed in the local knowledge database; local search does not require internet after ingestion.</div>
+      </section>
      </div>
-     <div class="note">Advanced settings are written to the local profile. Stop and start Sentinel after saving to reinitialize these collector pipelines.</div>
-     <div class="button-row"><button class="btn primary" id="saveProfile">SAVE PROFILE</button><button class="btn ghost" id="reloadProfile">RELOAD SAVED</button></div><div class="note" id="profileNote">Live worker controls refresh on an observer cycle. Sensitive collectors remain explicit opt-ins.</div>
-    </section>
+
+     <section class="panel control-panel">
+      <div class="panel-head"><div><div class="panel-title">PROFILE PRESETS & SAVE</div><div class="panel-sub">Presets only change this form. Review the switches before saving.</div></div><span class="tag">LOCAL CONFIGURATION</span></div>
+      <div class="button-row" style="margin-bottom:12px"><button class="btn" data-preset="deep">⚡ DEEP WATCH</button><button class="btn" data-preset="balanced">◈ BALANCED</button><button class="btn" data-preset="quiet">◌ LOW IMPACT</button></div>
+      <div class="control-copy" id="presetNote">Choose a preset, inspect the settings, then save. Sensitive sensors remain off unless you explicitly enable them.</div>
+      <div class="control-divider"></div>
+      <div class="control-savebar"><div class="button-row"><button class="btn primary" id="saveProfile">SAVE ALL SETTINGS</button><button class="btn ghost" id="reloadProfile">RELOAD SAVED SETTINGS</button></div><span class="control-status" id="profileSaveState">NOT SAVED</span></div>
+      <div class="note" id="profileNote">Settings are read from the worker's local profile. Changes requiring collector reinitialization are clearly marked above.</div>
+     </section>
+    </div>
     <section class="panel"><div class="panel-head"><div><div class="panel-title">MISSION DISPATCH</div><div class="panel-sub">Queue on-demand collector and intelligence jobs</div></div><span class="tag">ACTION QUEUE</span></div>
      <div class="action-grid">
       <button class="action-tile" data-command="scan_now"><b>◈ FULL SYSTEM SWEEP</b><small>Inventory + deep CIM + registry snapshot</small></button>
@@ -272,7 +415,7 @@ const $=id=>document.getElementById(id);
 const headers={"X-AIE-Token":token};
 let currentView="cockpit",lastStatus=null,lastInventory=null,lastEvents=[],lastConfig=null,lastAlertKeys=null;
 let cpuHistory=[],memHistory=[],lastInventoryFetch=0,lastEventsFetch=0,lastModelsFetch=0;
-const titles={cockpit:"COMMAND CENTER",system:"SYSTEM DEEP DIVE",telemetry:"TELEMETRY MATRIX",evidence:"EVIDENCE VAULT",ai:"SENTINEL AI LAB",autonomy:"AUTONOMY CONTROL DECK",knowledge:"TECHNICAL CODEX"};
+const titles={cockpit:"COMMAND CENTER",system:"SYSTEM DEEP DIVE",telemetry:"TELEMETRY MATRIX",evidence:"EVIDENCE VAULT",ai:"SENTINEL AI LAB",autonomy:"FEATURES & AUTOMATION",knowledge:"TECHNICAL CODEX"};
 function el(tag,cls,text){const n=document.createElement(tag);if(cls)n.className=cls;if(text!==undefined)n.textContent=text;return n}
 function toast(message,kind=""){const stack=$("toastStack"),box=el("div","toast "+kind,message);stack.append(box);setTimeout(()=>box.remove(),5200)}
 function age(iso){if(!iso)return"—";const t=new Date(iso).getTime();if(!Number.isFinite(t))return"—";const s=Math.max(0,Math.floor((Date.now()-t)/1000));return s<60?s+"s ago":s<3600?Math.floor(s/60)+"m ago":Math.floor(s/3600)+"h ago"}
