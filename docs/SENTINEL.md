@@ -99,7 +99,11 @@ Registry and deep inventory controls:
 
 Configuration changes are applied after restarting Sentinel. The dashboard includes live registry/CIM/ETW/knowledge status and a search field backed only by the local knowledge database.
 
-The Sentinel command deck also exposes live, authenticated controls for the independent registry, deep-CIM, Microsoft knowledge and local-AI schedules. Profile changes are validated against a fixed allowlist, written atomically to the local config file and loaded by the worker on its next observer cycle. The UI does not expose sensitive opt-ins such as foreground window titles, Event Log, UI Automation or ETW; those remain explicit CLI choices.
+The Sentinel Titan dashboard has been rebuilt as a multi-workspace interface with an animated boot sequence and distinct Cockpit, System, Telemetry, Evidence Vault, AI Lab, Autonomy and Knowledge views. Its motion is cosmetic; all charts and status indicators come from local system samples and collector state.
+
+The authenticated Autonomy workspace exposes the independent registry, deep-CIM, Microsoft knowledge and local-AI schedules. It also configures posture/registry-change review triggers, low-free-space and low-battery thresholds, plus advanced Application/System Event Log, ETW process-lifecycle, foreground-title and executable-scoped UI Automation opt-ins. Those advanced observation-provider settings are saved atomically but require a Sentinel worker restart to reinitialize the pipelines. Window titles are explicitly sensitive; the Event Log reader is metadata-only; UI Automation is structural and limited to the named application allowlist.
+
+The AI Lab discovers already-installed Ollama models locally and offers specialist Ask Sentinel modes for general Windows, security, performance, drivers/PnP, storage and network diagnostics. The modes use bounded telemetry plus the local Microsoft reference index and share the scheduled analysis inference lock. A browser-notification opt-in can surface newly detected posture alerts; notification permission is granted by the browser, not by silent background access.
 
 The command deck can queue a bounded system inventory scan, a deep CIM scan, a registry snapshot, a local AI review or a Microsoft knowledge crawl. Requests enter a small in-process queue and are dispatched by the worker; duplicate work is skipped while that collector is already busy. The dashboard reports the latest command state and the resulting events remain in the local event vault.
 
@@ -112,6 +116,8 @@ The deep diagnostics view additionally queries Windows Storage cmdlets for bound
 Ask Sentinel and the scheduled two-stage 4B/6B analysis share one inference lock. A Q&A request receives a busy response rather than launching a competing model while another inference is running, helping avoid unnecessary concurrent model memory use.
 
 A local posture watch evaluates the latest snapshot for explicit signals: Defender antivirus or real-time protection reporting disabled; a firewall profile reporting disabled; physical storage reporting Warning/Unhealthy/Critical; PnP groups reporting Error/Degraded; and BitLocker protection reporting Off (shown as informational because protection may be temporarily suspended). A newly observed high/critical signal queues one local model review; repeated copies of the same finding are deduplicated. A Secure Boot-disabled finding is informational because firmware setup may be intentional. This automation is analysis-only and never changes Windows settings or starts remediation.
+The local automation rules include adjustable low-free-space and low-battery thresholds. New high/critical posture findings can queue a local AI review; optionally, a registry configuration-change event can queue one too. Manual commands and automation triggers are recorded as `sentinel.command_dispatched` and `sentinel.automation_triggered` events in the local event vault. These rules only trigger diagnostics and AI review; they do not perform repair actions.
+
 
 
 
