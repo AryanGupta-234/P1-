@@ -193,3 +193,20 @@ The operator experience now includes:
 The palette dispatches through the existing dashboard command handlers and authenticated loopback API; it introduces no new operating-system execution capability or remote UI dependency. Feature switches, task scheduling and AI settings retain their existing approval and privacy boundaries.
 
 Validation boundary: source-level navigation, DOM-ID, command-target and CSS-balance checks were inspected after the change. Browser/WebView rendering, animation smoothness, keyboard operation and full interaction checks still require validation on the target Windows 11 desktop.
+
+## Sentinel agent auto-restart and dashboard reconnection — 19 October 2026
+
+Sentinel has a default-enabled, user-configurable `auto_restart_enabled` setting. The worker hashes the installed `aie/**/*.py` source tree (and a project `pyproject.toml`, when present) on a 2-second interval. A detected change must produce three consecutive identical source snapshots before restart is scheduled; transient or partially replaced files are ignored. The watcher never downloads or installs updates: it reacts only after an update is already present on disk (for example, after a user-controlled repository pull or package update).
+
+A saved Feature Control change to a continuous or explicitly opt-in sensor setting also schedules an automatic restart when auto-restart is enabled. Scheduled job switches and other settings that are read live continue to take effect without restarting. When auto-restart is disabled, a sensor change is still saved and marked as restart-required; the operator can use the dashboard's manual **RESTART** action.
+
+Restart handoff:
+- The worker records the reason and sets a restart marker.
+- The observer is asked to stop and the dashboard server shuts down cleanly.
+- The worker writes restart state, releases the named single-instance mutex, removes its stop/restart markers and launches a detached replacement process.
+- The new worker reads the persisted profile and reinitializes its collector graph. Existing task history continues to be preserved across worker starts.
+- The dashboard polls worker status, detects a PID change and reloads itself from the replacement worker so updated embedded HTML/JavaScript is loaded.
+
+The Feature Control page exposes the auto-restart switch and watcher status; the global header exposes a manual restart action. Manual Stop removes a pending restart marker so a stop request is not unintentionally converted into a restart.
+
+Limits: this is process self-restart after local source/config updates, not an automatic `git pull`, package installation, dependency upgrade or OS reboot. A failed replacement launch is recorded as `restart_failed` in the local worker state and requires operator intervention. Target Windows 11 behaviour still needs desktop validation.
