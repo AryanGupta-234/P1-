@@ -248,6 +248,8 @@ body:after{content:"";position:fixed;inset:0;z-index:0;pointer-events:none;opaci
         <div class="metric-tile"><small>BITLOCKER VOLUMES</small><strong id="metricBitlocker">—</strong></div>
         <div class="metric-tile"><small>BATTERY</small><strong id="metricBattery">—</strong></div>
         <div class="metric-tile"><small>HYPERVISOR</small><strong id="metricHypervisor">—</strong></div>
+        <div class="metric-tile"><small>SECURE BOOT</small><strong id="metricSecureBoot">—</strong></div>
+        <div class="metric-tile"><small>BIOS FIRMWARE</small><strong id="metricBIOS">—</strong></div>
       </div>
       <div class="deep-columns">
         <div><div class="deep-subhead">FIXED STORAGE</div><div id="diskList" class="disk-list"><div class="panel-sub">Waiting for a CIM snapshot.</div></div>
@@ -341,6 +343,9 @@ function renderDeepDiagnostics(status){
  $("metricBitlocker").textContent=deep.last_snapshot_at?(deep.bitlocker_volume_count??encryption.length):"—";
  $("metricBattery").textContent=!deep.last_snapshot_at?"—":batteries.length?(batteries[0].charge_percent==null?"Present":batteries[0].charge_percent+"%"):"N/A";
  $("metricHypervisor").textContent=deep.hypervisor_present===true?"DETECTED":deep.hypervisor_present===false?"NO":"—";
+ const secureBoot=deep.secure_boot||{},bios=deep.bios||{};
+ $("metricSecureBoot").textContent=secureBoot.supported===true?(secureBoot.enabled===true?"ENABLED":secureBoot.enabled===false?"DISABLED":"UNKNOWN"):"N/A";
+ $("metricBIOS").textContent=bios.SMBIOSBIOSVersion||bios.Manufacturer||"—";
  const physicalTarget=$("physicalHealthList");physicalTarget.replaceChildren();
  if(!physical.length)physicalTarget.append(create("div","panel-sub","Physical disk health is not exposed by this Windows configuration."));
  for(const disk of physical){
@@ -371,6 +376,7 @@ function renderDeepDiagnostics(status){
  }
  const security=$("securityList");security.replaceChildren();
  const securityItems=[
+  ["UEFI Secure Boot",deep.secure_boot?.supported===true?deep.secure_boot.enabled:null],
   ["Microsoft Defender",defender.AntivirusEnabled],
   ["Real-time protection",defender.RealTimeProtectionEnabled],
   ["Behavior monitoring",defender.BehaviorMonitorEnabled],
