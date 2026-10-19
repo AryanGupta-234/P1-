@@ -194,3 +194,9 @@ Development ownership and branch rules are defined in [Development Streams](DEVE
 | Noisy metrics cause false diagnosis | Repeated samples, multiple signals and evaluation | OPEN |
 | Memory retains sensitive data | Local-first, sensitivity labels, TTL and user deletion | CONTROLLED |
 | Agent performs unbounded actions | Capability scopes, budgets, kill switch, audit and verification | CONTROLLED |
+
+## Sentinel Prime UI delivery note — 19 October 2026
+
+The interface redesign is implemented on `dev`: the earlier navy/cyan/coral palette is retained, the accumulated CSS overrides are replaced by one responsive design system, navigation is grouped, and the new `Ctrl+K` command palette exposes existing workspace and job actions. Cockpit resource/evidence/sensor/posture metrics now provide keyboard-accessible drill-downs.
+
+**Still open:** target Windows 11 visual QA, animation performance, keyboard/focus behavior, command-palette dispatch, all eight workspace layouts, and repeated Feature Control enable/disable cycles. Do not mark the desktop-validation item complete until it has been exercised on the target machine.
