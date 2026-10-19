@@ -54,6 +54,8 @@ Development ownership and branch rules are defined in [Development Streams](DEVE
 - [x] Titan dashboard includes an animated boot sequence and Cockpit/System/Telemetry/Evidence/AI/Autonomy/Knowledge workspaces.
 - [x] Dashboard includes filterable signed-PnP inventory, storage/BitLocker/battery/firmware details, local Ollama discovery and six local AI specialist modes.
 - [x] Autonomy profile includes adjustable low-disk/low-battery thresholds, configurable registry/posture review triggers, advanced explicit Event Log/ETW/title/UIA settings and a local command/automation audit timeline.
+- [x] Searchable local catalogs for bounded process, installed-application, service, scheduled-task and network-interface records.
+- [x] One-click Deep Watch, Balanced and Low Impact autonomy presets with save-before-commit behavior.
 - [x] Local Microsoft Learn and Microsoft-owned GitHub Markdown crawler with bounded sources, local SQLite indexing and dashboard search.
 - [ ] Validate registry ACLs, CIM/Defender/PnP visibility, Learn crawler compatibility and inventory accuracy on the target Windows desktop.
 
