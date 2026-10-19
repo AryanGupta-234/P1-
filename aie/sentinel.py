@@ -352,7 +352,7 @@ def _worker() -> None:
     token = _ensure_token()
     server = None
     dashboard_thread = None
-    command_queue: queue.Queue[str] = queue.Queue(maxsize=12)
+    command_queue: queue.Queue[tuple[str, str]] = queue.Queue(maxsize=12)
     started = _now()
     state: dict[str, Any] = {
         "status": "starting",
@@ -517,7 +517,7 @@ def _worker() -> None:
                 and config["auto_review_on_registry_changes"]
             ):
                 try:
-                    command_queue.put_nowait("ai_review_now")
+                    command_queue.put_nowait(("ai_review_now", "registry configuration changed"))
                 except queue.Full:
                     pass
             with state_lock:
@@ -806,7 +806,7 @@ def _worker() -> None:
                 and config["auto_review_on_posture_alerts"]
             ):
                 try:
-                    command_queue.put_nowait("ai_review_now")
+                    command_queue.put_nowait(("ai_review_now", "new high or critical posture finding"))
                     from aie.contracts import AIEEvent, EntityRef
                     from aie.providers.windows import host_id
                     store.append(AIEEvent(
@@ -1084,7 +1084,8 @@ def _worker() -> None:
 
         while True:
             try:
-                action = command_queue.get_nowait()
+                queued_action = command_queue.get_nowait()
+                action, task_trigger = queued_action
             except queue.Empty:
                 break
 
@@ -1092,28 +1093,28 @@ def _worker() -> None:
             deferred_actions: list[str] = []
             if action in {"scan_now", "deep_scan_now"} and config["deep_inventory_enabled"] and deep_inventory_lock.acquire(blocking=False):
                 deep_inventory_thread = managed_task_thread(
-                    "deep_inventory", "manual command", update_deep_inventory,
+                    "deep_inventory", task_trigger, update_deep_inventory,
                     "aie-sentinel-deep-scan-on-demand",
                 )
                 deep_inventory_thread.start()
                 started_actions.append("deep_inventory")
             if action == "scan_now" and config["inventory_enabled"] and inventory_lock.acquire(blocking=False):
                 inventory_thread = managed_task_thread(
-                    "inventory", "manual command", update_inventory,
+                    "inventory", task_trigger, update_inventory,
                     "aie-sentinel-inventory-on-demand",
                 )
                 inventory_thread.start()
                 started_actions.append("system_inventory")
             if action in {"scan_now", "registry_scan_now"} and config["registry_enabled"] and registry_lock.acquire(blocking=False):
                 registry_thread = managed_task_thread(
-                    "registry", "manual command", update_registry,
+                    "registry", task_trigger, update_registry,
                     "aie-sentinel-registry-scan-on-demand",
                 )
                 registry_thread.start()
                 started_actions.append("registry")
             if action == "knowledge_crawl_now" and config["knowledge_enabled"] and knowledge_lock.acquire(blocking=False):
                 knowledge_thread = managed_task_thread(
-                    "knowledge", "manual command", update_knowledge,
+                    "knowledge", task_trigger, update_knowledge,
                     "aie-sentinel-knowledge-crawl-on-demand",
                 )
                 knowledge_thread.start()
@@ -1122,7 +1123,7 @@ def _worker() -> None:
                 if ai_lock.acquire(blocking=False):
                     next_analysis = now_mono + int(config["analysis_interval_seconds"])
                     ai_thread = managed_task_thread(
-                        "ai_review", "manual command", update_ai,
+                        "ai_review", task_trigger, update_ai,
                         "aie-sentinel-ai-review-on-demand",
                     )
                     ai_thread.start()
@@ -1136,6 +1137,7 @@ def _worker() -> None:
                     "started": started_actions,
                     "deferred": deferred_actions,
                     "accepted_at": _now(),
+                    "trigger": task_trigger,
                     "status": "started" if started_actions else "deferred" if deferred_actions else "busy_or_disabled",
                 }
                 history = state.setdefault("command_history", [])
