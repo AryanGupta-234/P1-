@@ -398,7 +398,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 </div>
 <div class="app" id="app">
  <aside class="rail">
-  <div class="rail-brand"><div class="brand-mini"></div><div class="brand-lockup"><strong>AIE / 01</strong><small>SENTINEL FIELD SYSTEM</small></div></div>
+  <div class="rail-brand"><div class="brand-mini"></div><div class="brand-lockup"><strong>AIE / SENTINEL</strong><small>PRIME SYSTEMS CONSOLE</small></div></div>
   <button class="nav-btn active" data-view="cockpit" title="Command Center"><span class="nav-icon">01</span><small>COMMAND</small></button>
   <button class="nav-btn" data-view="system" title="System Intelligence"><span class="nav-icon">02</span><small>SYSTEM INTELLIGENCE</small></button>
   <button class="nav-btn" data-view="telemetry" title="Telemetry"><span class="nav-icon">03</span><small>TELEMETRY</small></button>
@@ -411,7 +411,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
  </aside>
  <main>
   <header class="topbar">
-   <div class="top-left"><div class="top-mark"></div><div><div class="eyebrow">AIE / SENTINEL FIELD SYSTEM — WINDOWS NODE / 01</div><div class="view-title" id="viewTitle">COMMAND CENTER</div></div></div>
+   <div class="top-left"><div class="top-mark"></div><div><div class="eyebrow">AIE / SENTINEL PRIME — WINDOWS NODE / 01</div><div class="view-title" id="viewTitle">COMMAND CENTER</div></div></div>
    <div class="top-right"><span class="clock" id="clock">--:--:--</span><span class="system-badge" id="liveBadge"><i class="led"></i>CONNECTING</span><button class="icon-btn" id="notifyBtn">ALERTS</button><button class="icon-btn" id="refreshBtn">SYNC / F5</button><button class="icon-btn" id="stopBtn" style="border-color:#713e37;color:#ffaaa0">STOP WORKER</button></div>
   </header>
 
@@ -689,7 +689,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
    </div>
   </section>
 
-  <div class="note" style="padding:22px 2px 0;text-align:center;letter-spacing:.12em">AIE / SENTINEL FIELD SYSTEM · LOCAL OBSERVATION · EVIDENCE FIRST · USER-CONTROLLED EXECUTION</div>
+  <div class="note" style="padding:22px 2px 0;text-align:center;letter-spacing:.12em">SENTINEL PRIME · LOCAL OBSERVATION · EVIDENCE FIRST · USER-CONTROLLED EXECUTION</div>
  </main>
 </div>
 <div class="toast-stack" id="toastStack"></div>
