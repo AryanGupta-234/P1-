@@ -573,11 +573,23 @@ def _worker() -> None:
                     "battery_status": item.get("BatteryStatus"),
                     "health_status": str(item.get("Status") or "Unknown")[:24],
                     "estimated_runtime_minutes": (
-                        round(float(item.get("EstimatedRunTime")) / 60, 0)
+                        round(float(item.get("EstimatedRunTime")), 0)
                         if isinstance(item.get("EstimatedRunTime"), (int, float))
                         and not isinstance(item.get("EstimatedRunTime"), bool)
                         and item.get("EstimatedRunTime") >= 0
                         and item.get("EstimatedRunTime") < 2**31
+                        else None
+                    ),
+                    "design_capacity_mwh": item.get("DesignCapacity"),
+                    "full_charge_capacity_mwh": item.get("FullChargeCapacity"),
+                    "capacity_health_percent": (
+                        round(float(item.get("FullChargeCapacity")) / float(item.get("DesignCapacity")) * 100, 1)
+                        if isinstance(item.get("DesignCapacity"), (int, float))
+                        and isinstance(item.get("FullChargeCapacity"), (int, float))
+                        and not isinstance(item.get("DesignCapacity"), bool)
+                        and not isinstance(item.get("FullChargeCapacity"), bool)
+                        and item.get("DesignCapacity") > 0
+                        and item.get("FullChargeCapacity") > 0
                         else None
                     ),
                 }
