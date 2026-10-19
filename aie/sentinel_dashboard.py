@@ -424,7 +424,7 @@ function setMeter(id,value){const node=$(id);if(node)node.style.width=Math.max(0
 function statusTone(value){const s=String(value||"unknown").toLowerCase();return ["degraded","partial","warning","disabled","unavailable","critical"].includes(s)?"degraded":s==="available"||s==="watching"||s==="running"||s==="ok"?"":"optional"}
 async function request(path,options={}){const response=await fetch(path,{...options,headers:{...headers,...(options.headers||{})},cache:"no-store"});let payload={};try{payload=await response.json()}catch{}if(!response.ok)throw new Error(payload.error||("Local API "+response.status));return payload}
 function post(path,data){return request(path,{method:"POST",headers:{"Content-Type":"application/json","Origin":location.origin},body:JSON.stringify(data)})}
-function switchView(view){if(!titles[view])return;currentView=view;document.querySelectorAll("[data-screen]").forEach(n=>n.classList.toggle("active",n.dataset.screen===view));document.querySelectorAll(".nav-btn").forEach(n=>n.classList.toggle("active",n.dataset.view===view));$("viewTitle").textContent=titles[view];if(view==="ai")loadModels();if(view==="autonomy")loadProfile();if(view==="system"){loadInventory(true);loadCatalog("processes");}if(view==="evidence")loadEvents(true);if(view==="knowledge")renderKnowledgeStats()}
+function switchView(view){if(!titles[view])return;currentView=view;document.querySelectorAll("[data-screen]").forEach(n=>n.classList.toggle("active",n.dataset.screen===view));document.querySelectorAll(".nav-btn").forEach(n=>n.classList.toggle("active",n.dataset.view===view));$("viewTitle").textContent=titles[view];if(view==="ai")loadModels();if(view==="autonomy"){loadProfile();loadModels()}if(view==="system"){loadInventory(true);loadCatalog("processes");}if(view==="evidence")loadEvents(true);if(view==="knowledge")renderKnowledgeStats()}
 document.querySelectorAll(".nav-btn").forEach(n=>n.addEventListener("click",()=>switchView(n.dataset.view)));
 document.querySelectorAll("[data-view-jump]").forEach(n=>n.addEventListener("click",()=>switchView(n.dataset.viewJump)));
 function drawCanvas(id,dataA,dataB){const canvas=$(id);if(!canvas)return;const rect=canvas.getBoundingClientRect();const w=Math.max(320,Math.round(rect.width*devicePixelRatio)),h=Math.max(150,Math.round(rect.height*devicePixelRatio));if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h}const ctx=canvas.getContext("2d");ctx.clearRect(0,0,w,h);const pad=18*devicePixelRatio;ctx.strokeStyle="#303c35";ctx.lineWidth=devicePixelRatio;for(let i=0;i<=4;i++){const y=pad+(h-2*pad)*i/4;ctx.beginPath();ctx.moveTo(pad,y);ctx.lineTo(w-pad,y);ctx.stroke()}function line(values,color){if(values.length<2)return;ctx.beginPath();ctx.strokeStyle=color;ctx.lineWidth=2*devicePixelRatio;ctx.shadowBlur=8*devicePixelRatio;ctx.shadowColor=color;values.forEach((value,index)=>{const x=pad+(w-2*pad)*index/Math.max(1,values.length-1);const y=h-pad-(h-2*pad)*Math.max(0,Math.min(100,Number(value)||0))/100;if(index===0)ctx.moveTo(x,y);else ctx.lineTo(x,y)});ctx.stroke();ctx.shadowBlur=0}line(dataA,"#b8e65b");line(dataB,"#ff6b38")}
@@ -443,7 +443,7 @@ function renderStatus(s){
  $("eventValue").textContent=Number(s.event_count||0).toLocaleString();$("sensorValue").textContent=providers.length?((providers.length-bad)+"/"+providers.length):"—";$("sensorSub").textContent=bad?bad+" degraded":"Provider heartbeat";
  $("alertValue").textContent=deep.last_snapshot_at?String(alerts.length):"—";$("alertSub").textContent=deep.last_snapshot_at?(alerts.filter(a=>a.severity==="critical").length+" critical · "+alerts.filter(a=>a.severity==="high").length+" high"):"No deep snapshot";
  setMeter("cpuMeter",cpu);setMeter("ramMeter",memPct);setMeter("eventMeter",Math.min(100,Number(s.event_count||0)/250));setMeter("sensorMeter",providers.length?(providers.length-bad)/providers.length*100:0);setMeter("alertMeter",Math.min(100,alerts.length*12));
- addSample(s);renderSensors(s);renderProviderDetails(s);renderWatchers(s);renderRuntime(s);renderAlerts(alerts);renderAI(s.ai||{});renderCommand(s.last_command||null);renderKnowledgeStats();
+ addSample(s);renderSensors(s);renderProviderDetails(s);renderWatchers(s);renderRuntime(s);renderAlerts(alerts);renderAI(s.ai||{});renderCommand(s.last_command||null);renderKnowledgeStats();renderAutomationState(s);
  $("telemetryFreshness").textContent="HEARTBEAT "+age(s.heartbeat_at).toUpperCase();
  if(currentView==="autonomy")renderAudit(lastEvents);
 }
@@ -512,31 +512,105 @@ function renderWatchers(s){const target=$("internalWatchers");target.replaceChil
  ];for(const [name,item] of rows){const row=el("div","command-line"),left=el("strong",null,name),right=el("small",null,item?.status||item?.state||(item?"available":"not configured"));row.append(left,right);target.append(row)}}
 function renderRuntime(s){const target=$("runtimeProfile");target.replaceChildren();const hw=s.hardware||{};const entries=[["CPU LOGICAL COUNT",hw.cpu_count],["TOTAL MEMORY",hw.memory_total_gib==null?null:hw.memory_total_gib+" GiB"],["AVAILABLE MEMORY",hw.memory_available_gib==null?null:hw.memory_available_gib+" GiB"],["WORKER THREAD",s.pid]];for(const [name,value] of entries)target.append(infoCard(name,value,"Locally reported runtime profile"))}
 function renderKnowledgeStats(){const k=lastStatus?.knowledge||{};$("knowledgeState").textContent=String(k.status||"NOT STARTED").toUpperCase();const target=$("knowledgeStats");if(!target)return;target.replaceChildren(infoCard("LOCAL DOCUMENTS",k.documents??"—","Indexed SQLite corpus"),infoCard("ADDED / UPDATED",(k.documents_added??"—")+" / "+(k.documents_updated??"—"),"Last crawler pass"),infoCard("SOURCE GROUPS",Object.keys(k.sources||{}).length,"Allowlisted Microsoft sources"),infoCard("LAST CRAWL",age(k.last_fetched_at),"Local status"))}
-async function loadProfile(){try{const r=await request("/api/config");lastConfig=r.profile||{};renderProfile(lastConfig)}catch(e){$("profileNote").textContent="Profile load failed: "+e.message}}
-function renderProfile(p){$("cfgRegistry").checked=p.registry_enabled===true;$("cfgDeep").checked=p.deep_inventory_enabled===true;$("cfgKnowledge").checked=p.knowledge_enabled===true;$("cfgAI").checked=p.ai_enabled===true;$("cfgPostureReview").checked=p.auto_review_on_posture_alerts===true;$("cfgRegistryReview").checked=p.auto_review_on_registry_changes===true;$("cfgRegistryInterval").value=p.registry_interval_seconds??180;$("cfgDeepInterval").value=p.deep_inventory_interval_seconds??900;$("cfgKnowledgeInterval").value=p.knowledge_interval_seconds??21600;$("cfgAIInterval").value=p.analysis_interval_seconds??300;$("cfgDiskThreshold").value=p.low_disk_alert_percent??10;$("cfgBatteryThreshold").value=p.low_battery_alert_percent??15;$("cfgEventLogs").checked=p.include_event_logs===true;$("cfgEtw").checked=p.include_etw===true;$("cfgWindowTitles").checked=p.include_window_titles===true;$("cfgUITreeApps").value=Array.isArray(p.ui_tree_apps)?p.ui_tree_apps.join(", "):""}
+async function loadProfile(){try{const r=await request("/api/config");lastConfig=r.profile||{};renderProfile(lastConfig)}catch(e){$("profileNote").textContent="Profile load failed: "+e.message;$("profileSaveState").textContent="PROFILE UNAVAILABLE"}}
+function renderProfile(p){
+ const check=(id,key)=>$(id).checked=p[key]===true;
+ const value=(id,v)=>$(id).value=v;
+ check("cfgAutomation","automation_enabled");check("cfgInventory","inventory_enabled");
+ check("cfgNetwork","include_network");check("cfgForeground","include_foreground");check("cfgProcessResources","include_process_resources");
+ check("cfgRegistry","registry_enabled");check("cfgDeep","deep_inventory_enabled");check("cfgKnowledge","knowledge_enabled");check("cfgAI","ai_enabled");
+ check("cfgPostureReview","auto_review_on_posture_alerts");check("cfgRegistryReview","auto_review_on_registry_changes");
+ check("cfgEventLogs","include_event_logs");check("cfgEtw","include_etw");check("cfgWindowTitles","include_window_titles");check("cfgUITree","include_ui_tree");
+ value("cfgSampleInterval",p.sample_interval_seconds??2);value("cfgNetworkInterval",p.network_interval_seconds??30);value("cfgProcessInterval",p.process_resource_interval_seconds??15);
+ value("cfgInventoryInterval",Math.round((p.inventory_interval_seconds??900)/60));
+ value("cfgRegistryInterval",Math.round((p.registry_interval_seconds??180)/60));
+ value("cfgDeepInterval",Math.round((p.deep_inventory_interval_seconds??900)/60));
+ value("cfgKnowledgeInterval",Math.round((p.knowledge_interval_seconds??21600)/3600));
+ value("cfgAIInterval",Math.round((p.analysis_interval_seconds??300)/60));
+ value("cfgDiskThreshold",p.low_disk_alert_percent??10);value("cfgBatteryThreshold",p.low_battery_alert_percent??15);
+ value("cfgKnowledgeLearnTop",p.knowledge_learn_top_per_query??4);value("cfgKnowledgeGithubFiles",p.knowledge_github_files_per_repo??8);
+ value("cfgUITreeApps",Array.isArray(p.ui_tree_apps)?p.ui_tree_apps.join(", "):"");
+ value("cfgFastModel",p.fast_model||"");value("cfgDeepModel",p.deep_model||"");
+ $("profileSaveState").textContent="PROFILE LOADED";
+ updateCommandAvailability();renderAutomationState(lastStatus||{});
+}
 function applyPreset(name){
  const presets={
-  deep:{registry:true,deep:true,knowledge:true,ai:true,posture:true,registryReview:true,registrySec:90,deepSec:300,knowledgeSec:3600,aiSec:120,disk:10,battery:15},
-  balanced:{registry:true,deep:true,knowledge:true,ai:true,posture:true,registryReview:false,registrySec:180,deepSec:900,knowledgeSec:21600,aiSec:300,disk:10,battery:15},
-  quiet:{registry:true,deep:true,knowledge:true,ai:true,posture:true,registryReview:false,registrySec:900,deepSec:3600,knowledgeSec:86400,aiSec:900,disk:8,battery:12}
+  deep:{inventory:5,registry:2,deep:5,knowledge:1,ai:2,posture:true,registryReview:true,disk:10,battery:15},
+  balanced:{inventory:15,registry:3,deep:15,knowledge:6,ai:5,posture:true,registryReview:false,disk:10,battery:15},
+  quiet:{inventory:30,registry:15,deep:60,knowledge:24,ai:15,posture:true,registryReview:false,disk:8,battery:12}
  };
  const p=presets[name];if(!p)return;
- $("cfgRegistry").checked=p.registry;$("cfgDeep").checked=p.deep;$("cfgKnowledge").checked=p.knowledge;$("cfgAI").checked=p.ai;
+ $("cfgAutomation").checked=true;$("cfgInventory").checked=true;
+ $("cfgNetwork").checked=true;$("cfgForeground").checked=true;$("cfgProcessResources").checked=true;
+ $("cfgRegistry").checked=true;$("cfgDeep").checked=true;$("cfgKnowledge").checked=true;$("cfgAI").checked=true;
  $("cfgPostureReview").checked=p.posture;$("cfgRegistryReview").checked=p.registryReview;
- $("cfgRegistryInterval").value=p.registrySec;$("cfgDeepInterval").value=p.deepSec;$("cfgKnowledgeInterval").value=p.knowledgeSec;$("cfgAIInterval").value=p.aiSec;
+ $("cfgInventoryInterval").value=p.inventory;$("cfgRegistryInterval").value=p.registry;$("cfgDeepInterval").value=p.deep;
+ $("cfgKnowledgeInterval").value=p.knowledge;$("cfgAIInterval").value=p.ai;
+ $("cfgSampleInterval").value=2;$("cfgNetworkInterval").value=30;$("cfgProcessInterval").value=15;
  $("cfgDiskThreshold").value=p.disk;$("cfgBatteryThreshold").value=p.battery;
- $("presetNote").textContent=name.toUpperCase()+" PRESET LOADED · Review the thresholds and press SAVE PROFILE to commit.";
- toast(name.toUpperCase()+" preset loaded. Save to apply.");
+ $("presetNote").textContent=name.toUpperCase()+" preset loaded. Scheduled jobs and baseline sensors are enabled; high-sensitivity sensors stay exactly as you set them. Save to apply.";
+ renderAutomationState(lastStatus||{});updateCommandAvailability();
+ toast(name.toUpperCase()+" preset loaded. Save settings to apply.");
 }
-async function saveProfile(){const integer=id=>Number.parseInt($(id).value,10);const values={
- registry_enabled:$("cfgRegistry").checked,deep_inventory_enabled:$("cfgDeep").checked,knowledge_enabled:$("cfgKnowledge").checked,ai_enabled:$("cfgAI").checked,
- auto_review_on_posture_alerts:$("cfgPostureReview").checked,auto_review_on_registry_changes:$("cfgRegistryReview").checked,
- registry_interval_seconds:integer("cfgRegistryInterval"),deep_inventory_interval_seconds:integer("cfgDeepInterval"),knowledge_interval_seconds:integer("cfgKnowledgeInterval"),analysis_interval_seconds:integer("cfgAIInterval"),
- low_disk_alert_percent:integer("cfgDiskThreshold"),low_battery_alert_percent:integer("cfgBatteryThreshold"),
- include_event_logs:$("cfgEventLogs").checked,include_etw:$("cfgEtw").checked,include_window_titles:$("cfgWindowTitles").checked,
- ui_tree_apps:$("cfgUITreeApps").value.split(",").map(x=>x.trim().toLowerCase()).filter(Boolean)
-};const prior=lastConfig||{};const advancedChanged=["include_event_logs","include_etw","include_window_titles"].some(k=>prior[k]!==values[k])||JSON.stringify(prior.ui_tree_apps||[])!==JSON.stringify(values.ui_tree_apps);$("saveProfile").disabled=true;try{const r=await post("/api/config",{values});lastConfig=r.profile;renderProfile(r.profile);$("profileNote").textContent=advancedChanged?"Profile saved. Advanced sensor changes require aie sentinel stop then aie sentinel start to reinitialize collectors.":"Profile saved to the local AIE config. Scheduler and automation rules will be adopted on the next observer cycle.";toast("Automation profile saved.");}catch(e){$("profileNote").textContent=e.message;toast("Profile save failed: "+e.message,"error")}finally{$("saveProfile").disabled=false}}
-async function runCommand(action){try{const r=await post("/api/command",{action});toast("Command accepted · "+r.queued);setTimeout(()=>refresh(false),1100)}catch(e){toast(e.message,"error")}}
+async function saveProfile(){
+ const integer=id=>Number.parseInt($(id).value,10);
+ const appAllowlist=$("cfgUITreeApps").value.split(",").map(x=>x.trim().toLowerCase()).filter(Boolean);
+ const values={
+  automation_enabled:$("cfgAutomation").checked,inventory_enabled:$("cfgInventory").checked,
+  include_network:$("cfgNetwork").checked,include_foreground:$("cfgForeground").checked,include_process_resources:$("cfgProcessResources").checked,
+  sample_interval_seconds:integer("cfgSampleInterval"),network_interval_seconds:integer("cfgNetworkInterval"),process_resource_interval_seconds:integer("cfgProcessInterval"),
+  inventory_interval_seconds:integer("cfgInventoryInterval")*60,
+  registry_enabled:$("cfgRegistry").checked,deep_inventory_enabled:$("cfgDeep").checked,knowledge_enabled:$("cfgKnowledge").checked,ai_enabled:$("cfgAI").checked,
+  auto_review_on_posture_alerts:$("cfgPostureReview").checked,auto_review_on_registry_changes:$("cfgRegistryReview").checked,
+  registry_interval_seconds:integer("cfgRegistryInterval")*60,deep_inventory_interval_seconds:integer("cfgDeepInterval")*60,
+  knowledge_interval_seconds:integer("cfgKnowledgeInterval")*3600,analysis_interval_seconds:integer("cfgAIInterval")*60,
+  low_disk_alert_percent:integer("cfgDiskThreshold"),low_battery_alert_percent:integer("cfgBatteryThreshold"),
+  include_event_logs:$("cfgEventLogs").checked,include_etw:$("cfgEtw").checked,include_window_titles:$("cfgWindowTitles").checked,
+  include_ui_tree:$("cfgUITree").checked,ui_tree_apps:appAllowlist,
+  knowledge_learn_top_per_query:integer("cfgKnowledgeLearnTop"),knowledge_github_files_per_repo:integer("cfgKnowledgeGithubFiles"),
+  fast_model:$("cfgFastModel").value||null,deep_model:$("cfgDeepModel").value||null
+ };
+ const prior=lastConfig||{};
+ const restartFields=["include_network","include_foreground","include_process_resources","sample_interval_seconds","network_interval_seconds","process_resource_interval_seconds","include_event_logs","include_etw","include_window_titles","include_ui_tree"];
+ const restartChanged=restartFields.some(key=>prior[key]!==values[key])||JSON.stringify(prior.ui_tree_apps||[])!==JSON.stringify(values.ui_tree_apps);
+ $("saveProfile").disabled=true;$("profileSaveState").textContent="SAVING…";
+ try{
+  const r=await post("/api/config",{values});lastConfig=r.profile;renderProfile(r.profile);
+  $("profileSaveState").textContent="SAVED";
+  $("profileNote").textContent=restartChanged?"Saved successfully. Restart Sentinel to reinitialize the continuous or advanced sensor pipelines. Scheduled job switches and intervals are adopted on the next observer cycle.":"Saved successfully. Scheduled collectors and automation rules will adopt these settings on the next observer cycle.";
+  toast("Sentinel feature profile saved.");
+ }catch(e){
+  $("profileSaveState").textContent="SAVE FAILED";$("profileNote").textContent=e.message;toast("Profile save failed: "+e.message,"error");
+ }finally{$("saveProfile").disabled=false}
+}
+async function renderAutomationState(s){
+ const enabled=lastConfig?lastConfig.automation_enabled===true:s.features?.automation===true;
+ const paused=s.observer_paused===true,active=s.status==="running";
+ $("automationLive").textContent=!active?"WORKER OFFLINE":paused?"OBSERVER PAUSED":enabled?"SCHEDULES ENABLED":"MANUAL / SENSOR MODE";
+ $("automationSwitchText").textContent=enabled?"AUTOMATION ON":"AUTOMATION OFF";
+ $("automationExplanation").textContent=enabled
+  ?"Scheduled jobs are enabled. Individual collector switches still apply, and the observer must be running (not paused) for scheduled work to fire. Manual one-time actions remain separately available."
+  :"Scheduled inventory, registry, deep Windows, knowledge and periodic AI jobs are stopped. Event-driven AI reviews are also suppressed. Enabled continuous sensors keep observing, and allowed one-time jobs can still be launched manually.";
+ updateCommandAvailability();
+}
+function updateCommandAvailability(){
+ if(!lastConfig)return;
+ const enabled={
+  scan_now:["inventory_enabled","deep_inventory_enabled","registry_enabled"].some(key=>lastConfig[key]===true),
+  deep_scan_now:lastConfig.deep_inventory_enabled===true,
+  registry_scan_now:lastConfig.registry_enabled===true,
+  ai_review_now:lastConfig.ai_enabled===true,
+  knowledge_crawl_now:lastConfig.knowledge_enabled===true
+ };
+ document.querySelectorAll("[data-command]").forEach(button=>{
+  const action=button.dataset.command,available=enabled[action]!==false;
+  button.disabled=!available;button.classList.toggle("feature-command-disabled",!available);
+  if(!available)button.title="Disabled in Feature Control. Enable this subsystem and save the profile to use it.";
+  else if(button.title.includes("Disabled in Feature Control"))button.removeAttribute("title");
+ });
+}
+function runCommand(action){try{const r=await post("/api/command",{action});toast("Command queued · "+r.queued);setTimeout(()=>refresh(false),1100)}catch(e){toast(e.message,"error")}}
 let catalogKind="processes";
 async function loadCatalog(kind=catalogKind){
  catalogKind=kind;
@@ -562,7 +636,35 @@ async function loadCatalog(kind=catalogKind){
  }catch(error){target.replaceChildren(el("div","empty",error.message))}
 }
 async function searchDrivers(){const q=$("driverQuery").value.trim();const target=$("driverResults");target.replaceChildren(el("div","empty","Searching local signed-PnP snapshot…"));try{const r=await request("/api/drivers?q="+encodeURIComponent(q));target.replaceChildren();$("driverCount").textContent=(r.total||0)+" TOTAL / "+(r.matched||0)+" MATCHED";if(!r.drivers?.length){target.append(el("div","empty","No driver records matched. Run a deep scan first."));return}for(const d of r.drivers){const row=el("div","driver-row"),left=el("div"),name=el("strong",null,d.device),sub=el("small",null,d.provider+" · "+d.version),date=el("small",null,d.driver_date),signed=el("span","driver-state"+(d.signed===false?" unsigned":""),d.signed===true?"SIGNED":d.signed===false?"UNSIGNED":"UNKNOWN");left.append(name,sub);row.append(left,date,signed);target.append(row)}}catch(e){target.replaceChildren(el("div","empty",e.message))}}
-async function loadModels(){if(Date.now()-lastModelsFetch<10000)return;lastModelsFetch=Date.now();const target=$("modelList");target.replaceChildren(el("div","empty","Discovering locally installed Ollama models…"));try{const r=await request("/api/ai/models");target.replaceChildren();$("modelMemory").textContent="Available system RAM: "+(r.memory_available_gib??"—")+" GiB · local-only inference";if(!r.models?.length){target.append(el("div","empty",r.error||"No installed local Ollama models were discovered."));return}for(const m of r.models){const item=el("div","model-card"),name=el("strong",null,m),detail=el("small",null,(r.triage_candidates.includes(m)?"3B/4B Ask + triage candidate · ":"")+(r.review_candidates.includes(m)?"6B/7B reviewer candidate":"Installed local model"));item.append(name,detail);target.append(item)}}catch(e){target.replaceChildren(el("div","empty",e.message))}}
+function populateModelSelect(id,models,selected){
+ const select=$(id);if(!select)return;
+ select.replaceChildren(new Option("Automatic — best compatible installed model",""));
+ if(selected&&!models.includes(selected)){const option=new Option(selected+" (saved; not currently discovered)",selected);select.append(option)}
+ for(const model of models)select.append(new Option(model,model));
+ select.value=selected||"";
+}
+async function loadModels(){
+ if(Date.now()-lastModelsFetch<10000)return;lastModelsFetch=Date.now();
+ const target=$("modelList");target.replaceChildren(el("div","empty","Discovering locally installed Ollama models…"));
+ try{
+  const r=await request("/api/ai/models"),models=Array.isArray(r.models)?r.models:[];
+  populateModelSelect("cfgFastModel",models,lastConfig?.fast_model||"");
+  populateModelSelect("cfgDeepModel",models,lastConfig?.deep_model||"");
+  target.replaceChildren();
+  $("modelMemory").textContent="Available system RAM: "+(r.memory_available_gib??"—")+" GiB · local-only inference · "+models.length+" installed models";
+  if(!models.length){target.append(el("div","empty",r.error||"No installed local Ollama models were discovered. Install or start Ollama before expecting AI jobs to run."));return}
+  for(const model of models){
+   const item=el("div","model-card"),name=el("strong",null,model);
+   const triage=Array.isArray(r.triage_candidates)&&r.triage_candidates.includes(model),review=Array.isArray(r.review_candidates)&&r.review_candidates.includes(model);
+   const detail=el("small",null,(triage?"3B/4B triage candidate · ":"")+(review?"6B+ review candidate":"Installed local model"));
+   item.append(name,detail);target.append(item);
+  }
+ }catch(e){
+  populateModelSelect("cfgFastModel",[],lastConfig?.fast_model||"");
+  populateModelSelect("cfgDeepModel",[],lastConfig?.deep_model||"");
+  target.replaceChildren(el("div","empty","Local Ollama discovery failed: "+e.message));
+ }
+}
 async function askSentinel(){const question=$("aiQuestion").value.trim(),mode=$("aiMode").value;if(!question){$("aiQuestion").focus();return}const btn=$("askBtn");btn.disabled=true;btn.textContent="RUNNING LOCAL INFERENCE…";$("aiAnswer").textContent="Preparing the bounded evidence packet and local reference context. Waiting for local Ollama…";$("aiReferences").replaceChildren();try{const r=await post("/api/ask",{question,mode});$("aiAnswer").textContent=r.answer||"No answer returned.";const meta=el("div","panel-sub","SPECIALIST "+String(r.specialist_mode||mode).toUpperCase()+" · "+String(r.model||"LOCAL MODEL")+" · "+String(r.confidence||"low").toUpperCase()+" CONFIDENCE · "+(r.evidence_ids||[]).length+" EVIDENCE IDS");$("aiReferences").append(meta);if(r.evidence_ids?.length)$("aiReferences").append(el("div","panel-sub","EVIDENCE IDS · "+r.evidence_ids.join(", ")));for(const ref of r.references||[]){try{const url=new URL(ref.url);if(url.protocol==="https:"&&["learn.microsoft.com","github.com"].includes(url.hostname)){const a=el("a","ai-reference",ref.title||url.hostname);a.href=url.href;a.target="_blank";a.rel="noopener noreferrer";$("aiReferences").append(a)}}catch{}}toast("Local specialist response ready.")}catch(e){$("aiAnswer").textContent="Sentinel AI unavailable: "+e.message;toast(e.message,"error")}finally{btn.disabled=false;btn.textContent="✳ ASK LOCAL AI"}}
 async function searchKnowledge(){const q=$("knowledgeQuery").value.trim();if(!q){$("knowledgeQuery").focus();return}const target=$("knowledgeResults");target.replaceChildren(el("div","empty","Searching local documentation index…"));try{const r=await request("/api/knowledge/search?q="+encodeURIComponent(q)+"&limit=8");target.replaceChildren();if(!r.results?.length){target.append(el("div","empty","No indexed document matched. Run a knowledge sync."));return}for(const item of r.results){const card=el("div","knowledge-card"),title=el("strong",null,item.title||"Untitled document"),meta=el("small",null,String(item.source||"").toUpperCase()+" · SCORE "+item.score),p=el("p",null,item.excerpt||""),a=el("a","ai-reference",item.url||"");if(item.url){a.href=item.url;a.target="_blank";a.rel="noopener noreferrer"}card.append(title,meta,p,a);target.append(card)}}catch(e){target.replaceChildren(el("div","empty",e.message))}}
 let notifiedReady=("Notification" in window)&&Notification.permission==="granted";
