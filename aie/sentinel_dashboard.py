@@ -337,9 +337,9 @@ function renderDeepDiagnostics(status){
  const physical=Array.isArray(deep.physical_disks)?deep.physical_disks:[];
  const encryption=Array.isArray(deep.bitlocker_volumes)?deep.bitlocker_volumes:[];
  const batteries=Array.isArray(deep.batteries)?deep.batteries:[];
- $("metricPhysicalDisks").textContent=deep.physical_disk_count??physical.length??"—";
- $("metricBitlocker").textContent=deep.bitlocker_volume_count??encryption.length??"—";
- $("metricBattery").textContent=batteries.length?(batteries[0].charge_percent==null?"Present":batteries[0].charge_percent+"%"):"—";
+ $("metricPhysicalDisks").textContent=deep.last_snapshot_at?(deep.physical_disk_count??physical.length):"—";
+ $("metricBitlocker").textContent=deep.last_snapshot_at?(deep.bitlocker_volume_count??encryption.length):"—";
+ $("metricBattery").textContent=!deep.last_snapshot_at?"—":batteries.length?(batteries[0].charge_percent==null?"Present":batteries[0].charge_percent+"%"):"N/A";
  $("metricHypervisor").textContent=deep.hypervisor_present===true?"DETECTED":deep.hypervisor_present===false?"NO":"—";
  const physicalTarget=$("physicalHealthList");physicalTarget.replaceChildren();
  if(!physical.length)physicalTarget.append(create("div","panel-sub","Physical disk health is not exposed by this Windows configuration."));
