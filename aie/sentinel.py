@@ -42,6 +42,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "include_event_logs": False,
     "include_etw": False,
     "include_window_titles": False,
+    "include_ui_tree": False,
     "ui_tree_apps": [],
     "ai_enabled": True,
     "analysis_interval_seconds": 300,
@@ -94,6 +95,8 @@ def _load_config() -> dict[str, Any]:
             raise RuntimeError("Sentinel config is unreadable. Use configure --reset.") from exc
         if not isinstance(loaded, dict):
             raise RuntimeError("Sentinel config must be a JSON object.")
+        if "include_ui_tree" not in loaded and isinstance(loaded.get("ui_tree_apps"), list):
+            config["include_ui_tree"] = bool(loaded["ui_tree_apps"])
         for key in DEFAULT_CONFIG:
             if key in loaded:
                 config[key] = loaded[key]
@@ -132,7 +135,7 @@ def _load_config() -> dict[str, Any]:
     for key in (
         "automation_enabled", "inventory_enabled",
         "include_network", "include_foreground", "include_process_resources",
-        "include_event_logs", "include_etw", "include_window_titles", "ai_enabled",
+        "include_event_logs", "include_etw", "include_window_titles", "include_ui_tree", "ai_enabled",
         "registry_enabled", "deep_inventory_enabled", "knowledge_enabled",
         "auto_review_on_posture_alerts", "auto_review_on_registry_changes",
     ):
@@ -375,6 +378,7 @@ def _worker() -> None:
             "event_logs": config["include_event_logs"],
             "kernel_etw": config["include_etw"],
             "window_titles": config["include_window_titles"],
+            "ui_tree": config["include_ui_tree"] and bool(config["ui_tree_apps"]),
             "ui_tree_allowlist_count": len(config["ui_tree_apps"]),
             "registry": config["registry_enabled"],
             "deep_windows_inventory": config["deep_inventory_enabled"],
@@ -961,6 +965,7 @@ def _worker() -> None:
                 "event_logs": bool(config["include_event_logs"]),
                 "kernel_etw": bool(config["include_etw"]),
                 "window_titles": bool(config["include_window_titles"]),
+                "ui_tree": bool(config["include_ui_tree"] and config["ui_tree_apps"]),
                 "ui_tree_allowlist_count": len(config["ui_tree_apps"]),
                 "registry": bool(config["registry_enabled"]),
                 "deep_windows_inventory": bool(config["deep_inventory_enabled"]),
@@ -1179,7 +1184,7 @@ def _worker() -> None:
                     process_resource_interval=float(config["process_resource_interval_seconds"]),
                     include_event_logs=bool(config["include_event_logs"]),
                     include_etw=bool(config["include_etw"]),
-                    include_ui_tree=bool(config["ui_tree_apps"]),
+                    include_ui_tree=bool(config["include_ui_tree"] and config["ui_tree_apps"]),
                     ui_tree_app_names={name.casefold() for name in config["ui_tree_apps"]},
                     stop_file=stop_path,
                     on_cycle=on_cycle,
@@ -1394,6 +1399,7 @@ def sentinel_configure(
         if any("/" in item or "\\" in item for item in names):
             raise typer.BadParameter("UIA allowlist entries must be executable basenames, not file paths.")
         config["ui_tree_apps"] = names
+        config["include_ui_tree"] = bool(names)
     _save_config(config)
     console.print_json(json.dumps(config, indent=2))
     console.print("[yellow]Restart Sentinel to apply updated settings.[/yellow]")
