@@ -902,10 +902,11 @@ function renderTaskManager(s){
    task.error_type?"Error: "+task.error_type:null
   ].filter(Boolean);
   row.append(el("div","task-meta",details.join(" · ")||"No run recorded in this worker session."));
-  const actions=el("div","task-actions"),run=el("button","btn",task.status==="running"?"RUNNING":"RUN NOW"),settings=el("button","btn ghost","SETTINGS");
+  const actions=el("div","task-actions"),run=el("button","btn primary",task.status==="running"?"RUNNING":"RUN NOW"),toggle=el("button","btn ghost",enabled?"DISABLE":"ENABLE"),settings=el("button","btn ghost","ALL SETTINGS");
   run.type="button";run.disabled=!enabled||task.status==="running";run.addEventListener("click",()=>runCommand(meta[1]));
+  toggle.type="button";toggle.addEventListener("click",()=>setTaskFeature(meta[3],!enabled));
   settings.type="button";settings.addEventListener("click",()=>switchView("autonomy"));
-  actions.append(run,settings);row.append(actions);live.append(row);
+  actions.append(run,toggle,settings);row.append(actions);live.append(row);
  }
  if(s.inference_busy&&!s.tasks?.ai_review?.status?.includes("running")){
   const row=el("article","task-row"),top=el("div","task-row-head"),left=el("div");
@@ -936,6 +937,21 @@ function renderTaskManager(s){
   if(item.duration_seconds!=null)row.append(el("small","task-duration",item.duration_seconds+" s"));
   historyTarget.append(row);
  }
+}
+async function setTaskFeature(setting,enabled){
+ const fieldToControl={
+  inventory_enabled:"cfgInventory",registry_enabled:"cfgRegistry",
+  deep_inventory_enabled:"cfgDeep",knowledge_enabled:"cfgKnowledge",ai_enabled:"cfgAI"
+ };
+ try{
+  const result=await post("/api/config",{values:{[setting]:enabled}});
+  lastConfig=result.profile;
+  const input=$(fieldToControl[setting]);if(input)input.checked=enabled;
+  $("profileSaveState").textContent="PROFILE SAVED FROM TASK MANAGER";
+  updateCommandAvailability();
+  if(lastStatus)renderTaskManager(lastStatus);
+  toast((setting.replaceAll("_"," "))+ (enabled?" enabled.":" disabled."));
+ }catch(error){toast("Feature update failed: "+error.message,"error")}
 }
 async function loadTaskProcesses(){
  const target=$("taskProcessList"),query=$("taskProcessQuery")?.value.trim()||"";
