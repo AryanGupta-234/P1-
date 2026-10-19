@@ -10,7 +10,7 @@ The Sentinel loopback dashboard had accumulated multiple generations of CSS over
 
 ## Decision
 
-Retain the existing navy, cyan and coral visual palette, but replace the stacked stylesheet with one responsive design system. Use a grouped navigation rail, consistent page hierarchy, rounded layered surfaces, readable typography, restrained motion and explicit reduced-motion support.
+Restore the original gunmetal/steel visual palette with lime and orange accents, and replace the stacked stylesheet with one responsive design system. Use a grouped navigation rail, consistent page hierarchy, rounded layered surfaces, readable typography, restrained motion and explicit reduced-motion support.
 
 Add a searchable command palette opened with `Ctrl+K`, plus workspace shortcuts `Ctrl+Shift+1` through `Ctrl+Shift+8`. The palette may open existing workspaces or dispatch only the existing allowlisted Sentinel jobs through their current UI handlers. It must reflect disabled job state and must not bypass Feature Control.
 
