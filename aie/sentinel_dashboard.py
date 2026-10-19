@@ -655,6 +655,11 @@ function renderTaskManager(s){
   settings.type="button";settings.addEventListener("click",()=>switchView("autonomy"));
   actions.append(run,settings);row.append(actions);live.append(row);
  }
+ if(s.inference_busy&&!s.tasks?.ai_review?.status?.includes("running")){
+  const row=el("article","task-row"),top=el("div","task-row-head"),left=el("div");
+  left.append(el("strong",null,"Interactive local AI inference"),el("small",null,"An Ask Sentinel request or model operation currently holds the shared inference lock."));
+  top.append(left,el("span","task-pill running","INFERENCE BUSY"));row.append(top,el("div","task-meta","Local Ollama · request-level activity · completion is reported when the lock is released."));live.append(row);
+ }
  const toolList=$("taskToolsList");toolList.replaceChildren();
  if(!providers.length)toolList.append(el("div","empty","No provider-health metrics have been reported yet."));
  for(const [name,item] of providers.sort((a,b)=>a[0].localeCompare(b[0]))){
@@ -941,6 +946,8 @@ def make_dashboard_server(
                         raise ValueError("invalid status payload")
                     from aie.config import observer_is_paused
                     payload["observer_paused"] = observer_is_paused()
+                    payload["command_queue_depth"] = command_queue.qsize() if command_queue is not None else 0
+                    payload["inference_busy"] = bool(inference_lock is not None and inference_lock.locked())
                     self._json(200, payload)
                 except (OSError, ValueError, json.JSONDecodeError):
                     self._json(503, {"error": "Sentinel status is not available yet"})
