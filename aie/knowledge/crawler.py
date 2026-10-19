@@ -355,10 +355,11 @@ class MicrosoftKnowledgeCrawler:
         results = payload.get("results", []) if isinstance(payload, dict) else []
         return [item for item in results if isinstance(item, dict)]
 
-    def _crawl_learn(self, queries: tuple[str, ...], *, top: int) -> tuple[int, int, int]:
+    def _crawl_learn(self, queries: tuple[str, ...], *, top: int) -> tuple[int, int, int, int]:
         fetched = 0
         added = 0
-        updated_or_unchanged = 0
+        updated = 0
+        unchanged = 0
         seen: set[str] = set()
         for query in queries:
             try:
@@ -385,11 +386,13 @@ class MicrosoftKnowledgeCrawler:
                     fetched += 1
                     if outcome == "added":
                         added += 1
+                    elif outcome == "updated":
+                        updated += 1
                     else:
-                        updated_or_unchanged += 1
+                        unchanged += 1
                 except (RuntimeError, ValueError, OSError):
                     continue
-        return fetched, added, updated_or_unchanged
+        return fetched, added, updated, unchanged
 
     @staticmethod
     def _path_score(path: str) -> int:
@@ -409,7 +412,7 @@ class MicrosoftKnowledgeCrawler:
         branch: str,
         *,
         max_files: int,
-    ) -> tuple[int, int, int]:
+    ) -> tuple[int, int, int, int]:
         api_url = (
             f"https://{GITHUB_API_HOST}/repos/{owner}/{repo}/git/trees/"
             f"{quote(branch, safe='')}?recursive=1"
@@ -428,7 +431,7 @@ class MicrosoftKnowledgeCrawler:
             if score >= 4:
                 candidates.append((score, path))
         candidates.sort(key=lambda item: (-item[0], item[1].casefold()))
-        fetched = added = updated_or_unchanged = 0
+        fetched = added = updated = unchanged = 0
         for _score, path in candidates[:max_files]:
             raw_url = (
                 f"https://{GITHUB_RAW_HOST}/{owner}/{repo}/"
@@ -456,11 +459,13 @@ class MicrosoftKnowledgeCrawler:
                 fetched += 1
                 if outcome == "added":
                     added += 1
+                elif outcome == "updated":
+                    updated += 1
                 else:
-                    updated_or_unchanged += 1
+                    unchanged += 1
             except (RuntimeError, ValueError, OSError):
                 continue
-        return fetched, added, updated_or_unchanged
+        return fetched, added, updated, unchanged
 
     def crawl(
         self,
@@ -475,15 +480,15 @@ class MicrosoftKnowledgeCrawler:
             raise ValueError("github_files_per_repo must be between 1 and 20.")
         started_clock = time.monotonic()
         started_at = datetime.now(timezone.utc).isoformat()
-        learn_fetched, learn_added, learn_other = self._crawl_learn(
+        learn_fetched, learn_added, learn_updated, learn_unchanged = self._crawl_learn(
             learn_queries,
             top=learn_top_per_query,
         )
-        github_fetched = github_added = github_other = failures = 0
+        github_fetched = github_added = github_updated = github_unchanged = failures = 0
         repositories_processed = 0
         for owner, repo, branch in GITHUB_SOURCES:
             try:
-                fetched, added, other = self._crawl_repository(
+                fetched, added, updated, unchanged = self._crawl_repository(
                     owner,
                     repo,
                     branch,
@@ -491,7 +496,8 @@ class MicrosoftKnowledgeCrawler:
                 )
                 github_fetched += fetched
                 github_added += added
-                github_other += other
+                github_updated += updated
+                github_unchanged += unchanged
                 repositories_processed += 1
             except (RuntimeError, ValueError, OSError, json.JSONDecodeError):
                 failures += 1
@@ -505,8 +511,8 @@ class MicrosoftKnowledgeCrawler:
             github_repositories=repositories_processed,
             github_documents=github_fetched,
             documents_added=learn_added + github_added,
-            documents_updated=0,
-            unchanged=learn_other + github_other,
+            documents_updated=learn_updated + github_updated,
+            unchanged=learn_unchanged + github_unchanged,
             failures=failures,
             elapsed_seconds=round(time.monotonic() - started_clock, 2),
         )
