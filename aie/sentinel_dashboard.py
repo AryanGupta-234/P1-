@@ -1996,7 +1996,9 @@ def make_dashboard_server(
                         restart_reason = "Feature profile changed: " + ", ".join(changed_restart_fields)
                         try:
                             restart_path.write_text(restart_reason, encoding="utf-8")
-                            stop_path.touch(exist_ok=True)
+                            stop_timer = threading.Timer(0.7, lambda: stop_path.touch(exist_ok=True))
+                            stop_timer.daemon = True
+                            stop_timer.start()
                             restart_scheduled = True
                         except OSError as exc:
                             restart_error = type(exc).__name__
@@ -2102,7 +2104,9 @@ def make_dashboard_server(
                     return
                 try:
                     restart_path.write_text("Manual restart requested from dashboard", encoding="utf-8")
-                    stop_path.touch(exist_ok=True)
+                    stop_timer = threading.Timer(0.7, lambda: stop_path.touch(exist_ok=True))
+                    stop_timer.daemon = True
+                    stop_timer.start()
                 except OSError:
                     self._json(503, {"error": "unable to schedule worker restart"})
                     return
