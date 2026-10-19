@@ -16,6 +16,7 @@ windows = ["pywinauto>=0.6.8,<1", "pywin32>=306,<400", "pyetwkit==3.2.0"]
 
 [project.scripts]
 aie = "aie.cli:app"
+aie-sentinel = "aie.sentinel:sentinel_app"
 aie-browser-host = "aie.browser.native_host:main"
 
 [tool.setuptools.packages.find]
