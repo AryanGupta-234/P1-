@@ -29,6 +29,8 @@ from aie.store import EventStore
 sentinel_app = typer.Typer(no_args_is_help=True, help="Persistent Windows Sentinel background agent.")
 console = Console()
 TASK_NAME = "AIE Sentinel Background Watch"
+RESTART_SCAN_INTERVAL_SECONDS = 1.0
+RESTART_STABLE_SCANS_REQUIRED = 2
 
 DEFAULT_CONFIG: dict[str, Any] = {
     "sample_interval_seconds": 2.0,
@@ -463,8 +465,8 @@ def _worker() -> None:
         "watch_status": "starting" if config["auto_restart_enabled"] else "disabled",
         "last_reason": previous_restart.get("reason") if isinstance(previous_restart, dict) else None,
         "last_restart_at": previous_restart.get("requested_at") if isinstance(previous_restart, dict) else None,
-        "scan_interval_seconds": 2,
-        "stable_scans_required": 3,
+        "scan_interval_seconds": RESTART_SCAN_INTERVAL_SECONDS,
+        "stable_scans_required": RESTART_STABLE_SCANS_REQUIRED,
     }
 
     for port in range(int(config["dashboard_port"]), int(config["dashboard_port"]) + 11):
@@ -1320,7 +1322,7 @@ def _worker() -> None:
         stable_config_scans = 0
         last_reported_status = state["restart"]["watch_status"]
 
-        while not source_watch_stop.wait(2.0):
+        while not source_watch_stop.wait(RESTART_SCAN_INTERVAL_SECONDS):
             if stop_path.exists():
                 return
 
@@ -1372,8 +1374,8 @@ def _worker() -> None:
                 candidate_config = current_config
                 stable_config_scans = 1
 
-            source_changed = stable_source_scans >= 3 and current_source is not None
-            config_changed = stable_config_scans >= 3
+            source_changed = stable_source_scans >= RESTART_STABLE_SCANS_REQUIRED and current_source is not None
+            config_changed = stable_config_scans >= RESTART_STABLE_SCANS_REQUIRED
             if not source_changed and not config_changed:
                 continue
 
@@ -1404,8 +1406,8 @@ def _worker() -> None:
                     "changed_settings": changed_settings,
                     "changed_file_count": len(changed_files),
                     "requested_at": _now(),
-                    "scan_interval_seconds": 2,
-                    "stable_scans_required": 3,
+                    "scan_interval_seconds": RESTART_SCAN_INTERVAL_SECONDS,
+                    "stable_scans_required": RESTART_STABLE_SCANS_REQUIRED,
                 }
                 _write_state(state)
 
