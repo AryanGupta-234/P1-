@@ -13,7 +13,7 @@ const hms = ts => new Date(ts * 1000).toLocaleTimeString([], { hour12: false });
 const dur = s => { s = Math.floor(s); const d = Math.floor(s / 86400), h = Math.floor(s % 86400 / 3600), m = Math.floor(s % 3600 / 60); return (d ? d + "d " : "") + (h || d ? h + "h " : "") + m + "m " + (s % 60) + "s"; };
 
 /* ---------- P1 shell: titles, toasts, splash, starfield ---------- */
-const TITLES = { cmd: "COMMAND", sys: "SYSTEM", act: "ACTIVITY", proc: "PROCESSES", net: "NETWORK", ker: "KERNEL", evi: "EVIDENCE", intelx: "INTELLIGENCE", int: "INTEL FEED", ai: "AI CORE", ctl: "CONTROL", fc: "FEATURES", tsk: "TASKS" };
+const TITLES = { cmd: "COMMAND", sys: "SYSTEM", act: "ACTIVITY", proc: "PROCESSES", net: "NETWORK", ker: "KERNEL", adv: "TUNER / THERMAL", evi: "EVIDENCE", intelx: "INTELLIGENCE", int: "INTEL FEED", ai: "AI CORE", ctl: "CONTROL", fc: "FEATURES", tsk: "TASKS" };
 const VKEYS = Object.keys(TITLES);
 function toast(msg, kind = "") { const b = document.createElement("div"); b.className = "toast " + kind; b.textContent = msg; $("#toasts").append(b); setTimeout(() => b.remove(), 5200); }
 let bootDone = false;
@@ -123,22 +123,13 @@ function updProc() {
   const body = rows.map(r => {
     const app = r.app_kind || (r.session_id === 0 ? "SESSION 0 · SERVICE / SYSTEM" : "SESSION UNKNOWN");
     const canReview = r.onscreen_windows > 0 && r.session_id > 0 && r.path_state === "present" && r.exe;
-    const review = canReview ? `<button class="btn sm or" data-proc-review="${esc(procIdentity(r))}">REQUEST CLOSE</button>` : `<span class="tag mu">NO GUI CLOSE</span>`;
+    // Process termination is a dangerous, intentionally disabled action tier.
+    const review = canReview ? `<span class="tag warn" title="Arbitrary process close is disabled by the dangerous-action policy">CLOSE DISABLED · DANGEROUS</span>` : `<span class="tag mu">NO GUI CLOSE</span>`;
     return `<tr><td style="min-width:270px;max-width:560px"><b>${esc(r.name)}</b> ${recKeys.has(procIdentity(r)) ? '<span class="tag warn">RESOURCE REVIEW</span>' : ""}<small class="proc-path" title="${esc(r.exe || "Executable path unavailable")}">${esc(r.exe || "Executable path unavailable")}</small><small>${esc(r.path_state || "path unknown")} · parent ${esc(r.parent_name || "--")} (${esc(r.parent_pid ?? "--")})</small></td><td>${r.pid}<small>${fmt(r.create_time, 3)}</small></td><td><div class="bar"><i style="width:${Math.min(100, Number(r.cpu || 0) / mx * 100)}%"></i></div>${fmt(r.cpu, 1)}</td><td>${fmt(r.mem)}</td><td>${fmt(r.io, 3)}</td><td>${esc(r.thr ?? "--")} / ${esc(r.handles ?? "--")} handles</td><td>${esc(r.session_id ?? "unknown")}<small>${esc(app)} · ${r.visible_windows || 0} visible / ${r.onscreen_windows || 0} on-screen · ${r.cloaked_windows || 0} cloaked${r.foreground ? " · FOREGROUND" : ""}</small>${review}</td></tr>`;
   }).join("");
   const q = document.querySelector("#ptab");
   q.innerHTML = "<tr>" + header.map(([k,l]) => `<th data-k="${k}">${l}${sortK === k ? (sortD < 0 ? " ▼" : " ▲") : ""}</th>`).join("") + "</tr>" + (body || '<tr><td colspan="7"><div class="empty">No processes match this filter.</div></td></tr>');
   $$("#ptab th[data-k]").forEach(t => t.onclick = () => { sortD = sortK === t.dataset.k ? -sortD : -1; sortK = t.dataset.k; updProc(); });
-  $$('[data-proc-review]').forEach(b => b.onclick = async () => {
-    const row = PROC_ROWS.find(x => procIdentity(x) === b.dataset.procReview);
-    if (!row) return toast("Process identity changed; refresh the list", "warn");
-    const ok = confirm(`Request a graceful close for ${row.name}?\n\n${row.exe}\nPID ${row.pid} · session ${row.session_id}\n\nSENTINEL will send WM_CLOSE only to the same process instance's non-cloaked windows intersecting a physical monitor. It will not force-kill the process.`);
-    if (!ok) return;
-    const r = await api("/api/action/propose", { kind: "terminate_process", args: { pid: row.pid, create_time: row.create_time, exe: row.exe }, reason: "User requested graceful close after reviewing process identity and window presence" });
-    if (r.error) return toast(r.error, "bad");
-    toast("Close request queued. Review and approve it in CONTROL; no process was stopped yet.", "warn");
-    await loadActions();
-  });
   const fresh = PROC_META.updated_at ? new Date(PROC_META.updated_at * 1000).toLocaleTimeString() : "not yet sampled";
   $("#p-n").textContent = `${PROC_META.matched}/${PROC_META.total} process records · ${PROC_META.inaccessible || 0} metadata-inaccessible · refreshed ${fresh}`;
   const reviewRows = recs.filter(r => PROC_ROWS.some(p => procIdentity(p) === procIdentity(r)));
@@ -207,18 +198,19 @@ function updAI() {
   if (a.status) $("#ai-status").textContent = a.status; $("#ai-url").textContent = a.online ? a.models.length + " models installed" : (a.error || "Ollama offline");
   if ($("#ai-runtime")) $("#ai-runtime").innerHTML = `<div class="row"><b>Agent process</b><span class="tag ${rt.pid ? "ok" : "bad"}">${rt.pid ? "RUNNING" : "UNKNOWN"}</span></div><small>PID ${esc(rt.pid ?? "--")} · ${esc(rt.execution_context || "context unknown")} · desktop access ${rt.desktop_access_expected ? "available in this session" : "not expected"}</small><small>${esc(rt.executable || "")} · ${esc(rt.username || "")}</small><small>Agent CPU ${fmt(rt.cpu_percent, 1)}% · RAM ${fmt(rt.rss_mb, 1)} MB (${fmt(rt.memory_percent, 2)}%) · ${esc(rt.threads ?? "--")} threads · ${esc(rt.handles ?? "--")} handles</small><small>Agent I/O read ${esc(rt.io_read_bytes == null ? "unknown" : (rt.io_read_bytes / 1048576).toFixed(1) + " MB")} · write ${esc(rt.io_write_bytes == null ? "unknown" : (rt.io_write_bytes / 1048576).toFixed(1) + " MB")}</small><div class="row"><b>Inference</b><span class="tag ${a.online ? "ok" : "bad"}">${a.busy ? "BUSY · " + esc(a.busy) : a.online ? "IDLE / READY" : "OFFLINE"}</span></div><small>Current task: ${esc(a.current_task || "none")} · model: ${esc(a.current_model || "none")}</small><small>Requests ${u.requests || 0} · success ${u.successes || 0} · failures ${u.failures || 0} · last latency ${fmt(u.last_duration_s, 2)}s</small><small>Usage history persists across agent restarts · retention: ${esc(u.history_limit || "all stored requests")}</small><small>Prompt tokens ${esc(u.last_prompt_tokens ?? "unknown")} · output tokens ${esc(u.last_output_tokens ?? "unknown")} · last model ${esc(u.last_model || "--")}</small><small>RAM headroom ${fmt(a.model_policy?.available_memory_gib, 2)} GiB · route ${esc(a.model_policy?.reason || "not evaluated")}</small>`;
 }
-const NICE = { bg_priority: "Protect game from background apps", flush_dns: "Flush DNS", power_plan: "High-performance power plan", wpr_trace: "Capture ETW kernel trace", trim_bg: "Trim background RAM" };
+const NICE = { wpr_trace: "Capture WPR diagnostic trace", etw_capture: "Capture kernel ETW window" };
 async function loadActions() {
   const a = await api("/api/actions"), p = a.filter(x => x.state === "pending");
   $("#b-act").hidden = !p.length; $("#b-act").textContent = p.length;
-  $("#pend").innerHTML = p.map(x => `<div class="act"><div class="d"><b>${esc(x.desc)}</b><span>${esc(x.origin)} · ${esc(x.result || "")}</span></div><button class="btn sm" data-r="${x.id}">APPROVE</button><button class="btn sm or" data-d="${x.id}">DISMISS</button></div>`).join("") || '<div class="empty">nothing waiting for approval</div>';
+  $("#pend").innerHTML = p.map(x => `<div class="act"><div class="d"><b>${esc(x.desc)}</b><span>${esc(x.risk || "unknown risk")} · ${esc(x.origin)} · ${esc(x.result || "")}</span></div><button class="btn sm" data-r="${x.id}">APPROVE</button><button class="btn sm or" data-d="${x.id}">DISMISS</button></div>`).join("") || '<div class="empty">nothing waiting for approval</div>';
   $$("[data-r]").forEach(b => b.onclick = async () => {
     const item = p.find(x => x.id === +b.dataset.r);
     let confirmed = false;
-    if (item?.kind === "terminate_process") confirmed = confirm("Approve a graceful WM_CLOSE request for this reviewed GUI app? SENTINEL will not force-kill it.");
+    if (item?.risk === "medium") confirmed = confirm("Approve this MEDIUM-RISK system adjustment? SENTINEL captured a before-state and will offer rollback. Review its reason before continuing.");
+    else if (item?.kind === "terminate_process") confirmed = confirm("Approve a graceful WM_CLOSE request for this reviewed GUI app? SENTINEL will not force-kill it.");
     else confirmed = true;
     if (!confirmed) return;
-    const result = await api("/api/action/run", { id: +b.dataset.r, confirmed: item?.kind === "terminate_process" });
+    const result = await api("/api/action/run", { id: +b.dataset.r, confirmed: item?.risk === "medium" || item?.kind === "terminate_process" });
     if (result.result?.startsWith("rejected")) toast(result.result, "bad");
     else toast(result.result || "Action submitted", "ok");
     loadActions();
@@ -227,7 +219,7 @@ async function loadActions() {
   $("#hist").innerHTML = a.filter(x => x.state !== "pending").slice(0, 14).map(x => `<div class="act"><div class="d"><b>${esc(x.desc)}</b><span>${esc(x.state)} · ${esc(x.origin)} · ${esc(x.result || "")}</span></div><span class="tag">${hms(x.ts)}</span></div>`).join("") || '<div class="empty">no actions yet</div>';
 }
 function buildCtl() {
-  const ap = S.autopilot, lab = { bg_priority: ["Game shield", "keep background apps' RAM/IO priority low while gaming"], flush_dns: ["Auto DNS flush", "on network instability"], power_plan: ["Auto high-performance plan", "when a game starts on Balanced"], wpr_trace: ["Auto kernel trace", "on severe DPC spikes"] };
+  const ap = S.autopilot, lab = { wpr_trace: ["Auto WPR diagnostic", "bounded, read-only capture; never stops an existing trace"], etw_capture: ["Auto kernel ETW windows", "short trace windows only while a game is active"] };
   $("#auto").innerHTML = Object.keys(lab).map(k => `<label class="tog"><span>${lab[k][0]}<small>${lab[k][1]}</small></span><input type="checkbox" class="sw" data-ap="${k}" ${ap[k] ? "checked" : ""}></label>`).join("");
   $$("[data-ap]").forEach(c => c.onchange = async () => { c.disabled = true; const r = await api("/api/config", { autopilot: { [c.dataset.ap]: c.checked } }); c.disabled = false; if (r.error) { c.checked = !c.checked; toast(r.error, "bad"); } else toast(`${c.dataset.ap} ${c.checked ? "enabled" : "disabled"} and saved`, "ok"); });
   const a = S.ai, opt = cur => '<option value="">auto</option>' + a.models.map(m => `<option ${m.name === cur ? "selected" : ""} value="${esc(m.name)}">${esc(m.name)} (${m.gb} GB)</option>`).join("");
@@ -248,6 +240,7 @@ function onTick(d) {
   if (view === "proc") maybeRefreshProcesses();
   if (view === "net") updNet();
   if (view === "ker") { updKer(); if (Date.now() - kernelArchiveLast > 30000) loadKernelArchive(); }
+  if (view === "adv" && Date.now() - advLastLoad > 8000) loadAdvanced();
   if (view === "ai") updAI();
   if (view === "sys") maybeRefreshSystem();
   if (view === "ctl" && !ctlInitialized) { buildCtl(); loadActions(); ctlInitialized = true; }
@@ -257,6 +250,7 @@ function show(v) {
   if (!S) {
     if (v === "intelx") loadIntelligence();
     else if (v === "ker") loadKernelArchive();
+    else if (v === "adv") loadAdvanced(true);
     else if (v === "sys") loadSys(true);
     else if (v === "evi") loadEvi();
     else if (v === "fc") loadFC();
@@ -266,7 +260,7 @@ function show(v) {
     else if (v === "ctl") loadActions();
     return;
   }
-  ({ cmd: updTiles, act: () => { updHeart(); renderFeed(); }, proc: () => loadProcesses(true), net: updNet, ker: () => { updKer(); loadKernelArchive(); }, int: loadIntel, intelx: loadIntelligence, ai: updAI, ctl: () => { buildCtl(); loadActions(); ctlInitialized = true; }, sys: () => loadSys(true), evi: loadEvi, tsk: () => { updTasks(); loadHist(); }, fc: loadFC })[v]();
+  ({ cmd: updTiles, act: () => { updHeart(); renderFeed(); }, proc: () => loadProcesses(true), net: updNet, ker: () => { updKer(); loadKernelArchive(); }, adv: () => loadAdvanced(true), int: loadIntel, intelx: loadIntelligence, ai: updAI, ctl: () => { buildCtl(); loadActions(); ctlInitialized = true; }, sys: () => loadSys(true), evi: loadEvi, tsk: () => { updTasks(); loadHist(); }, fc: loadFC })[v]();
 }
 async function boot() {
   starfield(); $("#bootSkip").onclick = endBoot; let fast = false; try { fast = sessionStorage.getItem("sb") === "1"; } catch (e) { }
@@ -288,7 +282,7 @@ async function boot() {
   setInterval(() => { if (view === "int") loadIntel(); if (view === "ctl") loadActions(); }, 15000); loadActions();
   $("#p-q").oninput = () => { clearTimeout(procQueryTimer); procQueryTimer = setTimeout(() => loadProcesses(true), 260); }; $("#p-refresh").onclick = () => loadProcesses(true); $("#n-q").oninput = () => S && updNet();
   $("#a-exp").onclick = () => { const t = LOGS.map(r => `${new Date(r.ts * 1000).toISOString()}\t${r.level}\t${r.src}\t${r.msg}`).join("\n"); const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([t], { type: "text/plain" })); a.download = "sentinel-activity-" + Date.now() + ".log"; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000); toast("Exported " + LOGS.length + " events", "ok"); };
-  initPalette(); initNotify(); initFC(); initIntelligence(); bindJ("#metrics"); loadStatus(); setInterval(loadStatus, 15000);
+  initPalette(); initNotify(); initFC(); initIntelligence(); initAdvanced(); bindJ("#metrics"); loadStatus(); setInterval(loadStatus, 15000);
   $("#e-go").onclick = loadEvi; $("#e-csv").onclick = csvExport; $("#e-q").onkeydown = e => e.key === "Enter" && loadEvi(); $("#e-lv").onchange = $("#e-src").onchange = loadEvi;
   $("#sys-refresh").onclick = async () => { const b = $("#sys-refresh"); b.disabled = true; b.textContent = "SCANNING…"; const r = await api("/api/inventory/refresh", {}); b.disabled = false; b.textContent = "REFRESH INVENTORY"; if (r.error) toast(r.error, "bad"); else { toast("System inventory refreshed", "ok"); loadSys(true); } };
   $("#kernel-capture").onclick = async () => { const r = await api("/api/action/propose", { kind: "wpr_trace", reason: "User requested a bounded 15-second Windows Performance Recorder ETW trace" }); if (r.error) return toast(r.error, "bad"); toast("ETW trace queued. Approve it in CONTROL; an existing WPR recording will not be interrupted.", "warn"); loadActions(); };
@@ -297,6 +291,131 @@ async function boot() {
   addEventListener("keydown", e => { const t = e.target.tagName; if (t === "INPUT" || t === "SELECT" || t === "TEXTAREA" || e.ctrlKey || e.metaKey || e.altKey) return; const n = +e.key; if (n >= 1 && n <= VKEYS.length) show(VKEYS[n - 1]); });
   let sv = "cmd"; try { sv = localStorage.getItem("sv") || "cmd"; } catch (e) { } if (TITLES[sv] && sv !== "cmd") show(sv);
   bp(100, "ONLINE", "Command deck ready", "ok"); setTimeout(endBoot, fast ? 150 : 1500);
+}
+
+/* ---------- reversible performance intelligence / thermal workspace ---------- */
+let ADV = null, advLastLoad = 0, advBusy = false;
+const avNum = (v, d = 1, suffix = "") => v == null || !Number.isFinite(Number(v)) ? "--" : Number(v).toFixed(d) + suffix;
+function advGauge(id, temp, threshold, valId, sourceId, source) {
+  const dial = $("#" + id), value = $("#" + valId), src = $("#" + sourceId);
+  if (!dial || !value || !src) return;
+  if (temp == null || !Number.isFinite(Number(temp))) {
+    dial.style.setProperty("--heat", 0); dial.style.setProperty("--heat-color", "#526879");
+    value.textContent = "--"; src.textContent = source || "Sensor unavailable"; return;
+  }
+  const n = Number(temp), color = n >= threshold ? "#f05252" : n >= threshold - 10 ? "#f5a64a" : "#a7dc62";
+  dial.style.setProperty("--heat", Math.max(0, Math.min(100, n / 105 * 100)));
+  dial.style.setProperty("--heat-color", color); value.textContent = n.toFixed(1) + "°";
+  src.textContent = source || "Measured Windows sensor";
+}
+function advSpark(id, key) {
+  const svg = $("#" + id); if (!svg) return;
+  const values = (H[key] || []).map(Number).filter(Number.isFinite).slice(-80);
+  if (values.length < 2) { svg.innerHTML = ""; return; }
+  const lo = Math.min(...values), hi = Math.max(...values), span = hi - lo || 1;
+  const points = values.map((v, i) => `${(i / (values.length - 1) * 258 + 1).toFixed(1)},${(39 - (v - lo) / span * 34).toFixed(1)}`).join(" ");
+  svg.innerHTML = `<polyline points="${points}"></polyline>`;
+}
+function advRows(rows, empty) {
+  return rows.length ? rows.join("") : `<div class="empty">${esc(empty)}</div>`;
+}
+async function loadAdvanced(force = false) {
+  if (advBusy || (!force && Date.now() - advLastLoad < 5000)) return;
+  advBusy = true; advLastLoad = Date.now();
+  try {
+    const d = await api("/api/advanced"); if (d.error) throw new Error(d.error); ADV = d;
+    const game = d.game || null, gpu = d.gpu || {}, hs = d.hardware_sensors || {}, cfg = (d.settings || d.advanced_settings || {});
+    $("#adv-game").textContent = game?.name || "STANDBY";
+    $("#adv-session").textContent = d.sessions?.[0]?.status === "active" ? `Session #${d.sessions[0].id} · ${dur(Date.now()/1000 - d.sessions[0].started_at)}` : "No active session tracked";
+    $("#adv-etw-state").textContent = (d.etw_engine?.state || (d.etw_engine?.available ? "idle" : "unavailable")).toUpperCase();
+    $("#adv-etw-meta").textContent = d.etw_engine?.enabled ? (d.etw_engine?.last_event_count ? `${d.etw_engine.last_event_count} decoded events` : "waiting for trace") : "operator disabled";
+    $("#adv-etw-status").textContent = d.etw_engine?.enabled ? (d.etw_engine?.recording ? "RECORDING" : "ARMED") : "DISABLED";
+    $("#adv-etw-status").className = "tag " + (d.etw_engine?.recording ? "warn" : d.etw_engine?.enabled ? "ok" : "");
+    $("#adv-etw-source").textContent = d.etw_engine?.source || "Windows Performance Toolkit";
+    $("#adv-etw-note").textContent = d.etw_engine?.error || (d.etw_engine?.enabled ? "Bounded 12-second kernel ETW windows can be sampled while a game is active. Not a continuous decoded trace. Existing kernel logger sessions are never taken over." : "Enable the engine and separately opt into automatic captures; manual capture is available below.");
+    const baseEntries = Object.entries(d.baseline || {});
+    $("#adv-baseline-count").textContent = baseEntries.reduce((n, [,x])=>n+(x.samples||0),0).toLocaleString();
+    $("#adv-baseline-heading").textContent = `${d.game_key || "No active game"} · local hour ${d.baseline_hour ?? "--"}`;
+    $("#adv-undo-count").textContent = (d.action_journal || []).filter(x=>x.undo_available && x.changed && !x.reverted_at).length;
+    const cpuItems = (hs.cpu_temperatures || []); const cpuVals = cpuItems.map(x=>Number(x.value)).filter(Number.isFinite);
+    const cpuTemp = cpuVals.length ? Math.max(...cpuVals) : null;
+    const cpuSrc = hs.available ? `LibreHardwareMonitor · ${cpuItems.length} CPU temperature sensor(s)` : (hs.reason || "Optional sensor provider unavailable");
+    advGauge("adv-cpu-dial", cpuTemp, Number(cfg.cpu_temp_warn_c || 88), "adv-cpu-temp", "adv-cpu-source", cpuSrc);
+    const gpuTemp = gpu.temp != null && Number.isFinite(Number(gpu.temp)) ? Number(gpu.temp) : null;
+    advGauge("adv-gpu-dial", gpuTemp, Number(cfg.gpu_temp_warn_c || 82), "adv-gpu-temp", "adv-gpu-source", gpu.name ? `${gpu.name} · NVIDIA nvidia-smi` : "NVIDIA telemetry unavailable");
+    $("#adv-cpu-threshold").textContent = `Warning threshold ${fmt(cfg.cpu_temp_warn_c ?? 88, 0)} °C`;
+    $("#adv-gpu-throttle").textContent = (gpu.throttle || []).length ? `Throttle flags: ${gpu.throttle.join(", ")}` : "No active NVIDIA throttle flag reported";
+    const lhmFans = (hs.fan_rpm || []).filter(x=>Number.isFinite(Number(x.value)) && Number(x.value)>0);
+    const fanValue = lhmFans[0]?.value ?? gpu.fan_speed_pct;
+    const fanSource = lhmFans.length ? `${lhmFans[0].name || "Fan"} · LibreHardwareMonitor RPM` : (gpu.fan_speed_pct != null ? "nvidia-smi fan.speed percentage (not RPM)" : "Fan telemetry unavailable / unsupported");
+    $("#adv-fan-value").textContent = lhmFans.length ? `${avNum(fanValue,0)} RPM` : fanValue != null ? `${avNum(fanValue,0)}%` : "--";
+    $("#adv-fan-source").textContent = fanSource;
+    const rotor = $("#adv-fan"); const fanHz = lhmFans.length ? Math.max(.12, Math.min(3, 60/Math.max(1, Number(fanValue)))) : fanValue != null ? Math.max(.45, 4 - Number(fanValue)*.035) : 1.5;
+    rotor.style.animationDuration = `${fanHz}s`; rotor.classList.toggle("running", fanValue != null);
+    const cores = hs.per_core_temperatures || [];
+    $("#adv-core-meta").textContent = hs.available ? `${cores.length} core temperature sensor(s)` : "Optional LHM sensors only";
+    $("#adv-core-map").innerHTML = cores.length ? cores.map((x,i)=>{const n=Number(x.value), pct=Math.max(0,Math.min(100,n/105*100)); return `<div class="core-cell"><b>${esc(x.name || `Core ${i}`)}</b><small>${avNum(n,1)} °C</small><div class="heat-bar"><i style="width:${pct}%"></i></div></div>`;}).join("") : '<div class="empty">Per-core heat sensors not available. Enable optional LHM only while its own app is running.</div>';
+    $("#adv-gpu-stats").innerHTML = `<div class="row"><b>GPU clock</b><span>${esc(gpu.clk ?? "--")} MHz</span></div><div class="row"><b>Power draw</b><span>${esc(gpu.pwr ?? "--")} W</span></div><div class="row"><b>Power limit</b><span>${esc(gpu.pwrlim ?? "--")} W</span></div><div class="row"><b>GPU utilization</b><span>${esc(gpu.util ?? "--")}%</span></div><div class="row"><b>VRAM</b><span>${esc(gpu.vram ?? "--")} / ${esc(gpu.vramtot ?? "--")} MiB</span></div><div class="row"><b>Fan telemetry</b><span>${esc(gpu.fan_speed_pct == null ? "unavailable" : gpu.fan_speed_pct + "%")}</span></div>`;
+    advSpark("adv-clock-spark","gpuclk"); advSpark("adv-power-spark","gpupwr");
+    $("#adv-thermal-timeline").innerHTML = advRows((d.thermal_events || []).slice(0,16).map(x=>`<div class="event"><b>${esc(x.sensor)} · ${esc(x.event)}</b><small>${hms(x.ts)} · ${x.value==null?"value unavailable":avNum(x.value,1)+" °C"} ${esc(x.detail || "")}</small></div>`), "No thermal warning or GPU throttle transitions have been recorded.");
+    const drivers = d.etw_engine?.driver_modules || [];
+    $("#adv-drivers").innerHTML = drivers.length ? drivers.map(x=>`<div class="adv-row"><div><b>${esc(x.module)}</b><small>${esc(x.attribution)} · ${esc(x.line || "")}</small></div><span class="adv-badge">DRIVER MODULE</span></div>`).join("") : '<div class="empty">No .sys driver module resolved in the latest DPC/ISR report. This is not proof that no driver contributed.</div>';
+    $("#adv-etw-events").innerHTML = (d.etw_events || []).slice(0,12).map(x=>`<div class="adv-row"><div><b>${esc(x.event)}</b><small>${esc(x.provider)} · PID ${esc(x.pid ?? "unknown")} ${esc(x.process || "unresolved")}</small></div><span class="adv-badge">${esc(x.attribution)}</span></div>`).join("") || '<div class="empty">No decoded event rows yet.</div>';
+    $("#adv-baseline-table").innerHTML = baseEntries.length ? baseEntries.map(([k,x])=>`<div class="adv-row"><div><b>${esc(k)}</b><small>${x.samples} samples · mean ${fmt(x.mean,2)} · σ ${fmt(x.stddev,2)}</small></div><span class="adv-badge">${fmt(x.min,1)}–${fmt(x.max,1)}</span></div>`).join("") : '<div class="empty">Personal baseline learning starts when a supported game process is detected. Needs repeated samples before deviation alerts.</div>';
+    const correlations = (d.correlation_events || []).slice(0,10);
+    $("#adv-correlation").innerHTML = advRows(correlations.map(x=>`<div class="adv-row"><div><b>${esc(x.event)}</b><small>${hms(x.ts)} · ${esc(JSON.stringify(x.evidence || {}).slice(0,250))}</small></div><span class="adv-badge">TEMPORAL CANDIDATE</span></div>`), "No recent personal-baseline deviation events. Completed session reports also include preceding system changes.");
+    $("#adv-sessions").innerHTML = advRows((d.session_reports || []).map(x=>{const delta=x.report?.delta||{}; const short=Object.entries(delta).slice(0,6).map(([k,v])=>`${k}: ${v.delta>0?"+":""}${v.delta}`).join(" · ");return `<div class="adv-row"><div><b>${esc(x.game)} · Session #${x.id}</b><small>${Math.round(x.report?.duration_seconds||0)}s · ${esc(short || "No comparable metrics")}</small><small>${esc((x.report?.limitations||[]).join(" "))}</small></div><span class="adv-badge">REPORT</span></div>`;}), "No completed sessions yet. A report is generated when a tracked game exits.");
+    $("#adv-tuner-history").innerHTML = advRows((d.tuner_history || []).map(x=>`<div class="adv-row"><div><b>${esc(x.metric)} · ${esc(x.outcome.replaceAll("_"," "))}</b><small>${esc(x.detail || "")} · ${x.before==null?"--":fmt(x.before,2)} → ${x.after==null?"pending":fmt(x.after,2)}</small></div><span class="adv-badge">${x.delta_pct==null?"--":fmt(x.delta_pct,1)+"%"}</span></div>`), "No tuner experiments yet.");
+    $("#adv-network-evidence").textContent = d.network_evidence?.supported ? `Ping mean ${fmt(d.network_evidence.ping_mean_ms,1)} ms · jitter mean ${fmt(d.network_evidence.jitter_mean_ms,1)} ms · ${d.network_evidence.candidate ? "latency elevation candidate" : "no sustained elevation"}` : (d.network_evidence?.reason || "Network evidence unavailable");
+    $("#adv-journal").innerHTML = advRows((d.action_journal || []).map(x=>`<div class="adv-row"><div><b>#${x.action_id} · ${esc(x.kind.replaceAll("_"," "))}</b><small><span class="risk-${esc(x.risk)}">${esc(x.risk.toUpperCase())}</span> · ${esc(x.result || "prepared")}${x.reverted_at ? " · reverted" : ""}${x.revert_result ? " · " + esc(x.revert_result) : ""}</small><small>Snapshot before action: ${esc(JSON.stringify(x.before || {}).slice(0,240))}</small></div><div class="adv-actions">${x.undo_available && x.changed && !x.reverted_at ? `<button class="btn sm" data-adv-undo="${x.action_id}">UNDO</button>` : `<span class="adv-badge">${x.undo_available ? (x.reverted_at ? "REVERTED" : "NO CHANGE") : "NO AUTO-UNDO"}</span>`}</div></div>`), "No journaled SENTINEL changes yet.");
+    $$('[data-adv-undo]').forEach(b=>b.onclick=async()=>{if(!confirm(`Undo action #${b.dataset.advUndo}?`))return;const r=await api("/api/advanced/undo",{action_id:+b.dataset.advUndo});toast(r.ok?r.result:r.error,r.ok?"ok":"bad");loadAdvanced(true);});
+    const setToggle=(id,val)=>{const el=$("#"+id);if(el)el.checked=!!val;};
+    setToggle("adv-etw-enabled",cfg.etw_enabled); setToggle("adv-lhm-enabled",cfg.lhm_enabled); setToggle("adv-etw-auto",!!S?.autopilot?.etw_capture);
+    if(document.activeElement?.id!=="adv-cpu-threshold")$("#adv-cpu-threshold").value=cfg.cpu_temp_warn_c ?? 88;
+    if(document.activeElement?.id!=="adv-gpu-threshold")$("#adv-gpu-threshold").value=cfg.gpu_temp_warn_c ?? 82;
+    if(game && !$("#adv-profile-game").value)$("#adv-profile-game").value=game.name;
+  } catch(e) { toast(`Advanced telemetry unavailable: ${e.message}`,"warn"); }
+  finally { advBusy = false; }
+}
+function advProfilePayload(){
+  const affinityText=$("#adv-affinity").value.trim();
+  const affinity=affinityText?affinityText.split(",").map(x=>Number(x.trim())).filter(Number.isInteger):null;
+  return {priority:$("#adv-priority").value, cpu_set_policy:$("#adv-cpu-sets").value, affinity,
+    background_efficiency_allowlist:$("#adv-bg-allow").value.split(",").map(x=>x.trim()).filter(Boolean).slice(0,30),
+    apply_power_plan:$("#adv-power-enable").checked, power_plan_guid:$("#adv-power-guid").value.trim(), timer_resolution_ms:Number($("#adv-timer").value)};
+}
+let advDryRun = null;
+function initAdvanced(){
+  $("#adv-refresh").onclick=()=>loadAdvanced(true);
+  $("#adv-profile-save").onclick=async()=>{const r=await api("/api/advanced/game-profile/save",{game:$("#adv-profile-game").value.trim(),profile:advProfilePayload()});if(r.error)return toast(r.error,"bad");toast("Per-game profile saved to SQLite","ok");loadAdvanced(true);};
+  $("#adv-profile-propose").onclick=async()=>{const r=await api("/api/advanced/game-profile/propose-current",{});if(r.error)return toast(r.error,"bad");toast(`Profile proposal #${r.id} queued for approval in CONTROL`,"warn");loadActions();};
+  $("#adv-tuner-start").onclick=async()=>{const kind=$("#adv-tuner-kind").value,args=kind==="timer_resolution"?{milliseconds:1}:{};const r=await api("/api/advanced/tuner/start",{kind,args,metric:$("#adv-tuner-metric").value,direction:$("#adv-tuner-direction").value});if(r.error)return toast(r.error,"bad");toast(`Experiment #${r.action_id} queued. Approve it in CONTROL to start the measured trial.`,"warn");loadActions();loadAdvanced(true);};
+  $("#adv-wifi-propose").onclick=async()=>{const r=await api("/api/advanced/propose-wifi",{});if(r.error)return toast(r.error,"warn");toast(`Wi-Fi adjustment #${r.id} requires approval in CONTROL`,"warn");loadActions();};
+  $("#adv-updater-propose").onclick=async()=>{const r=await api("/api/advanced/propose-updater",{service:$("#adv-updater").value});if(r.error)return toast(r.error,"bad");toast(`Updater pause #${r.id} requires approval in CONTROL`,"warn");loadActions();};
+  $("#adv-etw-capture").onclick=async()=>{const r=await api("/api/advanced/propose-etw",{duration:12});if(r.error)return toast(r.error,"bad");const run=await api("/api/action/run",{id:r.id,confirmed:true});toast(run.result || "ETW capture requested",run.result?.startsWith("blocked")?"bad":"ok");loadActions();loadAdvanced(true);};
+  $("#adv-settings-save").onclick=async()=>{
+    const settings={etw_enabled:$("#adv-etw-enabled").checked,lhm_enabled:$("#adv-lhm-enabled").checked,cpu_temp_warn_c:Number($("#adv-cpu-threshold").value),gpu_temp_warn_c:Number($("#adv-gpu-threshold").value)};
+    const r=await api("/api/advanced/settings",settings);if(r.error)return toast(r.error,"bad");
+    const a=await api("/api/config",{autopilot:{etw_capture:$("#adv-etw-auto").checked}});if(a.error)return toast(a.error,"bad");
+    toast("Advanced sensor policy saved persistently","ok");loadAdvanced(true);
+  };
+  $("#adv-revert-all").onclick=async()=>{if(!confirm("Revert every outstanding change SENTINEL has a captured undo snapshot for? This does not undo third-party or user actions."))return;const r=await api("/api/advanced/revert-all",{confirmed:true});if(r.error)return toast(r.error,"bad");toast(`Rollback attempted ${r.attempted}; reverted ${r.reverted}`,r.reverted===r.attempted?"ok":"warn");loadAdvanced(true);};
+  $("#adv-preview-kind").onchange=()=>{advDryRun=null;$("#adv-preview-propose").disabled=true;$("#adv-preview-output").innerHTML='<div class="empty">Run a fresh dry-run for the selected action.</div>';};
+  $("#adv-preview-run").onclick=async()=>{
+    const kind=$("#adv-preview-kind").value,args=kind==="timer_resolution"?{milliseconds:1}:{duration:12};
+    const r=await api("/api/advanced/dry-run",{kind,args});advDryRun={kind,args,result:r};
+    $("#adv-preview-output").innerHTML=`<pre>${esc(JSON.stringify(r,null,2))}</pre>`;
+    $("#adv-preview-propose").disabled=!(r.supported===true);
+  };
+  $("#adv-preview-propose").onclick=async()=>{
+    if(!advDryRun || advDryRun.kind!==$("#adv-preview-kind").value || advDryRun.result?.supported!==true)return toast("Run a successful dry-run for this exact action first","warn");
+    const {kind,args}=advDryRun;
+    const r=await api("/api/action/propose",{kind,args,reason:"Operator initiated after successful dry-run preview"});
+    if(r.error)return toast(r.error,"bad");
+    advDryRun=null;$("#adv-preview-propose").disabled=true;
+    toast(`Action #${r.id} queued. Check CONTROL for its risk tier and approval requirements.`,"warn");
+    loadActions();loadAdvanced(true);
+  };
 }
 
 /* ---------- additive AIE intelligence: evidence, memory, planning and read-only UIA ---------- */

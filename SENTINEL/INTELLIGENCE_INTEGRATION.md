@@ -49,7 +49,7 @@ The Intelligence panel also displays the current hardware profile, installed-mod
 
 The Windows UIA adapter has hard limits for windows, nodes, depth, timeout and output size. It collects only structural metadata (control type, automation/class/framework identifiers, enabled/offscreen/password-control flags, process metadata for top-level windows and bounding rectangles). It never reads a control's name/text/value pattern, password content, clipboard, screenshot, or invokes a UI control.
 
-**Interactive-session limitation:** the standard SENTINEL installer registers the main agent as a `SYSTEM` scheduled task. Windows isolates that task in Session 0, which cannot inspect the signed-in user's interactive desktop. In that installed configuration the inspector returns `interactive_user_session_required`. A real interactive-session companion is a separate deployment/security task; this integration does not silently downgrade SENTINEL's SYSTEM task or create a second privileged service. Running the agent directly in an interactive user session is required for a live UIA inspection.
+**Interactive-session requirement:** the SENTINEL installer registers the agent as an interactive-user logon scheduled task (highest available privileges), not a Session 0 SYSTEM task. This is intentional because UI Automation, physical-monitor visibility and user notifications require the signed-in desktop. Live UIA therefore requires the interactive session; it is bounded and read-only.
 
 ## API additions
 
@@ -94,4 +94,11 @@ node --check ui/app.js
 python -m py_compile agent.py sentinel/*.py tests/*.py
 ```
 
-The combined 33-test regression suite exercises memory privacy/revisions/deletion, sensitive-memory exclusion from embedding, goal dependency and completion gates/history, plan validation/integrity/one-time review, bounded evidence retention and missing-data semantics, authenticated evidence lookup, RAM-gated model routing, loopback-only Ollama access and the read-only/platform guard for UIA. These checks do not replace a live Windows validation pass: UIA, actual Ollama inference, Windows inventory providers, interactive scheduled-task installation, DPAPI key protection, display-window enumeration and ETW/WPR behavior must be validated on the target Windows machine. See [AUDIT_AND_LIMITATIONS.md](AUDIT_AND_LIMITATIONS.md) for a wider reliability and provenance review.
+The initial AIE integration suite contained 33 tests in its first implementation. The current SENTINEL source suite has 54 passing tests covering its repair, intelligence and advanced game-session layers. These checks do not replace a live Windows validation pass: UIA, actual Ollama inference, Windows inventory providers, interactive scheduled-task installation, DPAPI key protection, display-window enumeration and ETW/WPR behavior must be validated on the target Windows machine. See [AUDIT_AND_LIMITATIONS.md](AUDIT_AND_LIMITATIONS.md) for a wider reliability and provenance review.
+
+
+## Phase 1–4 SENTINEL game-session foundation
+
+The new `sentinel.advanced` layer adds rollback snapshots, dry-run/rate-limit/risk controls, per-session automatic restoration, personal baselines, temporal correlation, approved closed-loop tuning, session reports, six evidence-only AI specialists, bounded Windows ETW capture, NVIDIA/optional external thermal sensors and CPU Set game profiles. It is additive: it uses the existing SENTINEL action/API/SQLite/dashboard rather than introducing a second executor.
+
+See `AUDIT_AND_LIMITATIONS.md` for exact support and known gaps. In particular, ETW is periodic bounded capture rather than continuous real-time decoding; FPS/frame pacing is not measured; LHM is read-only and opt-in only if already running; and unsafe actions (standby flush, fan writes, arbitrary process termination or memory trim) remain disabled.

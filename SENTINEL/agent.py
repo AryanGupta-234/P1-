@@ -111,7 +111,7 @@ def main():
     if a and a[0] == "open": return open_hud()
     if port_busy():           # already running (task + manual start) - just open the HUD
         return open_hud()
-    from sentinel import collectors, brain, ai, intel, server
+    from sentinel import collectors, brain, ai, intel, server, advanced
     # Restore the trace catalog from durable SQLite metadata after agent restarts.
     try:
         core.STATE["traces"] = [
@@ -133,6 +133,8 @@ def main():
            (time.time(), "normal process shutdown", run_id))
     atexit.register(close_run)
     log("core", f"SENTINEL starting (pid {os.getpid()}, {'Windows' if IS_WIN else 'demo'}, run {run_id})", "ok")
+    advanced.start()
+    atexit.register(advanced.shutdown)
     collectors.start_all(demo="--demo" in a)
     core.thread(brain.brain_loop, "brain")
     core.thread(ai.ai_loop, "ai")
@@ -142,6 +144,7 @@ def main():
     try:
         server.serve()
     finally:
+        advanced.shutdown()
         close_run()
 
 

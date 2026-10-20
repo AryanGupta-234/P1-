@@ -607,6 +607,15 @@ def gpu_loop():
         if not out.strip():
             out = run([exe, f"--query-gpu={q.replace('throttle','event')}", "--format=csv,noheader,nounits"], 5)
         f = [x.strip() for x in out.strip().split(",")] if out.strip() else []
+        fan_out = run([exe, "--query-gpu=fan.speed", "--format=csv,noheader,nounits"], 5)
+        fan_pct = None
+        try:
+            fan_value = fan_out.strip().splitlines()[0].strip().replace("%", "")
+            if fan_value.upper() not in ("N/A", "[N/A]", "NOT SUPPORTED"):
+                parsed_fan = float(fan_value)
+                if 0 <= parsed_fan <= 100: fan_pct = parsed_fan
+        except (IndexError, TypeError, ValueError):
+            pass
         if len(f) >= 10:
             try:
                 metric("gpu", float(f[2])); metric("gputemp", float(f[1])); metric("gpuclk", float(f[3]))
@@ -614,6 +623,8 @@ def gpu_loop():
                 bits = int(f[9], 16) if f[9].startswith("0x") else 0
                 STATE["gpu"] = {"name": f[0], "temp": f[1], "util": f[2], "clk": f[3], "maxclk": f[4],
                                 "pwr": f[5], "pwrlim": f[6], "vram": f[7], "vramtot": f[8],
+                                "fan_speed_pct": fan_pct, "fan_speed_source": "nvidia-smi fan.speed (percentage)" if fan_pct is not None else "unsupported/unavailable",
+                                "fan_rpm": None,
                                 "throttle": [n for b, n in ((4, "power cap"), (8, "HW slowdown"), (32, "SW thermal"),
                                                             (64, "HW thermal"), (128, "power brake")) if bits & b]}
             except Exception:
@@ -986,8 +997,7 @@ def demo_loop():
         STATE["net"] = [{"proc": "VALORANT-Win64-Shipping.exe", "pid": 4242, "ip": "104.160.131.3", "port": 443},
                         {"proc": "discord.exe", "pid": 3311, "ip": "162.159.135.234", "port": 443},
                         {"proc": "chrome.exe", "pid": 2210, "ip": "142.250.77.46", "port": 443}]
-        if spike and t % 47 == 0:
-            log("procwatch", "spawn MoUsoCoreWorker.exe (pid 9100) <- svchost.exe", "debug")
+        if spike and t % 47 == 0:            log("procwatch", "spawn MoUsoCoreWorker.exe (pid 9100) <- svchost.exe", "debug")
             log("eventlog", "Windows event 10016 from DistributedCOM (System)", "warn")
         for nme, ev in (("system+processes", 1), ("kernel-counters (PDH)", 1), ("gpu (nvidia-smi)", 2), ("latency probe (ping)", 1),
                         ("network connections", 5), ("services (SCM)", 30), ("autorun watcher (registry)", 60),
@@ -997,7 +1007,8 @@ def demo_loop():
         sleep_to(t0, 1.0)
 
 
-def start_all(demo=False):    T = core.thread
+def start_all(demo=False):
+    T = core.thread
     from . import inventory
     T(inventory.loop, "inventory")
     if demo or not IS_WIN:

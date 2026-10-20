@@ -179,3 +179,23 @@ Status vocabulary: DONE / IN_PROGRESS / BLOCKED / PLANNED. A task is DONE only w
 | Telemetry may expose private identifiers | Field allowlists, no IP/MAC/command line by default | CONTROLLED |
 | Custom driver conflicts with enforced code integrity | ETW first; signed driver only after separate review | AVOIDED FOR NOW |
 | Model hallucination becomes an action | Observer remains read-only; future policy broker is mandatory | CONTROLLED |
+
+
+## M7 — SENTINEL game-session performance intelligence
+
+SENTINEL is maintained as a separate Windows user-mode project under `SENTINEL/`, sharing the repository but not replacing AIE's observer/cognitive architecture.
+
+| Area | Implementation state | Remaining evidence |
+|---|---|---|
+| Reversible action foundation | Implemented snapshots, dry-run, rate limits, risk tiers, SQLite journal, conditional undo, explicit Revert All, game-exit/restart restore | Validate each restore path on Windows 11, including user changes during a session |
+| Live ETW diagnostics | Bounded xperf NT Kernel Logger windows for process/thread/image, scheduling, DPC/ISR, interrupt, disk/file, hard-fault and network flags; tracerpt metadata + xperf DPC/ISR summaries | Validate real provider/event coverage, loss counters, stack/module symbol resolution and driver attribution on the target PC; this is periodic capture, not continuous streaming |
+| Closed-loop tuner | Approved reversible medium-risk action, at least 8 samples, post-change measurement window, 3% improvement keep threshold; otherwise rollback | Evaluate per-metric thresholds and confounders against held-out sessions |
+| Personal baselines and correlation | Per-game/local-hour rolling baseline with variance, anomaly events and timestamped process/Event Log/network/thermal/ETW/action candidates | Build labeled false-positive/negative corpus; correlations are not causal proof |
+| Specialist AI | Six evidence-only modes; local Ollama model discovery; rule engine remains the sole action gate | Benchmark explanation accuracy and prompt-injection robustness |
+| Game profiles | Reversible priority/affinity/CPU Set placement; optional AC power plan/timer; allowlisted efficiency-CPU-set background targets | Validate hybrid-core topology and restoration on ASUS target hardware |
+| Network/updater changes | Approval-only Wi-Fi AC power setting only with elevated ping/jitter evidence; limited third-party updater service allowlist | Validate adapter-specific behavior and service recovery on Windows |
+| Thermal telemetry and visuals | NVIDIA temperature/clock/power/throttle; percent fan reporting; optional external LHM WMI CPU/core temperature and RPM; warning timeline and animated dashboard | Confirm NVIDIA device availability and LHM WMI compatibility; no LHM install/bundle/launch; no ASUS fan curve writes |
+
+**Explicitly not implemented or enabled:** per-window DWM/DXGI frame pacing/FPS/drop-frame decoding; arbitrary process termination; standby-memory flush; working-set trim; generic DNS/TCP tuning; custom fan control; voltage/overclock changes. These do not meet the current safety/evidence contract.
+
+Validation: `python -m pytest SENTINEL/tests -q`, Python compilation of the SENTINEL tree, and `node --check SENTINEL/ui/app.js`. Native Windows ETW, xperf, CPU Set, power/timer/Wi-Fi/SCM, NVIDIA and optional LHM behavior still needs target-host verification.

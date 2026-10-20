@@ -84,8 +84,9 @@ def test_embeddings_validate_count_finiteness_and_dimensions():
     assert result.dimensions == 2
     assert len(result.embeddings) == 2
 
+    mismatch_client = OllamaClient(opener=fake_opener({"model": "model", "embeddings": [[0.1, 0.2]]}))
     with pytest.raises(OllamaError, match="dimension mismatch"):
-        client.embed("model", "text", expected_dimensions=3)
+        mismatch_client.embed("model", "text", expected_dimensions=3)
 
 
 @pytest.mark.parametrize("vectors", [

@@ -1,7 +1,7 @@
 """HTTP + Server-Sent-Events API. Binds 127.0.0.1 only; every /api call needs the install token."""
 import json, os, threading, time, urllib.parse, psutil, platform, sys, hmac
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from . import core, actions, ai, intel, inventory, intelligence
+from . import core, actions, ai, intel, inventory, intelligence, advanced
 from .core import CFG, STATE, LIVE, HIST, HEART, START, db, log, save_cfg
 
 UI = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "ui")
@@ -263,6 +263,10 @@ class H(BaseHTTPRequestHandler):
             return self._json([dict(zip(("id", "ts", "sev", "key", "title", "detail", "culprit"), r)) for r in rows])
         if p == "/api/actions":
             return self._json(actions.list_actions())
+        if p == "/api/advanced":
+            return self._json(advanced.status())
+        if p == "/api/advanced/journal":
+            return self._json(advanced.list_journal(min(500, int((qs.get("limit") or ["100"])[0]))))
         if p == "/api/intel":
             return self._json(intel.recent())
         if p == "/api/ai":
@@ -323,6 +327,9 @@ class H(BaseHTTPRequestHandler):
         if p == "/api/action/propose":
             kind = str(body.get("kind", ""))
             args = body.get("args") if isinstance(body.get("args"), dict) else {}
+            if body.get("dry_run") is True:
+                try: return self._json(advanced.action_preview(kind, args))
+                except (ValueError, TypeError) as exc: return self._json({"error": str(exc)}, 400)
             if kind == "terminate_process":
                 try:
                     pid, created, exe = int(args.get("pid")), float(args.get("create_time")), str(args.get("exe") or "")
@@ -335,6 +342,63 @@ class H(BaseHTTPRequestHandler):
             aid = actions.propose(kind, args, origin="user", reason=str(body.get("reason", "manual review"))[:240])
             if aid is None: return self._json({"error": "action is not allowlisted"}, 400)
             return self._json({"id": aid, "requires_confirmation": kind == "terminate_process"}, 201)
+        if p == "/api/advanced/dry-run":
+            try:
+                return self._json(advanced.action_preview(str(body.get("kind", "")), body.get("args") if isinstance(body.get("args"), dict) else {}))
+            except (ValueError, TypeError) as exc:
+                return self._json({"error": str(exc)}, 400)
+        if p == "/api/advanced/undo":
+            try: return self._json(advanced.undo_action(int(body.get("action_id", 0))))
+            except (TypeError, ValueError) as exc: return self._json({"error": str(exc)}, 400)
+        if p == "/api/advanced/revert-all":
+            if body.get("confirmed") is not True:
+                return self._json({"error": "explicit confirmation is required to revert every outstanding SENTINEL change"}, 400)
+            return self._json(advanced.revert_all())
+        if p == "/api/advanced/settings":
+            try: return self._json(advanced.settings_update(body))
+            except (ValueError, TypeError) as exc: return self._json({"error": str(exc)}, 400)
+        if p == "/api/advanced/game-profile/save":
+            try: return self._json(advanced.save_game_profile(str(body.get("game", "")), body.get("profile") if isinstance(body.get("profile"), dict) else {}))
+            except (ValueError, TypeError) as exc: return self._json({"error": str(exc)}, 400)
+        if p == "/api/advanced/game-profile/propose-current":
+            game = STATE.get("game") if isinstance(STATE.get("game"), dict) else None
+            if not game: return self._json({"error": "no active game process was detected"}, 409)
+            profile = advanced.get_game_profile(str(game.get("name") or ""))
+            if not profile: return self._json({"error": "no saved profile exists for the active game"}, 404)
+            aid = actions.propose("game_profile_apply", {"pid": game.get("pid"), "create_time": game.get("create_time"), "exe": game.get("exe"), "profile": profile}, origin="profile-tuner", reason="Operator requested the saved profile for the active game")
+            if not aid: return self._json({"error": "risk policy refused this profile action"}, 409)
+            return self._json({"id": aid, "risk": "medium", "requires_confirmation": True}, 201)
+        if p == "/api/advanced/tuner/start":
+            try:
+                result = advanced.start_tuner_experiment(str(body.get("kind", "")), body.get("args") if isinstance(body.get("args"), dict) else {}, str(body.get("metric", "")), str(body.get("direction", "lower")))
+                return self._json(result, 201)
+            except (ValueError, TypeError, RuntimeError) as exc:
+                return self._json({"error": str(exc)}, 400)
+        if p == "/api/advanced/propose-wifi":
+            if not core.STATE.get("advanced", {}).get("active_session_id"):
+                return self._json({"error": "Wi-Fi tuning is scoped to an active tracked game session"}, 409)
+            evidence = advanced._check_network_evidence()
+            if not evidence.get("candidate"):
+                return self._json({"error": "no persistent ping/jitter elevation; Wi-Fi tuning was not proposed", "evidence": evidence}, 409)
+            if not advanced.wifi_connected():
+                return self._json({"error": "no active Wi-Fi adapter detected; no network tuning proposed", "evidence": evidence}, 409)
+            aid = actions.propose("wifi_max_performance", {}, origin="network-evidence", reason=f"Measured ping {evidence.get('ping_mean_ms')} ms / jitter {evidence.get('jitter_mean_ms')} ms; approval required")
+            if not aid: return self._json({"error": "risk policy refused Wi-Fi adjustment"}, 409)
+            return self._json({"id": aid, "risk": "medium", "requires_confirmation": True, "evidence": evidence}, 201)
+        if p == "/api/advanced/propose-updater":
+            if not core.STATE.get("advanced", {}).get("active_session_id"):
+                return self._json({"error": "Updater pausing is scoped to an active tracked game session"}, 409)
+            service = str(body.get("service", "")).casefold()
+            if service not in advanced.UPDATER_SERVICES:
+                return self._json({"error": "service is not on the explicit third-party updater allowlist"}, 400)
+            aid = actions.propose("pause_updater_service", {"service": service}, origin="user", reason="Pause allowlisted updater during a game; operator approval required")
+            if not aid: return self._json({"error": "risk policy refused updater action"}, 409)
+            return self._json({"id": aid, "risk": "medium", "requires_confirmation": True}, 201)
+        if p == "/api/advanced/propose-etw":
+            duration = max(5, min(20, int(body.get("duration", 12))))
+            aid = actions.propose("etw_capture", {"duration": duration}, origin="user", reason="Operator requested bounded kernel ETW diagnostic sample")
+            if not aid: return self._json({"error": "ETW is unavailable or policy refused the capture"}, 409)
+            return self._json({"id": aid, "risk": "safe", "requires_confirmation": False}, 201)
         if p == "/api/inventory/refresh":
             try:
                 data = inventory.scan()

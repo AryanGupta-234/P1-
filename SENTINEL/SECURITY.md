@@ -6,3 +6,14 @@
 - The installer creates a `SYSTEM` scheduled task and must be reviewed before deployment.
 - Automatic remediation is disabled by default. Review each allowlisted action before enabling its autopilot setting.
 - Report security issues privately to the repository maintainer rather than opening a public issue containing secrets or exploit details.
+
+
+Advanced tuning actions are risk-tiered. Dangerous/non-reversible operations
+(standby-list flush, arbitrary process termination, generic memory trimming,
+fan control and broad process-priority changes) are blocked. Medium-risk game
+profiles, power/timer changes, Wi-Fi power policy and allowlisted updater pauses
+require explicit approval and are session-linked for best-effort restoration.
+Undo refuses to overwrite state that changed independently after SENTINEL's
+action. ETW is bounded and never interrupts an existing kernel logger. Optional
+LibreHardwareMonitor access is read-only, opt-in, and requires an external
+instance already running; no driver or sensor utility is installed by SENTINEL.

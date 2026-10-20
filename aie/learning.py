@@ -562,7 +562,7 @@ class ExperienceStore:
                 if competing > 1:
                     continue
                 source_rows = db.execute(
-                    """SELECT experience_id,evidence_json,verifier FROM experiences e
+                    """SELECT e.experience_id,e.evidence_json,e.verifier FROM experiences e
                        JOIN experience_fingerprints f ON f.experience_id=e.experience_id
                        WHERE e.task_key=? AND f.semantic_key=? AND e.outcome=?
                        ORDER BY e.created_at,e.experience_id LIMIT 32""",

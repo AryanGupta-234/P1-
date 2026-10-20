@@ -44,6 +44,7 @@
   <button data-v="proc"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16"/><path d="M9 9h6v6H9zM9 1v3M15 1v3M9 20v3M15 20v3M1 9h3M1 15h3M20 9h3M20 15h3"/></svg><span class="lb">PROCESSES</span></button>
   <button data-v="net"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/></svg><span class="lb">NETWORK</span></button>
   <button data-v="ker"><svg viewBox="0 0 24 24"><path d="M4 5l8 7-8 7M13 19h7"/></svg><span class="lb">KERNEL</span></button>
+  <button data-v="adv"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 3v9l6 6M4 18l3-3"/></svg><span class="lb">TUNER / THERMAL</span></button>
   <div class="ng">INTELLIGENCE</div>
   <button data-v="evi"><svg viewBox="0 0 24 24"><path d="M4 4h16v16H4zM8 9h8M8 13h8M8 17h5"/></svg><span class="lb">EVIDENCE</span></button>
   <button data-v="intelx"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2M5 4l2 2M19 4l-2 2"/></svg><span class="lb">INTELLIGENCE</span></button>
@@ -129,6 +130,75 @@
     <div class="panel"><div class="ph">GUI composition / animation diagnostics<em>measured vs not yet measured</em></div><div class="pb"><div class="msg"><small>Current measurement boundary</small>Process session IDs and visible-window counts show which processes own visible top-level windows. PDH samples DPC, paging, faults, memory and disk counters. WPR captures an ETL trace only when an approved trace is running. SENTINEL does not yet decode DWM frame-present events, per-window frame pacing, dropped frames or input-to-photon latency into an FPS timeline. Use Windows Performance Analyzer / GPUView on the captured ETL for that deeper analysis; do not infer animation smoothness from DPC counters alone.</div></div></div>
   </div></div></section>
 
+<!-- ADVANCED PERFORMANCE / REVERSIBILITY -->
+<section class="view" id="v-adv">
+  <div class="row" style="margin-bottom:10px"><div><b>Performance intelligence &amp; reversible tuning</b><small>Evidence first · dry run · snapshot · approval · measure · rollback.</small></div><button class="btn or" id="adv-refresh">REFRESH TELEMETRY</button></div>
+  <div class="metrics" id="adv-metrics">
+    <div class="metric"><small>ACTIVE GAME</small><b id="adv-game">--</b><span id="adv-session">No session tracked</span></div>
+    <div class="metric"><small>ETW ENGINE</small><b id="adv-etw-state">--</b><span id="adv-etw-meta">Windows Performance Toolkit</span></div>
+    <div class="metric"><small>BASELINE SAMPLES</small><b id="adv-baseline-count">--</b><span>per game / hour / metric</span></div>
+    <div class="metric"><small>REVERSIBLE CHANGES</small><b id="adv-undo-count">--</b><span>journaled and not reverted</span></div>
+  </div>
+  <div class="adv-grid">
+    <div class="panel adv-span"><div class="ph">Thermal headroom <em>measured sensors only</em></div>
+      <div class="pb heat-grid">
+        <div class="heat-card"><div class="heat-dial" id="adv-cpu-dial"><div><b id="adv-cpu-temp">--</b><small>CPU °C</small></div></div><div class="heat-meta"><b>CPU package</b><small id="adv-cpu-source">Optional external sensor not enabled</small><small id="adv-cpu-threshold">Warning threshold -- °C</small></div></div>
+        <div class="heat-card"><div class="heat-dial" id="adv-gpu-dial"><div><b id="adv-gpu-temp">--</b><small>GPU °C</small></div></div><div class="heat-meta"><b>GPU temperature</b><small id="adv-gpu-source">NVIDIA nvidia-smi</small><small id="adv-gpu-throttle">No active throttle flag reported</small></div></div>
+        <div class="heat-card"><div class="fan-wrap"><svg id="adv-fan" class="fan-rotor" viewBox="0 0 100 100" aria-label="Fan speed visualization"><circle cx="50" cy="50" r="46"/><g><path d="M50 47 C30 10 53 5 58 13 C65 24 54 37 53 47Z"/><path d="M53 50 C90 30 95 53 87 58 C76 65 63 54 53 53Z"/><path d="M50 53 C70 90 47 95 42 87 C35 76 46 63 47 53Z"/><path d="M47 50 C10 70 5 47 13 42 C24 35 37 46 47 47Z"/></g><circle cx="50" cy="50" r="8"/></svg></div><div class="heat-meta"><b>Fan telemetry</b><strong id="adv-fan-value">--</strong><small id="adv-fan-source">RPM unavailable</small></div></div>
+      </div>
+      <div class="pb"><div class="ph" style="padding:8px 0;border:0">Per-core temperature map <em id="adv-core-meta">Optional LHM sensors only</em></div><div id="adv-core-map" class="core-heatmap"><div class="empty">CPU core sensors are unavailable. Enable the optional reader only when LibreHardwareMonitor is already running.</div></div></div>
+    </div>
+    <div class="panel"><div class="ph">GPU clocks &amp; power <em>nvidia-smi</em></div><div class="pb kv" id="adv-gpu-stats"></div><div class="pb"><div class="adv-spark-row"><span>GPU clock</span><svg id="adv-clock-spark" viewBox="0 0 260 44"></svg></div><div class="adv-spark-row"><span>GPU power</span><svg id="adv-power-spark" viewBox="0 0 260 44"></svg></div></div></div>
+    <div class="panel"><div class="ph">Thermal / power limit timeline <em>sensor transitions, no inferred events</em></div><div class="pb list" id="adv-thermal-timeline"><div class="empty">Waiting for sensor transitions.</div></div></div>
+    <div class="panel"><div class="ph">Live ETW kernel engine <em id="adv-etw-source">periodic bounded trace windows</em></div><div class="pb">
+      <div class="row"><span class="tag" id="adv-etw-status">DISABLED</span><button class="btn sm or" id="adv-etw-capture">CAPTURE 12s ETW</button></div>
+      <div class="msg" id="adv-etw-note" style="margin-top:8px">ETW is not a continuous stream in this build. When enabled and explicitly opted in, SENTINEL captures short kernel trace windows while a game is active.</div>
+      <div class="list" id="adv-drivers" style="margin-top:8px"></div><div class="list" id="adv-etw-events"></div>
+    </div></div>
+    <div class="panel"><div class="ph">Personal performance baseline <em id="adv-baseline-heading">per game and local hour</em></div><div class="pb"><div class="msg">Welford running statistics learn observed CPU, GPU, DPC/ISR, paging, disk and network metrics by game and time of day. A deviation is a lead, not proof of cause.</div><div class="list" id="adv-baseline-table"></div></div></div>
+    <div class="panel"><div class="ph">Cause correlation <em>preceding system changes</em></div><div class="pb list" id="adv-correlation"><div class="empty">Correlated event candidates will appear when a metric deviates from its personal baseline.</div></div></div>
+    <div class="panel adv-span"><div class="ph">Game-session reports <em>before / after snapshots</em></div><div class="pb list" id="adv-sessions"><div class="empty">No completed game sessions yet.</div></div></div>
+    <div class="panel"><div class="ph">Per-game profile <em>priority · CPU Sets · power · timer</em></div><div class="pb adv-form">
+      <label>Game executable name<input id="adv-profile-game" placeholder="e.g. VALORANT-Win64-Shipping.exe"></label>
+      <label>Process priority<select id="adv-priority"><option value="normal">Normal</option><option value="below_normal">Below normal</option><option value="above_normal" selected>Above normal</option></select></label>
+      <label>CPU Sets<select id="adv-cpu-sets"><option value="unchanged">Leave scheduler placement unchanged</option><option value="performance">Prefer performance cores</option><option value="efficiency">Prefer efficiency cores</option></select></label>
+      <label>CPU affinity (optional logical CPU indexes)<input id="adv-affinity" placeholder="e.g. 0,2,4,6"></label>
+      <label>Background process allowlist (optional)<input id="adv-bg-allow" placeholder="OneDrive.exe, Discord.exe"></label>
+      <label class="tog"><span>Apply selected power plan<small>Restored on game exit / undo</small></span><input id="adv-power-enable" type="checkbox"></label>
+      <label>Power plan GUID<input id="adv-power-guid" value="8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c"></label>
+      <label>Timer resolution<select id="adv-timer"><option value="0">No request</option><option value="1">1 ms</option><option value="2">2 ms</option></select></label>
+      <div class="row"><button class="btn" id="adv-profile-save">SAVE PROFILE</button><button class="btn or" id="adv-profile-propose">PROPOSE FOR ACTIVE GAME</button></div>
+      <small>CPU Set placement is a scheduling preference, not a core reservation. Every profile change requires approval and is restored when the tracked game exits.</small>
+    </div></div>
+    <div class="panel"><div class="ph">Closed-loop tuner <em>approve · measure · keep or revert</em></div><div class="pb adv-form">
+      <label>Reversible adjustment<select id="adv-tuner-kind"><option value="power_plan">High performance power plan</option><option value="timer_resolution">1 ms timer request</option></select></label>
+      <label>Metric to measure<select id="adv-tuner-metric"><option value="dlat">Disk latency</option><option value="dpc">DPC time</option><option value="irq">Interrupt time</option><option value="cpu">CPU load</option><option value="ping">Ping latency</option><option value="jitter">Network jitter</option><option value="gpu">GPU utilization</option></select></label>
+      <label>Desired direction<select id="adv-tuner-direction"><option value="lower">Lower is better</option><option value="higher">Higher is better</option></select></label>
+      <div class="msg">The tuner measures a recent baseline, waits for explicit approval, then evaluates a 45-second measurement window. Less than 3% improvement triggers an undo. It cannot guarantee causality; use stable scenes and avoid changing other settings during the trial.</div>
+      <button class="btn or" id="adv-tuner-start">START CONTROLLED EXPERIMENT</button><div class="list" id="adv-tuner-history"></div>
+    </div></div>
+    <div class="panel"><div class="ph">Evidence-gated network tuning <em>Wi-Fi only · AC power · approval</em></div><div class="pb"><div class="msg" id="adv-network-evidence">Waiting for ping and jitter evidence.</div><button class="btn" id="adv-wifi-propose">PROPOSE WI-FI POWER ADJUSTMENT</button>
+      <hr><label>Third-party updater service<select id="adv-updater"><option value="gupdate">Google Update (gupdate)</option><option value="gupdatem">Google Update Machine (gupdatem)</option><option value="edgeupdate">Microsoft Edge Update (edgeupdate)</option><option value="edgeupdatem">Microsoft Edge Update Machine</option><option value="adobearmservice">Adobe ARM Update</option></select></label><button class="btn" id="adv-updater-propose">PROPOSE TEMPORARY PAUSE</button><small>Updater stopping is medium risk and never automatic. Windows Update, Defender and security services are not on the allowlist. Standby-list flushing and forced process termination remain disabled.</small>
+    </div></div>
+    <div class="panel"><div class="ph">Advanced sensor settings <em>persistent operator controls</em></div><div class="pb adv-form">
+      <label class="tog"><span>Enable bounded kernel ETW engine<small>Windows Performance Toolkit required</small></span><input id="adv-etw-enabled" type="checkbox"></label>
+      <label class="tog"><span>Automatically capture during games<small>Explicit safe diagnostic opt-in; max one window per 120 seconds</small></span><input id="adv-etw-auto" type="checkbox"></label>
+      <label class="tog"><span>Read optional LibreHardwareMonitor WMI<small>Only reads an already-running external instance; Sentinel does not install or launch it</small></span><input id="adv-lhm-enabled" type="checkbox"></label>
+      <label>CPU early-warning threshold °C<input id="adv-cpu-threshold" type="number" min="50" max="110" value="88"></label>
+      <label>GPU early-warning threshold °C<input id="adv-gpu-threshold" type="number" min="50" max="110" value="82"></label>
+      <button class="btn" id="adv-settings-save">SAVE SENSOR SETTINGS</button>
+      <small>LibreHardwareMonitor CPU/fan coverage depends on hardware, driver availability and its WMI provider. Fan controls are never written; use the manufacturer utility (Armoury Crate on supported ASUS models).</small>
+    </div></div>
+    <div class="panel adv-span"><div class="ph">Action dry-run preview <em>no system changes until approved</em></div><div class="pb adv-form">
+      <label>Action to inspect<select id="adv-preview-kind"><option value="etw_capture">Bounded kernel ETW capture · safe diagnostic</option><option value="wpr_trace">WPR GeneralProfile.Light trace · safe diagnostic</option><option value="power_plan">Switch to High Performance plan · medium risk</option><option value="timer_resolution">Request 1 ms timer resolution · medium risk</option></select></label>
+      <div class="msg">Run the dry-run first. It checks platform support, risk, current state and rollback availability without making a change. Medium-risk proposals are then queued for explicit approval.</div>
+      <div class="row"><button class="btn" id="adv-preview-run">RUN DRY-RUN</button><button class="btn or" id="adv-preview-propose" disabled>PROPOSE ACTION</button></div>
+      <div class="list" id="adv-preview-output"><div class="empty">No preview has been run.</div></div>
+    </div></div>
+    <div class="panel adv-span"><div class="ph">Action rollback journal <em>snapshot · risk · undo history</em><button class="btn sm danger" id="adv-revert-all">REVERT ALL SENTINEL CHANGES</button></div><div class="pb"><div class="msg">Safe diagnostic actions can be opted into. Medium-risk system changes always require approval. Dangerous/unreversible actions are blocked. Revert-all only reverts actions with a captured undo record; it does not reverse third-party or user changes.</div><div class="list" id="adv-journal"></div></div></div>
+  </div>
+</section>
+
 <!-- INTEL -->
 <section class="view" id="v-int"><div class="panel"><div class="ph">Intel feed<em>Microsoft Learn + GitHub</em></div>
   <div class="chatbox"><input id="i-q" placeholder="search Microsoft Learn + GitHub issues (e.g. nvlddmkm 141 Valorant)"><button class="btn" id="i-go">SCAN</button></div>
@@ -140,7 +210,7 @@
   <div class="pb"><div class="msg"><small>latest triage</small><span id="ai-status">Waiting for the first fast-model triage...</span></div></div></div>
   <div class="panel" style="margin-top:14px"><div class="ph">Council transcript</div>
     <div class="feed" id="tr" style="max-height:calc(100vh - 460px);font-family:var(--mo)"></div>
-    <div class="chatbox"><select id="ai-mode"><option value="council">COUNCIL</option><option value="fast">FAST</option><option value="deep">DEEP</option></select><input id="ai-in" placeholder="ask Sentinel anything about your PC..."><button class="btn or" id="ai-go">SEND</button></div></div>
+    <div class="chatbox"><select id="ai-mode"><option value="council">COUNCIL</option><option value="fast">FAST</option><option value="deep">DEEP</option><option value="frame_time">FRAME-TIME SPECIALIST</option><option value="driver_etw">DRIVER / ETW SPECIALIST</option><option value="thermal">THERMAL SPECIALIST</option><option value="network">NETWORK SPECIALIST</option><option value="memory_io">MEMORY / I/O SPECIALIST</option><option value="profile_tuner">PROFILE TUNER SPECIALIST</option></select><input id="ai-in" placeholder="ask Sentinel anything about your PC..."><button class="btn or" id="ai-go">SEND</button></div></div>
   <div class="panel" style="margin-top:14px"><div class="ph">Agent runtime &amp; inference telemetry<em>live process state, not model claims</em></div><div class="pb kv" id="ai-runtime"><div class="empty">Waiting for runtime status and usage sample.</div></div></div>
 </section>
 

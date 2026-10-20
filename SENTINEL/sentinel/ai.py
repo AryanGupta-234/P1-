@@ -325,12 +325,35 @@ def investigate(ins):
 
 def chat(msg, mode="council"):
     a = STATE["ai"]
+    from . import advanced
     if not a["online"] and not refresh_models():
-        return "Ollama is not reachable at " + CFG["ollama_url"] + ". Start Ollama and pull a model, e.g. `ollama pull llama3.2`."
+        return "Ollama is not reachable at " + CFG["ollama_url"] + ". Start Ollama and install a local model."
+    _say("user", "you", msg)
+    if mode in advanced.SPECIALISTS:
+        # Specialist modes are advisory only. Their output is never passed into
+        # the action layer; deterministic allowlists and risk policy remain authoritative.
+        status = advanced.status()
+        packet = {
+            "live": {k: LIVE.get(k) for k in ("cpu", "mem", "gpu", "gputemp", "gpuclk", "gpupwr", "dpc", "irq", "pagesin", "pagesout", "dlat", "ping", "jitter", "loss") if LIVE.get(k) is not None},
+            "game": STATE.get("game"), "gpu": STATE.get("gpu", {}), "cores": STATE.get("cores", []),
+            "kernel": STATE.get("kernel", {}), "personal_baseline": status.get("baseline", {}),
+            "network_evidence": status.get("network_evidence", {}), "hardware_sensors": status.get("hardware_sensors", {}),
+            "recent_etw_events": status.get("etw_events", [])[:12], "thermal_events": status.get("thermal_events", [])[:12],
+            "session_reports": status.get("session_reports", [])[:2],
+        }
+        q = f"Specialist task: {mode}\nUser question: {msg}\nMeasured local evidence (JSON): {json.dumps(packet, default=str)[:10000]}"
+        sysq = ("You are one of SENTINEL's specialist analysts. " + advanced.SPECIALISTS[mode] +
+                " Use only evidence in the payload, clearly label missing/unknown measurements, state confidence and limitations. "
+                "Return diagnosis and at most three proposed next steps. Do not emit shell commands, scripts, registry edits or executable action payloads. "
+                "You cannot approve or execute changes: SENTINEL's deterministic rule engine and explicit user approvals decide all actions.")
+        model = a.get("deep") or a.get("fast")
+        slot = "deep" if model == a.get("deep") else "fast"
+        out = gen(model, q, sysq, timeout=240 if slot == "deep" else 120, slot=slot)
+        _say(mode, model, out)
+        return out
     ctx = json.dumps(snapshot())[:2500]
     q = f"User question: {msg}\nLive telemetry: {ctx}"
     sysq = "You are SENTINEL, the user's Windows gaming-performance agent. Answer concisely and concretely using the telemetry."
-    _say("user", "you", msg)
     if mode == "fast" or a["fast"] == a["deep"]:
         out = gen(a["fast"], q, sysq, timeout=120, slot="fast"); _say("fast", a["fast"], out); return out
     if mode == "deep":

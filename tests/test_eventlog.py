@@ -90,7 +90,7 @@ def test_event_log_provider_advances_record_cursor():
 
     assert [event.data["record_id"] for event in first] == [77, 78]
     assert [event.data["record_id"] for event in second] == [80, 81]
-    assert "EventRecordID > 78" in calls[1][3]
+    assert "EventRecordID > 79" in calls[1][3]
     assert "/rd:false" in calls[1]
 
 

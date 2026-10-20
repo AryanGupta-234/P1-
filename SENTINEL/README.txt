@@ -32,3 +32,18 @@ local plan drafts; RAM-aware DEEP-model fallback; and an explicitly triggered, r
 Windows UI Automation structural inspector. Existing SENTINEL screens, collectors, action
 allowlist, approval queue and P1 color theme are retained. See INTELLIGENCE_INTEGRATION.md
 for capability comparison, privacy boundaries, API routes and Windows-session limitation.
+
+
+ADVANCED GAME TUNING
+--------------------
+The TUNER / THERMAL workspace provides action snapshots and undo, dry-run,
+rate limits, risk tiers, per-game CPU/power/timer profiles, local-hour personal
+baselines, temporal correlations, controlled single-metric tuner trials,
+session reports and evidence-only specialist AI prompts.
+
+ETW uses bounded 12-second xperf captures when explicitly enabled; it is not a
+continuous decoded event stream. NVIDIA fan.speed is percentage, not RPM.
+CPU/per-core/fan sensors use only an already-running external LibreHardwareMonitor
+WMI provider after opt-in; SENTINEL does not install or launch it. Fan controls,
+standby-list flush, arbitrary process termination and forced memory trimming stay
+disabled. See AUDIT_AND_LIMITATIONS.md.

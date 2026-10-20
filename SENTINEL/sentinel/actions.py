@@ -15,7 +15,12 @@ KINDS = {
     "wpr_trace": "Record a 15 s ETW kernel trace (Windows Performance Recorder) for deep analysis",
     "trim_bg": "Trim working sets of background apps to free RAM for the game",
     "terminate_process": "Request graceful close of a reviewed user app window (no force-kill)",
-    "undo_power_plan": "Restore the previous power plan",
+    "undo_power_plan": "Restore the previous power plan (legacy; use the journal undo)",
+    "game_profile_apply": "Apply an approved reversible per-game priority / CPU Set / power / timer profile",
+    "timer_resolution": "Request a reversible 1–2 ms multimedia timer period for the game session",
+    "wifi_max_performance": "Use evidence-gated Wi-Fi adapter maximum-performance AC policy (reversible)",
+    "etw_capture": "Capture a bounded NT Kernel Logger ETW window and decode DPC/ISR/process evidence",
+    "pause_updater_service": "Temporarily pause an allowlisted third-party updater (approval required; undo restarts it)",
 }
 _last_trace = [0.0]
 _prev_plan = [None]
@@ -151,13 +156,61 @@ def _do(kind, args):
         return _run(["ipconfig", "/flushdns"]).strip()[:120] or "ok"
     if kind == "power_plan":
         if not IS_WIN:
-            return "skipped (not Windows)"
-        cur = _run(["powercfg", "/getactivescheme"])
-        _prev_plan[0] = next((w for w in cur.split() if len(w) == 36 and w.count("-") == 4), None)
-        _run(["powercfg", "/setactive", HIGH_PERF])
-        return f"High performance active (previous: {_prev_plan[0]})"
+            raise RuntimeError("power plan changes are Windows-only")
+        from .winutil import run_command
+        result = run_command(["powercfg.exe", "/setactive", HIGH_PERF], timeout=12)
+        if result.returncode != 0:
+            raise RuntimeError(f"powercfg failed (exit {result.returncode}): {(result.stderr or result.stdout or '')[:180]}")
+        return "High performance power plan activated; previous scheme is journaled for undo"
     if kind == "terminate_process":
         return _terminate_reviewed_process(args)
+    if kind == "game_profile_apply":
+        from . import advanced
+        return advanced.apply_game_profile(args)
+    if kind == "timer_resolution":
+        from . import advanced
+        ms = int(args.get("milliseconds", 1))
+        advanced._timer_request(ms, begin=True)
+        return f"requested {ms} ms multimedia timer period; paired release is journaled"
+    if kind == "wifi_max_performance":
+        from . import advanced
+        return advanced.apply_wifi_max_performance()
+    if kind == "pause_updater_service":
+        from . import advanced
+        service = str(args.get("service") or "").casefold()
+        if service not in advanced.UPDATER_SERVICES:
+            return "rejected (service is not allowlisted)"
+        from .winutil import run_command
+        state_before = advanced._service_state(service)
+        if state_before != "running":
+            return f"not changed (updater service state changed to {state_before or 'unknown'} outside SENTINEL before the request)"
+        r = run_command(["sc.exe", "stop", service], timeout=15)
+        message = (r.stdout or "") + " " + (r.stderr or "")
+        if r.returncode != 0 and "STOP_PENDING" not in message:
+            after_error = advanced._service_state(service)
+            if after_error != "running":
+                return f"not changed (SCM reported a stop error and the service is now {after_error or 'unknown'}; preserving its external state)"
+            raise RuntimeError(f"could not stop {service}: {message[:180]}")
+        # Do not record a reversible change until SCM confirms the service is stopped.
+        deadline = time.monotonic() + 12
+        state = None
+        while time.monotonic() < deadline:
+            state = advanced._service_state(service)
+            if state == "stopped":
+                return f"paused allowlisted updater {service}; it was running before the game-session action and is linked to automatic restore"
+            if state not in ("running", "paused"):
+                time.sleep(0.4)
+                continue
+            if state == "running":
+                time.sleep(0.4)
+                continue
+        raise RuntimeError(f"SCM did not confirm {service} stopped (last state: {state or 'unknown'}); attempted rollback will preserve uncertain state")
+    if kind == "etw_capture":
+        from . import advanced
+        result = advanced.capture_kernel_window(int(args.get("duration", 12)))
+        if not result.get("ok"):
+            raise RuntimeError(result.get("error", "ETW capture failed"))
+        return f"ETW capture saved: {result['path']} ({result['bytes']} bytes; {result['decoded'].get('event_count',0)} decoded events)"
     if kind == "undo_power_plan":
         if _prev_plan[0]:
             _run(["powercfg", "/setactive", _prev_plan[0]])
@@ -165,19 +218,19 @@ def _do(kind, args):
         return "nothing to restore"
     if kind == "wpr_trace":
         if time.time() - _last_trace[0] < 900:
-            return "skipped (rate limit: one trace per 15 min)"
+            raise RuntimeError("WPR capture rate limit: one trace per 15 minutes")
         if not IS_WIN:
-            return "skipped (not Windows)"
+            raise RuntimeError("WPR capture is Windows-only")
         from .winutil import run_command
         etw = STATE.setdefault("kernel", {}).get("etw", {})
         if etw.get("recording"):
-            return "skipped (a WPR ETW recording is already active; SENTINEL will not cancel another session)"
+            raise RuntimeError("an existing WPR recording is active; SENTINEL will not cancel or replace it")
         start_result = run_command(["wpr.exe", "-start", "GeneralProfile.Light", "-filemode"], timeout=30)
         start_text = ((start_result.stdout or "") + "\n" + (start_result.stderr or "")).strip()
         if start_result.returncode != 0:
             etw.update(available=True, recording=None, state="unknown", checked_at=time.time(),
                        status_text=start_text[-800:], error=f"WPR start failed (exit {start_result.returncode})")
-            return f"WPR start failed (exit {start_result.returncode}): {start_text[-240:]}"
+            raise RuntimeError(f"WPR start failed (exit {start_result.returncode}): {start_text[-180:]}")
         _last_trace[0] = time.time()
         etw.update(available=True, recording=True, state="recording", checked_at=time.time(),
                    status_text=start_text[-800:], error="")
@@ -199,18 +252,29 @@ def _do(kind, args):
             db("INSERT OR IGNORE INTO trace_archive(ts,file_path,size_bytes,source,status) VALUES(?,?,?,?,?)",
                (trace_ts, f, trace_bytes, trace_row["source"], "captured"))
             return f"trace saved: {f} (ETL; open in Windows Performance Analyzer)"
-        return f"WPR stop failed (exit {stop_result.returncode}): {stop_text[-240:]}"
+        raise RuntimeError(f"WPR stop failed (exit {stop_result.returncode}): {stop_text[-180:]}")
     return "unknown action"
 
 
 def propose(kind, args=None, origin="brain", reason=""):
-    """Entry point for brain / AI / UI. Enforces allowlist and autopilot policy."""
+    """Entry point for brain / AI / UI. Risk tiers gate every proposal."""
     if kind not in KINDS:
         log("actions", f"REJECTED non-allowlisted action '{kind}' from {origin}", "warn")
         return None
     args = args or {}
-    # Terminating a process is never eligible for unattended execution.
-    auto = bool(CFG["autopilot"].get(kind)) and kind not in ("undo_power_plan", "terminate_process") and core.get_profile()["automation"]
+    from . import advanced
+    try:
+        preview = advanced.action_preview(kind, args)
+    except Exception as exc:
+        log("actions", f"REJECTED {kind}: preview failed ({type(exc).__name__})", "warn")
+        return None
+    if not preview.get("supported") or preview.get("risk") == "dangerous":
+        log("actions", f"REJECTED {kind}: {('; '.join(preview.get('warnings') or []))[:180] or 'risk policy'}", "warn")
+        return None
+    # Only explicitly opted-in SAFE diagnostic actions may run automatically.
+    # Medium risk always needs a fresh approval; dangerous actions never run.
+    auto = (preview.get("risk") == "safe" and bool(CFG["autopilot"].get(kind))
+            and core.get_profile()["automation"])
     db("INSERT INTO actions(ts,kind,args,state,origin,result) VALUES(?,?,?,?,?,?)",
        (time.time(), kind, json.dumps(args), "pending", origin, reason))
     aid = db("SELECT MAX(id) FROM actions")[0][0]
@@ -223,19 +287,43 @@ def propose(kind, args=None, origin="brain", reason=""):
 
 
 def execute(aid, *, user_confirmed=False):
+    from . import advanced
     with _lock:
         rows = db("SELECT kind,args,state FROM actions WHERE id=?", (aid,))
         if not rows or rows[0][2] not in ("pending",):
             return "not pending"
         kind, args = rows[0][0], json.loads(rows[0][1] or "{}")
-        if kind == "terminate_process" and not user_confirmed:
-            return "explicit user confirmation required; action remains pending"
+        tier = advanced.risk_tier(kind)
+        if tier == "dangerous":
+            return "blocked by risk policy: dangerous actions are never automated and this action has no approved reversible implementation"
+        if tier == "medium" and not user_confirmed:
+            return "explicit user approval required; action remains pending"
+        try:
+            advanced.prepare_action(int(aid), kind, args)
+        except Exception as exc:
+            db("UPDATE actions SET state='blocked',result=? WHERE id=?", (f"{type(exc).__name__}: {str(exc)[:250]}", aid))
+            log("actions", f"{kind} blocked before execution: {type(exc).__name__}: {str(exc)[:180]}", "warn")
+            return f"blocked: {type(exc).__name__}: {str(exc)[:200]}"
         db("UPDATE actions SET state='running' WHERE id=?", (aid,))
     try:
         res = _do(kind, args)
         state = "done"
+        # The ETW trace is the only file created by diagnostic capture and can be deleted by Undo.
+        changed = not str(res).lower().startswith(("skipped", "nothing", "rejected", "not sent", "not changed"))
+        advanced.mark_action_result(int(aid), str(res), changed)
+        if changed and kind in {"game_profile_apply", "power_plan", "timer_resolution", "wifi_max_performance", "pause_updater_service"}:
+            advanced.link_action_to_session(int(aid))
     except Exception as e:
-        res, state = repr(e), "failed"
+        res, state = f"{type(e).__name__}: {str(e)[:220]}", "failed"
+        # Capture post-failure values for operations that can partially mutate
+        # process/power state before raising; undo remains conditional on exact match.
+        if kind in {"game_profile_apply", "power_plan"}:
+            try: advanced.capture_failed_action_state(int(aid))
+            except Exception: pass
+        # Best-effort rollback for partial writes; preserves user changes if state diverged.
+        rollback = advanced.undo_action(int(aid))
+        if rollback.get("ok"):
+            res += f" · rollback: {rollback['result']}"
     db("UPDATE actions SET state=?, result=? WHERE id=?", (state, res[:400], aid))
     publish("action", {"id": aid, "kind": kind, "state": state, "result": res})
     log("actions", f"{kind}: {res}", "ok" if state == "done" else "error")
@@ -253,6 +341,10 @@ def list_actions(limit=40):
     for r in rows:
         try: args = json.loads(r[6] or "{}")
         except Exception: args = {}
+        journal = db("SELECT risk,undo_available,changed,reverted_at,revert_result FROM action_journal WHERE action_id=?", (r[0],))
+        meta = journal[0] if journal else ("dangerous", 0, 0, None, "")
         decoded.append({"id": r[0], "ts": r[1], "kind": r[2], "desc": KINDS.get(r[2], r[2]),
-            "state": r[3], "origin": r[4], "result": r[5], "args": args})
+            "state": r[3], "origin": r[4], "result": r[5], "args": args,
+            "risk": meta[0], "undo_available": bool(meta[1]), "changed": bool(meta[2]),
+            "reverted_at": meta[3], "revert_result": meta[4]})
     return decoded

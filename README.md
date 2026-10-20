@@ -2,6 +2,12 @@
 
 Windows-first, hybrid, persistent intelligence research platform. AGI is a research objective, not a capability claim.
 
+## SENTINEL gaming/performance guardian
+
+This repository also includes **SENTINEL** as a separate Windows user-mode gaming/performance diagnostics project under [`SENTINEL/`](SENTINEL/). It combines local telemetry, a performance HUD, reversible game-session tuning, an SQLite action journal, explicit risk/approval gates, per-game/hour baselines, bounded ETW diagnostics and optional thermal sensor integration.
+
+Read the [SENTINEL setup guide](SENTINEL/README.md), [security model](SENTINEL/SECURITY.md) and [implementation/validation boundaries](SENTINEL/AUDIT_AND_LIMITATIONS.md). SENTINEL is not a kernel driver. It does not bundle/install LibreHardwareMonitor, alter fan curves, flush standby memory, force-kill processes or claim per-frame FPS attribution without a real frame-telemetry source. Its regression suite is run separately by Windows CI.
+
 ## Architecture spotlight
 **Current focus: M2 Context Intelligence — evidence-backed environment projection over the Windows observer.**
 Track status and next evidence in [docs/ARCHITECTURE_SPOTLIGHT.md](docs/ARCHITECTURE_SPOTLIGHT.md) and [docs/ROADMAP.md](docs/ROADMAP.md).

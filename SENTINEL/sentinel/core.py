@@ -1,5 +1,5 @@
 """Sentinel core: config, SQLite store, event bus, heartbeat registry."""
-import copy, json, os, secrets, sqlite3, threading, time, queue, sys
+import copy, json, os, secrets, sqlite3, threading, time, queue, sys, math
 from urllib.parse import urlparse
 
 IS_WIN = os.name == "nt"
@@ -35,8 +35,13 @@ DEFAULTS = {
         "flush_dns": False,
         "power_plan": False,
         "wpr_trace": False,
+        "etw_capture": False,
     },
     "retention_days": 14,
+    "advanced": {
+        "etw_enabled": False, "lhm_enabled": False, "cpu_temp_warn_c": 88.0,
+        "gpu_temp_warn_c": 82.0, "auto_report_sessions": True,
+    },
 }
 
 
@@ -168,6 +173,18 @@ def load_cfg():
     else:
         for key, default in DEFAULTS["autopilot"].items():
             if not isinstance(cfg["autopilot"].get(key), bool): cfg["autopilot"][key] = default
+    if not isinstance(cfg.get("advanced"), dict): cfg["advanced"] = copy.deepcopy(DEFAULTS["advanced"])
+    else:
+        for key, default in DEFAULTS["advanced"].items():
+            value = cfg["advanced"].get(key, default)
+            if isinstance(default, bool):
+                cfg["advanced"][key] = value if isinstance(value, bool) else default
+            else:
+                try:
+                    number = float(value)
+                    cfg["advanced"][key] = max(50.0, min(110.0, number)) if math.isfinite(number) else default
+                except (TypeError, ValueError, OverflowError):
+                    cfg["advanced"][key] = default
     save_cfg(cfg)
     return cfg
 
@@ -328,6 +345,7 @@ CREATE TABLE IF NOT EXISTS trace_archive(
     size_bytes INTEGER NOT NULL, source TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'captured'
 );
 CREATE INDEX IF NOT EXISTS ix_trace_archive_ts ON trace_archive(ts);
+CREATE TABLE IF NOT EXISTS game_profiles(game_key TEXT PRIMARY KEY,display_name TEXT NOT NULL,profile_json TEXT NOT NULL,updated_at REAL NOT NULL);
 """)
 _db.commit()
 
@@ -387,7 +405,7 @@ def config_revision():
 LIVE = {}                 # latest value per metric key
 HIST = {}                 # key -> list[(ts, v)] ring for the UI (last 10 min @1s)
 HIST_MAX = 600
-STATE = {"procs": [], "proc_total": 0, "proc_recommendations": [], "net": [], "services": {}, "services_catalog": [], "gpu": {}, "game": None, "ai": {}, "traces": [], "kernel": {}}
+STATE = {"procs": [], "proc_total": 0, "proc_recommendations": [], "net": [], "services": {}, "services_catalog": [], "gpu": {}, "game": None, "ai": {}, "traces": [], "kernel": {}, "cores": [], "advanced": {}, "hardware_sensors": {"available": False, "reason": "not sampled"}}
 _subs = []
 _subs_lock = threading.Lock()
 HEART = {}                # collector name -> dict(last, every, runs, note, err)

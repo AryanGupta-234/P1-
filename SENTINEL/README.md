@@ -118,6 +118,18 @@ The automated suite includes portable unit and demo/API checks. It does not subs
 └── README.md
 ```
 
+## Advanced game-session tuning (new)
+
+The **TUNER / THERMAL** workspace adds a snapshotted reversible-action journal, dry-run previews, action rate limits, risk tiers, session-scoped restore, per-game/per-local-hour baselines, temporal cause-correlation candidates, session before/after reports, and six specialist AI modes. AI is advisory only; rule-based risk policy and explicit approvals control actions.
+
+Per-game profiles can set process priority, CPU affinity/Windows CPU Sets, optional allowlisted background-process efficiency-core placement, an AC-only power plan and a process-scoped timer request. Wi-Fi power policy is offered only with sustained ping/jitter evidence, a connected Wi-Fi adapter and AC power. Updater pausing is restricted to a short allowlist of third-party services and is approval-only. Changes are restored at game exit or during recovery after a Sentinel restart when the previous state is still identifiable and has not been changed independently.
+
+ETW capture uses optional Windows Performance Toolkit `xperf` for bounded 12-second NT Kernel Logger windows; automatic windows are disabled until explicitly opted into and are sampled no more than once every 120 seconds during a detected game. This is not a continuous decoded trace. Driver names appear only when xperf or event fields resolve a `.sys` module. Unresolved attribution remains unresolved.
+
+NVIDIA GPU metrics use `nvidia-smi`. Fan speed is reported as a percentage unless an external sensor source reports RPM. CPU/per-core temperatures and RPM can be read from an already-running LibreHardwareMonitor WMI provider only after explicit opt-in; SENTINEL never installs or launches it. Fan curves are not written. Dangerous actions such as standby-list flushing, process termination, working-set trimming and fan control are disabled. The current UI does not decode per-window frame pacing or dropped frames.
+
+See [AUDIT_AND_LIMITATIONS.md](AUDIT_AND_LIMITATIONS.md) for risk boundaries and the Windows validation matrix.
+
 ## Limitations
 
 Telemetry availability depends on Windows version, hardware, drivers, language, and permissions. The Kernel page uses PDH / Performance Counters for live DPC, interrupt, paging and memory counters; these graphs do not by themselves prove an ETW trace is active. WPR status is polled separately and an unrecognized status is shown as unknown. Captured ETL traces must be inspected with Windows Performance Analyzer / GPUView for provider-level events. SENTINEL does not yet decode ETW present-history into a live per-frame animation/FPS timeline.

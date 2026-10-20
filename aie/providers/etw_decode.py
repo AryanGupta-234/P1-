@@ -185,8 +185,11 @@ def decode_trace_xml(
     jsonl_path.parent.mkdir(parents=True, exist_ok=True)
     count = 0
     batch: list[AIEEvent] = []
+    created_output = False
     try:
+        # Delete only output created by this invocation; never remove an existing file.
         with jsonl_path.open("x", encoding="utf-8") as output:
+            created_output = True
             for event in iter_process_events(xml_path, event_host_id=event_host_id):
                 output.write(event.model_dump_json() + "\n")
                 count += 1
@@ -198,6 +201,7 @@ def decode_trace_xml(
             if store is not None and batch:
                 store.append_many(batch)
     except Exception:
-        jsonl_path.unlink(missing_ok=True)
+        if created_output:
+            jsonl_path.unlink(missing_ok=True)
         raise
     return count
