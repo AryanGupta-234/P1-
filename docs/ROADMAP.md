@@ -205,7 +205,7 @@ The interface redesign is implemented on `dev`: the original gunmetal/steel pale
 
 Implemented on `dev`:
 - Default-enabled `auto_restart_enabled` profile setting and Feature Control toggle.
-- Worker source watcher for installed AIE Python modules with three stable snapshots at 2-second intervals before restarting.
+- Worker source watcher for installed AIE Python modules with two stable snapshots at 1-second intervals before restarting.
 - Automatic graceful restart when saved continuous/advanced sensor settings require collector reinitialization.
 - Shared restart marker, graceful observer/dashboard shutdown, single-instance mutex release and detached worker relaunch.
 - Global dashboard **RESTART** action and automatic reconnect/reload when the replacement worker PID appears.
