@@ -26,23 +26,24 @@ DASHBOARD_HTML = r"""<!doctype html>
 
 
 
+
 :root{
   color-scheme:dark;
-  --bg:#111722;
-  --bg2:#151a24;
-  --panel:#1c2431;
-  --panel2:#242f3f;
-  --line:#263243;
-  --line2:#354357;
-  --text:#f1f5f9;
-  --soft:#b8c5d5;
-  --muted:#8798ad;
-  --orange:#77b7ff;
-  --orange2:#3979b8;
-  --lime:#77b7ff;
+  --bg:#080b0c;
+  --bg2:#0d1112;
+  --panel:#121819;
+  --panel2:#171f20;
+  --line:#2a3735;
+  --line2:#405149;
+  --text:#e4e9e3;
+  --soft:#b5c0b9;
+  --muted:#718079;
+  --orange:#ff6b38;
+  --orange2:#c94c2c;
+  --lime:#b8e65b;
   --red:#f05252;
   --amber:#eab45e;
-  --green:#7cc6a2;
+  --green:#7cd59c;
   --display:"Segoe UI Variable Display","Aptos Display","Segoe UI",Arial,sans-serif;
   --mono:"Cascadia Code","Consolas",monospace;
   --radius:22px;
@@ -611,6 +612,7 @@ kbd{font:9px var(--mono);color:#829087;border:1px solid #526158;border-radius:6p
 
 
 
+
 </style>
 </head>
 <body>
@@ -965,6 +967,7 @@ const $=id=>document.getElementById(id);
 const headers={"X-AIE-Token":token};
 let currentView="cockpit",lastStatus=null,lastInventory=null,lastEvents=[],lastConfig=null,lastAlertKeys=null;
 let cpuHistory=[],memHistory=[],lastInventoryFetch=0,lastEventsFetch=0,lastModelsFetch=0;
+let knownWorkerStartedAt=null,autoReloadScheduled=false;
 const titles={cockpit:"COMMAND CENTER",system:"SYSTEM DEEP DIVE",telemetry:"TELEMETRY MATRIX",evidence:"EVIDENCE VAULT",ai:"SENTINEL AI LAB",autonomy:"FEATURES & AUTOMATION",tasks:"TASK MANAGER",knowledge:"TECHNICAL CODEX"};
 function el(tag,cls,text){const n=document.createElement(tag);if(cls)n.className=cls;if(text!==undefined)n.textContent=text;return n}
 function toast(message,kind=""){const stack=$("toastStack"),box=el("div","toast "+kind,message);stack.append(box);setTimeout(()=>box.remove(),5200)}
@@ -1070,6 +1073,13 @@ function drawCharts(){drawCanvas("mainChart",cpuHistory,memHistory);drawCanvas("
 function addSample(s){const cpu=Number(s.cpu_percent)||0,total=Number(s.hardware?.memory_total_gib)||0,avail=Number(s.hardware?.memory_available_gib)||0;cpuHistory.push(cpu);memHistory.push(total?Math.max(0,(total-avail)/total*100):0);cpuHistory=cpuHistory.slice(-70);memHistory=memHistory.slice(-70);drawCharts()}
 function renderStatus(s){
  lastStatus=s;const running=s.status==="running",paused=s.observer_paused===true,features=s.features||{},health=s.provider_health||{},providers=Object.values(health),bad=providers.filter(p=>p.state==="degraded").length,deep=s.deep_inventory||{},alerts=Array.isArray(deep.posture_alerts)?deep.posture_alerts:[],restart=s.restart||{};
+ const workerRestarted=Boolean(knownWorkerStartedAt&&s.started_at&&knownWorkerStartedAt!==s.started_at);
+ if(s.started_at)knownWorkerStartedAt=s.started_at;
+ if(workerRestarted&&!autoReloadScheduled&&s.status==="running"){
+  autoReloadScheduled=true;
+  toast("Sentinel restarted successfully · loading the updated command deck.","warn");
+  setTimeout(()=>window.location.reload(),450);
+ }
  if($("restartWatchState"))$("restartWatchState").textContent=restart.watch_status==="watching"?"AUTO RESTART / WATCHING":restart.watch_status==="disabled"?"AUTO RESTART / OFF":String(restart.watch_status||"CHECKING").replaceAll("_"," ").toUpperCase();
  if($("restartWatchDescription")){
   const restartReason=restart.reason||restart.last_reason;
@@ -1551,7 +1561,7 @@ $("eventSearch").addEventListener("click",async()=>{
 $("eventRefresh").addEventListener("click",()=>loadEvents(true));
 document.querySelectorAll("[data-command]").forEach(n=>n.addEventListener("click",()=>runCommand(n.dataset.command)));
 $("clock").textContent=new Date().toLocaleTimeString();setInterval(()=>$("clock").textContent=new Date().toLocaleTimeString(),1000);
-addEventListener("resize",drawCharts);drawStars();startBoot();setInterval(()=>refresh(false),3000);
+addEventListener("resize",drawCharts);drawStars();startBoot();setInterval(()=>refresh(false),2000);
 $("bootSkip").addEventListener("click",finishBoot);
 </script>
 </body>
