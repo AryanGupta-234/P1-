@@ -160,7 +160,8 @@ class GoalStore:
         return self.get(goal_id)["steps_by_id"][step_id]
 
     def update_step(self, goal_id: str, step_id: str, status: str):
-        self._id(goal_id); self._id(step_id)
+        self._id(goal_id)
+        self._id(step_id)
         if not isinstance(status, str) or status not in STEP_STATUSES:
             raise ValueError("invalid step status")
         now=datetime.now(timezone.utc).isoformat()

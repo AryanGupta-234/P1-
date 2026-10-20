@@ -55,7 +55,7 @@ class MemoryStore:
             db.execute(
                 "CREATE INDEX IF NOT EXISTS idx_memory_revisions_id "
                 "ON memory_revisions(memory_id, revision_id DESC)"
-            );
+            )
             db.execute("""CREATE TABLE IF NOT EXISTS memory_imports (
                 source_key TEXT PRIMARY KEY,
                 memory_id TEXT NOT NULL UNIQUE,

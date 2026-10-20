@@ -296,7 +296,7 @@ def test_knowledge_consolidation_requires_repetition_and_skips_conflicts(tmp_pat
 def test_knowledge_draft_integrity_and_one_time_review(tmp_path: Path):
     store = ExperienceStore(tmp_path / "learning.db")
     for index in range(3):
-        store.record("task", f"same result", "success", evidence_ids=[f"e{index}"])
+        store.record("task", "same result", "success", evidence_ids=[f"e{index}"])
     draft = store.create_knowledge_drafts("task")[0]
     accepted = store.resolve_knowledge_draft(draft["knowledge_id"], "accepted")
     assert accepted["status"] == "accepted"
