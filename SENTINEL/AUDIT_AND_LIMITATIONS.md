@@ -122,4 +122,4 @@ The advanced game-session layer is an additive feature set in `sentinel/advanced
 
 ### Phase test boundary
 
-The portable SENTINEL suite currently passes 54 tests, including journal/risk/rate-limit/rollback, game-session recovery, baseline/tuner, thermal source gating and UI/API behaviour. Python compilation and dashboard JavaScript syntax checks pass. Native xperf/WPR capture, CPU Set mapping, timer/power/Wi-Fi/SCM restoration, actual LHM WMI compatibility, NVIDIA sensor availability and game profile behaviour remain pending on the target Windows 11 laptop. No custom kernel driver is installed or required.
+The portable SENTINEL suite currently passes 55 tests, including journal/risk/rate-limit/rollback, game-session recovery, baseline/tuner, thermal source gating and UI/API behaviour. Python compilation and dashboard JavaScript syntax checks pass. Native xperf/WPR capture, CPU Set mapping, timer/power/Wi-Fi/SCM restoration, actual LHM WMI compatibility, NVIDIA sensor availability and game profile behaviour remain pending on the target Windows 11 laptop. No custom kernel driver is installed or required.
