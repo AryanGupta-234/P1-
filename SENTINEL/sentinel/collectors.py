@@ -997,7 +997,8 @@ def demo_loop():
         STATE["net"] = [{"proc": "VALORANT-Win64-Shipping.exe", "pid": 4242, "ip": "104.160.131.3", "port": 443},
                         {"proc": "discord.exe", "pid": 3311, "ip": "162.159.135.234", "port": 443},
                         {"proc": "chrome.exe", "pid": 2210, "ip": "142.250.77.46", "port": 443}]
-        if spike and t % 47 == 0:            log("procwatch", "spawn MoUsoCoreWorker.exe (pid 9100) <- svchost.exe", "debug")
+        if spike and t % 47 == 0:
+            log("procwatch", "spawn MoUsoCoreWorker.exe (pid 9100) <- svchost.exe", "debug")
             log("eventlog", "Windows event 10016 from DistributedCOM (System)", "warn")
         for nme, ev in (("system+processes", 1), ("kernel-counters (PDH)", 1), ("gpu (nvidia-smi)", 2), ("latency probe (ping)", 1),
                         ("network connections", 5), ("services (SCM)", 30), ("autorun watcher (registry)", 60),

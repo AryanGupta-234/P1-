@@ -997,7 +997,8 @@ def _start_game_session(game: dict, ts: float) -> int:
              (key, int(game.get("pid") or 0), float(game.get("create_time") or 0), ts, json.dumps(metrics, sort_keys=True)))
     sid = db("SELECT MAX(id) FROM game_sessions")[0][0]
     log("session", f"Game session started: {game.get('name')}", "ok", session_id=sid, game=key)
-    publish("game_session", {"id": sid, "game": key, "state": "started"})    return int(sid)
+    publish("game_session", {"id": sid, "game": key, "state": "started"})
+    return int(sid)
 
 
 def _end_game_session(session_id: int, ts: float) -> dict:
