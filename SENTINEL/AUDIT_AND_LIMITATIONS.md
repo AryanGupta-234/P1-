@@ -123,3 +123,7 @@ The advanced game-session layer is an additive feature set in `sentinel/advanced
 ### Phase test boundary
 
 The portable SENTINEL suite currently passes 55 tests, including journal/risk/rate-limit/rollback, game-session recovery, baseline/tuner, thermal source gating and UI/API behaviour. Python compilation and dashboard JavaScript syntax checks pass. Native xperf/WPR capture, CPU Set mapping, timer/power/Wi-Fi/SCM restoration, actual LHM WMI compatibility, NVIDIA sensor availability and game profile behaviour remain pending on the target Windows 11 laptop. No custom kernel driver is installed or required.
+
+### GPU power / clock visualization
+
+The Performance Intelligence workspace also renders a paired time-aligned waterfall from the same bounded GPU clock and power samples used by the sparklines. It is a normalized within-series history view, not a claim of synchronized hardware sampling beyond the collector timestamps. Missing or insufficient samples remain an explicit collecting state.

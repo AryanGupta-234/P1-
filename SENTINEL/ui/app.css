@@ -299,3 +299,17 @@ header{gap:16px}header>*{white-space:nowrap}.brand small{font-size:10px;letter-s
 .danger{border-color:#873c36!important;color:#ff8577!important}.adv-muted{color:var(--mut);font:10px var(--mo)}
 @media(max-width:1120px){.adv-grid{grid-template-columns:1fr}.heat-grid{grid-template-columns:1fr 1fr}.adv-span{grid-column:auto}}
 @media(max-width:650px){.heat-grid{grid-template-columns:1fr}.heat-card{justify-content:flex-start}.adv-row{grid-template-columns:1fr}.adv-actions{justify-content:flex-start}}
+/* Paired GPU clock/power time waterfall */
+.adv-waterfall-wrap{margin-top:15px;padding-top:12px;border-top:1px solid var(--line)}
+.adv-waterfall-heading{display:flex;justify-content:space-between;gap:10px;align-items:center;font:700 10px var(--mo);letter-spacing:.08em;color:var(--txt);text-transform:uppercase}
+.adv-waterfall-heading em{font:10px var(--mo);color:var(--mut);font-style:normal;letter-spacing:0;text-transform:none}
+#adv-power-clock-waterfall{display:block;width:100%;height:auto;max-height:170px;margin-top:5px;overflow:visible}
+.adv-waterfall-label{font:700 10px var(--mo);fill:var(--txt);letter-spacing:.08em}
+.adv-waterfall-unit,.adv-waterfall-range{font:9px var(--mo);fill:var(--mut)}
+.adv-waterfall-axis{stroke:var(--line);stroke-width:1}
+.adv-waterfall-empty{font:11px var(--mo);fill:var(--mut)}
+.adv-waterfall-legend{display:flex;gap:14px;flex-wrap:wrap;font:9px var(--mo);color:var(--mut)}
+.adv-waterfall-legend span{display:inline-flex;align-items:center;gap:5px}
+.adv-waterfall-legend i{width:8px;height:8px;border-radius:2px;display:inline-block}
+.adv-waterfall-legend i.clock{background:#b6e66a;box-shadow:0 0 8px #b6e66a66}
+.adv-waterfall-legend i.power{background:#62c7e8;box-shadow:0 0 8px #62c7e866}

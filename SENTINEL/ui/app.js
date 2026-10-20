@@ -316,6 +316,34 @@ function advSpark(id, key) {
   const points = values.map((v, i) => `${(i / (values.length - 1) * 258 + 1).toFixed(1)},${(39 - (v - lo) / span * 34).toFixed(1)}`).join(" ");
   svg.innerHTML = `<polyline points="${points}"></polyline>`;
 }
+function advPowerClockWaterfall() {
+  const svg = $("#adv-power-clock-waterfall");
+  if (!svg) return;
+  const clocks = (H.gpuclk || []).map(Number).filter(Number.isFinite).slice(-60);
+  const power = (H.gpupwr || []).map(Number).filter(Number.isFinite).slice(-60);
+  const count = Math.min(clocks.length, power.length);
+  if (count < 2) {
+    svg.innerHTML = '<text x="12" y="72" class="adv-waterfall-empty">Collecting aligned GPU clock and power samples…</text>';
+    return;
+  }
+  const renderLane = (values, y, label, unit, color) => {
+    const data = values.slice(-count);
+    const lo = Math.min(...data), hi = Math.max(...data), span = hi - lo || 1;
+    const left = 92, width = 452, top = y + 17, height = 30, base = top + height;
+    const step = width / data.length;
+    const bars = data.map((value, index) => {
+      const norm = (value - lo) / span;
+      const barHeight = 3 + norm * (height - 3);
+      const x = left + index * step + 0.6;
+      const w = Math.max(1, step - 1.2);
+      const yy = base - barHeight;
+      return `<rect x="${x.toFixed(2)}" y="${yy.toFixed(2)}" width="${w.toFixed(2)}" height="${barHeight.toFixed(2)}" rx="1" fill="${color}" opacity="${(0.48 + norm * 0.48).toFixed(2)}"></rect>`;
+    }).join("");
+    return `<g><text x="8" y="${y + 29}" class="adv-waterfall-label">${label}</text><text x="8" y="${y + 43}" class="adv-waterfall-unit">${unit}</text><line x1="${left}" y1="${base}" x2="${left + width}" y2="${base}" class="adv-waterfall-axis"></line>${bars}<text x="${left}" y="${base + 12}" class="adv-waterfall-range">${lo.toFixed(0)}</text><text x="${left + width}" y="${base + 12}" text-anchor="end" class="adv-waterfall-range">${hi.toFixed(0)}</text></g>`;
+  };
+  svg.innerHTML = renderLane(clocks, 0, "CLOCK", "MHz", "#b6e66a")
+    + renderLane(power, 72, "POWER", "W", "#62c7e8");
+}
 function advRows(rows, empty) {
   return rows.length ? rows.join("") : `<div class="empty">${esc(empty)}</div>`;
 }
@@ -356,7 +384,7 @@ async function loadAdvanced(force = false) {
     $("#adv-core-meta").textContent = hs.available ? `${cores.length} core temperature sensor(s)` : "Optional LHM sensors only";
     $("#adv-core-map").innerHTML = cores.length ? cores.map((x,i)=>{const n=Number(x.value), pct=Math.max(0,Math.min(100,n/105*100)); return `<div class="core-cell"><b>${esc(x.name || `Core ${i}`)}</b><small>${avNum(n,1)} °C</small><div class="heat-bar"><i style="width:${pct}%"></i></div></div>`;}).join("") : '<div class="empty">Per-core heat sensors not available. Enable optional LHM only while its own app is running.</div>';
     $("#adv-gpu-stats").innerHTML = `<div class="row"><b>GPU clock</b><span>${esc(gpu.clk ?? "--")} MHz</span></div><div class="row"><b>Power draw</b><span>${esc(gpu.pwr ?? "--")} W</span></div><div class="row"><b>Power limit</b><span>${esc(gpu.pwrlim ?? "--")} W</span></div><div class="row"><b>GPU utilization</b><span>${esc(gpu.util ?? "--")}%</span></div><div class="row"><b>VRAM</b><span>${esc(gpu.vram ?? "--")} / ${esc(gpu.vramtot ?? "--")} MiB</span></div><div class="row"><b>Fan telemetry</b><span>${esc(gpu.fan_speed_pct == null ? "unavailable" : gpu.fan_speed_pct + "%")}</span></div>`;
-    advSpark("adv-clock-spark","gpuclk"); advSpark("adv-power-spark","gpupwr");
+    advSpark("adv-clock-spark","gpuclk"); advSpark("adv-power-spark","gpupwr"); advPowerClockWaterfall();
     $("#adv-thermal-timeline").innerHTML = advRows((d.thermal_events || []).slice(0,16).map(x=>`<div class="event"><b>${esc(x.sensor)} · ${esc(x.event)}</b><small>${hms(x.ts)} · ${x.value==null?"value unavailable":avNum(x.value,1)+" °C"} ${esc(x.detail || "")}</small></div>`), "No thermal warning or GPU throttle transitions have been recorded.");
     const drivers = d.etw_engine?.driver_modules || [];
     $("#adv-drivers").innerHTML = drivers.length ? drivers.map(x=>`<div class="adv-row"><div><b>${esc(x.module)}</b><small>${esc(x.attribution)} · ${esc(x.line || "")}</small></div><span class="adv-badge">DRIVER MODULE</span></div>`).join("") : '<div class="empty">No .sys driver module resolved in the latest DPC/ISR report. This is not proof that no driver contributed.</div>';
