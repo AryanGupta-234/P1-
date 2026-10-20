@@ -1,0 +1,507 @@
+"use strict";
+const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const qs = new URLSearchParams(location.search);
+let TOKEN = qs.get("t") || ""; try { if (TOKEN) localStorage.setItem("st", TOKEN); else TOKEN = localStorage.getItem("st") || ""; } catch (e) { }
+const api = (p, body) => fetch(p, { method: body ? "POST" : "GET", headers: { "X-Sentinel-Token": TOKEN, "Content-Type": "application/json" }, body: body ? JSON.stringify(body) : undefined }).then(r => r.json());
+
+const H = {}, MAXH = 300; let S = null, view = "cmd";
+const LOGS = []; let paused = false, lastLogId = 0;
+const lv = { info: 1, ok: 1, warn: 1, error: 1, debug: 1 };
+const fmt = (v, d = 0) => v == null || isNaN(v) ? "--" : (+v).toFixed(d);
+const hms = ts => new Date(ts * 1000).toLocaleTimeString([], { hour12: false });
+const dur = s => { s = Math.floor(s); const d = Math.floor(s / 86400), h = Math.floor(s % 86400 / 3600), m = Math.floor(s % 3600 / 60); return (d ? d + "d " : "") + (h || d ? h + "h " : "") + m + "m " + (s % 60) + "s"; };
+
+/* ---------- P1 shell: titles, toasts, splash, starfield ---------- */
+const TITLES = { cmd: "COMMAND", sys: "SYSTEM", act: "ACTIVITY", proc: "PROCESSES", net: "NETWORK", ker: "KERNEL", evi: "EVIDENCE", intelx: "INTELLIGENCE", int: "INTEL FEED", ai: "AI CORE", ctl: "CONTROL", fc: "FEATURES", tsk: "TASKS" };
+const VKEYS = Object.keys(TITLES);
+function toast(msg, kind = "") { const b = document.createElement("div"); b.className = "toast " + kind; b.textContent = msg; $("#toasts").append(b); setTimeout(() => b.remove(), 5200); }
+let bootDone = false;
+function bp(p, stage, msg, cls = "") {
+  $("#bootProgress").style.width = p + "%"; $("#bootPct").textContent = String(p).padStart(2, "0") + "%";
+  if (stage) $("#bootStage").textContent = stage;
+  if (msg) { const l = $("#bootLog"), d = document.createElement("div"); d.className = cls; d.textContent = msg; l.append(d); l.scrollTop = l.scrollHeight; }
+}
+function endBoot() { if (bootDone) return; bootDone = true; $("#boot").classList.add("done"); $("#app").classList.add("ready"); try { sessionStorage.setItem("sb", "1"); } catch (e) { } }
+function starfield() {
+  const c = $("#starfield"), x = c.getContext("2d"); if (matchMedia("(prefers-reduced-motion:reduce)").matches) return;
+  let w, h, st = []; const rs = () => { w = c.width = innerWidth; h = c.height = innerHeight; st = Array.from({ length: Math.min(110, w * h / 14000 | 0) }, () => ({ x: Math.random() * w, y: Math.random() * h, r: Math.random() * 1.2 + .3, v: Math.random() * .12 + .02 })); };
+  rs(); addEventListener("resize", rs);
+  (function f() { x.clearRect(0, 0, w, h); x.fillStyle = "#cfe8a0"; for (const s of st) { s.y -= s.v; if (s.y < 0) { s.y = h; s.x = Math.random() * w; } x.globalAlpha = .3 + s.r / 2; x.beginPath(); x.arc(s.x, s.y, s.r, 0, 6.3); x.fill(); } requestAnimationFrame(f); })();
+}
+
+/* ---------- charts ---------- */
+function prep(c) { const r = devicePixelRatio || 1, w = c.clientWidth, h = c.clientHeight; if (c.width !== w * r || c.height !== h * r) { c.width = w * r; c.height = h * r; } const x = c.getContext("2d"); x.setTransform(r, 0, 0, r, 0, 0); x.clearRect(0, 0, w, h); return [x, w, h]; }
+function line(x, d, w, h, col, lo, hi, fill) {
+  if (!d.length) return; const n = Math.max(d.length, 60), st = w / (n - 1), off = n - d.length; x.beginPath();
+  d.forEach((v, i) => { const px = (off + i) * st, py = h - 2 - (Math.min(hi, Math.max(lo, v)) - lo) / ((hi - lo) || 1) * (h - 4); i ? x.lineTo(px, py) : x.moveTo(px, py); });
+  x.strokeStyle = col; x.lineWidth = 1.6; x.shadowColor = col; x.shadowBlur = 6; x.stroke(); x.shadowBlur = 0;
+  if (fill) { x.lineTo(w, h); x.lineTo(off * st, h); x.closePath(); const g = x.createLinearGradient(0, 0, 0, h); g.addColorStop(0, col + "55"); g.addColorStop(1, col + "00"); x.fillStyle = g; x.fill(); }
+}
+function spark(c, k, col, lo, hi) { const [x, w, h] = prep(c); const d = H[k] || []; if (hi == null) hi = Math.max(lo + 1, ...d) * 1.1; line(x, d, w, h, col, lo, hi, true); }
+function big(c, series, opts = {}) {
+  const [x, w, h] = prep(c); const all = series.flatMap(s => H[s.k] || []); let hi = opts.hi ?? Math.max(1, ...all) * 1.15, lo = opts.lo ?? 0;
+  x.strokeStyle = "rgba(184,230,91,.08)"; x.fillStyle = "#5a6a60"; x.font = "10px 'Share Tech Mono',monospace";
+  for (let i = 0; i <= 4; i++) { const y = 4 + i * (h - 8) / 4; x.beginPath(); x.moveTo(0, y); x.lineTo(w, y); x.stroke(); x.fillText(fmt(hi - (hi - lo) * i / 4, hi < 10 ? 1 : 0), 4, y - 2); }
+  series.forEach((s, i) => { line(x, H[s.k] || [], w, h, s.c, lo, hi, i === 0); x.fillStyle = s.c; x.fillText(s.l, w - 90, 14 + i * 12); });
+}
+
+/* ---------- tiles ---------- */
+const TILES = [
+  { k: "cpu", l: "CPU", u: "%", c: "#b8e65b", lo: 0, hi: 100, w: 75, b: 92 },
+  { k: "dpc", l: "DPC TIME", u: "%", c: "#a99bff", lo: 0, hi: null, w: 3, b: 8, d: 1 },
+  { k: "mem_free_mb", l: "FREE RAM", u: "MB", c: "#7cd59c", lo: 0, hi: null, w: 2500, b: 1200, inv: 1 },
+  { k: "pagesout", l: "PAGE EVICT", u: "/s", c: "#ff6b38", lo: 0, hi: null, w: 100, b: 400 },
+  { k: "dlat", l: "DISK LATENCY", u: "ms", c: "#ff6b38", lo: 0, hi: null, w: 12, b: 40, d: 1 },
+  { k: "gpu", l: "GPU 3D", u: "%", c: "#b8e65b", lo: 0, hi: 100, w: 999, b: 999 },
+  { k: "gputemp", l: "GPU TEMP", u: "°C", c: "#ff6b38", lo: 30, hi: 100, w: 80, b: 87 },
+  { k: "ping", l: "PING", u: "ms", c: "#7cd59c", lo: 0, hi: null, w: 40, b: 80, d: 1 },
+  { k: "jitter", l: "JITTER", u: "ms", c: "#ff6b38", lo: 0, hi: null, w: 8, b: 20, d: 1 },
+  { k: "cpuperf", l: "CPU CLOCK", u: "%", c: "#b8e65b", lo: 0, hi: 130, w: 80, b: 60, inv: 1 },
+  { k: "pagesin", l: "HARD FAULTS", u: "/s", c: "#a99bff", lo: 0, hi: null, w: 1500, b: 5000 },
+  { k: "netdown", l: "NET DOWN", u: "Mb/s", c: "#7cd59c", lo: 0, hi: null, w: 9e9, b: 9e9, d: 1 },
+];
+function buildTiles() { $("#tiles").innerHTML = TILES.map(t => `<div class="tile" id="t-${t.k}"><div class="k"><span>${t.l}</span><span id="tk-${t.k}"></span></div><div class="v"><span id="tv-${t.k}">--</span><small>${t.u}</small></div><canvas id="tc-${t.k}"></canvas></div>`).join(""); }
+function updTiles() {
+  TILES.forEach(t => {
+    const v = S.live[t.k]; if (v == null) { $("#t-" + t.k).style.opacity = .35; return; } $("#t-" + t.k).style.opacity = 1;
+    $("#tv-" + t.k).textContent = fmt(v, t.d || 0);
+    const bad = t.inv ? v < t.b : v > t.b, warn = t.inv ? v < t.w : v > t.w;
+    $("#t-" + t.k).className = "tile" + (bad ? " bad" : warn ? " warn" : "");
+    spark($("#tc-" + t.k), t.k, bad ? "#f05252" : warn ? "#ff6b38" : t.c, t.lo, t.hi);
+  });
+}
+
+/* ---------- command view ---------- */
+function updHero() {
+  const v = S.live.lag_index ?? 0, col = v < 20 ? "#b8e65b" : v < 45 ? "#ff6b38" : "#f05252";
+  $("#arc").style.strokeDashoffset = 653.5 * (1 - v / 100); $("#arc").style.stroke = col;
+  $("#c-num").textContent = fmt(v); $("#h-lag").textContent = fmt(v);
+  const st = $("#c-st"); st.textContent = v < 12 ? "OPTIMAL" : v < 25 ? "NOMINAL" : v < 45 ? "ELEVATED" : v < 70 ? "DEGRADED" : "CRITICAL"; st.setAttribute("fill", col);
+  const g = S.game; $("#c-game").textContent = g ? g.name.replace(".exe", "") + " · " + fmt(g.cpu, 0) + "% CPU · " + fmt(g.mem) + " MB" : "no game detected";
+  const p = $("#p-game"); p.textContent = g ? "GAME MODE · " + g.name.replace(/-Win64.*|\.exe/g, "") : "STANDBY"; p.className = "pill " + (g ? "game" : "off");
+  const a = S.ai, pa = $("#p-ai"); pa.textContent = a.online ? "AI · " + (a.busy ? a.busy.toUpperCase() + " THINKING" : "ONLINE") : "AI OFFLINE"; pa.className = "pill " + (a.online ? "ok" : "off");
+  const sy = S.system || {};
+  $("#c-plan").textContent = "PLAN " + (sy.power_plan || "--").toUpperCase(); $("#c-plan").className = "pill" + (/balanced|saver/i.test(sy.power_plan || "") ? " game" : "");
+  $("#c-vbs").textContent = "VBS " + (sy.vbs == null ? "--" : sy.vbs ? "ON" : "OFF"); $("#c-vbs").className = "pill" + (sy.vbs ? " game" : "");
+  const vg = (S.services.vanguard || {}); $("#c-vg").textContent = "VANGUARD " + (vg.vgk || "--").toUpperCase(); $("#c-vg").className = "pill " + (vg.vgk === "running" ? "ok" : "off");
+  const cs = S.cores || []; $("#c-cores").textContent = cs.length + " logical";
+  const box = $("#cores"); if (box.children.length !== cs.length) box.innerHTML = cs.map(() => "<i></i>").join("");
+  cs.forEach((c, i) => { box.children[i].style.height = Math.max(3, c * .64) + "px"; box.children[i].className = c > 85 ? "h" : ""; });
+  $("#culp").innerHTML = (S.culprits || []).map(c => `<div class="act"><div class="d"><b>${esc(c.name)}</b><span>caused ${c.n} spike${c.n > 1 ? "s" : ""}</span></div><div class="bar" style="width:90px"><i style="width:${Math.min(100, c.n * 12)}%;background:linear-gradient(90deg,#ff6b38,#ff6b38)"></i></div></div>`).join("") || '<div class="empty">no culprits caught yet - background is clean</div>';
+}
+
+/* ---------- activity ---------- */
+function lnHTML(r) { return `<div class="ln ${esc(r.level)}"><span class="t">${hms(r.ts)}</span><span class="s">${esc(r.src)}</span><span class="m">${esc(r.msg)}</span></div>`; }
+function buildChips() { $("#chips").innerHTML = Object.keys(lv).map(k => `<button class="chip on" data-l="${k}">${k.toUpperCase()}</button>`).join(""); $$("#chips .chip").forEach(b => b.onclick = () => { lv[b.dataset.l] ^= 1; b.classList.toggle("on", !!lv[b.dataset.l]); renderFeed(); }); }
+function renderFeed() { const q = $("#a-q").value.toLowerCase(); const rows = LOGS.filter(r => lv[r.level] && (!q || (r.src + r.msg).toLowerCase().includes(q))).slice(-400); const f = $("#feed"); const stick = f.scrollTop + f.clientHeight >= f.scrollHeight - 30; f.innerHTML = rows.map(lnHTML).join(""); if (stick) f.scrollTop = f.scrollHeight; $("#a-n").textContent = LOGS.length + " events"; }
+function addLog(r) { LOGS.push(r); if (LOGS.length > 1500) LOGS.shift(); const t = $("#ticker"); t.insertAdjacentHTML("beforeend", lnHTML(r)); while (t.children.length > 40) t.firstChild.remove(); t.scrollTop = t.scrollHeight; if (view === "act" && !paused) renderFeed(); }
+function updHeart() {
+  const now = S.now, rows = Object.entries(S.heart).sort();
+  $("#heart").innerHTML = "<tr><th>Collector</th><th>Every</th><th>Runs</th><th>Last</th><th>Detail</th></tr>" + rows.map(([n, h]) => {
+    const age = now - h.last, st = h.every === 0 ? "late" : age < h.every * 2.5 + 3 ? "" : age < h.every * 6 + 10 ? "late" : "dead";
+    return `<tr><td><span class="dot ${st}"></span>${esc(n)}</td><td>${h.every ? h.every + "s" : "-"}</td><td>${h.runs}</td><td>${fmt(age, 0)}s ago</td><td style="color:${h.err ? "#f05252" : "#829087"}">${esc(h.err || h.note)}</td></tr>`;
+  }).join("");
+}
+
+/* ---------- insights ---------- */
+let INS = [];
+function renderIns() { $("#ins").innerHTML = INS.slice(0, 7).map(i => `<div class="ins ${esc(i.sev)}"><time>${hms(i.ts)}</time><b>${esc(i.title)}</b><span>${esc(i.detail)}${i.culprit ? " · " + esc(i.culprit) : ""}</span></div>`).join("") || '<div class="empty">all clear - no problems detected</div>'; $("#i-n").textContent = INS.length + " total"; }
+
+/* ---------- processes: full identity, path and interactive-session facts ---------- */
+let sortK = "cpu", sortD = -1, PROC_ROWS = [], PROC_META = { total: 0, matched: 0, updated_at: 0 }, procFetchBusy = false, procLastFetch = 0, procQueryTimer = 0;
+function procIdentity(r) { return `${r.pid}:${Number(r.create_time || 0).toPrecision(15)}`; }
+function updProc() {
+  const rows = PROC_ROWS.slice().sort((a, b) => {
+    const av = a[sortK] ?? "", bv = b[sortK] ?? "";
+    return (typeof av === "string" ? String(av).localeCompare(String(bv)) : Number(av) - Number(bv)) * sortD;
+  });
+  const mx = Math.max(1, ...rows.map(r => Number(r.cpu || 0)));
+  const recs = S?.proc_recommendations || [];
+  const recKeys = new Set(recs.map(procIdentity));
+  const header = [["name", "PROCESS / PATH"], ["pid", "PID"], ["cpu", "CPU %"], ["mem", "RAM MB"], ["io", "IO MB/s"], ["thr", "THREADS"], ["session_id", "SESSION / WINDOWS"]];
+  const body = rows.map(r => {
+    const app = r.app_kind || (r.session_id === 0 ? "SESSION 0 · SERVICE / SYSTEM" : "SESSION UNKNOWN");
+    const canReview = r.onscreen_windows > 0 && r.session_id > 0 && r.path_state === "present" && r.exe;
+    const review = canReview ? `<button class="btn sm or" data-proc-review="${esc(procIdentity(r))}">REQUEST CLOSE</button>` : `<span class="tag mu">NO GUI CLOSE</span>`;
+    return `<tr><td style="min-width:270px;max-width:560px"><b>${esc(r.name)}</b> ${recKeys.has(procIdentity(r)) ? '<span class="tag warn">RESOURCE REVIEW</span>' : ""}<small class="proc-path" title="${esc(r.exe || "Executable path unavailable")}">${esc(r.exe || "Executable path unavailable")}</small><small>${esc(r.path_state || "path unknown")} · parent ${esc(r.parent_name || "--")} (${esc(r.parent_pid ?? "--")})</small></td><td>${r.pid}<small>${fmt(r.create_time, 3)}</small></td><td><div class="bar"><i style="width:${Math.min(100, Number(r.cpu || 0) / mx * 100)}%"></i></div>${fmt(r.cpu, 1)}</td><td>${fmt(r.mem)}</td><td>${fmt(r.io, 3)}</td><td>${esc(r.thr ?? "--")} / ${esc(r.handles ?? "--")} handles</td><td>${esc(r.session_id ?? "unknown")}<small>${esc(app)} · ${r.visible_windows || 0} visible / ${r.onscreen_windows || 0} on-screen · ${r.cloaked_windows || 0} cloaked${r.foreground ? " · FOREGROUND" : ""}</small>${review}</td></tr>`;
+  }).join("");
+  const q = document.querySelector("#ptab");
+  q.innerHTML = "<tr>" + header.map(([k,l]) => `<th data-k="${k}">${l}${sortK === k ? (sortD < 0 ? " ▼" : " ▲") : ""}</th>`).join("") + "</tr>" + (body || '<tr><td colspan="7"><div class="empty">No processes match this filter.</div></td></tr>');
+  $$("#ptab th[data-k]").forEach(t => t.onclick = () => { sortD = sortK === t.dataset.k ? -sortD : -1; sortK = t.dataset.k; updProc(); });
+  $$('[data-proc-review]').forEach(b => b.onclick = async () => {
+    const row = PROC_ROWS.find(x => procIdentity(x) === b.dataset.procReview);
+    if (!row) return toast("Process identity changed; refresh the list", "warn");
+    const ok = confirm(`Request a graceful close for ${row.name}?\n\n${row.exe}\nPID ${row.pid} · session ${row.session_id}\n\nSENTINEL will send WM_CLOSE only to the same process instance's non-cloaked windows intersecting a physical monitor. It will not force-kill the process.`);
+    if (!ok) return;
+    const r = await api("/api/action/propose", { kind: "terminate_process", args: { pid: row.pid, create_time: row.create_time, exe: row.exe }, reason: "User requested graceful close after reviewing process identity and window presence" });
+    if (r.error) return toast(r.error, "bad");
+    toast("Close request queued. Review and approve it in CONTROL; no process was stopped yet.", "warn");
+    await loadActions();
+  });
+  const fresh = PROC_META.updated_at ? new Date(PROC_META.updated_at * 1000).toLocaleTimeString() : "not yet sampled";
+  $("#p-n").textContent = `${PROC_META.matched}/${PROC_META.total} process records · ${PROC_META.inaccessible || 0} metadata-inaccessible · refreshed ${fresh}`;
+  const reviewRows = recs.filter(r => PROC_ROWS.some(p => procIdentity(p) === procIdentity(r)));
+  const box = $("#proc-recs");
+  if (box) box.innerHTML = reviewRows.map(r => `<div class="row"><div><b>${esc(r.name)} · PID ${r.pid}</b><small>${esc(r.reason)} · CPU ${fmt(r.cpu,1)}% · RAM ${r.mem} MB · ${r.observations} consecutive samples</small><small class="proc-path">${esc(r.exe)}</small></div><span class="tag warn">REVIEW ONLY</span></div>`).join("") || '<div class="empty">No sustained background resource-use candidate currently meets the conservative review threshold.</div>';
+}
+async function loadProcesses(force = false) {
+  if (procFetchBusy || (view !== "proc" && !force)) return;
+  const q = $("#p-q")?.value || "";
+  if (!force && Date.now() - procLastFetch < 4500) { updProc(); return; }
+  procFetchBusy = true;
+  try {
+    const d = await api("/api/processes?limit=2000&q=" + encodeURIComponent(q));
+    if (d.error) throw new Error(d.error);
+    // Deduplicate on process-instance identity, not PID (Windows reuses PIDs).
+    const unique = new Map();
+    for (const row of (d.rows || [])) unique.set(procIdentity(row), row);
+    PROC_ROWS = [...unique.values()]; PROC_META = { total: d.total || 0, matched: d.matched ?? PROC_ROWS.length, inaccessible: d.inaccessible || 0, updated_at: d.updated_at || 0 };
+    updProc(); procLastFetch = Date.now();
+  } catch (e) { toast("Process inventory: " + e.message, "warn"); }
+  finally { procFetchBusy = false; }
+}
+function maybeRefreshProcesses() { if (view === "proc" && Date.now() - procLastFetch > 5000) loadProcesses(true); }
+
+function updNet() {
+  $("#ntab").innerHTML = "<tr><th>Process</th><th>Remote</th><th>Port</th></tr>" + S.net.filter(c => { const q = ($("#n-q").value || "").toLowerCase(); return !q || (c.proc + " " + c.ip + " " + c.port).toLowerCase().includes(q); }).map(c => `<tr><td>${esc(c.proc)}</td><td>${esc(c.ip)}</td><td>${c.port}</td></tr>`).join(""); $("#n-n").textContent = S.net.length + " established";
+  big($("#nc-ping"), [{ k: "ping", c: "#7cd59c", l: "PING ms" }, { k: "jitter", c: "#ff6b38", l: "JITTER ms" }]);
+  big($("#nc-thr"), [{ k: "netdown", c: "#b8e65b", l: "DOWN Mb/s" }, { k: "netup", c: "#ff6b38", l: "UP Mb/s" }]);
+}
+let kernelArchiveLast = 0;
+async function loadKernelArchive() {
+  kernelArchiveLast = Date.now();
+  const key = $("#kernel-archive-key")?.value || "dpc";
+  const table = $("#kernel-archive");
+  if (!table) return;
+  table.innerHTML = '<tr><td>Loading archived samples…</td></tr>';
+  try {
+    const d = await api("/api/metrics/archive?metric=" + encodeURIComponent(key) + "&limit=500");
+    if (d.error) throw new Error(d.error);
+    table.innerHTML = "<tr><th>HOUR (LOCAL)</th><th>SAMPLES</th><th>AVG</th><th>MIN</th><th>MAX</th></tr>" +
+      (d.rows || []).map(r => `<tr><td>${new Date(r.hour_epoch * 3600000).toLocaleString()}</td><td>${esc(r.samples)}</td><td>${fmt(r.avg, 3)}</td><td>${fmt(r.min, 3)}</td><td>${fmt(r.max, 3)}</td></tr>`).join("") ||
+      '<tr><td colspan="5"><div class="empty">No archived samples yet. Hourly rollups appear after raw samples age beyond the retention window.</div></td></tr>';
+  } catch (e) {
+    table.innerHTML = `<tr><td>${esc(e.message || "archive unavailable")}</td></tr>`;
+  }
+}
+function updKer() {
+  big($("#kc-dpc"), [{ k: "dpc", c: "#a99bff", l: "PDH DPC %" }, { k: "irq", c: "#ff6b38", l: "PDH IRQ %" }]);
+  big($("#kc-pg"), [{ k: "pagesin", c: "#b8e65b", l: "PAGES IN/s" }, { k: "pagesout", c: "#ff6b38", l: "PAGES OUT/s" }, { k: "pagefaults", c: "#a99bff", l: "PAGE FAULTS/s" }]);
+  const k = S.kernel || {}, pdh = k.pdh || {}, etw = k.etw || {};
+  const age = pdh.last_sample ? `${Math.max(0, Math.round(Date.now()/1000-pdh.last_sample))}s ago` : "no samples yet";
+  $("#kernel-health").innerHTML = `<div class="row"><b>PDH / typeperf counters</b><span class="tag ${pdh.available && pdh.state === "streaming" ? "ok" : "bad"}">${esc(pdh.state || "unknown")}</span></div><small>${esc(pdh.source || "No source reported")} · ${esc(pdh.samples || 0)} samples · ${esc(age)}</small><small>${esc(pdh.counters?.length || 0)} requested counter(s) · ${esc(pdh.unsupported?.length || 0)} unsupported · ${esc(pdh.error || "")}</small><div class="row"><b>WPR / ETW session</b><span class="tag ${etw.recording === true ? "ok" : etw.recording === false ? "mu" : "bad"}">${etw.recording === true ? "RECORDING" : etw.recording === false ? "IDLE" : "UNKNOWN"}</span></div><small>${esc(etw.source || "Windows Performance Recorder")} · checked ${etw.checked_at ? new Date(etw.checked_at*1000).toLocaleTimeString() : "never"}</small><small>${esc(etw.error || "")}</small><small class="proc-path">${esc(etw.status_text || "No WPR status output available")}</small><small>Live paging/DPC values are PDH counters. ETW event payloads are not decoded into a live paging timeline yet; approved WPR captures are retained as ETL for WPA/GPUView analysis.</small>`;
+  const g = S.gpu || {}, kv = o => Object.entries(o).map(([k, v]) => `<i>${k}</i><span>${esc(v)}</span>`).join("");
+  $("#gpu").innerHTML = g.name ? kv({ Model: g.name, Temp: g.temp + " °C", Load: g.util + " %", Clock: g.clk + " / " + g.maxclk + " MHz", Power: g.pwr + " / " + g.pwrlim + " W", VRAM: g.vram + " / " + g.vramtot + " MB", Throttle: (g.throttle || []).join(", ") || "none" }) : '<span class="empty">No NVIDIA GPU telemetry; adapter may be non-NVIDIA or driver tool unavailable.</span>';
+  const sy = S.system || {}, vg = S.services.vanguard || {};
+  $("#sys").innerHTML = kv({ "Power plan": sy.power_plan || "--", "VBS / HVCI": sy.vbs == null ? "unknown" : sy.vbs ? "ON" : "OFF", "Defender RT": sy.defender_rt == null ? "unknown" : sy.defender_rt ? "ON" : "OFF", "OS uptime": (sy.uptime_h ?? "--") + " h", Battery: sy.battery ? sy.battery.pct + "% " + (sy.battery.plugged ? "plugged" : "ON BATTERY") : "n/a", Services: (S.services.running ?? "--") + " / " + (S.services.total ?? "--"), "vgc / vgk": (vg.vgc || "--") + " / " + (vg.vgk || "--"), "Autoruns": S.autoruns ?? "--", Processes: S.proc_total });
+  $("#traces").innerHTML = (S.traces || []).slice().reverse().map(t => `<div class="act"><div class="d"><b>${esc(String(t.file || "trace").split(/[\\/]/).pop())}</b><span>${t.mb} MB · ${hms(t.ts)} · ${t.exists === false ? "FILE MISSING" : "FILE PRESENT"}</span><small class="proc-path">${esc(t.file || "")}</small></div></div>`).join("") || '<div class="empty">No captured ETL traces. PDH graphs above do not mean ETW is recording.</div>';
+}
+
+/* ---------- intel / ai / control ---------- */
+async function loadIntel() { const d = await api("/api/intel"); $("#intel").innerHTML = d.map(g => `<div style="margin-bottom:14px"><div style="font:12px var(--mo);color:var(--or);letter-spacing:.1em">&gt; ${esc(g.q)}</div>` + g.items.map(i => `<div class="ref"><b><a href="${esc(i.url)}" target="_blank" rel="noopener noreferrer">${esc(i.title)}</a></b><span>${esc(i.src)} · ${esc(i.snippet)}</span></div>`).join("") + "</div>").join("") || '<div class="empty">crawler is warming up - first results in ~30 s. Or search above.</div>'; }
+function addTr(t) { const d = document.createElement("div"); d.className = "msg " + t.role; d.innerHTML = `<small>${esc(t.role === "user" ? "you" : t.role + " · " + t.model)} · ${hms(t.ts)}</small>${esc(t.text)}`; const b = $("#tr"); b.appendChild(d); b.scrollTop = b.scrollHeight; }
+function updAI() {
+  const a = S.ai || {}, u = a.usage || {}, rt = ST?.agent || {};
+  $("#m-fast").textContent = a.fast || "--"; $("#m-deep").textContent = a.deep || "--"; $("#n-fast").classList.toggle("act", a.busy === "fast"); $("#n-deep").classList.toggle("act", a.busy === "deep"); $("#lnk").classList.toggle("on", !!a.busy);
+  if (a.status) $("#ai-status").textContent = a.status; $("#ai-url").textContent = a.online ? a.models.length + " models installed" : (a.error || "Ollama offline");
+  if ($("#ai-runtime")) $("#ai-runtime").innerHTML = `<div class="row"><b>Agent process</b><span class="tag ${rt.pid ? "ok" : "bad"}">${rt.pid ? "RUNNING" : "UNKNOWN"}</span></div><small>PID ${esc(rt.pid ?? "--")} · ${esc(rt.execution_context || "context unknown")} · desktop access ${rt.desktop_access_expected ? "available in this session" : "not expected"}</small><small>${esc(rt.executable || "")} · ${esc(rt.username || "")}</small><small>Agent CPU ${fmt(rt.cpu_percent, 1)}% · RAM ${fmt(rt.rss_mb, 1)} MB (${fmt(rt.memory_percent, 2)}%) · ${esc(rt.threads ?? "--")} threads · ${esc(rt.handles ?? "--")} handles</small><small>Agent I/O read ${esc(rt.io_read_bytes == null ? "unknown" : (rt.io_read_bytes / 1048576).toFixed(1) + " MB")} · write ${esc(rt.io_write_bytes == null ? "unknown" : (rt.io_write_bytes / 1048576).toFixed(1) + " MB")}</small><div class="row"><b>Inference</b><span class="tag ${a.online ? "ok" : "bad"}">${a.busy ? "BUSY · " + esc(a.busy) : a.online ? "IDLE / READY" : "OFFLINE"}</span></div><small>Current task: ${esc(a.current_task || "none")} · model: ${esc(a.current_model || "none")}</small><small>Requests ${u.requests || 0} · success ${u.successes || 0} · failures ${u.failures || 0} · last latency ${fmt(u.last_duration_s, 2)}s</small><small>Usage history persists across agent restarts · retention: ${esc(u.history_limit || "all stored requests")}</small><small>Prompt tokens ${esc(u.last_prompt_tokens ?? "unknown")} · output tokens ${esc(u.last_output_tokens ?? "unknown")} · last model ${esc(u.last_model || "--")}</small><small>RAM headroom ${fmt(a.model_policy?.available_memory_gib, 2)} GiB · route ${esc(a.model_policy?.reason || "not evaluated")}</small>`;
+}
+const NICE = { bg_priority: "Protect game from background apps", flush_dns: "Flush DNS", power_plan: "High-performance power plan", wpr_trace: "Capture ETW kernel trace", trim_bg: "Trim background RAM" };
+async function loadActions() {
+  const a = await api("/api/actions"), p = a.filter(x => x.state === "pending");
+  $("#b-act").hidden = !p.length; $("#b-act").textContent = p.length;
+  $("#pend").innerHTML = p.map(x => `<div class="act"><div class="d"><b>${esc(x.desc)}</b><span>${esc(x.origin)} · ${esc(x.result || "")}</span></div><button class="btn sm" data-r="${x.id}">APPROVE</button><button class="btn sm or" data-d="${x.id}">DISMISS</button></div>`).join("") || '<div class="empty">nothing waiting for approval</div>';
+  $$("[data-r]").forEach(b => b.onclick = async () => {
+    const item = p.find(x => x.id === +b.dataset.r);
+    let confirmed = false;
+    if (item?.kind === "terminate_process") confirmed = confirm("Approve a graceful WM_CLOSE request for this reviewed GUI app? SENTINEL will not force-kill it.");
+    else confirmed = true;
+    if (!confirmed) return;
+    const result = await api("/api/action/run", { id: +b.dataset.r, confirmed: item?.kind === "terminate_process" });
+    if (result.result?.startsWith("rejected")) toast(result.result, "bad");
+    else toast(result.result || "Action submitted", "ok");
+    loadActions();
+  });
+  $$("[data-d]").forEach(b => b.onclick = async () => { await api("/api/action/dismiss", { id: +b.dataset.d }); loadActions(); });
+  $("#hist").innerHTML = a.filter(x => x.state !== "pending").slice(0, 14).map(x => `<div class="act"><div class="d"><b>${esc(x.desc)}</b><span>${esc(x.state)} · ${esc(x.origin)} · ${esc(x.result || "")}</span></div><span class="tag">${hms(x.ts)}</span></div>`).join("") || '<div class="empty">no actions yet</div>';
+}
+function buildCtl() {
+  const ap = S.autopilot, lab = { bg_priority: ["Game shield", "keep background apps' RAM/IO priority low while gaming"], flush_dns: ["Auto DNS flush", "on network instability"], power_plan: ["Auto high-performance plan", "when a game starts on Balanced"], wpr_trace: ["Auto kernel trace", "on severe DPC spikes"] };
+  $("#auto").innerHTML = Object.keys(lab).map(k => `<label class="tog"><span>${lab[k][0]}<small>${lab[k][1]}</small></span><input type="checkbox" class="sw" data-ap="${k}" ${ap[k] ? "checked" : ""}></label>`).join("");
+  $$("[data-ap]").forEach(c => c.onchange = async () => { c.disabled = true; const r = await api("/api/config", { autopilot: { [c.dataset.ap]: c.checked } }); c.disabled = false; if (r.error) { c.checked = !c.checked; toast(r.error, "bad"); } else toast(`${c.dataset.ap} ${c.checked ? "enabled" : "disabled"} and saved`, "ok"); });
+  const a = S.ai, opt = cur => '<option value="">auto</option>' + a.models.map(m => `<option ${m.name === cur ? "selected" : ""} value="${esc(m.name)}">${esc(m.name)} (${m.gb} GB)</option>`).join("");
+  $("#cfg").innerHTML = `<div class="tog"><span>FAST model<small>triage every minute</small></span><select id="cf-f">${opt(a.fast)}</select></div><div class="tog"><span>DEEP model<small>verifies serious problems</small></span><select id="cf-d">${opt(a.deep)}</select></div><div class="tog"><span>Ollama URL</span><input id="cf-u" value="${esc(S.cfg.ollama_url)}"></div><label class="tog"><span>Sleep local AI while gaming<small>keeps your GPU/CPU free</small></span><input type="checkbox" class="sw" id="cf-p" ${S.cfg.pause ? "checked" : ""}></label><div class="ph" style="padding:10px 0 4px;border:0">Free cloud deep model<em>Groq / Cerebras / OpenRouter</em></div><label class="tog"><span>Use cloud for DEEP<small>IPs are redacted before sending</small></span><input type="checkbox" class="sw" id="cf-ce" ${S.cfg.cloud.enabled ? "checked" : ""}></label><div class="tog"><span>API URL</span><input id="cf-cu" value="${esc(S.cfg.cloud.url)}"></div><div class="tog"><span>Model</span><input id="cf-cm" value="${esc(S.cfg.cloud.model)}"></div><div class="tog"><span>API key</span><input id="cf-ck" type="password" placeholder="${S.cfg.has_key ? "DPAPI-protected key saved - paste to replace" : "paste key (protected locally on Windows)"}"></div><div style="padding-top:10px"><button class="btn" id="cf-s">SAVE</button></div>`;
+  $("#cf-s").onclick = async () => { const b = $("#cf-s"); b.disabled = true; const r = await api("/api/config", { model_fast: $("#cf-f").value, model_deep: $("#cf-d").value, ollama_url: $("#cf-u").value, pause_ai_when_gaming: $("#cf-p").checked, cloud: { enabled: $("#cf-ce").checked, url: $("#cf-cu").value, model: $("#cf-cm").value, key: $("#cf-ck").value } }); b.disabled = false; if (r.error) toast(r.error, "bad"); else { toast(`AI settings saved to SQLite · revision ${r.revision?.revision ?? "?"}`, "ok"); S.cfg.ollama_url = $("#cf-u").value; S.cfg.pause = $("#cf-p").checked; S.cfg.cloud.enabled = $("#cf-ce").checked; S.cfg.cloud.url = $("#cf-cu").value; S.cfg.cloud.model = $("#cf-cm").value; S.cfg.has_key = Boolean(S.cfg.has_key || $("#cf-ck").value.trim()); } };
+  $("#runnow").innerHTML = Object.keys(NICE).map(k => `<button class="btn sm" data-k="${k}">${NICE[k]}</button>`).join("");
+  $$("#runnow [data-k]").forEach(b => b.onclick = async () => { const r = await api("/api/action/propose", { kind: b.dataset.k }); if (r.id) { await api("/api/action/run", { id: r.id }); toast("Ran: " + NICE[b.dataset.k], "ok"); } loadActions(); });
+}
+
+/* ---------- main tick ---------- */
+let ctlInitialized = false;
+function onTick(d) {
+  S = d; for (const [k, v] of Object.entries(d.live || {})) { (H[k] ||= []).push(v); if (H[k].length > MAXH) H[k].shift(); }
+  $("#h-up").textContent = dur(d.uptime); updHero();
+  if (view === "cmd") { updTiles(); updMetrics(); }
+  if (view === "tsk") updTasks();
+  if (view === "act") updHeart();
+  if (view === "proc") maybeRefreshProcesses();
+  if (view === "net") updNet();
+  if (view === "ker") { updKer(); if (Date.now() - kernelArchiveLast > 30000) loadKernelArchive(); }
+  if (view === "ai") updAI();
+  if (view === "sys") maybeRefreshSystem();
+  if (view === "ctl" && !ctlInitialized) { buildCtl(); loadActions(); ctlInitialized = true; }
+}
+function show(v) {
+  view = v; $("#vtitle").textContent = TITLES[v]; try { localStorage.setItem("sv", v); } catch (e) { } $$(".view").forEach(e => e.classList.toggle("on", e.id === "v-" + v)); $$("#nav button").forEach(b => b.classList.toggle("on", b.dataset.v === v));
+  if (!S) {
+    if (v === "intelx") loadIntelligence();
+    else if (v === "ker") loadKernelArchive();
+    else if (v === "sys") loadSys(true);
+    else if (v === "evi") loadEvi();
+    else if (v === "fc") loadFC();
+    else if (v === "int") loadIntel();
+    else if (v === "tsk") loadHist();
+    else if (v === "act") renderFeed();
+    else if (v === "ctl") loadActions();
+    return;
+  }
+  ({ cmd: updTiles, act: () => { updHeart(); renderFeed(); }, proc: () => loadProcesses(true), net: updNet, ker: () => { updKer(); loadKernelArchive(); }, int: loadIntel, intelx: loadIntelligence, ai: updAI, ctl: () => { buildCtl(); loadActions(); ctlInitialized = true; }, sys: () => loadSys(true), evi: loadEvi, tsk: () => { updTasks(); loadHist(); }, fc: loadFC })[v]();
+}
+async function boot() {
+  starfield(); $("#bootSkip").onclick = endBoot; let fast = false; try { fast = sessionStorage.getItem("sb") === "1"; } catch (e) { }
+  bp(8, "LOADING INTERFACE", "Building tiles and filters"); buildTiles(); buildChips(); $$("#nav button").forEach(b => b.onclick = () => show(b.dataset.v));
+  bp(18, "AUTHENTICATING", TOKEN ? "Access token found" : "No access token", TOKEN ? "ok" : "bad"); if (!TOKEN) { endBoot(); document.body.innerHTML = '<div style="padding:40px;font:16px var(--mo);color:#ff6b38">No access token. Open SENTINEL from its desktop shortcut.</div>'; return; }
+  bp(34, "READING TELEMETRY", "Fetching history, events and insights"); const [hist, ev, ins] = await Promise.all([api("/api/history?secs=300"), api("/api/events?limit=300"), api("/api/insights")]);
+  if (hist.error) { endBoot(); document.body.innerHTML = '<div style="padding:40px;font:16px var(--mo);color:#f05252">Access denied - bad token. Open SENTINEL from its desktop shortcut.</div>'; return; }
+  for (const [k, a] of Object.entries(hist)) H[k] = a.map(p => p[1]).slice(-MAXH);
+  ev.forEach(addLog); INS = ins; renderIns();
+  bp(66, "WAKING AI COUNCIL", "Loading council transcript"); const tr = await api("/api/ai"); (tr.transcript || []).forEach(addTr);
+  bp(86, "OPENING LIVE STREAM", "Subscribing to agent stream"); const es = new EventSource("/api/stream?t=" + encodeURIComponent(TOKEN));
+  es.onmessage = m => { const j = JSON.parse(m.data); if (j.t === "tick") { $("#p-online").className = "pill ok"; $("#p-online").textContent = "AGENT ONLINE"; onTick(j.d); } else if (j.t === "log") addLog(j.d); else if (j.t === "insight") { INS.unshift(j.d); renderIns(); alertInsight(j.d); } else if (j.t === "action") loadActions(); else if (j.t === "ai") addTr(j.d); else if (j.t === "ai_status") $("#ai-status").textContent = j.d.text; else if (j.t === "intel" && view === "int") loadIntel(); };
+  es.onerror = () => { toast("Link to agent lost - retrying", "bad"); $("#p-online").className = "pill bad"; $("#p-online").textContent = "LINK LOST - RETRYING"; };
+  $("#a-q").oninput = renderFeed; $("#a-pause").onclick = e => { paused = !paused; e.target.textContent = paused ? "RESUME" : "PAUSE"; if (!paused) renderFeed(); };
+  $("#i-go").onclick = async () => { const q = $("#i-q").value.trim(); if (q) { await api("/api/intel/search", { q }); setTimeout(loadIntel, 4000); } };
+  const send = () => { const m = $("#ai-in").value.trim(); if (m) { api("/api/chat", { msg: m, mode: $("#ai-mode").value }); $("#ai-in").value = ""; } };
+  $("#ai-go").onclick = send; $("#ai-in").onkeydown = e => e.key === "Enter" && send();
+  setInterval(() => $("#h-clock").textContent = new Date().toLocaleTimeString([], { hour12: false }), 1000);
+  setInterval(() => { if (view === "int") loadIntel(); if (view === "ctl") loadActions(); }, 15000); loadActions();
+  $("#p-q").oninput = () => { clearTimeout(procQueryTimer); procQueryTimer = setTimeout(() => loadProcesses(true), 260); }; $("#p-refresh").onclick = () => loadProcesses(true); $("#n-q").oninput = () => S && updNet();
+  $("#a-exp").onclick = () => { const t = LOGS.map(r => `${new Date(r.ts * 1000).toISOString()}\t${r.level}\t${r.src}\t${r.msg}`).join("\n"); const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([t], { type: "text/plain" })); a.download = "sentinel-activity-" + Date.now() + ".log"; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000); toast("Exported " + LOGS.length + " events", "ok"); };
+  initPalette(); initNotify(); initFC(); initIntelligence(); bindJ("#metrics"); loadStatus(); setInterval(loadStatus, 15000);
+  $("#e-go").onclick = loadEvi; $("#e-csv").onclick = csvExport; $("#e-q").onkeydown = e => e.key === "Enter" && loadEvi(); $("#e-lv").onchange = $("#e-src").onchange = loadEvi;
+  $("#sys-refresh").onclick = async () => { const b = $("#sys-refresh"); b.disabled = true; b.textContent = "SCANNING…"; const r = await api("/api/inventory/refresh", {}); b.disabled = false; b.textContent = "REFRESH INVENTORY"; if (r.error) toast(r.error, "bad"); else { toast("System inventory refreshed", "ok"); loadSys(true); } };
+  $("#kernel-capture").onclick = async () => { const r = await api("/api/action/propose", { kind: "wpr_trace", reason: "User requested a bounded 15-second Windows Performance Recorder ETW trace" }); if (r.error) return toast(r.error, "bad"); toast("ETW trace queued. Approve it in CONTROL; an existing WPR recording will not be interrupted.", "warn"); loadActions(); };
+  $("#kernel-archive-load").onclick = loadKernelArchive;
+  $("#kernel-archive-key").onchange = loadKernelArchive;
+  addEventListener("keydown", e => { const t = e.target.tagName; if (t === "INPUT" || t === "SELECT" || t === "TEXTAREA" || e.ctrlKey || e.metaKey || e.altKey) return; const n = +e.key; if (n >= 1 && n <= VKEYS.length) show(VKEYS[n - 1]); });
+  let sv = "cmd"; try { sv = localStorage.getItem("sv") || "cmd"; } catch (e) { } if (TITLES[sv] && sv !== "cmd") show(sv);
+  bp(100, "ONLINE", "Command deck ready", "ok"); setTimeout(endBoot, fast ? 150 : 1500);
+}
+
+/* ---------- additive AIE intelligence: evidence, memory, planning and read-only UIA ---------- */
+let IX = { state: [], memories: [], goals: [], runtime: null };
+let ixBusy = false;
+async function loadIntelligence() {
+  if (ixBusy) return; ixBusy = true;
+  try {
+    const [ctx, mem, activeGoals, pausedGoals, completedGoals, runtime] = await Promise.all([
+      api("/api/intelligence/context"), api("/api/intelligence/memories?limit=100"),
+      api("/api/intelligence/goals?status=active"), api("/api/intelligence/goals?status=paused"),
+      api("/api/intelligence/goals?status=completed"), api("/api/intelligence/runtime")
+    ]);
+    if (ctx.error) throw new Error(ctx.error);
+    IX.state = ctx.ranked_state || []; IX.memories = mem.error ? [] : mem; IX.goals = [...(activeGoals.error ? [] : activeGoals), ...(pausedGoals.error ? [] : pausedGoals), ...(completedGoals.error ? [] : completedGoals)]; IX.runtime = runtime;
+    const total = (ctx.coverage && Object.values(ctx.coverage).reduce((n, x) => n + (x.observed_entities || 0), 0)) || 0;
+    $("#ix-count").textContent = total.toLocaleString(); $("#ix-count-m").style.width = Math.min(100, total / 5) + "%";
+    $("#ix-memory-count").textContent = IX.memories.length.toLocaleString(); $("#ix-memory-m").style.width = Math.min(100, IX.memories.length * 2) + "%";
+    const activeGoalCount = IX.goals.filter(g => g.status === "active").length;
+    $("#ix-goal-count").textContent = activeGoalCount.toLocaleString(); $("#ix-goal-m").style.width = Math.min(100, activeGoalCount * 10) + "%";
+    $("#ix-state-meta").textContent = `${IX.state.length} ranked records · ${ctx.new_evidence_records || 0} new evidence events`;
+    renderIXState(); renderIXMemories(); await renderIXGoals(); renderIXRuntime();
+  } catch (e) { toast("Intelligence refresh: " + e.message, "warn"); }
+  finally { ixBusy = false; }
+}
+function renderIXState() {
+  const rows = IX.state.slice(0, 24);
+  $("#ix-state").innerHTML = rows.map(r => `<div class="act ix-state-row"><div class="d"><b>${esc(r.name)}</b><span>${esc(r.collection)} · ${esc(r.status)} · score ${fmt(r.score, 3)}</span><small>${esc(r.evidence_ids.length)} evidence ref(s)${r.evidence_truncated ? " · older refs truncated" : ""} · observed ${esc(new Date(r.last_observed).toLocaleString())}</small></div><div class="ix-actions"><span class="tag mu">${esc(r.evidence_kind)}</span><button class="btn sm" data-state-evidence="${esc(r.evidence_ids.join(","))}">EVIDENCE</button></div><div class="ix-evidence"></div></div>`).join("") || '<div class="empty">No evidence-backed environment rows yet. Refresh after collectors have completed an inventory scan.</div>';
+  $$('[data-state-evidence]').forEach(b => b.onclick = async () => { const ids = b.dataset.stateEvidence; const d = await api("/api/intelligence/observations?ids=" + encodeURIComponent(ids)); if (d.error) return toast(d.error, "warn"); const box = b.closest(".ix-state-row")?.querySelector(".ix-evidence"); if (!box) return; box.innerHTML = d.length ? d.map(e => `<div class="ix-revision"><small>${esc(e.event_type)} · ${esc(e.timestamp)} · ${esc(e.source)}</small><span>${esc(JSON.stringify(e.payload, null, 2))}</span></div>`).join("") : '<div class="empty">Referenced evidence is no longer available.</div>'; });
+}
+function renderIXMemories() {
+  $("#ix-memories").innerHTML = IX.memories.map(m => `<div class="act ix-memory"><div class="d"><b>${esc(m.kind.toUpperCase())} · ${esc(m.verification.toUpperCase())}</b><span>${esc(m.content)}</span><small>${esc(m.sensitivity)} · confidence ${fmt(m.confidence, 2)} · ${m.revisions} revision(s) · ${esc(m.updated_at)}</small></div><div class="ix-actions"><button class="btn sm" data-memory-history="${esc(m.id)}">HISTORY</button><button class="btn sm" data-edit-memory="${esc(m.id)}">REVISE</button><button class="btn sm" data-del-memory="${esc(m.id)}">DELETE</button></div><div class="ix-revisions"></div></div>`).join("") || '<div class="empty">No matching non-sensitive memories. Add an explicit memory above.</div>';
+  $$('[data-del-memory]').forEach(b => b.onclick = async () => { if (!confirm("Delete this memory and its revision history?")) return; const r = await api("/api/intelligence/memory/delete", { id: b.dataset.delMemory }); if (r.deleted) { toast("Memory deleted", "ok"); loadIntelligence(); } });
+  $$('[data-edit-memory]').forEach(b => b.onclick = async () => { const item = IX.memories.find(x => x.id === b.dataset.editMemory); if (!item) return; const text = prompt("Revise this memory. The previous version will be retained in history.", item.content); if (text == null || !text.trim()) return; const r = await api("/api/intelligence/memory/revise", { id: item.id, content: text }); if (r.error) return toast(r.error, "bad"); toast("Memory revised; previous version preserved", "ok"); loadIntelligence(); });
+  $$('[data-memory-history]').forEach(b => b.onclick = async () => { const d = await api("/api/intelligence/memory/history?id=" + encodeURIComponent(b.dataset.memoryHistory)); if (d.error) return toast(d.error, "warn"); const card = b.closest(".ix-memory"); const box = card && card.querySelector(".ix-revisions"); if (!box) return; box.innerHTML = d.length ? d.map(r => `<div class="ix-revision"><small>REVISION ${r.revision} · ${esc(new Date(r.revised_at).toLocaleString())}</small><span>${esc(r.previous.content)}</span></div>`).join("") : '<div class="empty">No previous revisions.</div>'; });
+}
+async function renderIXGoals() {
+  const goalList = [];
+  for (const g of IX.goals) {
+    const drafts = await api("/api/intelligence/goal/plan-drafts?goal_id=" + encodeURIComponent(g.id) + "&status=pending_review");
+    goalList.push({ ...g, drafts: drafts.error ? [] : drafts });
+  }
+  $("#ix-goals").innerHTML = goalList.map(g => `<div class="ix-goal">
+    <div class="ix-goal-head"><div><b>${esc(g.title)}</b><small>${g.progress.completed}/${g.progress.total} steps completed · ${Math.round(g.progress.total ? g.progress.completed / g.progress.total * 100 : 0)}% · ${esc(g.status)}</small></div>
+      <div class="ix-actions"><button class="btn sm" data-plan="${esc(g.id)}" ${g.status !== "active" ? "disabled" : ""}>SUGGEST PLAN</button><button class="btn sm" data-add-step="${esc(g.id)}" ${g.status !== "active" ? "disabled" : ""}>ADD STEP</button>${g.status === "active" || g.status === "paused" ? `<button class="btn sm" data-goal-status="${esc(g.id)}" data-next-status="${g.status === "paused" ? "active" : "paused"}">${g.status === "paused" ? "RESUME" : "PAUSE"}</button>` : ""}<button class="btn sm" data-goal-history="${esc(g.id)}">HISTORY</button></div></div>
+    <div class="ix-progress"><i style="width:${g.progress.total ? g.progress.completed / g.progress.total * 100 : 0}%"></i></div>
+    <div class="ix-goal-history"></div>
+    <div class="list">${g.steps.map(st => `<div class="row"><div><b>${esc(st.title)}</b><small>${esc(st.status)}${st.dependencies.length ? " · depends on " + st.dependencies.length + " step(s)" : ""}</small></div><button class="btn sm" data-step-done="${esc(g.id)}" data-step-id="${esc(st.id)}" ${g.status !== "active" || st.status === "completed" || !st.ready ? "disabled" : ""}>${st.status === "completed" ? "DONE" : st.ready ? "COMPLETE" : "WAITING"}</button></div>`).join("") || '<div class="empty">No steps yet. Add a step or request a local plan suggestion.</div>'}</div>
+    ${g.drafts.map(d => `<div class="ix-draft"><div class="ix-draft-head"><b>PLAN DRAFT · ${d.plan.steps.length} STEPS</b><span class="tag">REVIEW REQUIRED</span></div>${d.plan.steps.map((st,i) => `<div class="ix-plan-step"><b>${i+1}. ${esc(st.title)}</b><small>${esc(st.description)}${st.depends_on.length ? " · depends on " + st.depends_on.map(x=>x+1).join(", ") : ""}</small></div>`).join("")}<div class="ix-actions"><button class="btn or sm" data-accept-draft="${esc(d.id)}">ACCEPT STEPS</button><button class="btn sm" data-reject-draft="${esc(d.id)}">REJECT</button></div></div>`).join("")}
+    </div>`).join("") || '<div class="empty">No goals yet. Create a goal to begin prospective planning.</div>';
+  $$('[data-plan]').forEach(b => b.onclick = async () => { b.disabled = true; b.textContent = "THINKING…"; const r = await api("/api/intelligence/goal/suggest-plan", { goal_id: b.dataset.plan }); if (r.error) toast(r.error, "warn"); else toast("Plan draft created — review before accepting", "ok"); loadIntelligence(); });
+  $$('[data-add-step]').forEach(b => b.onclick = async () => { const title = prompt("Step title"); if (!title || !title.trim()) return; const r = await api("/api/intelligence/goal/step/add", { goal_id: b.dataset.addStep, title }); if (r.error) toast(r.error, "bad"); else loadIntelligence(); });
+  $$('[data-goal-status]').forEach(b => b.onclick = async () => { const r = await api("/api/intelligence/goal/status", { goal_id: b.dataset.goalStatus, status: b.dataset.nextStatus }); if (r.error) toast(r.error, "bad"); else loadIntelligence(); });
+  $$('[data-goal-history]').forEach(b => b.onclick = async () => { const d = await api("/api/intelligence/goal/history?id=" + encodeURIComponent(b.dataset.goalHistory)); if (d.error) return toast(d.error, "warn"); const box = b.closest(".ix-goal")?.querySelector(".ix-goal-history"); if (!box) return; box.innerHTML = d.length ? d.map(r => `<div class="ix-revision"><small>${esc(r.event)} · ${esc(new Date(r.occurred_at).toLocaleString())}</small><span>${esc(JSON.stringify(r.current))}</span></div>`).join("") : '<div class="empty">No goal history.</div>'; });
+  $$('[data-step-done]').forEach(b => b.onclick = async () => { const r = await api("/api/intelligence/goal/step/status", { goal_id: b.dataset.stepDone, step_id: b.dataset.stepId, status: "completed" }); if (r.error) toast(r.error, "warn"); else loadIntelligence(); });
+  $$('[data-accept-draft]').forEach(b => b.onclick = async () => { if (!confirm("Accept this model-generated plan as goal steps? No system actions will be executed.")) return; const r = await api("/api/intelligence/goal/plan-draft/resolve", { draft_id: b.dataset.acceptDraft, decision: "accepted" }); if (r.error) toast(r.error, "bad"); else { toast("Reviewed plan accepted as goal steps only", "ok"); loadIntelligence(); } });
+  $$('[data-reject-draft]').forEach(b => b.onclick = async () => { const r = await api("/api/intelligence/goal/plan-draft/resolve", { draft_id: b.dataset.rejectDraft, decision: "rejected" }); if (r.error) toast(r.error, "bad"); else loadIntelligence(); });
+}
+function renderIXRuntime() {
+  const r = IX.runtime || {}; const rt = r.runtime || {}; const route = r.routing || {};
+  $("#ix-ram").textContent = rt.memory_available_gib == null ? "--" : rt.memory_available_gib.toFixed(1) + " GB";
+  $("#ix-pressure").textContent = rt.memory_pressure ? rt.memory_pressure.toUpperCase() + " MEMORY PRESSURE" : "runtime headroom";
+  $("#ix-ram-m").style.width = rt.memory_total_gib ? Math.min(100, rt.memory_available_gib / rt.memory_total_gib * 100) + "%" : "0%";
+  $("#ix-model").textContent = route.routine && route.routine.model ? route.routine.model.replace("qwen2.5:", "") : "UNAVAILABLE";
+  $("#ix-model-sub").textContent = r.ollama && r.ollama.online ? `${r.ollama.models.length} local model(s) discovered` : "Ollama offline";
+  $("#ix-model-m").style.width = route.routine && route.routine.available ? "100%" : "0%";
+  $("#ix-ollama-state").textContent = r.ollama && r.ollama.online ? "LOOPBACK ONLINE" : "OFFLINE / UNAVAILABLE";
+  const fields = [["Platform", rt.platform], ["CPU", (rt.cpu_physical ?? "--") + " physical / " + (rt.cpu_logical ?? "--") + " logical"], ["RAM total", rt.memory_total_gib == null ? "--" : rt.memory_total_gib + " GiB"], ["Available now", rt.memory_available_gib == null ? "--" : rt.memory_available_gib + " GiB"], ["Routine", route.routine?.model || "not installed"], ["Complex", route.complex?.model || "no eligible model"], ["Embeddings", route.embedding?.model || "not installed"], ["Active FAST", r.active_sentinel_models?.fast || "--"], ["Active DEEP", r.active_sentinel_models?.deep || "--"], ["DEEP guard", r.active_model_policy?.reason || "not reported"]];
+  $("#ix-runtime").innerHTML = fields.map(([k,v]) => `<i>${esc(k)}</i><span>${esc(v ?? "--")}</span>`).join("");
+}
+function initIntelligence() {
+  $("#ix-refresh-state").onclick = loadIntelligence;
+  $("#ix-memory-search").onclick = async () => { const q = $("#ix-memory-q").value.trim(); const include = $("#ix-include-sensitive")?.checked ? "&include_sensitive=1" : ""; const d = await api("/api/intelligence/memories?q=" + encodeURIComponent(q) + "&limit=100" + include); if (d.error) return toast(d.error, "warn"); IX.memories = d; renderIXMemories(); };
+  $("#ix-memory-semantic").onclick = async () => { const q = $("#ix-memory-q").value.trim(); if (!q) return toast("Enter a search query first", "warn"); const d = await api("/api/intelligence/memory/semantic?q=" + encodeURIComponent(q) + "&limit=30"); if (d.error) return toast(d.error, "warn"); IX.memories = d; renderIXMemories(); toast("Local semantic retrieval complete", "ok"); };
+  $("#ix-memory-add").onclick = async () => { const content = $("#ix-memory-content").value.trim(); if (!content) return toast("Enter memory content", "warn"); const r = await api("/api/intelligence/memory/add", { content, kind: $("#ix-memory-kind").value, sensitivity: $("#ix-memory-sensitivity").value, verification: "unverified", confidence: .5 }); if (r.error) return toast(r.error, "bad"); $("#ix-memory-content").value = ""; toast("Memory saved locally", "ok"); loadIntelligence(); };
+  $("#ix-memory-index").onclick = async e => { e.currentTarget.disabled = true; const r = await api("/api/intelligence/memory/index", { limit: 100 }); e.currentTarget.disabled = false; if (r.error) return toast(r.error, "warn"); toast(`Indexed ${r.indexed} non-sensitive memories · ${r.model}`, "ok"); };
+  $("#ix-goal-add").onclick = async () => { const title = $("#ix-goal-title").value.trim(); if (!title) return toast("Enter a goal title", "warn"); const r = await api("/api/intelligence/goal/create", { title, description: $("#ix-goal-desc").value }); if (r.error) return toast(r.error, "bad"); $("#ix-goal-title").value = ""; $("#ix-goal-desc").value = ""; toast("Goal created", "ok"); loadIntelligence(); };
+  $("#ix-uia").onclick = async e => { const b = e.currentTarget; b.disabled = true; b.textContent = "INSPECTING…"; const r = await api("/api/intelligence/uia/inspect", { max_windows: 12, max_nodes: 250, max_depth: 5, timeout: 12 }); b.disabled = false; b.textContent = "INSPECT"; if (r.error) return toast(r.error, "warn");
+    $("#ix-uia-result").innerHTML = !r.available ? `<div class="empty">UI Automation unavailable: ${esc(r.reason || "unknown reason")}</div>` : `<div class="row"><b>${r.nodes_inspected} structural nodes inspected</b><span class="tag ok">READ ONLY</span></div>` + (r.windows || []).map((w,i) => { const c = w.controls || [], root = c[0] || {}; const types = [...new Set(c.map(x => x.control_type).filter(Boolean))].slice(0,8); return `<div class="act"><div class="d"><b>Window ${i+1} · ${esc(root.process_name || "unknown process")}</b><span>${c.length} controls · ${esc(types.join(", "))}</span></div></div>`; }).join("") + (r.truncated ? '<div class="empty">Inspection reached a configured safety limit; output was truncated.</div>' : "");
+    toast(r.available ? "Read-only UIA inspection complete" : "UIA inspection unavailable", r.available ? "ok" : "warn"); };
+}
+
+/* ---------- P1 ports: metric cards, system intelligence, evidence vault, task manager ---------- */
+let ST = { events: 0 }; const mcard = (l, v, sub, pct, warn, j) => `<div class="metric${warn ? " warn" : ""}"${j ? ` data-j="${j}"` : ""}><small>${l}</small><b>${v}</b><span>${sub}</span><div class="meter"><i style="width:${Math.max(0, Math.min(100, pct || 0))}%"></i></div></div>`;
+const bindJ = r => $$(r + " [data-j]").forEach(c => c.onclick = () => show(c.dataset.j));
+function sensors() { const m = ST?.sensor_matrix || {}; return [m.healthy || 0, m.total || 0]; }
+function setM(id, v, sub, pct, warn) { $("#m-" + id).textContent = v; const m = $("#m-" + id + "-m"); m.style.width = Math.max(0, Math.min(100, pct || 0)) + "%"; m.closest(".metric").classList.toggle("warn", !!warn); if (sub != null && $("#m-" + id + "-s")) $("#m-" + id + "-s").textContent = sub; }
+function updMetrics() {
+  if (!S) return; const L = S.live || {}, [ok, tot] = sensors(), posture = ST?.posture || {};
+  setM("cpu", fmt(L.cpu) + "%", null, L.cpu, L.cpu > 85); setM("ram", fmt(L.mem_free_mb / 1024, 1) + " GB", "RAM headroom", 100 - (L.mem || 0), L.mem_free_mb < 1500);
+  const eventCount = Number(ST?.events || 0); setM("evt", eventCount.toLocaleString(), null, Math.min(100, eventCount / 500)); setM("sen", ok + "/" + tot, "collectors healthy", tot ? ok / tot * 100 : 0, ok < tot);
+  const postVal = posture.status === "incomplete" || posture.count == null ? "UNKNOWN" : posture.count;
+  setM("pos", postVal, posture.status === "incomplete" ? `${(posture.unknown_sources || []).length} source(s) unknown` : posture.status === "clear" ? "no rule-based findings" : "rule-based findings", Math.min(100, (posture.count || 0) * 12), posture.status !== "clear");
+}
+async function loadStatus() { try { ST = await api("/api/status"); } catch (e) { } if (S && view === "cmd") updMetrics(); if (S && view === "ai") updAI(); }
+const tagOK = (ok, a = "OK", b = "OFF") => `<span class="tag ${ok ? "ok" : "bad"}">${ok ? a : b}</span>`;
+let CAT = "processes";
+const CATS = { processes: ["name", "pid"], apps: ["name", "version", "publisher"], drivers: ["name", "display", "state", "start"], services: ["name", "display", "state", "start"], tasks: ["name", "state", "path"], interfaces: ["name", "ip", "mbps", "up"], startup: ["name", "where", "cmd"] };
+async function loadCat() {
+  const d = await api("/api/catalog?kind=" + CAT + "&limit=150&q=" + encodeURIComponent($("#cat-q").value)); if (d.error) return; const c = CATS[CAT];
+  $("#cat-t").innerHTML = "<tr>" + c.map(k => `<th>${k.toUpperCase()}</th>`).join("") + "</tr>" + d.rows.map(r => "<tr>" + c.map(k => `<td>${esc(r[k])}</td>`).join("") + "</tr>").join("") || "";
+  $("#cat-n").textContent = d.matched + " of " + d.total + " records";
+}
+let sysLastFetch = 0, sysFetchBusy = false;
+async function loadSys(force = false) {
+  if (sysFetchBusy || (!force && Date.now() - sysLastFetch < 15000)) return;
+  sysFetchBusy = true; sysLastFetch = Date.now();
+  try {
+
+    const d = await api("/api/inventory");
+    const c = d.counts || {}, p = d.platform || {}, sec = d.security || {}, health = d.health || {};
+    $("#sys-m").innerHTML = [["PROCESSES", "processes"], ["INSTALLED APPS", "apps"], ["SYSTEM DRIVERS", "drivers"], ["SERVICES", "services"], ["STARTUP ENTRIES", "startup"]].map(([l, k]) => mcard(l, c[k] ?? "--", d.ts ? "latest snapshot" : "not scanned", Math.min(100, (c[k] || 0) / 3))).join("");
+    $("#sys-ts").textContent = d.ts ? "scanned " + hms(d.ts) : "no successful snapshot";
+    $("#sys-plat").innerHTML = Object.entries({ Host: p.host, OS: p.os, Build: p.build, CPU: p.cpu, Cores: p.cpus, RAM: p.ram_gb == null ? null : p.ram_gb + " GB", "Available RAM": p.ram_available_gb == null ? null : p.ram_available_gb + " GB", BIOS: p.bios, "BIOS date": (p.bios_date || "").slice(0, 10) }).map(([k,v]) => `<i>${esc(k)}</i><span>${esc(v ?? "UNKNOWN / NOT SAMPLED")}</span>`).join("") || '<div class="empty">platform details are not yet available</div>';
+    const R = (t, h) => `<div class="row"><b>${t}</b>${h}</div>`, fw = sec.firewall || [], bl = sec.bitlocker || [];
+    $("#sys-sec").innerHTML = (sec.defender_rt != null ? R("Defender real-time", tagOK(sec.defender_rt, "ON", "OFF")) : R("Defender real-time", '<span class="tag mu">UNKNOWN</span>')) + (sec.signature_age_days != null ? R("Signature age", `<span class="tag ${sec.signature_age_days > 7 ? "bad" : "ok"}">${sec.signature_age_days} d</span>`) : "") + fw.map(f => R("Firewall - " + esc(f.name), tagOK(f.on, "ON", "OFF"))).join("") + (sec.secure_boot != null ? R("Secure Boot", tagOK(sec.secure_boot, "ON", "OFF")) : R("Secure Boot", '<span class="tag mu">UNKNOWN</span>')) + bl.map(b => R("BitLocker " + esc(b.mount), `<span class="tag mu">${esc(b.status)}</span>`)).join("") || '<div class="empty">No security-provider data yet.</div>';
+    $("#sys-vol").innerHTML = (d.volumes || []).map(v => `<div class="row"><div style="flex:1"><b>${esc(v.mount)}</b><small>${v.free_gb} / ${v.total_gb} GB free · ${esc(v.fs)}</small><div class="bar" style="margin-top:6px"><i style="width:${100 - v.free_pct}%;${v.free_pct < 10 ? "background:var(--or)" : ""}"></i></div></div>${tagOK(v.free_pct >= 10, v.free_pct + "% free", v.free_pct + "% free")}</div>`).join("") + (d.physical || []).map(x => `<div class="row"><div><b>${esc(x.name)}</b><small>${x.gb} GB · ${esc(x.type)} · ${esc(x.bus || "bus unknown")}</small></div>${tagOK(/healthy/i.test(x.health), esc(x.health), esc(x.health))}</div>`).join("") || '<div class="empty">Storage inventory unavailable or not sampled; inspect source health below.</div>';
+    $("#sys-post").innerHTML = `<div class="row"><b>Posture signal</b><span class="tag ${d.posture_summary?.status === "clear" ? "ok" : d.posture_summary?.status === "findings" ? "warn" : "bad"}">${esc((d.posture_summary?.status || "unknown").toUpperCase())}</span></div><small>${d.posture_summary?.count ?? "unknown"} findings · unknown sources: ${esc((d.posture_summary?.unknown_sources || []).join(", ") || "none")}</small>` + (d.posture || []).map(x => `<div class="ins ${x.sev === "high" ? "high" : "warn"}"><b>${esc(x.title)}</b><span>${esc(x.detail)}</span></div>`).join("") || '<div class="empty">No rule-based findings were emitted. Incomplete source coverage is not treated as a clean posture.</div>';
+    const healthRows = Object.entries(health).sort(([a],[b]) => a.localeCompare(b));
+    $("#sys-health").innerHTML = healthRows.map(([name, h]) => `<div class="row"><div><b>${esc(name)}</b><small>${esc(h.mode || "source probe")} · ${h.count == null ? "count unknown" : h.count + " record(s)"}</small><small>${esc(h.error || (h.errors?.length ? h.errors.length + " isolated issue(s)" : ""))}</small></div><span class="tag ${h.ok ? "ok" : "bad"}">${h.ok ? "OK" : "UNKNOWN / FAILED"}</span></div>`).join("") || '<div class="empty">No system source results are available yet.</div>';
+    const storage = await api("/api/storage");
+    $("#sys-storage").innerHTML = `<div class="row"><b>SQLite database</b><span class="tag ${storage.database_exists ? "ok" : "bad"}">${storage.database_exists ? "PRESENT" : "MISSING"}</span></div><small>${esc(storage.database || "path unavailable")} · ${fmt((storage.database_bytes || 0) / 1048576, 2)} MB · config revision ${esc(storage.config_revision?.revision ?? "--")}</small><small>${(storage.snapshots || []).length} bounded latest-state snapshot(s)</small><small>${Object.entries(storage.rows || {}).map(([k,v]) => `${k}: ${v ?? "unavailable"}`).join(" · ")}</small>`;
+    $("#cat-k").innerHTML = Object.keys(CATS).map(k => `<button class="chip${k === CAT ? " on" : ""}" data-k="${k}">${k.toUpperCase()}</button>`).join("");
+    $$("#cat-k .chip").forEach(b => b.onclick = () => { CAT = b.dataset.k; loadCat(); $$("#cat-k .chip").forEach(x => x.classList.toggle("on", x === b)); });
+    $("#cat-q").oninput = loadCat; loadCat();
+  } catch (e) {
+    toast("System inventory: " + (e?.message || "source unavailable"), "warn");
+    const box = $("#sys-health"); if (box) box.innerHTML = `<div class="empty">System inventory request failed: ${esc(e?.message || "unknown error")}. Source health remains unknown until a successful scan.</div>`;
+  } finally { sysFetchBusy = false; }
+}
+function maybeRefreshSystem() { if (view === "sys" && Date.now() - sysLastFetch >= 15000) loadSys(false); }
+
+let evRows = [];
+async function loadEvi() {
+  if (ST?.sources && $("#e-src").options.length === 1) $("#e-src").innerHTML += ST.sources.map(x => `<option>${esc(x)}</option>`).join("");
+  evRows = await api("/api/events?limit=600&q=" + encodeURIComponent($("#e-q").value) + "&level=" + $("#e-lv").value + "&src=" + $("#e-src").value); evRows.reverse();
+  $("#e-t").innerHTML = "<tr><th>TIME</th><th>LEVEL</th><th>SOURCE</th><th>MESSAGE</th></tr>" + evRows.map(r => `<tr><td>${hms(r.ts)}</td><td><span class="tag ${r.level === "error" ? "bad" : r.level === "ok" ? "ok" : "mu"}">${esc(r.level)}</span></td><td>${esc(r.src)}</td><td>${esc(r.msg)}</td></tr>`).join("");
+  $("#e-n").textContent = evRows.length + " shown of " + Number(ST?.events || 0).toLocaleString() + " stored";
+}
+function csvExport() { const q = v => '"' + String(v).replace(/"/g, '""') + '"'; const t = "time,level,source,message\n" + evRows.map(r => [new Date(r.ts * 1000).toISOString(), r.level, r.src, r.msg].map(q).join(",")).join("\n"); const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([t], { type: "text/csv" })); a.download = "sentinel-evidence-" + Date.now() + ".csv"; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000); toast("Exported " + evRows.length + " records", "ok"); }
+let HISTA = [];
+async function loadHist() { HISTA = await api("/api/actions"); updTasks(); }
+function updTasks() {
+  if (!S) return; const [ok, tot] = sensors(), pend = HISTA.filter(a => a.state === "pending").length;
+  $("#t-m").innerHTML = mcard("ACTIVE JOBS", ok, "collectors running", tot ? ok / tot * 100 : 0, ok < tot) + mcard("TOOLS", Object.keys(NICE).length, "allowlisted actions", 60) + mcard("ACTION RUNS", HISTA.length, "retained records", Math.min(100, HISTA.length * 5)) + mcard("AWAITING APPROVAL", pend, "open CONTROL to decide", Math.min(100, pend * 25), pend > 0) + mcard("INSIGHTS", INS.length, "this session", Math.min(100, INS.length * 4));
+  const n = S.now; $("#t-jobs").innerHTML = "<tr><th></th><th>JOB</th><th>EVERY</th><th>RUNS</th><th>NOTE</th></tr>" + Object.entries(S.heart).map(([k, h]) => { const late = n - h.last > Math.max(8, h.every * 3); return `<tr><td><span class="dot ${h.err ? "dead" : late ? "late" : ""}"></span></td><td>${esc(k)}</td><td>${h.every}s</td><td>${h.runs}</td><td>${esc(h.err || h.note)}</td></tr>`; }).join("");
+  $("#t-hist").innerHTML = HISTA.slice(0, 40).map(a => `<div class="row"><div><b>${esc(a.desc || a.kind)}</b><small>${esc(a.origin)} · ${esc(a.reason || "")}</small></div><span class="tag ${a.state === "pending" ? "" : a.state === "failed" ? "bad" : "mu"}">${esc(a.state)}</span></div>`).join("") || '<div class="empty">no actions yet</div>';
+  if (!$("#t-dis").children.length) { $("#t-dis").innerHTML = Object.keys(NICE).map(k => `<button class="btn sm" data-k="${k}">${NICE[k]}</button>`).join(""); $$("#t-dis [data-k]").forEach(b => b.onclick = async () => { const r = await api("/api/action/propose", { kind: b.dataset.k }); if (r.id) { await api("/api/action/run", { id: r.id }); toast("Ran: " + NICE[b.dataset.k], "ok"); } loadHist(); }); }
+}
+
+/* ---------- Feature Control ---------- */
+const SENS = [["processes", "Process inventory & lifecycle", "full process identity, executable path, session and resource sampling"], ["kernel", "Kernel counters & ETW status", "PDH performance counters plus separate WPR/ETW session status"], ["system", "System configuration", "power plan, battery, VBS/HVCI and Defender configuration"], ["gpu", "GPU telemetry", "nvidia-smi samples: load, clocks, temperature, throttling"], ["ping", "Latency & jitter probe", "ICMP ping to 1.1.1.1 every second"], ["net", "Network connections", "established connections per process - no packet payload"], ["services", "Service watcher", "new, stopped and changed Windows services"], ["autoruns", "Startup watcher", "registry Run keys - flags new startup entries"], ["eventlog", "Windows event logs", "metadata from allowlisted channels, no Security log"], ["inventory", "System inventory & posture", "apps, drivers, security posture, storage"]];
+const NUMS = [["intervals", "inventory_min", "INVENTORY SCAN / MIN", 2, 120], ["thresholds", "disk_free_pct", "LOW DISK - FREE SPACE / %", 1, 30], ["thresholds", "battery_pct", "LOW BATTERY / %", 5, 40]];
+const PRESETS = { "Deep Watch": { automation: true, sensors: {}, intervals: { inventory_min: 5 }, thresholds: { disk_free_pct: 15, battery_pct: 25 } }, "Balanced": { automation: true, sensors: {}, intervals: { inventory_min: 10 }, thresholds: { disk_free_pct: 10, battery_pct: 20 } }, "Low Impact": { automation: true, sensors: { gpu: false, net: false, eventlog: false }, intervals: { inventory_min: 30 }, thresholds: { disk_free_pct: 8, battery_pct: 15 } } };
+let FC = null, FCsaved = null;
+const fcRead = () => { const p = { automation: $("#fc-auto").checked, sensors: {}, intervals: {}, thresholds: {} }; $$("[data-s]").forEach(c => p.sensors[c.dataset.s] = c.checked); $$("[data-n]").forEach(c => { const [g, k] = c.dataset.n.split("."); p[g][k] = +c.value; }); return p; };
+const fcDirty = () => { $("#fc-dirty").hidden = JSON.stringify(fcRead()) === JSON.stringify(FCsaved); };
+function fcFill(p) {
+  $("#fc-auto").checked = p.automation; $("#fc-state").textContent = p.automation ? "AUTOMATION ON" : "AUTOMATION OFF - APPROVAL ONLY";
+  $("#fc-sens").innerHTML = SENS.map(([k, t, d]) => `<label class="tog"><span>${t}<small>${d}</small></span><input type="checkbox" class="sw" data-s="${k}" ${p.sensors[k] ? "checked" : ""}></label>`).join("");
+  $("#fc-num").innerHTML = NUMS.map(([g, k, l, lo, hi]) => `<div class="tog"><span>${l}<small>allowed ${lo}-${hi}</small></span><input type="number" min="${lo}" max="${hi}" data-n="${g}.${k}" value="${p[g][k]}" style="width:90px"></div>`).join("");
+  $$("#v-fc input").forEach(i => i.onchange = i.oninput = fcDirty); fcDirty();
+}
+async function loadFC(keepForm) {
+  const d = await api("/api/profile"); FC = d; FCsaved = d.profile; if (!keepForm) fcFill(d.profile);
+  $("#fc-pre").innerHTML = Object.keys(PRESETS).map(k => `<button class="chip on" data-p="${k}">${k.toUpperCase()}</button>`).join("");
+  $$("#fc-pre [data-p]").forEach(b => b.onclick = () => { const x = PRESETS[b.dataset.p], p = { automation: x.automation, sensors: Object.fromEntries(SENS.map(([k]) => [k, x.sensors[k] !== false])), intervals: x.intervals, thresholds: x.thresholds }; fcFill(p); toast(b.dataset.p + " loaded - review, then save", "warn"); });
+  const audit = await api("/api/config/history"); const rows = audit.history || []; $("#fc-audit").innerHTML = rows.map(r => `<div class="ln info"><span class="t">${hms(r.ts)}</span><span class="s">rev ${r.revision}</span><span class="m">${esc((r.changed || []).join(", ") || "settings verified; no value changes")}</span></div>`).join("") || '<div class="empty">no configuration changes yet</div>';
+}
+function initFC() {
+  $("#fc-save").onclick = async () => { const b = $("#fc-save"); b.disabled = true; const r = await api("/api/profile", { profile: fcRead() }); b.disabled = false; if (r.error) return toast(r.error, "bad"); toast(r.changed && r.changed.length ? "Saved: " + r.changed.join(", ") : "No changes to save", "ok"); FCsaved = r.profile; fcFill(r.profile); loadFC(true); };
+  $("#fc-reload").onclick = () => { loadFC(); toast("Reloaded saved settings"); };
+}
+
+/* ---------- palette + alerts ---------- */
+let palSel = 0, palItems = [];
+function palAll() { return [...VKEYS.map((k, i) => ({ g: "SCREENS", ic: String(i + 1), t: TITLES[k], d: "Open " + TITLES[k].toLowerCase(), tag: "OPEN", go: () => show(k) })), ...Object.keys(NICE).map(k => ({ g: "ACTIONS", ic: "RUN", t: NICE[k], d: "Propose and run on this PC (allowlisted)", tag: "RUN", go: async () => { const r = await api("/api/action/propose", { kind: k }); if (r.id) { await api("/api/action/run", { id: r.id }); toast("Ran: " + NICE[k], "ok"); } loadActions(); } })), { g: "ACTIONS", ic: "LOG", t: "Export activity log", d: "Download the stream as a text file", tag: "SAVE", go: () => $("#a-exp").click() }, { g: "ACTIONS", ic: "BELL", t: "Enable desktop alerts", d: "Notify on serious lag and process review insights", tag: "ASK", go: () => $("#notifyBtn").click() }]; }
+function palRender() {
+  const q = $("#pal-q").value.toLowerCase(); palItems = palAll().filter(i => (i.t + " " + i.d).toLowerCase().includes(q)); palSel = Math.min(palSel, Math.max(0, palItems.length - 1));
+  let g = "", h = ""; palItems.forEach((i, n) => { if (i.g !== g) { g = i.g; h += `<div class="pal-g">${g}</div>`; } h += `<button class="pal-i${n === palSel ? " sel" : ""}" data-n="${n}"><i>${i.ic}</i><span><b>${esc(i.t)}</b><small>${esc(i.d)}</small></span><em>${i.tag}</em></button>`; });
+  $("#pal-list").innerHTML = h || '<div class="empty" style="padding:20px">No match. Try a shorter search.</div>';
+  $$("#pal-list .pal-i").forEach(b => b.onclick = () => palRun(+b.dataset.n)); const s = $("#pal-list .sel"); if (s) s.scrollIntoView({ block: "nearest" });
+}
+function palOpen() { $("#pal").classList.add("open"); $("#pal-q").value = ""; palSel = 0; palRender(); $("#pal-q").focus(); }
+function palClose() { $("#pal").classList.remove("open"); }
+function palRun(n) { const i = palItems[n]; if (!i) return; palClose(); i.go(); }
+function initPalette() {
+  $("#palBtn").onclick = palOpen; $("#pal").onclick = e => { if (e.target.id === "pal") palClose(); }; $("#pal-q").oninput = () => { palSel = 0; palRender(); };
+  addEventListener("keydown", e => {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") { e.preventDefault(); $("#pal").classList.contains("open") ? palClose() : palOpen(); return; }
+    if (!$("#pal").classList.contains("open")) return;
+    if (e.key === "Escape") palClose(); else if (e.key === "ArrowDown") { e.preventDefault(); palSel = Math.min(palItems.length - 1, palSel + 1); palRender(); } else if (e.key === "ArrowUp") { e.preventDefault(); palSel = Math.max(0, palSel - 1); palRender(); } else if (e.key === "Enter") palRun(palSel);
+  });
+}
+function initNotify() {
+  const b = $("#notifyBtn"), sync = () => { b.textContent = ("Notification" in window && Notification.permission === "granted") ? "\u260E ALERTS ON" : "\u260E ALERTS"; }; sync();
+  b.onclick = async () => { if (!("Notification" in window)) return toast("Desktop alerts are not supported here", "warn"); if (Notification.permission === "denied") return toast("Alerts are blocked in browser settings", "warn"); const p = await Notification.requestPermission(); sync(); toast(p === "granted" ? "Desktop alerts enabled for serious lag and process review" : "Alerts not enabled", p === "granted" ? "ok" : "warn"); };
+}
+const notifiedInsights = new Set();
+function alertInsight(i) {
+  if (!i || (i.sev !== "high" && i.sev !== "warn")) return; toast((i.title || "Insight") + (i.culprit ? " - " + i.culprit : ""), i.sev === "high" ? "bad" : "warn");
+  const review = String(i.key || "").startsWith("process-review-");
+  const key = String(i.id || i.key || i.ts || i.title);
+  if ((i.sev === "high" || review) && !notifiedInsights.has(key) && "Notification" in window && Notification.permission === "granted" && document.hidden) {
+    notifiedInsights.add(key); try { new Notification(review ? "SENTINEL process review" : "SENTINEL: " + (i.title || "Serious lag"), { body: (i.detail || "") + (review ? " — advisory only; inspect the Process tab before requesting a close." : "") }); } catch (e) { }
+  }
+}
+boot();

@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SENTINEL</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cpath d='M32 4l24 14v28L32 60 8 46V18z' fill='none' stroke='%23b8e65b' stroke-width='4'/%3E%3Ccircle cx='32' cy='32' r='8' fill='%23ff6b38'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="app.css"></head>
+<body><div class="ambient"></div><canvas id="starfield"></canvas>
+<div class="boot" id="boot"><div class="boot-grid"></div><div class="boot-card">
+ <div class="boot-emblem"><div class="boot-mark">S1</div></div>
+ <div class="boot-title">SENTINEL / PERFORMANCE GUARDIAN</div>
+ <div class="boot-sub">NATIVE WINDOWS GAMING INTELLIGENCE / LOCAL ONLY / NODE 01</div>
+ <div class="boot-copy">Opening the local command channel. Telemetry stays local; optional cloud inference and user-triggered web lookups contact external providers.</div>
+ <div class="boot-track"><div class="boot-progress" id="bootProgress"></div></div>
+ <div class="boot-stage"><span id="bootStage">INITIALIZING CORE</span><b id="bootPct">00%</b></div>
+ <div class="boot-log" id="bootLog"><div>Interface loader ready</div></div>
+ <button class="boot-skip" id="bootSkip">ENTER COMMAND DECK &gt;&gt;</button>
+</div></div>
+<div id="toasts" aria-live="polite"></div>
+<div class="pal" id="pal"><div class="pal-box" role="dialog" aria-modal="true" aria-label="Command palette">
+ <input id="pal-q" type="search" autocomplete="off" spellcheck="false" placeholder="Jump to a screen or run an action...">
+ <div class="pal-list" id="pal-list"></div>
+ <div class="pal-f"><span>&uarr; &darr; NAVIGATE &nbsp; ENTER OPEN &nbsp; ESC CLOSE</span><span>LOCAL COMMANDS ONLY</span></div></div></div>
+<div id="app">
+<header>
+  <div class="brand">
+    <svg viewBox="0 0 64 64"><path d="M32 3l25 14.5v29L32 61 7 46.5v-29z" fill="#0b1110" stroke="#b8e65b" stroke-width="2.5"/><path d="M32 13l16 9.3v18.6L32 50 16 40.900V22.300z" fill="none" stroke="#b8e65b" stroke-opacity=".5" stroke-width="1.5"/><circle cx="32" cy="32" r="7" fill="#ff6b38"><animate attributeName="r" values="6;8;6" dur="2.4s" repeatCount="indefinite"/></circle></svg>
+    <div><b>SENTINEL</b><small>PERFORMANCE GUARDIAN</small></div>
+  </div>
+  <div class="vtitle"><small>SENTINEL / WINDOWS NODE</small><b id="vtitle">COMMAND</b></div>
+  <span class="pill ok" id="p-online">AGENT ONLINE</span>
+  <span class="pill off" id="p-game">STANDBY</span>
+  <span class="pill off" id="p-ai">AI OFFLINE</span>
+  <span class="sp"></span>
+  <div class="hstat">LAG INDEX<b id="h-lag">--</b></div>
+  <div class="hstat">AGENT UPTIME<b id="h-up">--</b></div>
+  <button class="icon-btn" id="notifyBtn" title="Desktop alerts for serious lag">&#9742; ALERTS</button><button class="icon-btn" id="palBtn" title="Command palette">&#8981; COMMANDS <kbd>Ctrl K</kbd></button>
+  <div class="hstat">LOCAL TIME<b id="h-clock">--</b></div>
+</header>
+
+<nav id="nav">
+  <div class="ng">MONITOR</div>
+  <button data-v="cmd" class="on"><svg viewBox="0 0 24 24"><path d="M12 2l9 5v10l-9 5-9-5V7z"/><circle cx="12" cy="12" r="3"/></svg><span class="lb">COMMAND</span></button>
+  <button data-v="sys"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="1"/><path d="M8 20h8M12 16v4"/></svg><span class="lb">SYSTEM</span></button>
+  <button data-v="act"><svg viewBox="0 0 24 24"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg><span class="lb">ACTIVITY</span></button>
+  <button data-v="proc"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16"/><path d="M9 9h6v6H9zM9 1v3M15 1v3M9 20v3M15 20v3M1 9h3M1 15h3M20 9h3M20 15h3"/></svg><span class="lb">PROCESSES</span></button>
+  <button data-v="net"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/></svg><span class="lb">NETWORK</span></button>
+  <button data-v="ker"><svg viewBox="0 0 24 24"><path d="M4 5l8 7-8 7M13 19h7"/></svg><span class="lb">KERNEL</span></button>
+  <div class="ng">INTELLIGENCE</div>
+  <button data-v="evi"><svg viewBox="0 0 24 24"><path d="M4 4h16v16H4zM8 9h8M8 13h8M8 17h5"/></svg><span class="lb">EVIDENCE</span></button>
+  <button data-v="intelx"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2M5 4l2 2M19 4l-2 2"/></svg><span class="lb">INTELLIGENCE</span></button>
+  <button data-v="int"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M16 16l5 5"/></svg><span class="lb">INTEL FEED</span></button>
+  <button data-v="ai"><svg viewBox="0 0 24 24"><circle cx="6" cy="12" r="3"/><circle cx="18" cy="6" r="3"/><circle cx="18" cy="18" r="3"/><path d="M9 11l6-4M9 13l6 4"/></svg><span class="lb">AI CORE</span></button>
+  <div class="ng">OPERATIONS</div>
+  <button data-v="ctl"><svg viewBox="0 0 24 24"><path d="M5 3v18M12 3v18M19 3v18"/><rect x="3" y="7" width="4" height="4" fill="#080b0c"/><rect x="10" y="13" width="4" height="4" fill="#080b0c"/><rect x="17" y="5" width="4" height="4" fill="#080b0c"/></svg><span class="lb">CONTROL</span><span class="badge" id="b-act" hidden>0</span></button>
+  <button data-v="fc"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2"/></svg><span class="lb">FEATURES</span></button>
+  <button data-v="tsk"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/><path d="M17 16l2 2 3-4"/></svg><span class="lb">TASKS</span></button>
+
+  <div class="side-note"><b>&#9679; LOCAL-FIRST</b>Telemetry, traces and AI stay on this PC. Actions are allowlisted and reversible.<br><span style="color:var(--mut)">Keys 1-9 switch screens</span></div>
+</nav>
+
+<main>
+<!-- COMMAND -->
+<section class="view on" id="v-cmd"><div class="metrics" id="metrics">
+  <div class="metric" data-j="ker"><small>CPU LOAD</small><b id="m-cpu">--</b><span id="m-cpu-s">host processor</span><div class="meter"><i id="m-cpu-m"></i></div></div>
+  <div class="metric" data-j="ker"><small>MEMORY FREE</small><b id="m-ram">--</b><span id="m-ram-s">RAM headroom</span><div class="meter"><i id="m-ram-m"></i></div></div>
+  <div class="metric" data-j="evi"><small>EVIDENCE RECORDS</small><b id="m-evt">--</b><span>local SQLite vault</span><div class="meter"><i id="m-evt-m"></i></div></div>
+  <div class="metric" data-j="tsk"><small>SENSOR MATRIX</small><b id="m-sen">--</b><span id="m-sen-s">collectors healthy</span><div class="meter"><i id="m-sen-m"></i></div></div>
+  <div class="metric" data-j="sys"><small>POSTURE SIGNALS</small><b id="m-pos">--</b><span id="m-pos-s">open findings</span><div class="meter"><i id="m-pos-m"></i></div></div>
+</div>
+<div class="grid g-cmd">
+  <div class="panel" style="grid-row:span 2"><div class="ph">Core status<em id="c-game">no game</em></div>
+    <div class="core">
+      <svg viewBox="0 0 300 300">
+        <defs><filter id="glow"><feGaussianBlur stdDeviation="4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>
+        <g class="ring-a"><circle cx="150" cy="150" r="142" fill="none" stroke="#b8e65b" stroke-opacity=".35" stroke-dasharray="2 9"/><circle cx="150" cy="150" r="134" fill="none" stroke="#b8e65b" stroke-opacity=".18" stroke-width="6" stroke-dasharray="40 24"/></g>
+        <g class="ring-b"><circle cx="150" cy="150" r="118" fill="none" stroke="#ff6b38" stroke-opacity=".45" stroke-dasharray="14 10 3 10"/></g>
+        <circle cx="150" cy="150" r="104" fill="none" stroke="#12202e" stroke-width="14"/>
+        <circle id="arc" class="arc" cx="150" cy="150" r="104" fill="none" stroke="#b8e65b" stroke-width="14" stroke-linecap="butt" filter="url(#glow)" transform="rotate(-90 150 150)" stroke-dasharray="653.5" stroke-dashoffset="653.5"/>
+        <circle cx="150" cy="150" r="86" fill="#080d14" stroke="#b8e65b" stroke-opacity=".25"/>
+        <text id="c-num" class="num" x="150" y="168" text-anchor="middle">--</text>
+        <text class="lbl" x="150" y="108" text-anchor="middle">LAG INDEX</text>
+        <text id="c-st" class="st" x="150" y="200" text-anchor="middle" fill="#b8e65b">SCANNING</text>
+      </svg>
+      <div class="corebar"><span class="pill" id="c-plan">PLAN --</span><span class="pill" id="c-vbs">VBS --</span><span class="pill" id="c-vg">VANGUARD --</span></div>
+    </div>
+    <div class="pb"><div class="ph" style="padding:6px 0;border:0">CPU cores<em id="c-cores"></em></div><div class="cores" id="cores"></div></div>
+  </div>
+  <div class="panel"><div class="ph">Live vitals<em>1 s resolution</em></div><div class="pb"><div class="tiles" id="tiles"></div></div></div>
+  <div class="panel"><div class="ph">Threat &amp; lag insights<em id="i-n"></em></div><div class="pb"><div class="list" id="ins"></div></div></div>
+  <div class="panel"><div class="ph">What I'm doing right now<em>live</em></div><div class="feed sm" id="ticker"></div></div>
+  <div class="panel"><div class="ph">Lag culprits<em>since start</em></div><div class="pb"><div class="list" id="culp"></div></div></div>
+</div></section>
+
+<!-- ACTIVITY -->
+<section class="view" id="v-act"><div class="cols2" style="grid-template-columns:1.6fr 1fr">
+  <div class="panel"><div class="ph">Agent activity stream<em id="a-n"></em></div>
+    <div class="chips" id="chips"></div>
+    <div style="padding:0 16px 8px;display:flex;gap:8px"><input id="a-q" placeholder="filter text..." style="flex:1"><button class="btn sm" id="a-pause">PAUSE</button><button class="btn sm" id="a-exp">EXPORT</button></div>
+    <div class="feed" id="feed"></div></div>
+  <div class="panel"><div class="ph">Collectors &amp; heartbeats<em>every background task</em></div><div class="pb"><table id="heart"></table></div></div>
+</div></section>
+
+<!-- PROCESSES -->
+<section class="view" id="v-proc">
+  <div class="panel"><div class="ph">Process radar<em id="p-n">waiting for process snapshot</em></div><div style="padding:10px 16px 0;display:flex;gap:8px"><input id="p-q" placeholder="filter process, executable path, owner, parent or session..." style="width:100%"><button class="btn" id="p-refresh">REFRESH</button></div>
+    <div class="msg" style="margin:10px 16px"><small>Physical desktop vs background process</small>“Visible GUI” means Windows enumerated at least one visible top-level window for that PID in the agent's interactive session. Session 0 indicates a service/system context. This does not prove the window is foreground, responsive or actively used. Full path and creation time identify the exact process instance.</div>
+    <div class="pb" style="overflow:auto;max-height:calc(100vh - 350px)"><table id="ptab"></table></div></div>
+  <div class="panel" style="margin-top:14px"><div class="ph">Sustained resource review<em>advisory · never auto-kills</em></div><div class="pb list" id="proc-recs"></div></div>
+</section>
+
+<!-- NETWORK -->
+<section class="view" id="v-net"><div class="cols2">
+  <div class="panel big"><div class="ph">Latency &amp; jitter<em>1.1.1.1 probe</em></div><div class="pb"><canvas id="nc-ping"></canvas></div><div class="pb"><canvas id="nc-thr"></canvas></div></div>
+  <div class="panel"><div class="ph">Outbound connections<em id="n-n"></em></div><div style="padding:10px 16px 0"><input id="n-q" placeholder="filter by process, host or port..." style="width:100%"></div><div class="pb" style="overflow:auto;max-height:calc(100vh - 170px)"><table id="ntab"></table></div></div>
+</div></section>
+
+<!-- KERNEL -->
+<section class="view" id="v-ker"><div class="cols2">
+  <div class="panel big"><div class="ph">DPC / interrupt time<em>driver latency</em></div><div class="pb"><canvas id="kc-dpc"></canvas></div><div class="ph" style="margin-top:6px">Paging &amp; disk latency</div><div class="pb"><canvas id="kc-pg"></canvas></div></div>
+  <div style="display:grid;gap:14px;align-content:start">
+    <div class="panel"><div class="ph">GPU</div><div class="pb kv" id="gpu"></div></div>
+    <div class="panel"><div class="ph">System &amp; Vanguard</div><div class="pb kv" id="sys"></div></div>
+    <div class="panel"><div class="ph">Kernel source validation<em>PDH counters ≠ ETW capture</em></div><div class="pb" id="kernel-health"></div><div class="pb"><button class="btn or" id="kernel-capture">REQUEST 15s ETW TRACE</button></div></div>
+    <div class="panel"><div class="ph">ETW kernel trace archive<em>Windows Performance Recorder</em></div><div class="pb list" id="traces"></div></div>
+    <div class="panel"><div class="ph">Long-term kernel counter archive<em>hourly min / average / max; raw samples are separately retained</em></div>
+      <div class="pb"><div class="row"><select id="kernel-archive-key"><option value="dpc">DPC time</option><option value="irq">Interrupt time</option><option value="pagesin">Pages input / sec</option><option value="pagesout">Pages output / sec</option><option value="pagefaults">Page faults / sec</option><option value="pagereads">Page reads / sec</option><option value="dlat">Disk latency</option></select><button class="btn sm" id="kernel-archive-load">LOAD ARCHIVE</button></div>
+      <div class="msg" style="margin-top:8px"><small>Retention semantics</small>High-frequency samples are kept raw for the configured window, then rolled into permanent hourly count, average, minimum and maximum records. This preserves long-term trends without allowing one-second sampling to grow the database without bound.</div>
+      <div style="overflow:auto;max-height:260px;margin-top:8px"><table id="kernel-archive"></table></div></div>
+    </div>
+    <div class="panel"><div class="ph">GUI composition / animation diagnostics<em>measured vs not yet measured</em></div><div class="pb"><div class="msg"><small>Current measurement boundary</small>Process session IDs and visible-window counts show which processes own visible top-level windows. PDH samples DPC, paging, faults, memory and disk counters. WPR captures an ETL trace only when an approved trace is running. SENTINEL does not yet decode DWM frame-present events, per-window frame pacing, dropped frames or input-to-photon latency into an FPS timeline. Use Windows Performance Analyzer / GPUView on the captured ETL for that deeper analysis; do not infer animation smoothness from DPC counters alone.</div></div></div>
+  </div></div></section>
+
+<!-- INTEL -->
+<section class="view" id="v-int"><div class="panel"><div class="ph">Intel feed<em>Microsoft Learn + GitHub</em></div>
+  <div class="chatbox"><input id="i-q" placeholder="search Microsoft Learn + GitHub issues (e.g. nvlddmkm 141 Valorant)"><button class="btn" id="i-go">SCAN</button></div>
+  <div class="pb" id="intel" style="margin-top:8px"></div></div></section>
+
+<!-- AI -->
+<section class="view" id="v-ai"><div class="panel"><div class="ph">Council<em id="ai-url"></em></div>
+  <div class="council"><div class="node" id="n-fast"><h4>FAST</h4><b id="m-fast">--</b></div><div class="link" id="lnk"></div><div class="node" id="n-deep"><h4>DEEP</h4><b id="m-deep">--</b></div></div>
+  <div class="pb"><div class="msg"><small>latest triage</small><span id="ai-status">Waiting for the first fast-model triage...</span></div></div></div>
+  <div class="panel" style="margin-top:14px"><div class="ph">Council transcript</div>
+    <div class="feed" id="tr" style="max-height:calc(100vh - 460px);font-family:var(--mo)"></div>
+    <div class="chatbox"><select id="ai-mode"><option value="council">COUNCIL</option><option value="fast">FAST</option><option value="deep">DEEP</option></select><input id="ai-in" placeholder="ask Sentinel anything about your PC..."><button class="btn or" id="ai-go">SEND</button></div></div>
+  <div class="panel" style="margin-top:14px"><div class="ph">Agent runtime &amp; inference telemetry<em>live process state, not model claims</em></div><div class="pb kv" id="ai-runtime"><div class="empty">Waiting for runtime status and usage sample.</div></div></div>
+</section>
+
+<!-- CONTROL -->
+<section class="view" id="v-ctl"><div class="cols2">
+  <div class="panel"><div class="ph">Action queue<em>approve or dismiss</em></div><div class="pb"><div class="list" id="pend"></div></div><div class="ph" style="margin-top:10px">History</div><div class="pb"><div class="list" id="hist"></div></div></div>
+  <div style="display:grid;gap:14px;align-content:start">
+    <div class="panel"><div class="ph">Autopilot<em>runs without asking</em></div><div class="pb" id="auto"></div></div>
+    <div class="panel"><div class="ph">AI settings</div><div class="pb" id="cfg"></div></div>
+    <div class="panel"><div class="ph">Run now</div><div class="pb" style="display:flex;gap:8px;flex-wrap:wrap" id="runnow"></div></div>
+  </div></div></section>
+
+<!-- SYSTEM -->
+<section class="view" id="v-sys">
+  <div class="row" style="margin-bottom:10px"><div><b>Host inventory &amp; security posture</b><small>Unknown data is shown as unknown, never treated as a healthy result.</small></div><button class="btn or" id="sys-refresh">REFRESH INVENTORY</button></div>
+  <div class="metrics" id="sys-m"></div>
+  <div class="cols2">
+    <div class="panel"><div class="ph">Platform / firmware<em id="sys-ts"></em></div><div class="pb kv" id="sys-plat"></div></div>
+    <div class="panel"><div class="ph">Security posture<em>Defender / firewall / boot</em></div><div class="pb list" id="sys-sec"></div></div>
+    <div class="panel"><div class="ph">Volumes &amp; physical storage</div><div class="pb list" id="sys-vol"></div></div>
+    <div class="panel"><div class="ph">Posture findings<em>rule-based, not AI</em></div><div class="pb list" id="sys-post"></div></div>
+  </div>
+  <div class="cols2" style="margin-top:14px">
+    <div class="panel"><div class="ph">Source health matrix<em>per-provider result and failure detail</em></div><div class="pb list" id="sys-health"><div class="empty">No inventory scan yet.</div></div></div>
+    <div class="panel"><div class="ph">Permanent local storage<em>SQLite + integrity-stamped snapshots</em></div><div class="pb kv" id="sys-storage"><div class="empty">Storage status loading.</div></div></div>
+  </div>
+  <div class="panel" style="margin-top:14px"><div class="ph">Inventory explorer<em id="cat-n"></em></div>
+    <div class="chips" id="cat-k"></div>
+    <div style="padding:0 16px 8px;display:flex;gap:8px"><input id="cat-q" placeholder="filter this catalog..." style="flex:1"></div>
+    <div class="pb" style="overflow:auto;max-height:46vh"><table id="cat-t"></table></div></div>
+</section>
+<!-- EVIDENCE -->
+<section class="view" id="v-evi"><div class="panel"><div class="ph">Evidence vault<em id="e-n">local SQLite audit trail</em></div>
+  <div style="padding:12px 16px 8px;display:flex;gap:8px;flex-wrap:wrap"><input id="e-q" placeholder="search message or source..." style="flex:1;min-width:200px">
+    <select id="e-lv"><option value="">all levels</option><option>error</option><option>warn</option><option>ok</option><option>info</option><option>debug</option></select>
+    <select id="e-src"><option value="">all sources</option></select>
+    <button class="btn" id="e-go">SEARCH</button><button class="btn or" id="e-csv">EXPORT CSV</button></div>
+  <div class="pb" style="overflow:auto;max-height:calc(100vh - 230px)"><table id="e-t"></table></div></div></section>
+<!-- TASKS -->
+<section class="view" id="v-tsk">
+  <div class="metrics" id="t-m"></div>
+  <div class="cols2">
+    <div class="panel"><div class="ph">Live agent jobs<em>one thread per collector</em></div><div class="pb"><table id="t-jobs"></table></div></div>
+    <div class="panel"><div class="ph">Action run history<em>proposed / approved / run</em></div><div class="pb list" id="t-hist"></div></div>
+  </div>
+  <div class="panel" style="margin-top:14px"><div class="ph">Quick dispatch<em>allowlisted, logged, reversible</em></div><div class="pb" style="display:flex;gap:8px;flex-wrap:wrap" id="t-dis"></div></div>
+</section>
+
+<!-- ADDITIVE AIE INTELLIGENCE -->
+<section class="view" id="v-intelx">
+  <div class="metrics" id="ix-metrics">
+    <div class="metric"><small>OBSERVED ENTITIES</small><b id="ix-count">--</b><span>evidence-linked state</span><div class="meter"><i id="ix-count-m"></i></div></div>
+    <div class="metric"><small>LOCAL MEMORIES</small><b id="ix-memory-count">--</b><span>explicitly stored</span><div class="meter"><i id="ix-memory-m"></i></div></div>
+    <div class="metric"><small>ACTIVE GOALS</small><b id="ix-goal-count">--</b><span>user-directed</span><div class="meter"><i id="ix-goal-m"></i></div></div>
+    <div class="metric"><small>AVAILABLE RAM</small><b id="ix-ram">--</b><span id="ix-pressure">runtime headroom</span><div class="meter"><i id="ix-ram-m"></i></div></div>
+    <div class="metric"><small>LOCAL MODEL</small><b id="ix-model">--</b><span id="ix-model-sub">Ollama routing</span><div class="meter"><i id="ix-model-m"></i></div></div>
+  </div>
+  <div class="cols2">
+    <div class="panel"><div class="ph">Environment evidence <em id="ix-state-meta">observed facts only</em></div>
+      <div class="pb"><div class="msg"><small>State semantics</small>Missing entries are treated as unknown, never as proof that a process or resource was removed. Each state row carries bounded evidence IDs and an explainable recency score.</div>
+        <div class="list" id="ix-state"></div><button class="btn sm" id="ix-refresh-state" style="margin-top:10px">REFRESH EVIDENCE MODEL</button></div></div>
+    <div class="panel"><div class="ph">Hardware-aware local routing <em id="ix-ollama-state">checking</em></div>
+      <div class="pb"><div class="kv" id="ix-runtime"></div><div class="msg" style="margin-top:12px"><small>Model routing policy</small>Routine work prefers an installed 3B model. Complex work may use 7B only when at least 7.5 GiB RAM is currently available. Embeddings use an already-installed Nomic model. No model is downloaded and this layer never uses cloud inference.</div>
+        <div class="row" style="margin-top:10px"><div><b>Windows UI Automation</b><small>Bounded structural inspection; no text, values, screenshots or clicks.</small></div><button class="btn sm" id="ix-uia">INSPECT</button></div><div id="ix-uia-result" class="list" style="margin-top:8px"></div></div></div>
+    <div class="panel"><div class="ph">Persistent memory <em>local · provenance-aware · explicit</em></div>
+      <div class="pb">
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px"><input id="ix-memory-q" placeholder="Search stored memories..." style="flex:1;min-width:180px"><button class="btn sm" id="ix-memory-search">SEARCH</button><button class="btn sm" id="ix-memory-semantic">SEMANTIC</button></div><label class="ix-sensitive-toggle"><input type="checkbox" id="ix-include-sensitive"><span>Include sensitive records in this explicit search</span></label>
+        <div class="msg"><small>Memory contract</small>Sensitive memories are excluded from retrieval and embedding indexing by default. Saving, correction and deletion remain explicit; corrections preserve the prior revision.</div>
+        <textarea id="ix-memory-content" rows="3" placeholder="Add a memory or an explicit note..." style="width:100%;margin:10px 0"></textarea>
+        <div style="display:flex;gap:8px;flex-wrap:wrap"><select id="ix-memory-kind"><option value="episodic">EPISODIC</option><option value="working">WORKING</option><option value="semantic">SEMANTIC</option><option value="procedural">PROCEDURAL</option><option value="prospective">PROSPECTIVE</option></select><select id="ix-memory-sensitivity"><option value="internal">INTERNAL</option><option value="public">PUBLIC</option><option value="sensitive">SENSITIVE</option></select><button class="btn or" id="ix-memory-add">SAVE MEMORY</button><button class="btn sm" id="ix-memory-index">INDEX NON-SENSITIVE</button></div>
+        <div class="list" id="ix-memories" style="margin-top:12px"></div>
+      </div></div>
+    <div class="panel"><div class="ph">Goals &amp; reviewed plans <em>planning is not execution</em></div>
+      <div class="pb"><div style="display:grid;gap:8px"><input id="ix-goal-title" placeholder="New goal title"><textarea id="ix-goal-desc" rows="2" placeholder="Describe the outcome you want..."></textarea><button class="btn or" id="ix-goal-add">CREATE GOAL</button></div>
+        <div class="msg" style="margin-top:12px"><small>Plan lifecycle</small>Local model suggestions are stored as integrity-checked drafts. Accepting a draft creates ordered goal steps only; it does not run commands or perform system actions.</div>
+        <div class="list" id="ix-goals" style="margin-top:12px"></div></div></div>
+  </div>
+</section>
+
+<!-- FEATURE CONTROL -->
+<section class="view" id="v-fc">
+  <div class="panel hot"><div class="ph">Automation master control<em id="fc-state">LOADING</em></div>
+    <div class="pb"><label class="tog"><span>Automation<small>Off = nothing runs on autopilot; every action waits for your approval in CONTROL. Sensors keep running.</small></span><input type="checkbox" class="sw" id="fc-auto"></label></div></div>
+  <div class="cols2" style="margin-top:14px">
+    <div class="panel"><div class="ph">Continuous sensors<em>take effect within seconds</em></div><div class="pb" id="fc-sens"></div></div>
+    <div class="panel"><div class="ph">Schedules &amp; thresholds</div><div class="pb" id="fc-num"></div></div>
+    <div class="panel"><div class="ph">Profile presets<em>fills the form only - review, then save</em></div><div class="pb"><div class="chips" id="fc-pre" style="padding:0 0 10px"></div>
+      <div class="msg"><small>collection boundaries</small>Foreground window titles and ETW provider streams are not part of passive collection. A separate, explicit UI Automation inspection is available under Intelligence and returns structural metadata only. SENTINEL's own process spawn/exit watcher already covers process lifecycle; nothing privacy-sensitive is read by this workspace.</div>
+      <div style="display:flex;gap:8px;margin-top:10px;align-items:center"><button class="btn or" id="fc-save">SAVE ALL SETTINGS</button><button class="btn" id="fc-reload">RELOAD SAVED</button><span class="tag" id="fc-dirty" hidden>UNSAVED</span></div></div></div>
+    <div class="panel"><div class="ph">Configuration audit timeline<em>saved changes and approvals</em></div><div class="feed sm" id="fc-audit"></div></div>
+  </div>
+</section>
+</main></div>
+<script src="app.js"></script></body></html>

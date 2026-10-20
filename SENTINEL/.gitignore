@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyd
+.Python
+.venv/
+venv/
+.env
+.env.*
+
+# Runtime state / credentials
+.sentinel/
+Sentinel/
+config.json
+sentinel.db
+*.db
+*.db-shm
+*.db-wal
+traces/
+*.etl
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+Desktop.ini
