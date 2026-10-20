@@ -789,9 +789,9 @@ kbd{font:9px var(--mono);color:#829087;border:1px solid #526158;border-radius:6p
       <div class="control-divider"></div>
       <div class="control-group-title">AGENT LIFECYCLE / AUTOMATIC RECOVERY</div>
       <div class="form-grid">
-       <label class="toggle"><input type="checkbox" id="cfgAutoRestart"><span><strong>Auto-restart after agent updates</strong><small>Watch installed AIE Python modules for completed changes. After three stable scans, Sentinel gracefully restarts and reloads the updated code.</small></span></label>
+       <label class="toggle"><input type="checkbox" id="cfgAutoRestart"><span><strong>Auto-restart after agent updates</strong><small>Watch installed AIE Python modules for completed changes. After two stable scans about one second apart, Sentinel gracefully restarts and reloads the updated code.</small></span></label>
       </div>
-      <div class="control-footnote" id="restartWatchDescription">The source watcher checks every 2 seconds and waits for three consistent snapshots before restarting. It does not download updates or install packages.</div>
+      <div class="control-footnote" id="restartWatchDescription">The source watcher checks every second and waits for two consistent snapshots before restarting. It does not download updates or install packages.</div>
       <div class="button-row"><span class="tag" id="restartWatchState">CHECKING RESTART WATCH</span><span class="panel-sub">Continuous sensor changes also restart automatically when this setting is enabled.</span></div>
      </section>
 
@@ -1085,7 +1085,7 @@ function renderStatus(s){
   const restartReason=restart.reason||restart.last_reason;
   $("restartWatchDescription").textContent=restartReason
    ?restartReason+" · "+(restart.watch_status==="restart_pending"||restart.watch_status==="launching"?"Restart in progress.":"Last restart reason.")
-   :"Watches installed AIE Python modules and collector settings every 2 seconds. Three stable snapshots are required before restart. It does not pull or install packages.";
+   :"Watches installed AIE Python modules and collector settings every second. Two stable snapshots are required before restart. It does not pull or install packages.";
  }
  $("liveBadge").innerHTML=restart.status==="scheduled"||restart.status==="restarting"
   ?'<i class="led" style="background:var(--amber);color:var(--amber)"></i>RESTARTING'
