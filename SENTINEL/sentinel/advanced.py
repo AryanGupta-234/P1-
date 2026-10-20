@@ -1263,9 +1263,18 @@ def capture_kernel_window(duration: int = 12) -> dict:
     trace_id = time.strftime("sentinel_kernel_%Y%m%d_%H%M%S")
     etl_path = os.path.join(core.TRACE_DIR, trace_id + ".etl")
     flags = "PROC_THREAD+LOADER+PROFILE+DISK_IO+DISK_IO_INIT+FILE_IO+FILE_IO_INIT+HARD_FAULTS+INTERRUPT+DPC+CSWITCH+NETWORKTRACE"
-    start = _run([xperf, "-on", flags, "-stackwalk", "CSwitch+ReadyThread+DPC+ISR", "-BufferSize", "1024",
-                  "-MaxBuffers", "256", "-MaxFile", "256", "-FileMode", "Circular"], 20)
+    # Reset the completion signal before starting the owned logger. Shutdown may
+    # race with this worker as soon as ownership is published below; it must see
+    # an unset event and wait for xperf -d to finish writing the ETL.
+    _ETW_DONE.clear()
+    try:
+        start = _run([xperf, "-on", flags, "-stackwalk", "CSwitch+ReadyThread+DPC+ISR", "-BufferSize", "1024",
+                      "-MaxBuffers", "256", "-MaxFile", "256", "-FileMode", "Circular"], 20)
+    except Exception:
+        _ETW_DONE.set()
+        raise
     if start.returncode != 0:
+        _ETW_DONE.set()
         return {"ok": False, "error": ((start.stderr or start.stdout or "xperf start failed")[:260])}
     _ETW_OWNED = True
     state = STATE.setdefault("kernel", {}).setdefault("etw_engine", {})

@@ -1,6 +1,7 @@
 import json
 import sqlite3
 import time
+from pathlib import Path
 
 from sentinel import advanced, core
 
@@ -262,3 +263,59 @@ def test_updater_pause_requires_a_running_pre_action_service(monkeypatch):
         assert "not running" in str(exc)
     else:
         raise AssertionError("SENTINEL must not change an updater that was already stopped")
+
+
+def test_etw_capture_clears_shutdown_event_until_owned_trace_is_closed(monkeypatch, tmp_path):
+    """Shutdown must not observe a stale, pre-set completion event for a new trace."""
+    conn = memory_store(monkeypatch)
+    conn.execute(
+        "CREATE TABLE trace_archive(ts REAL,file_path TEXT,size_bytes INTEGER,source TEXT,status TEXT)"
+    )
+    conn.commit()
+    monkeypatch.setattr(advanced, "IS_WIN", True)
+    monkeypatch.setattr(advanced, "locate_xperf", lambda: r"C:\WPT\xperf.exe")
+    monkeypatch.setattr(core, "TRACE_DIR", str(tmp_path))
+    monkeypatch.setitem(advanced.STATE, "kernel", {"etw": {"recording": False}})
+    advanced._ETW_OWNED = False
+    advanced._ETW_DONE.set()  # the module's idle state
+
+    class FastStop:
+        def wait(self, _seconds):
+            return False
+
+    monkeypatch.setattr(advanced, "_STOP", FastStop())
+    calls = []
+
+    class Result:
+        def __init__(self, args, stdout=""):
+            self.args = args
+            self.returncode = 0
+            self.stdout = stdout
+            self.stderr = ""
+
+    def fake_run(args, timeout=15):
+        calls.append(list(args))
+        if args[1] == "-loggers":
+            return Result(args, "No other kernel logger is active")
+        if args[1] == "-on":
+            return Result(args)
+        if args[1] == "-d":
+            # This assertion catches the regression: completion must remain
+            # unset until the owned xperf -d has finished writing the ETL.
+            assert advanced._ETW_DONE.is_set() is False
+            Path(args[-1]).write_bytes(b"synthetic ETL")
+            return Result(args)
+        raise AssertionError(f"unexpected xperf command: {args}")
+
+    monkeypatch.setattr(advanced, "_run", fake_run)
+    monkeypatch.setattr(advanced, "_decode_etl", lambda *_args: {
+        "decoded": True, "event_count": 0, "named_driver_modules": []
+    })
+
+    result = advanced.capture_kernel_window(5)
+
+    assert result["ok"] is True
+    assert any(call[1] == "-d" for call in calls)
+    assert advanced._ETW_OWNED is False
+    assert advanced._ETW_DONE.is_set() is True
+    assert conn.execute("SELECT COUNT(*) FROM trace_archive").fetchone()[0] == 1
