@@ -8,14 +8,19 @@ powershell -NoLogo -NoProfile -NonInteractive -Command "$id=[Security.Principal.
 if errorlevel 1 (
   echo Requesting Windows administrator permission...
   powershell -NoLogo -NoProfile -ExecutionPolicy Bypass -Command "$p=Start-Process -FilePath $env:SENTINEL_INSTALLER -Verb RunAs -Wait -PassThru; exit [int]$p.ExitCode"
-  set "ELEVATED_RESULT=%ERRORLEVEL%"
-  if not "%ELEVATED_RESULT%"=="0" (
-    echo.
-    echo ERROR: The elevated installer did not complete successfully. Exit code: %ELEVATED_RESULT%
-    pause
-  )
-  exit /b %ELEVATED_RESULT%
+  if errorlevel 1 goto :elevation_failed
+  exit /b 0
 )
+goto :admin_ok
+
+:elevation_failed
+echo.
+echo ERROR: The elevated installer did not complete successfully.
+echo Review the elevated installer window for its diagnostic message.
+pause
+exit /b 1
+
+:admin_ok
 
 for %%I in ("%~dp0.") do set "SRC=%%~fI"
 set "ROOT=%ProgramFiles%\Sentinel"
@@ -97,9 +102,8 @@ if exist "%VERSION_DIR%" (
     echo It has been left untouched. Choose a new release version.
     goto :fail
   )
-  set "EXISTING_VERSION="
-  set /p "EXISTING_VERSION="<"%VERSION_DIR%\VERSION"
-  if not "%EXISTING_VERSION%"=="%VERSION%" (
+  findstr /R /X /C:"%VERSION%" "%VERSION_DIR%\VERSION" >nul
+  if errorlevel 1 (
     echo ERROR: Existing folder version mismatch. Nothing was overwritten.
     goto :fail
   )
