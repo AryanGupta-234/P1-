@@ -266,10 +266,11 @@ def propose(kind, args=None, origin="brain", reason=""):
     try:
         preview = advanced.action_preview(kind, args)
     except Exception as exc:
-        log("actions", f"REJECTED {kind}: preview failed ({type(exc).__name__})", "warn")
+        log("actions", f"REJECTED {kind}: preview failed ({type(exc).__name__}: {str(exc)[:200]})", "warn")
         return None
     if not preview.get("supported") or preview.get("risk") == "dangerous":
-        log("actions", f"REJECTED {kind}: {('; '.join(preview.get('warnings') or []))[:180] or 'risk policy'}", "warn")
+        detail = "; ".join(str(item) for item in (preview.get("warnings") or []) if item)
+        log("actions", f"REJECTED {kind}: {detail[:260] or 'risk policy'}", "warn")
         return None
     # Only explicitly opted-in SAFE diagnostic actions may run automatically.
     # Medium risk always needs a fresh approval; dangerous actions never run.
