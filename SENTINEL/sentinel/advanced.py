@@ -1530,7 +1530,7 @@ def _parse_etw_xml(xml_path: str, trace_end: float | None = None) -> dict:
     return {
         "ok": True,
         "events": raw_events,
-        "process_start_count": len(process_starts),
+        "process_start_count": sum(len(starts) for starts in process_starts.values()),
         "process_attribution_count": sum(1 for event in raw_events if event.get("process_name")),
         "unattributed_event_count": sum(1 for event in raw_events if not event.get("process_name") and not event.get("module_name")),
     }
