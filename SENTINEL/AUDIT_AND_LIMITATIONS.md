@@ -139,3 +139,28 @@ The Performance Intelligence workspace also renders a paired time-aligned waterf
 Regression coverage was added in tests/test_advanced_windows_integrations.py for ETW ProcessStart/DPC attribution, PID-reuse rejection, LHM sensor classification and startup/session rollback retry. These are deterministic parser/policy tests, not proof of actual xperf symbol resolution, laptop sensor exposure or Windows scheduler/SCM restoration.
 
 **Still requires target-machine validation:** install Windows Performance Toolkit if needed and capture ETL during a reproducible DPC/ISR spike; verify that xperf resolves the responsible .sys module and inspect the ETL in WPA. Run the optional LHM reader while LibreHardwareMonitor is already running and confirm CPU Package/Core and ASUS fan RPM availability. Apply a reversible game profile on a disposable session, end the game, restart SENTINEL during an active session, and verify the action journal and external power/process state. No custom driver is installed, no fan curve is written and no hardware sensor software is bundled.
+
+
+## Windows integration follow-up — 21 October 2026
+
+### ETW event attribution
+- The bounded NT Kernel Logger decoder consumes the event timestamp, PID from payload/header, thread ID, event provider/task/opcode and explicit image/module fields.
+- Process names are resolved from ProcessStart events only when that start timestamp is at or before the event being attributed. A live process-list fallback is guarded by process creation time. A PID reused later in the same trace is not allowed to name earlier events.
+- Driver attribution is reported only when an event field or xperf's DPC/ISR summary explicitly names a `.sys` module. The trace's event and driver-report availability/counts are exposed separately. Missing stacks, symbols or module records remain unresolved.
+- SENTINEL serializes its own ETW capture windows and finalizes only its owned logger. This is bounded capture/decoding, not a continuous real-time kernel event stream.
+
+### Hardware sensor providers
+- CPU/package/core temperatures and fan RPM remain opt-in and read-only. SENTINEL tries the LibreHardwareMonitor / OpenHardwareMonitor WMI namespaces, then the explicitly configured local LibreHardwareMonitor HTTP `GET /data.json` endpoint (default port 8085) if WMI is unavailable or incomplete.
+- REST requests are sent only to fixed loopback address `127.0.0.1`, only to `/data.json`, with a 3-second timeout and 4 MiB response cap. SENTINEL does not follow redirects, call sensor-control endpoints, start LHM, install LHM, or bundle its binaries. HTTP authentication-enabled servers return an explicit unavailable status; credentials are not stored by SENTINEL.
+- The tree reader is bounded by node/depth limits, uses `SensorId`, `Type`, `RawValue` and hardware identity, rejects non-finite readings, and separates CPU temperatures from GPU temperatures. ASUS embedded-controller fan sensors are not guaranteed by model/EC/firmware; if LHM does not expose fan RPM, the UI reports the reason rather than fabricating a reading. Fan curves are never written; use Armoury Crate for supported ASUS fan modes.
+- LibreHardwareMonitor's official server serializes a hardware tree at `/data.json` with sensor IDs/types/raw values and hardware IDs; its test client reads the endpoint on localhost. WMI behavior is version-dependent, so SENTINEL retains both read paths. (Implementation references: the upstream HTTP server and its basic REST test script.)
+
+### Session rollback guarantees
+- A game session is only marked completed after its linked journal actions have been undone or safely preserved because the external state changed independently.
+- Failed restores remain `restore_pending`; the agent retries them during runtime and on startup. The original game end timestamp and performance snapshot are retained across retries.
+- If SENTINEL cannot observe the exact post-apply CPU Set/process state, it does not guess. The action stays un-reverted and the session stays pending for retry/manual review. This may remain pending until the process exits or Windows exposes enough state to restore safely.
+
+### Validation boundary
+- Added deterministic regression tests for ETW attribution and PID reuse within a trace, WMI and loopback REST sensor-tree parsing, ASUS CPU/core/fan classification, startup/runtime session restore retries, journaled power-plan undo, and fail-closed unknown CPU Set state.
+- The Windows CI matrix compiles SENTINEL, checks dashboard JavaScript and runs SENTINEL tests under Python 3.11 and 3.12. A green hosted Windows CI run validates mocked and portable logic, not xperf symbol resolution, this ASUS embedded-controller sensor map, or live state restoration on the target laptop.
+- Target-machine validation remains required: capture an actual trace with Windows Performance Toolkit installed and inspect xperf/WPA driver modules; launch LHM manually with its localhost Web Server enabled and confirm which CPU and ASUS fan sensors appear; then test a disposable game session with power/process profile changes, normal game exit, agent restart and action-journal inspection.
