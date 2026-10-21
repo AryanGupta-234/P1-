@@ -9,6 +9,7 @@ Commands:
   python agent.py stop              gracefully stop the serving agent for upgrades
 """
 import atexit
+import ctypes
 import json
 import os
 import subprocess
@@ -33,6 +34,61 @@ TASK = "SentinelAgent"
 HERE = os.path.dirname(os.path.abspath(__file__))
 PROGRAM_DIR = os.path.join(os.environ.get("ProgramFiles", r"C:\Program Files"), "Sentinel")
 NO_WIN = 0x08000000 if IS_WIN else 0
+
+
+def _admin_error(message):
+    """Report an elevation failure even when launched through pythonw.exe."""
+    print(message, file=sys.stderr) if sys.stderr is not None else None
+    if IS_WIN:
+        try:
+            ctypes.windll.user32.MessageBoxW(
+                None, message, "SENTINEL - Administrator permission required", 0x10
+            )
+        except Exception:
+            pass
+
+
+def _ensure_admin():
+    """Require an elevated Windows token before any SENTINEL CLI action runs.
+
+    Returns None when already elevated, 0 after successfully handing off to an
+    elevated process, or 1 when elevation cannot be verified/requested.
+    """
+    if not IS_WIN:
+        return None
+    try:
+        if bool(ctypes.windll.shell32.IsUserAnAdmin()):
+            return None
+    except Exception as exc:
+        _admin_error(
+            "SENTINEL could not verify administrator permissions. "
+            f"It will not start without elevation ({type(exc).__name__}: {exc})."
+        )
+        return 1
+
+    parameters = subprocess.list2cmdline(
+        [os.path.abspath(__file__), *sys.argv[1:]]
+    )
+    try:
+        shell_execute = ctypes.windll.shell32.ShellExecuteW
+        # ShellExecuteW returns an HINSTANCE (pointer-sized on 64-bit Windows).
+        shell_execute.restype = ctypes.c_void_p
+        result = shell_execute(
+            None, "runas", sys.executable, parameters, HERE, 1
+        )
+        if result and int(result) > 32:
+            return 0
+        _admin_error(
+            "SENTINEL requires administrator permissions. "
+            "Approve the Windows UAC prompt to continue; the current process was not started."
+        )
+        return 1
+    except Exception as exc:
+        _admin_error(
+            "SENTINEL could not request administrator permissions. "
+            f"It will not start without elevation ({type(exc).__name__}: {exc})."
+        )
+        return 1
 
 
 def base_url():
@@ -450,4 +506,7 @@ def main():
 
 
 if __name__ == "__main__":
-    raise SystemExit(main() or 0)
+    _elevation_result = _ensure_admin()
+    if _elevation_result is None:
+        raise SystemExit(main() or 0)
+    raise SystemExit(_elevation_result)
