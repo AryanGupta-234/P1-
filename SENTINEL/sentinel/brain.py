@@ -80,9 +80,9 @@ def detect():
         c = top_nongame("mem", 400)
         insight("high" if free < 800 else "warn", "mem", f"Real memory pressure: {free:.0f} MB free, {pout or 0:.0f} pages/s evicted",
                 "Windows is pushing live pages to the pagefile.", c["name"] if c else "")
-        actions.propose("bg_priority", origin="brain", reason="protect game pages by evicting background apps first")
-        if free < 1000:
-            actions.propose("trim_bg", origin="brain", reason="free RAM now")
+        if c:
+            insight("warn", "memory-review", f"Background memory candidate: {c['name']} ({c['mem']} MB)",
+                    "Review this app before closing it. SENTINEL does not trim working sets or force-close arbitrary processes.")
     elif pin is not None and pin > 1500 and (pout or 0) < 50 and (free or 9999) > 2000 and cool("assetload", 600):
         insight("info", "assetload", f"Hard faults {pin:.0f}/s but nothing evicted - normal game asset loading",
                 "File-backed reads, not a RAM shortage. Install the game on an NVMe/SSD to shorten them.")
@@ -96,7 +96,8 @@ def detect():
     if ((j or 0) > 15 or (loss or 0) > 3) and cool("net", 180):
         insight("high" if (loss or 0) > 3 else "warn", "net", f"Network unstable: jitter {j or 0:.0f} ms, loss {loss or 0:.0f}%, ping {png or 0:.0f} ms",
                 "Use Ethernet / 5 GHz and stop downloads while gaming.", "network")
-        actions.propose("flush_dns", origin="brain", reason="cheap first step on unstable network")
+        # High ping/jitter does not prove DNS is the cause. Report evidence only;
+        # do not run a DNS flush that can interrupt name resolution or fail to help.
     # GPU
     g = STATE.get("gpu") or {}
     if g.get("throttle") and cool("gpu-thr", 300):
@@ -104,17 +105,27 @@ def detect():
     # config nags (only once an hour, only while gaming)
     sysd = STATE.get("system") or {}
     if gaming and sysd.get("power_plan", "").lower().startswith("balanced") and cool("plan", 3600):
-        insight("warn", "plan", "Power plan is Balanced while gaming", "CPU clocks ramp slowly -> frame-time stutter.", "power")
-        actions.propose("power_plan", origin="brain", reason="High performance plan while a game is running")
+        insight("info", "plan", "Balanced power plan is active during gaming",
+                "This is context, not proof of throttling. Review measured CPU clock and temperature before choosing a reversible power adjustment.", "power")
     if gaming and sysd.get("vbs") and cool("vbs", 86400):
-        insight("warn", "vbs", "Memory Integrity / VBS is ON", "Costs 5-15% CPU in games. Turn off in Windows Security > Core isolation (needs reboot).", "config")
+        insight("info", "vbs", "Memory Integrity / VBS is enabled",
+                "Security protections are intentionally left enabled. SENTINEL will not recommend disabling VBS, HVCI, Secure Boot or Defender for performance.", "config")
 
 
 def reflex():
-    """Game-mode reflex: keep background apps de-prioritised as new ones appear."""
-    if STATE.get("game") and CFG["autopilot"].get("bg_priority") and cool("reflex-bg", 20):
-        if any(p.get("bg") and p["pid"] not in actions._handled for p in STATE.get("procs", [])):
-            actions.propose("bg_priority", origin="reflex", reason="new background apps appeared during game")
+    """Do not alter other processes when a game starts; surface review-only candidates."""
+    if not STATE.get("game") or not cool("reflex-review", 30):
+        return
+    candidates = [
+        row for row in STATE.get("proc_recommendations", [])
+        if row.get("name") and row.get("safe_to_terminate") is False
+    ]
+    if candidates:
+        first = candidates[0]
+        insight("info", "game-background-review",
+                f"Review background resource use: {first['name']}",
+                f"PID {first['pid']} · CPU {first['cpu']:.1f}% · RAM {first['mem']} MB. No automatic process change was made.",
+                first.get("exe", ""))
 
 
 def brain_loop():

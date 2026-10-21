@@ -15,8 +15,8 @@ def inference_allowed(model: str, *, cloud: bool = False, pause_when_gaming: boo
     guard = safeguard.snapshot()
     runtime = runtime_engine.snapshot()
     memory = memory_engine.pressure()
-    if not cloud and guard["valorant_active"]:
-        return False, "local inference paused during VALORANT to preserve CPU/GPU headroom"
+    if guard["valorant_active"]:
+        return False, "all inference paused during VALORANT to preserve CPU/GPU/network headroom"
     if not cloud and pause_when_gaming and runtime["game_active"]:
         return False, "local inference paused during the active game session"
     if slot == "deep" and (not runtime["deep_ai_allowed"] or not memory["deep_inference_allowed"]):

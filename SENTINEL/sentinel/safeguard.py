@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import ctypes
 import os
+import ntpath
 import time
 from typing import Any
 
@@ -50,8 +51,8 @@ _probe_cache: dict[str, Any] = {"at": 0.0, "valorant": False, "complete": False,
 
 def is_protected_process(name: str | None = None, exe: str | None = None) -> bool:
     """Match exact process basenames; do not use broad substring matching."""
-    name_key = os.path.basename(str(name or "")).casefold()
-    exe_key = os.path.basename(str(exe or "")).casefold()
+    name_key = ntpath.basename(str(name or "").replace("/", "\\")).casefold()
+    exe_key = ntpath.basename(str(exe or "").replace("/", "\\")).casefold()
     return name_key in PROTECTED_NAMES or exe_key in PROTECTED_NAMES
 
 
@@ -72,13 +73,15 @@ def _read_process_state() -> tuple[bool, bool, float, str]:
     on an old game-presence observation.
     """
     now = time.time()
+    if core.off("processes"):
+        return False, False, float("inf"), "process_monitor_disabled"
     scanned_at = float(core.STATE.get("proc_scan_at") or 0.0)
     age = max(0.0, now - scanned_at) if scanned_at else float("inf")
     rows = core.STATE.get("procs") or []
     if scanned_at and age <= 4.0:
         active = any(
             str(row.get("name") or "").casefold() in VALORANT_NAMES
-            or os.path.basename(str(row.get("exe") or "")).casefold() in VALORANT_NAMES
+            or ntpath.basename(str(row.get("exe") or "").replace("/", "\\")).casefold() in VALORANT_NAMES
             for row in rows if isinstance(row, dict)
         )
         return active, True, age, "collector_snapshot"
@@ -93,8 +96,8 @@ def _read_process_state() -> tuple[bool, bool, float, str]:
         for proc in psutil.process_iter(attrs=["name", "exe"]):
             try:
                 info = proc.info
-                name = os.path.basename(str(info.get("name") or "")).casefold()
-                exe = os.path.basename(str(info.get("exe") or "")).casefold()
+                name = ntpath.basename(str(info.get("name") or "").replace("/", "\\")).casefold()
+                exe = ntpath.basename(str(info.get("exe") or "").replace("/", "\\")).casefold()
                 if name in VALORANT_NAMES or exe in VALORANT_NAMES:
                     active = True
                     break
@@ -155,7 +158,7 @@ def check_action(kind: str, args: dict | None = None) -> dict[str, Any]:
     if kind == "game_profile_apply":
         profile_game = str(args.get("game") or args.get("game_name") or "").casefold()
         active_game = str((core.STATE.get("game") or {}).get("name") or "").casefold()
-        target = os.path.basename(target_exe).casefold()
+        target = ntpath.basename(target_exe.replace("/", "\\")).casefold()
         if (profile_game in VALORANT_NAMES or active_game in VALORANT_NAMES
                 or target in VALORANT_NAMES):
             return {"allowed": False, "code": "valorant_profile_forbidden", "reason": "VALORANT process profiles are permanently disabled in SENTINEL. No CPU Set, priority, timer, or power changes will be applied to the game."}
