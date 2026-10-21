@@ -168,6 +168,36 @@ def test_game_profile_undo_after_game_exit_still_restores_global_power_state(mon
     assert "restored eligible" in result
 
 
+def test_etw_preview_explains_missing_windows_performance_toolkit(monkeypatch):
+    monkeypatch.setattr(advanced, "IS_WIN", True)
+    monkeypatch.setattr(advanced, "locate_xperf", lambda: None)
+
+    preview = advanced.action_preview("etw_capture", {"duration": 12})
+
+    assert preview["supported"] is False
+    assert any("xperf.exe" in warning and "Windows ADK" in warning for warning in preview["warnings"])
+
+
+def test_advanced_status_always_includes_live_metric_contract_without_game(monkeypatch):
+    memory_store(monkeypatch)
+    monkeypatch.setitem(advanced.STATE, "game", None)
+    monkeypatch.setitem(advanced.STATE, "advanced", {})
+    monkeypatch.setitem(advanced.STATE, "kernel", {})
+    monkeypatch.setitem(advanced.STATE, "gpu", {})
+    monkeypatch.setitem(advanced.STATE, "hardware_sensors", {"available": False})
+    monkeypatch.setattr(advanced, "_check_network_evidence", lambda: {"supported": False, "reason": "insufficient samples"})
+    monkeypatch.setattr(advanced, "_cpu_set_inventory", lambda: {"available": False, "reason": "test"})
+
+    payload = advanced.status()
+
+    assert payload["game"] is None
+    assert "live_metrics" in payload
+    assert {"cpu", "mem", "dpc", "irq", "pagesin", "dlat", "ping", "jitter"}.issubset(payload["live_metrics"])
+    assert payload["sessions"] == []
+    assert payload["action_journal"] == []
+    assert payload["tuner_history"] == []
+
+
 def test_etw_capture_dry_run_advertises_bounded_trace_undo():
     preview = advanced.action_preview("etw_capture", {"duration": 12})
     assert preview["risk"] == "safe"
