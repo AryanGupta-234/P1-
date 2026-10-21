@@ -101,6 +101,23 @@ from sentinel.core import CFG, IS_WIN, log
 TASK = "SentinelAgent"
 HERE = os.path.dirname(os.path.abspath(__file__))
 PROGRAM_DIR = os.path.join(os.environ.get("ProgramFiles", r"C:\Program Files"), "Sentinel")
+VERSIONS_DIR = os.path.join(PROGRAM_DIR, "versions")
+
+
+def _read_app_version():
+    try:
+        with open(os.path.join(HERE, "VERSION"), "r", encoding="utf-8") as handle:
+            value = handle.read().strip()
+        if value and all(part.isdigit() for part in value.split(".")) and len(value.split(".")) == 3:
+            return value
+    except OSError:
+        pass
+    return "0.0.0-dev"
+
+
+APP_VERSION = _read_app_version()
+APP_VERSION_DIR = os.path.join(VERSIONS_DIR, APP_VERSION)
+os.environ.setdefault("SENTINEL_VERSION", APP_VERSION)
 NO_WIN = 0x08000000 if IS_WIN else 0
 
 
@@ -212,6 +229,14 @@ def _stop_legacy_agent():
                     os.path.normcase(os.path.abspath(os.path.join(HERE, "agent.py"))),
                     os.path.normcase(os.path.abspath(os.path.join(PROGRAM_DIR, "agent.py"))),
                 }
+                versions_root = os.path.join(PROGRAM_DIR, "versions")
+                try:
+                    for version_name in os.listdir(versions_root):
+                        version_script = os.path.join(versions_root, version_name, "agent.py")
+                        if os.path.isfile(version_script):
+                            accepted_scripts.add(os.path.normcase(os.path.abspath(version_script)))
+                except OSError:
+                    pass
                 exact_agent = any(
                     os.path.basename(str(part).strip('"')).casefold() == "agent.py"
                     and os.path.normcase(os.path.abspath(str(part).strip('"'))) in accepted_scripts
@@ -350,133 +375,221 @@ def open_app():
 
 
 def install():
-    """Idempotently register/upgrade the interactive agent and its app shortcuts."""
+    """Register this immutable version, create verified launchers and start its agent."""
     if not IS_WIN:
         print("install is Windows-only")
         return 1
-    import ctypes
-    if not ctypes.windll.shell32.IsUserAnAdmin():
-        arguments = subprocess.list2cmdline([os.path.abspath(__file__), "install"])
-        result = ctypes.windll.shell32.ShellExecuteW(None, "runas", sys.executable, arguments, HERE, 1)
-        if int(result) <= 32:
-            print(f"Could not request administrator permission (ShellExecute result {result}).")
-            return 1
-        return 0
 
     pythonw = os.path.join(os.path.dirname(sys.executable), "pythonw.exe")
     if not os.path.isfile(pythonw):
-        pythonw = sys.executable
+        print(f"pythonw.exe was not found next to {sys.executable}")
+        return 1
+
     script = os.path.abspath(__file__)
     store = os.path.join(os.environ.get("ProgramData", r"C:\ProgramData"), "Sentinel")
-
-    # The installer has already attempted a graceful stop before replacing files.
-    # Re-registering the task is idempotent and leaves ProgramData untouched.
     values = {
         "SENTINEL_TASK": TASK,
         "SENTINEL_PYTHONW": pythonw,
         "SENTINEL_SCRIPT": script,
         "SENTINEL_WORKDIR": HERE,
         "SENTINEL_STORE": store,
+        "SENTINEL_VERSION": APP_VERSION,
     }
     os.environ.update(values)
     ps = r"""
 $ErrorActionPreference = 'Stop'
-$taskName = $env:SENTINEL_TASK
-$pythonw = $env:SENTINEL_PYTHONW
-$script = $env:SENTINEL_SCRIPT
-$workdir = $env:SENTINEL_WORKDIR
-$store = $env:SENTINEL_STORE
-$loggedOn = (Get-CimInstance Win32_ComputerSystem -ErrorAction SilentlyContinue).UserName
-if (-not $loggedOn) { $loggedOn = [Security.Principal.WindowsIdentity]::GetCurrent().Name }
 try {
+    $taskName = $env:SENTINEL_TASK
+    $pythonw = $env:SENTINEL_PYTHONW
+    $script = $env:SENTINEL_SCRIPT
+    $workdir = $env:SENTINEL_WORKDIR
+    $store = $env:SENTINEL_STORE
+    $version = $env:SENTINEL_VERSION
+
+    if (-not (Test-Path -LiteralPath $pythonw -PathType Leaf)) { throw "Python windowed executable not found: $pythonw" }
+    if (-not (Test-Path -LiteralPath $script -PathType Leaf)) { throw "Agent script not found: $script" }
+    if (-not (Test-Path -LiteralPath (Join-Path $workdir 'ui\index.html') -PathType Leaf)) { throw "Dashboard files are missing from $workdir" }
+
+    $loggedOn = (Get-CimInstance Win32_ComputerSystem -ErrorAction Stop).UserName
+    if (-not $loggedOn) {
+        throw "Windows did not report an interactive signed-in user. Sign in to the target Windows account and rerun install.bat."
+    }
     $userSid = ([System.Security.Principal.NTAccount]::new($loggedOn)).Translate([System.Security.Principal.SecurityIdentifier]).Value
     $userProfile = Get-CimInstance Win32_UserProfile -Filter ("SID='{0}'" -f $userSid) -ErrorAction Stop
-    if (-not $userProfile -or -not $userProfile.LocalPath) { throw "Interactive user profile path is unavailable" }
+    if (-not $userProfile -or -not $userProfile.LocalPath) { throw "Profile path unavailable for interactive user $loggedOn" }
     $userRoot = $userProfile.LocalPath
+
+    # Honour Desktop redirection (including OneDrive) from the actual user's
+    # loaded profile instead of assuming C:\Users\name\Desktop.
+    $desktop = $null
+    $usersHive = [Microsoft.Win32.RegistryKey]::OpenBaseKey(
+        [Microsoft.Win32.RegistryHive]::Users,
+        [Microsoft.Win32.RegistryView]::Default
+    )
+    try {
+        $shellFolders = $usersHive.OpenSubKey("$userSid\Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders")
+        if ($shellFolders) {
+            try {
+                $desktopValue = $shellFolders.GetValue(
+                    'Desktop', $null,
+                    [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames
+                )
+                if ($desktopValue) {
+                    $desktopValue = $desktopValue.Replace('%USERPROFILE%', $userRoot)
+                    $desktop = [Environment]::ExpandEnvironmentVariables($desktopValue)
+                }
+            } finally { $shellFolders.Dispose() }
+        }
+    } finally { $usersHive.Dispose() }
+    if (-not $desktop -or $desktop -match '%[^%]+%') { $desktop = Join-Path $userRoot 'Desktop' }
+
+    $userStartMenu = Join-Path $userRoot 'AppData\Roaming\Microsoft\Windows\Start Menu\Programs\SENTINEL'
+    $commonStartMenu = Join-Path $env:ProgramData 'Microsoft\Windows\Start Menu\Programs\SENTINEL'
+    New-Item -ItemType Directory -Force -Path $desktop, $userStartMenu, $commonStartMenu | Out-Null
+
+    New-Item -ItemType Directory -Force -Path $store | Out-Null
+    & icacls.exe $store /inheritance:r | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "Could not set SENTINEL data-directory inheritance (icacls $LASTEXITCODE)" }
+    & icacls.exe $store /grant:r '*S-1-5-18:(OI)(CI)F' '*S-1-5-32-544:(OI)(CI)F' "$($loggedOn):(OI)(CI)M" /T /C | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "Could not secure SENTINEL data directory ACL (icacls $LASTEXITCODE)" }
+
+    $action = New-ScheduledTaskAction -Execute $pythonw -Argument ('"{0}"' -f $script) -WorkingDirectory $workdir
+    $trigger = New-ScheduledTaskTrigger -AtLogOn -User $loggedOn
+    $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -RestartCount 999 -RestartInterval (New-TimeSpan -Minutes 1) -ExecutionTimeLimit ([TimeSpan]::Zero) -MultipleInstances IgnoreNew
+    $principal = New-ScheduledTaskPrincipal -UserId $loggedOn -LogonType Interactive -RunLevel Highest
+
+    $oldTask = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
+    if ($oldTask) {
+        Stop-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
+        Unregister-ScheduledTask -TaskName $taskName -Confirm:$false
+    }
+    Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Settings $settings -Principal $principal -Description "SENTINEL $version interactive Windows agent" | Out-Null
+
+    $registered = Get-ScheduledTask -TaskName $taskName -ErrorAction Stop
+    if ($registered.Principal.RunLevel.ToString() -ne 'Highest') { throw "Scheduled task $taskName was not registered with highest privileges" }
+    if ($registered.Actions[0].Execute -ne $pythonw -or $registered.Actions[0].Arguments -ne ('"{0}"' -f $script)) {
+        throw "Scheduled task action does not point to SENTINEL $version"
+    }
+
+    $wsh = New-Object -ComObject WScript.Shell
+    $shortcutArgs = ('"{0}" open' -f $script)
+    $shortcutTargets = @(
+        @{ Path = (Join-Path $desktop 'SENTINEL.lnk'); Kind = 'Desktop' },
+        @{ Path = (Join-Path $userStartMenu 'SENTINEL.lnk'); Kind = 'User Start Menu' },
+        @{ Path = (Join-Path $commonStartMenu 'SENTINEL.lnk'); Kind = 'All Users Start Menu' }
+    )
+    foreach ($item in $shortcutTargets) {
+        $link = $wsh.CreateShortcut($item.Path)
+        $link.TargetPath = $pythonw
+        $link.Arguments = $shortcutArgs
+        $link.WorkingDirectory = $workdir
+        $link.Description = "SENTINEL $version - performance and agent dashboard"
+        $link.Save()
+        if (-not (Test-Path -LiteralPath $item.Path -PathType Leaf)) {
+            throw "$($item.Kind) shortcut was not created: $($item.Path)"
+        }
+        $check = $wsh.CreateShortcut($item.Path)
+        if ($check.TargetPath -ne $pythonw -or $check.Arguments -ne $shortcutArgs) {
+            throw "$($item.Kind) shortcut points to an unexpected target: $($item.Path)"
+        }
+    }
+
+    Start-ScheduledTask -TaskName $taskName -ErrorAction Stop
+    Write-Output "INSTALL_VERSION=$version"
+    Write-Output "INSTALL_USER=$loggedOn"
+    Write-Output "INSTALL_TASK=$taskName"
+    Write-Output "INSTALL_DESKTOP=$((Join-Path $desktop 'SENTINEL.lnk'))"
+    Write-Output "INSTALL_START_MENU=$((Join-Path $commonStartMenu 'SENTINEL.lnk'))"
+    Write-Output "INSTALL_USER_START_MENU=$((Join-Path $userStartMenu 'SENTINEL.lnk'))"
+    Write-Output "INSTALL_DATA=$store"
+    exit 0
 } catch {
-    throw "Cannot resolve the signed-in interactive user's profile ($loggedOn): $($_.Exception.Message)"
+    [Console]::Error.WriteLine("SENTINEL installation integration failed: " + $_.Exception.Message)
+    exit 1
 }
-$desktop = Join-Path $userRoot 'Desktop'
-$startMenu = Join-Path $userRoot 'AppData\Roaming\Microsoft\Windows\Start Menu\Programs\SENTINEL'
-New-Item -ItemType Directory -Force -Path $desktop, (Split-Path -Parent $startMenu) | Out-Null
-
-New-Item -ItemType Directory -Force -Path $store | Out-Null
-& icacls.exe $store /inheritance:r | Out-Null
-if ($LASTEXITCODE -ne 0) { throw "Could not set SENTINEL data-directory inheritance (icacls $LASTEXITCODE)" }
-& icacls.exe $store /grant:r '*S-1-5-18:(OI)(CI)F' '*S-1-5-32-544:(OI)(CI)F' "$($loggedOn):(OI)(CI)M" /T /C | Out-Null
-if ($LASTEXITCODE -ne 0) { throw "Could not secure SENTINEL data directory ACL (icacls $LASTEXITCODE)" }
-
-$action = New-ScheduledTaskAction -Execute $pythonw -Argument ('"{0}"' -f $script) -WorkingDirectory $workdir
-$trigger = New-ScheduledTaskTrigger -AtLogOn -User $loggedOn
-$settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -RestartCount 999 -RestartInterval (New-TimeSpan -Minutes 1) -ExecutionTimeLimit ([TimeSpan]::Zero) -MultipleInstances IgnoreNew
-$principal = New-ScheduledTaskPrincipal -UserId $loggedOn -LogonType Interactive -RunLevel Highest
-$oldTask = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
-if ($oldTask) {
-    Stop-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
-    Unregister-ScheduledTask -TaskName $taskName -Confirm:$false
-}
-Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Settings $settings -Principal $principal -Description 'SENTINEL interactive Windows telemetry agent' | Out-Null
-
-$wsh = New-Object -ComObject WScript.Shell
-$shortcutArgs = ('"{0}" open' -f $script)
-New-Item -ItemType Directory -Force -Path $startMenu | Out-Null
-foreach ($location in @(
-    (Join-Path $desktop 'SENTINEL.lnk'),
-    (Join-Path $startMenu 'SENTINEL.lnk')
-)) {
-    $link = $wsh.CreateShortcut($location)
-    $link.TargetPath = $pythonw
-    $link.Arguments = $shortcutArgs
-    $link.WorkingDirectory = $workdir
-    $link.Description = 'Open the SENTINEL performance and agent dashboard'
-    $link.Save()
-}
-Start-ScheduledTask -TaskName $taskName
-Write-Output "SENTINEL task and Desktop/Start Menu launchers installed for $loggedOn."
-Write-Output "Agent data and history remain in $store."
 """
-    result = pw(ps)
-    print(result.stdout or result.stderr or "")
+    try:
+        result = pw(ps)
+    except Exception as exc:
+        print(f"Could not run the Windows installation checks: {type(exc).__name__}: {exc}")
+        return 1
+
+    if result.stdout:
+        print(result.stdout.rstrip())
+    if result.stderr:
+        print(result.stderr.rstrip(), file=sys.stderr)
     if result.returncode != 0:
-        print("SENTINEL task registration or shortcut creation failed. The existing ProgramData history was not removed.")
+        print("SENTINEL task or shortcut verification failed. The version files and ProgramData history were left untouched.")
         return 1
-    print("Waiting for the Windows agent to become ready...")
-    if not _wait_for_agent(30):
-        print("The task was registered, but the agent API did not become ready. Check Task Scheduler → SentinelAgent and %ProgramData%\\Sentinel.")
+
+    print(f"Waiting for SENTINEL {APP_VERSION} to become ready...")
+    if not _wait_for_agent(35):
+        diagnostic = pw(
+            f"$task = Get-ScheduledTask -TaskName {_ps_quote(TASK)} -ErrorAction SilentlyContinue; "
+            f"if ($task) {{ $info = Get-ScheduledTaskInfo -TaskName {_ps_quote(TASK)}; "
+            f"Write-Output ('TaskState=' + $task.State + '; LastTaskResult=' + $info.LastTaskResult) }} "
+            f"else {{ Write-Output 'ScheduledTaskMissing' }}"
+        )
+        print("The shortcuts and task were registered, but the authenticated agent API did not become ready.")
+        print(diagnostic.stdout or diagnostic.stderr or "No Task Scheduler diagnostics were returned.")
         return 1
-    print("SENTINEL is installed and running. Opening the desktop app...")
-    return 0 if _launch_hud() else 1
+
+    if _running_agent_is_elevated() is not True:
+        print("The agent API is responding, but administrator elevation could not be verified. Installation is not marked complete.")
+        return 1
+
+    print(f"SENTINEL {APP_VERSION} installed and verified at {HERE}.")
+    print("Desktop and Start Menu shortcuts were checked on disk; the elevated agent is running.")
+    if not _launch_hud():
+        print("WARNING: The agent is running, but Windows could not open the dashboard window. Use the SENTINEL shortcut to open it.")
+    return 0
 
 
 def uninstall():
     """Remove launch integration, never remove user configuration/history."""
-    if port_busy() and not stop_agent():
+    if stop_agent() != 0:
         print("Agent could not be stopped; uninstall was not completed.")
         return 1
-    os.environ["SENTINEL_TASK"] = TASK
+
     ps = r"""
 $ErrorActionPreference = 'Stop'
-$taskName = $env:SENTINEL_TASK
-Stop-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
-Unregister-ScheduledTask -TaskName $taskName -Confirm:$false -ErrorAction SilentlyContinue
-$loggedOn = (Get-CimInstance Win32_ComputerSystem -ErrorAction SilentlyContinue).UserName
-if (-not $loggedOn) { $loggedOn = [Security.Principal.WindowsIdentity]::GetCurrent().Name }
-$userSid = ([System.Security.Principal.NTAccount]::new($loggedOn)).Translate([System.Security.Principal.SecurityIdentifier]).Value
-$userProfile = Get-CimInstance Win32_UserProfile -Filter ("SID='{0}'" -f $userSid) -ErrorAction Stop
-if (-not $userProfile -or -not $userProfile.LocalPath) { throw "Interactive user profile path is unavailable" }
-$userRoot = $userProfile.LocalPath
-$desktop = Join-Path $userRoot 'Desktop'
-$startMenu = Join-Path $userRoot 'AppData\Roaming\Microsoft\Windows\Start Menu\Programs\SENTINEL'
-Remove-Item (Join-Path $desktop 'SENTINEL.lnk') -Force -ErrorAction SilentlyContinue
-Remove-Item $startMenu -Recurse -Force -ErrorAction SilentlyContinue
-Write-Output 'SENTINEL task and shortcuts removed. ProgramData was kept.'
+try {
+    $taskName = 'SentinelAgent'
+    Unregister-ScheduledTask -TaskName $taskName -Confirm:$false -ErrorAction SilentlyContinue
+
+    $loggedOn = (Get-CimInstance Win32_ComputerSystem -ErrorAction SilentlyContinue).UserName
+    $desktop = $null
+    $userStartMenu = $null
+    if ($loggedOn) {
+        $userSid = ([System.Security.Principal.NTAccount]::new($loggedOn)).Translate([System.Security.Principal.SecurityIdentifier]).Value
+        $userProfile = Get-CimInstance Win32_UserProfile -Filter ("SID='{0}'" -f $userSid) -ErrorAction Stop
+        if ($userProfile -and $userProfile.LocalPath) {
+            $userRoot = $userProfile.LocalPath
+            $desktop = Join-Path $userRoot 'Desktop'
+            $userStartMenu = Join-Path $userRoot 'AppData\Roaming\Microsoft\Windows\Start Menu\Programs\SENTINEL'
+        }
+    }
+    if ($desktop) { Remove-Item (Join-Path $desktop 'SENTINEL.lnk') -Force -ErrorAction SilentlyContinue }
+    if ($userStartMenu) { Remove-Item $userStartMenu -Recurse -Force -ErrorAction SilentlyContinue }
+    $commonStartMenu = Join-Path $env:ProgramData 'Microsoft\Windows\Start Menu\Programs\SENTINEL'
+    Remove-Item $commonStartMenu -Recurse -Force -ErrorAction SilentlyContinue
+    Write-Output 'SENTINEL task and shortcuts removed. ProgramData data was kept.'
+    exit 0
+} catch {
+    [Console]::Error.WriteLine("SENTINEL uninstall integration failed: " + $_.Exception.Message)
+    exit 1
+}
 """
     result = pw(ps)
-    print(result.stdout or result.stderr or "")
+    if result.stdout:
+        print(result.stdout.rstrip())
+    if result.stderr:
+        print(result.stderr.rstrip(), file=sys.stderr)
     if result.returncode != 0:
         print("Could not fully remove the task/shortcuts.")
         return 1
-    print(f"Application files remain in {PROGRAM_DIR}; history and settings remain in {core.HOME}.")
+    print(f"SENTINEL {APP_VERSION} launch integration removed; application files remain in {PROGRAM_DIR}.")
+    print(f"Settings, SQLite history and traces remain in {core.HOME}.")
     return 0
 
 
