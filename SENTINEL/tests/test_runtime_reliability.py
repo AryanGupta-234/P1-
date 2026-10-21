@@ -495,10 +495,10 @@ def test_installer_uses_immutable_version_folders_and_preserves_programdata():
     dependencies_at = installer.index("pip install --disable-pip-version-check")
     registration_at = installer.index('" %VERSION_DIR%\\agent.py" install'.strip())
     assert stop_at < copy_at < environment_at < dependencies_at < registration_at
-    assert f"set /p \"VERSION=\"<\"%VERSION_FILE%\" " .strip() in installer or 'set /p "VERSION="<"%VERSION_FILE%"' in installer
+    assert 'set /p "VERSION="<"%VERSION_FILE%"' in installer
     assert "%VERSIONS%\\%VERSION%" in installer
     assert "%STAGING_DIR%" in installer
-    assert "move \"%STAGING_DIR%\" \"%VERSION_DIR%\" " .strip() in installer or 'move "%STAGING_DIR%" "%VERSION_DIR%"' in installer
+    assert 'move "%STAGING_DIR%" "%VERSION_DIR%"' in installer
     assert 'if exist "%VERSION_DIR%"' in installer
     assert "findstr /R /X /C:" in installer
     assert "/E /R:2 /W:2" in installer
@@ -518,7 +518,7 @@ def test_release_marker_and_runtime_report_a_semantic_version():
     root = Path(__file__).resolve().parents[1]
     version = (root / "VERSION").read_text(encoding="utf-8").strip()
 
-    assert re.fullmatch(r"\\d+\\.\\d+\\.\\d+", version)
+    assert re.fullmatch(r"\d+\.\d+\.\d+", version)
     assert agent.APP_VERSION == version
     assert agent.APP_VERSION_DIR.endswith(os.path.join("versions", version))
 
