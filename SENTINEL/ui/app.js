@@ -367,7 +367,10 @@ async function loadAdvanced(force = false) {
     $("#adv-undo-count").textContent = (d.action_journal || []).filter(x=>x.undo_available && x.changed && !x.reverted_at).length;
     const cpuItems = (hs.cpu_temperatures || []); const cpuVals = cpuItems.map(x=>Number(x.value)).filter(Number.isFinite);
     const cpuTemp = cpuVals.length ? Math.max(...cpuVals) : null;
-    const cpuSrc = hs.available ? `LibreHardwareMonitor · ${cpuItems.length} CPU temperature sensor(s)` : (hs.reason || "Optional sensor provider unavailable");
+    const sensorProvider = hs.provider || "External hardware monitor";
+    const cpuSrc = hs.available
+      ? `${sensorProvider} · ${cpuItems.length} CPU temperature sensor(s)${cpuItems.length ? "" : " · " + (hs.cpu_reason || "CPU sensor not exposed")}`
+      : (hs.reason || "Optional sensor provider unavailable");
     advGauge("adv-cpu-dial", cpuTemp, Number(cfg.cpu_temp_warn_c || 88), "adv-cpu-temp", "adv-cpu-source", cpuSrc);
     const gpuTemp = gpu.temp != null && Number.isFinite(Number(gpu.temp)) ? Number(gpu.temp) : null;
     advGauge("adv-gpu-dial", gpuTemp, Number(cfg.gpu_temp_warn_c || 82), "adv-gpu-temp", "adv-gpu-source", gpu.name ? `${gpu.name} · NVIDIA nvidia-smi` : "NVIDIA telemetry unavailable");
@@ -375,14 +378,18 @@ async function loadAdvanced(force = false) {
     $("#adv-gpu-throttle").textContent = (gpu.throttle || []).length ? `Throttle flags: ${gpu.throttle.join(", ")}` : "No active NVIDIA throttle flag reported";
     const lhmFans = (hs.fan_rpm || []).filter(x=>Number.isFinite(Number(x.value)) && Number(x.value)>0);
     const fanValue = lhmFans[0]?.value ?? gpu.fan_speed_pct;
-    const fanSource = lhmFans.length ? `${lhmFans[0].name || "Fan"} · LibreHardwareMonitor RPM` : (gpu.fan_speed_pct != null ? "nvidia-smi fan.speed percentage (not RPM)" : "Fan telemetry unavailable / unsupported");
+    const fanSource = lhmFans.length
+      ? `${lhmFans[0].name || "Fan"} · ${sensorProvider} RPM`
+      : (gpu.fan_speed_pct != null
+        ? `nvidia-smi fan.speed percentage (not RPM)${hs.fan_reason ? " · " + hs.fan_reason : ""}`
+        : (hs.fan_reason || "Fan telemetry unavailable / unsupported"));
     $("#adv-fan-value").textContent = lhmFans.length ? `${avNum(fanValue,0)} RPM` : fanValue != null ? `${avNum(fanValue,0)}%` : "--";
     $("#adv-fan-source").textContent = fanSource;
     const rotor = $("#adv-fan"); const fanHz = lhmFans.length ? Math.max(.12, Math.min(3, 60/Math.max(1, Number(fanValue)))) : fanValue != null ? Math.max(.45, 4 - Number(fanValue)*.035) : 1.5;
     rotor.style.animationDuration = `${fanHz}s`; rotor.classList.toggle("running", fanValue != null);
     const cores = hs.per_core_temperatures || [];
     $("#adv-core-meta").textContent = hs.available ? `${cores.length} core temperature sensor(s)` : "Optional LHM sensors only";
-    $("#adv-core-map").innerHTML = cores.length ? cores.map((x,i)=>{const n=Number(x.value), pct=Math.max(0,Math.min(100,n/105*100)); return `<div class="core-cell"><b>${esc(x.name || `Core ${i}`)}</b><small>${avNum(n,1)} °C</small><div class="heat-bar"><i style="width:${pct}%"></i></div></div>`;}).join("") : '<div class="empty">Per-core heat sensors not available. Enable optional LHM only while its own app is running.</div>';
+    $("#adv-core-map").innerHTML = cores.length ? cores.map((x,i)=>{const n=Number(x.value), pct=Math.max(0,Math.min(100,n/105*100)); return `<div class="core-cell"><b>${esc(x.name || `Core ${i}`)}</b><small>${avNum(n,1)} °C</small><div class="heat-bar"><i style="width:${pct}%"></i></div></div>`;}).join("") : `<div class="empty">${esc(hs.cpu_reason || "Per-core heat sensors are unavailable. Start an external LHM instance and enable the optional reader.")}</div>`;
     $("#adv-gpu-stats").innerHTML = `<div class="row"><b>GPU clock</b><span>${esc(gpu.clk ?? "--")} MHz</span></div><div class="row"><b>Power draw</b><span>${esc(gpu.pwr ?? "--")} W</span></div><div class="row"><b>Power limit</b><span>${esc(gpu.pwrlim ?? "--")} W</span></div><div class="row"><b>GPU utilization</b><span>${esc(gpu.util ?? "--")}%</span></div><div class="row"><b>VRAM</b><span>${esc(gpu.vram ?? "--")} / ${esc(gpu.vramtot ?? "--")} MiB</span></div><div class="row"><b>Fan telemetry</b><span>${esc(gpu.fan_speed_pct == null ? "unavailable" : gpu.fan_speed_pct + "%")}</span></div>`;
     advSpark("adv-clock-spark","gpuclk"); advSpark("adv-power-spark","gpupwr"); advPowerClockWaterfall();
     $("#adv-thermal-timeline").innerHTML = advRows((d.thermal_events || []).slice(0,16).map(x=>`<div class="event"><b>${esc(x.sensor)} · ${esc(x.event)}</b><small>${hms(x.ts)} · ${x.value==null?"value unavailable":avNum(x.value,1)+" °C"} ${esc(x.detail || "")}</small></div>`), "No thermal warning or GPU throttle transitions have been recorded.");
