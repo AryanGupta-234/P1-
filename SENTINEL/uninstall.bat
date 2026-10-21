@@ -59,25 +59,24 @@ echo  SENTINEL - Uninstall
 echo ============================================================
 if defined VERSION echo Installed release: %VERSION%
 echo Removing scheduled task and shortcuts...
-if defined PYTHON (
-  "%PYTHON%" "%AGENT%" uninstall
-) else (
-  set "PY="
-  where py >nul 2>&1
-  if not errorlevel 1 set "PY=py -3"
-  if not defined PY where python >nul 2>&1 && set "PY=python"
-  if not defined PY (
-    echo ERROR: Python 3 was not found. The installation was not removed.
-    pause
-    exit /b 1
-  )
-  %PY% "%AGENT%" uninstall
-)
-if errorlevel 1 (
-  echo ERROR: Task/shortcut removal failed. Application files were preserved.
+if defined PYTHON goto :run_versioned_python
+set "PY="
+where py >nul 2>&1
+if not errorlevel 1 set "PY=py -3"
+if not defined PY where python >nul 2>&1 && set "PY=python"
+if not defined PY (
+  echo ERROR: Python 3 was not found. The installation was not removed.
   pause
   exit /b 1
 )
+%PY% "%AGENT%" uninstall
+goto :uninstall_result
+
+:run_versioned_python
+"%PYTHON%" "%AGENT%" uninstall
+
+:uninstall_result
+if errorlevel 1 goto :uninstall_failed
 
 echo Removing installed version folders...
 rd /s /q "%ROOT%"
@@ -98,3 +97,8 @@ echo Delete that folder manually only if you intentionally want to erase local d
 echo.
 pause
 exit /b 0
+
+:uninstall_failed
+echo ERROR: Task/shortcut removal failed. Application files were preserved.
+pause
+exit /b 1
