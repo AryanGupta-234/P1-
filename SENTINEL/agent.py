@@ -294,7 +294,19 @@ $pythonw = $env:SENTINEL_PYTHONW
 $script = $env:SENTINEL_SCRIPT
 $workdir = $env:SENTINEL_WORKDIR
 $store = $env:SENTINEL_STORE
-$loggedOn = [Security.Principal.WindowsIdentity]::GetCurrent().Name
+$loggedOn = (Get-CimInstance Win32_ComputerSystem -ErrorAction SilentlyContinue).UserName
+if (-not $loggedOn) { $loggedOn = [Security.Principal.WindowsIdentity]::GetCurrent().Name }
+try {
+    $userSid = (New-Object System.Security.Principal.NTAccount($loggedOn)).Translate([System.Security.Principal.SecurityIdentifier]).Value
+    $userProfile = Get-CimInstance Win32_UserProfile -Filter ("SID='{0}'" -f $userSid) -ErrorAction Stop
+    if (-not $userProfile -or -not $userProfile.LocalPath) { throw "Interactive user profile path is unavailable" }
+    $userRoot = $userProfile.LocalPath
+} catch {
+    throw "Cannot resolve the signed-in interactive user's profile ($loggedOn): $($_.Exception.Message)"
+}
+$desktop = Join-Path $userRoot 'Desktop'
+$startMenu = Join-Path $userRoot 'AppData\Roaming\Microsoft\Windows\Start Menu\Programs\SENTINEL'
+New-Item -ItemType Directory -Force -Path $desktop, (Split-Path -Parent $startMenu) | Out-Null
 
 New-Item -ItemType Directory -Force -Path $store | Out-Null
 & icacls.exe $store /inheritance:r | Out-Null
@@ -315,8 +327,6 @@ Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Se
 
 $wsh = New-Object -ComObject WScript.Shell
 $shortcutArgs = ('"{0}" open' -f $script)
-$desktop = [Environment]::GetFolderPath('DesktopDirectory')
-$startMenu = Join-Path ([Environment]::GetFolderPath('StartMenu')) 'Programs\SENTINEL'
 New-Item -ItemType Directory -Force -Path $startMenu | Out-Null
 foreach ($location in @(
     (Join-Path $desktop 'SENTINEL.lnk'),
