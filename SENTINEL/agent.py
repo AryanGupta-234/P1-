@@ -297,7 +297,7 @@ $store = $env:SENTINEL_STORE
 $loggedOn = (Get-CimInstance Win32_ComputerSystem -ErrorAction SilentlyContinue).UserName
 if (-not $loggedOn) { $loggedOn = [Security.Principal.WindowsIdentity]::GetCurrent().Name }
 try {
-    $userSid = (New-Object System.Security.Principal.NTAccount($loggedOn)).Translate([System.Security.Principal.SecurityIdentifier]).Value
+    $userSid = ([System.Security.Principal.NTAccount]::new($loggedOn)).Translate([System.Security.Principal.SecurityIdentifier]).Value
     $userProfile = Get-CimInstance Win32_UserProfile -Filter ("SID='{0}'" -f $userSid) -ErrorAction Stop
     if (-not $userProfile -or -not $userProfile.LocalPath) { throw "Interactive user profile path is unavailable" }
     $userRoot = $userProfile.LocalPath
