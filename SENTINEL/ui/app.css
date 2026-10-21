@@ -602,6 +602,7 @@ td{overflow-wrap:anywhere}
   color:var(--am);
   overflow-wrap:anywhere;
 }
+.adv-load-error[hidden]{display:none!important}
 @media(max-width:680px){
   .ix-state-row{
     grid-template-columns:minmax(0,1fr);
