@@ -325,6 +325,7 @@ function updateAgentView(runtime, matrix, runs, storage) {
   $("#ag-identity").innerHTML = Object.entries({
     "Process ID": runtime.pid,
     "Parent PID": runtime.parent_pid,
+    "User": runtime.username,
     "Windows session": runtime.session_id ?? "unknown",
     "Execution context": runtime.execution_context,
     "Desktop access": runtime.desktop_access_expected ? "interactive desktop" : "not confirmed",
