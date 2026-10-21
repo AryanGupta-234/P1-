@@ -537,6 +537,7 @@ def test_admin_guard_relaunches_with_runas_and_forwards_all_arguments(monkeypatc
     shell_execute = __import__("unittest.mock", fromlist=["Mock"]).Mock(return_value=42)
     shell32 = SimpleNamespace(IsUserAnAdmin=lambda: False, ShellExecuteW=shell_execute)
     fake_ctypes = SimpleNamespace(
+        c_void_p=agent.ctypes.c_void_p,
         windll=SimpleNamespace(
             shell32=shell32,
             user32=SimpleNamespace(MessageBoxW=lambda *_args: None),
@@ -564,6 +565,7 @@ def test_admin_guard_fails_closed_when_uac_is_cancelled(monkeypatch):
     message_boxes = []
     shell_execute = Mock(return_value=5)
     fake_ctypes = SimpleNamespace(
+        c_void_p=agent.ctypes.c_void_p,
         windll=SimpleNamespace(
             shell32=SimpleNamespace(IsUserAnAdmin=lambda: False, ShellExecuteW=shell_execute),
             user32=SimpleNamespace(MessageBoxW=lambda *args: message_boxes.append(args)),
