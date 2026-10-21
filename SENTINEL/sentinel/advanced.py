@@ -10,6 +10,7 @@ import csv
 import ctypes
 import datetime as _dt
 import json
+from http.client import HTTPConnection
 import math
 import os
 import re
@@ -1211,16 +1212,69 @@ def _thermal_watch(ts: float) -> None:
         _LAST_GPU_THROTTLE = throttle
 
 
-def _lhm_sample() -> dict:
-    """Read an already-running LHM/OpenHardwareMonitor WMI provider; never launch/install it."""
-    if not IS_WIN:
-        return {"available": False, "reason": "Windows only"}
-    config = CFG.get("advanced", {}) if isinstance(CFG.get("advanced"), dict) else {}
-    if config.get("lhm_enabled") is not True:
-        return {"available": False, "reason": "Optional hardware sensor reader disabled"}
+def _lhm_number(value: Any) -> float | None:
+    """Parse numeric WMI / data.json values without accepting NaN or infinities."""
+    if isinstance(value, bool) or value is None:
+        return None
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        match = re.search(r"[-+]?\d+(?:[.,]\d+)?", str(value).strip())
+        if not match:
+            return None
+        try:
+            number = float(match.group(0).replace(",", "."))
+        except ValueError:
+            return None
+    return number if math.isfinite(number) else None
 
-    # WMI namespaces use a single backslash. Query both the current
-    # LibreHardwareMonitor namespace and its predecessor for compatibility.
+
+def _lhm_tree_sensors(document: Any, max_nodes: int = 5000, max_depth: int = 18) -> list[dict]:
+    """Flatten LHM's read-only /data.json hardware tree into Sensor records."""
+    if not isinstance(document, dict):
+        raise ValueError("LHM data.json root must be an object")
+    output: list[dict] = []
+    stack: list[tuple[dict, tuple[str, ...], int]] = [(document, (), 0)]
+    visited = 0
+    while stack and visited < max_nodes:
+        node, ancestors, depth = stack.pop()
+        visited += 1
+        if not isinstance(node, dict) or depth > max_depth:
+            continue
+        text = str(node.get("Text") or node.get("Name") or "")[:160]
+        hardware_id = str(node.get("HardwareId") or "")[:220]
+        sensor_id = str(node.get("SensorId") or "")[:220]
+        sensor_type = str(node.get("Type") or node.get("SensorType") or "")[:40]
+        children = node.get("Children")
+        if sensor_id and sensor_type:
+            raw = node.get("RawValue")
+            if raw is None or raw == "":
+                raw = node.get("Value")
+            value = _lhm_number(raw)
+            if value is not None:
+                parent_parts = ancestors
+                output.append({
+                    "Name": text[:120],
+                    "Parent": " / ".join(parent_parts)[-180:],
+                    "SensorType": sensor_type,
+                    "Value": value,
+                    "Identifier": sensor_id,
+                })
+        child_context = ancestors
+        # Only hardware identity nodes contribute to the parent path; category
+        # nodes such as Temperatures / Powers are not useful device identifiers.
+        if hardware_id:
+            identity = (text + " " + hardware_id).strip()
+            child_context = (*ancestors[-5:], identity[:200])
+        if isinstance(children, list) and depth < max_depth:
+            for child in reversed(children[:1000]):
+                if isinstance(child, dict):
+                    stack.append((child, child_context, depth + 1))
+    return output[:300]
+
+
+def _lhm_wmi_sensors() -> tuple[list[dict], str]:
+    """Read the optional WMI provider. It is never started or installed by SENTINEL."""
     command = r"""
 $ErrorActionPreference = 'Stop'
 $providerNamespace = $null
@@ -1247,94 +1301,178 @@ if (-not $providerNamespace) {
     ConvertTo-Json -Compress -Depth 4
 """
     try:
-        r = _run(["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", command], 12)
-        if r.returncode != 0:
-            return {"available": False, "reason": (r.stderr or r.stdout or "WMI provider did not respond")[:220]}
-        raw = (r.stdout or "").strip()
+        result = _run(["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", command], 12)
+        if result.returncode != 0:
+            return [], (result.stderr or result.stdout or "WMI provider did not respond")[:220]
+        raw = (result.stdout or "").strip()
         if not raw:
-            return {"available": False, "reason": "Hardware sensor WMI provider returned empty output"}
+            return [], "Hardware sensor WMI provider returned empty output"
         parsed = json.loads(raw)
         if isinstance(parsed, dict) and "sensors" in parsed:
             provider_namespace = str(parsed.get("namespace") or "unknown")
-            sensor_rows = parsed.get("sensors") or []
+            rows = parsed.get("sensors") or []
         else:
-            # Older PowerShell script output / test fixtures may contain a bare
-            # CIM sensor array.
             provider_namespace = "unknown"
-            sensor_rows = parsed if isinstance(parsed, list) else [parsed]
-        if isinstance(sensor_rows, dict):
-            sensor_rows = [sensor_rows]
-
-        normalized = []
-        for sensor in sensor_rows[:300]:
-            if not isinstance(sensor, dict):
-                continue
-            try:
-                value = float(sensor.get("Value"))
-            except (TypeError, ValueError):
-                continue
-            if not math.isfinite(value):
-                continue
-            normalized.append({
-                "name": str(sensor.get("Name") or "")[:120],
-                "parent": str(sensor.get("Parent") or "")[:180],
-                "type": str(sensor.get("SensorType") or "")[:40],
-                "value": value,
-                "identifier": str(sensor.get("Identifier") or "")[:220],
-            })
-        if not normalized:
-            return {"available": False, "reason": "WMI namespace responded but exposed no numeric sensors",
-                    "namespace": provider_namespace}
-
-        cpu_temperatures = []
-        per_core_temperatures = []
-        fan_rpm = []
-        hardware_names = set()
-        for sensor in normalized:
-            name = sensor["name"].casefold()
-            parent = sensor["parent"].casefold()
-            identifier = sensor["identifier"].casefold().replace("\\", "/")
-            kind = sensor["type"].casefold()
-            value = sensor["value"]
-            if sensor["parent"]:
-                hardware_names.add(sensor["parent"])
-            # LHM labels Intel/AMD CPU hardware by model name (e.g. "Intel Core
-            # i5-12500H"), not always with the literal word CPU. Identifiers are
-            # the most stable fallback across vendor naming variations.
-            cpu_hardware = any(token in (parent + " " + identifier) for token in (
-                "intelcpu", "amdcpu", "intel core", "amd ryzen", "cpu", "processor"
-            ))
-            explicitly_gpu = any(token in (parent + " " + name + " " + identifier) for token in (
-                "nvidia", "geforce", "radeon", "graphics", "gpu", "video"
-            ))
-            cpu_named = any(token in name for token in ("cpu package", "cpu core", "processor package"))
-            if kind == "temperature" and -10.0 <= value <= 130.0 and (cpu_hardware or cpu_named) and not explicitly_gpu:
-                cpu_temperatures.append(sensor)
-                if re.search(r"\bcore\s*(?:#|\d|\[)", name) or "cpu core" in name:
-                    per_core_temperatures.append(sensor)
-            if kind == "fan" and 0.0 < value <= 30000.0:
-                fan_rpm.append(sensor)
-
-        return {
-            "available": True,
-            "source": "externally-running hardware-monitor WMI provider",
-            "provider": "LibreHardwareMonitor" if "LibreHardwareMonitor" in provider_namespace else "OpenHardwareMonitor",
-            "namespace": provider_namespace,
-            "checked_at": time.time(),
-            "cpu_temperatures": cpu_temperatures[:48],
-            "per_core_temperatures": per_core_temperatures[:64],
-            "fan_rpm": fan_rpm[:32],
-            "sensor_count": len(normalized),
-            "hardware": sorted(hardware_names)[:40],
-            "cpu_sensor_count": len(cpu_temperatures),
-            "fan_sensor_count": len(fan_rpm),
-            "cpu_reason": "" if cpu_temperatures else "Provider is running, but no CPU temperature sensors were exposed for this hardware",
-            "fan_reason": "" if fan_rpm else "Provider is running, but no fan RPM sensors were exposed; ASUS EC fan telemetry may not be supported",
-        }
+            rows = parsed if isinstance(parsed, list) else [parsed]
+        if isinstance(rows, dict):
+            rows = [rows]
+        return [x for x in rows[:300] if isinstance(x, dict)], f"WMI · {provider_namespace}"
     except Exception as exc:
-        return {"available": False, "reason": f"{type(exc).__name__}: {str(exc)[:200]}"}
+        return [], f"{type(exc).__name__}: {str(exc)[:180]}"
 
 
+def _lhm_rest_sensors(port: int) -> tuple[list[dict], str]:
+    """Read only GET /data.json from a loopback LHM server; never call sensor-control endpoints."""
+    connection = None
+    try:
+        connection = HTTPConnection("127.0.0.1", int(port), timeout=3)
+        connection.request(
+            "GET",
+            "/data.json",
+            headers={"Accept": "application/json", "Connection": "close"},
+        )
+        response = connection.getresponse()
+        if response.status != 200:
+            reason = f"loopback /data.json returned HTTP {response.status} {response.reason}".strip()
+            response.read(1024)
+            return [], reason[:220]
+        payload = response.read(4 * 1024 * 1024 + 1)
+        if len(payload) > 4 * 1024 * 1024:
+            return [], "LHM /data.json response exceeded the 4 MiB safety limit"
+        document = json.loads(payload.decode("utf-8-sig"))
+        rows = _lhm_tree_sensors(document)
+        if not rows:
+            return [], "LHM /data.json contained no numeric sensor readings"
+        version = str(document.get("Version") or "unknown")[:40]
+        return rows, f"LibreHardwareMonitor {version} · loopback REST /data.json"
+    except Exception as exc:
+        return [], f"{type(exc).__name__}: {str(exc)[:180]}"
+    finally:
+        if connection is not None:
+            try:
+                connection.close()
+            except Exception:
+                pass
+
+
+def _lhm_sensor_result(sensor_rows: list[dict], provider: str, source: str, namespace: str) -> dict:
+    normalized = []
+    for sensor in sensor_rows[:600]:
+        if not isinstance(sensor, dict):
+            continue
+        value = _lhm_number(sensor.get("Value"))
+        if value is None:
+            value = _lhm_number(sensor.get("RawValue"))
+        if value is None:
+            continue
+        normalized.append({
+            "name": str(sensor.get("Name") or sensor.get("Text") or "")[:120],
+            "parent": str(sensor.get("Parent") or "")[:180],
+            "type": str(sensor.get("SensorType") or sensor.get("Type") or "")[:40],
+            "value": value,
+            "identifier": str(sensor.get("Identifier") or sensor.get("SensorId") or "")[:220],
+        })
+    if not normalized:
+        return {"available": False, "reason": "Hardware monitor returned no numeric sensors", "provider": provider}
+
+    cpu_temperatures = []
+    per_core_temperatures = []
+    fan_rpm = []
+    hardware_names = set()
+    for sensor in normalized:
+        name = sensor["name"].casefold()
+        parent = sensor["parent"].casefold()
+        identifier = sensor["identifier"].casefold().replace("\\", "/")
+        kind = sensor["type"].casefold()
+        value = sensor["value"]
+        if sensor["parent"]:
+            hardware_names.add(sensor["parent"])
+        cpu_hardware = any(token in (parent + " " + identifier) for token in (
+            "intelcpu", "amdcpu", "intel core", "amd ryzen", "cpu", "processor"
+        ))
+        explicitly_gpu = any(token in (parent + " " + name + " " + identifier) for token in (
+            "nvidia", "geforce", "radeon", "graphics", "gpu", "video"
+        ))
+        cpu_named = any(token in name for token in ("cpu package", "cpu core", "processor package"))
+        if kind == "temperature" and -10.0 <= value <= 130.0 and (cpu_hardware or cpu_named) and not explicitly_gpu:
+            cpu_temperatures.append(sensor)
+            if re.search(r"\bcore\s*(?:#|\d|\[)", name) or "cpu core" in name:
+                per_core_temperatures.append(sensor)
+        if kind == "fan" and 0.0 < value <= 30000.0:
+            fan_rpm.append(sensor)
+
+    # Prefer an explicit ASUS/embedded-controller or CPU fan reading over a
+    # GPU fan when several devices expose fan sensors.
+    fan_rpm.sort(key=lambda item: (
+        0 if any(x in (item["name"] + " " + item["parent"]).casefold()
+                 for x in ("asus", "embedded controller", "cpu")) else
+        1 if any(x in (item["name"] + " " + item["parent"]).casefold()
+                 for x in ("nvidia", "geforce", "gpu")) else 2
+    ))
+    return {
+        "available": True,
+        "source": source,
+        "provider": provider,
+        "namespace": namespace,
+        "checked_at": time.time(),
+        "cpu_temperatures": cpu_temperatures[:48],
+        "per_core_temperatures": per_core_temperatures[:64],
+        "fan_rpm": fan_rpm[:32],
+        "sensor_count": len(normalized),
+        "hardware": sorted(hardware_names)[:40],
+        "cpu_sensor_count": len(cpu_temperatures),
+        "fan_sensor_count": len(fan_rpm),
+        "cpu_reason": "" if cpu_temperatures else "Provider is responding, but no CPU temperature sensors were exposed for this hardware",
+        "fan_reason": "" if fan_rpm else "Provider is responding, but no fan RPM sensors were exposed; ASUS embedded-controller fan telemetry may not be supported",
+    }
+
+
+def _lhm_sample() -> dict:
+    """Read an already-running local LHM provider; prefer REST data.json, with legacy WMI fallback."""
+    if not IS_WIN:
+        return {"available": False, "reason": "Windows only"}
+    config = CFG.get("advanced", {}) if isinstance(CFG.get("advanced"), dict) else {}
+    if config.get("lhm_enabled") is not True:
+        return {"available": False, "reason": "Optional hardware sensor reader disabled"}
+    try:
+        port = int(config.get("lhm_http_port", 8085))
+    except (TypeError, ValueError):
+        port = 8085
+    if not 1 <= port <= 65535:
+        return {"available": False, "reason": "LHM local HTTP port must be between 1 and 65535"}
+
+    wmi_rows, wmi_reason = _lhm_wmi_sensors()
+    rest_rows, rest_reason = _lhm_rest_sensors(port)
+    merged: dict[str, dict] = {}
+    for row in [*wmi_rows, *rest_rows]:
+        key = str(row.get("Identifier") or row.get("SensorId") or "").casefold()
+        if not key:
+            key = f"{row.get('Parent','')}|{row.get('Name','')}|{row.get('SensorType',row.get('Type',''))}".casefold()
+        merged[key] = row
+    if merged:
+        rest_used = bool(rest_rows)
+        provider = "LibreHardwareMonitor" if rest_used else "OpenHardwareMonitor / LibreHardwareMonitor"
+        if rest_used:
+            version = ""
+            try:
+                version = rest_reason.split("·", 1)[0].strip()
+            except Exception:
+                pass
+            provider = version or "LibreHardwareMonitor"
+        source = "loopback REST /data.json" if rest_used else "WMI"
+        namespace = f"http://127.0.0.1:{port}/data.json" if rest_used else wmi_reason
+        result = _lhm_sensor_result(list(merged.values()), provider, source, namespace)
+        result["wmi_status"] = wmi_reason
+        result["rest_status"] = rest_reason
+        result["rest_used"] = rest_used
+        return result
+    return {
+        "available": False,
+        "reason": f"WMI: {wmi_reason}; local REST: {rest_reason}"[:260],
+        "wmi_status": wmi_reason,
+        "rest_status": rest_reason,
+        "namespace": f"http://127.0.0.1:{port}/data.json",
+    }
 
 def _hardware_loop() -> None:
     while not _STOP.is_set():
