@@ -1343,19 +1343,27 @@ def _etw_int(value: Any) -> int | None:
             return None
 
 
-def _etw_process_name_for_pid(pid: int | None, process_starts: dict[int, str], trace_end: float) -> str | None:
+def _etw_process_name_for_pid(
+    pid: int | None,
+    process_starts: dict[int, list[tuple[float, str]]],
+    event_ts: float,
+) -> str | None:
     if not pid:
         return None
-    if pid in process_starts:
-        return process_starts[pid]
-    # The live process list is only a fallback. Reject a PID that was created
-    # after the captured trace window, which is evidence of PID reuse.
+    starts = process_starts.get(int(pid), [])
+    if starts:
+        # A later ProcessStart must never be applied retroactively to an earlier
+        # event for the same PID; Windows can reuse PIDs inside one trace window.
+        prior = [(ts, name) for ts, name in starts if ts <= event_ts + 0.001]
+        return max(prior, key=lambda item: item[0])[1] if prior else None
+    # Only use the live process inventory if that exact process was already
+    # alive at the timestamp of this ETW event (with a small timestamp tolerance).
     for row in STATE.get("procs", []):
         try:
             if int(row.get("pid", -1)) != int(pid):
                 continue
             created = float(row.get("create_time"))
-            if created <= trace_end + 1.0:
+            if created <= event_ts + 1.0:
                 return str(row.get("name") or "") or None
             return None
         except (TypeError, ValueError):
@@ -1367,7 +1375,7 @@ def _parse_etw_xml(xml_path: str, trace_end: float | None = None) -> dict:
     """Parse tracerpt XML into bounded event evidence without guessing attribution."""
     trace_end = float(trace_end if trace_end is not None else time.time())
     raw_events: list[dict] = []
-    process_starts: dict[int, str] = {}
+    process_starts: dict[int, list[tuple[float, str]]] = {}
     try:
         for _, elem in ET.iterparse(xml_path, events=("end",)):
             if _etl_local_name(elem.tag) != "Event":
@@ -1425,7 +1433,7 @@ def _parse_etw_xml(xml_path: str, trace_end: float | None = None) -> dict:
             if target_pid and image_name and image_name.casefold().endswith((".exe", ".com")) and (
                 ("process" in signature and ("start" in signature or event_id in ("1", "10")))
             ):
-                process_starts[int(target_pid)] = image_name[:180]
+                process_starts.setdefault(int(target_pid), []).append((float(event_ts), image_name[:180]))
 
             module_name = None
             for key, value in fields.items():
@@ -1439,7 +1447,7 @@ def _parse_etw_xml(xml_path: str, trace_end: float | None = None) -> dict:
 
             relevant = any(token in signature for token in (
                 "dpc", "interrupt", "cswitch", "disk", "tcp", "process", "thread", "image", "driver", "network", "kernel"
-            )) or bool(module_name)
+            )) or bool(module_name) or "nt kernel logger" in provider.casefold()
             if relevant and len(raw_events) < 1500:
                 pid = target_pid
                 duration_us = None
@@ -1470,11 +1478,13 @@ def _parse_etw_xml(xml_path: str, trace_end: float | None = None) -> dict:
         return {"ok": False, "reason": f"ETW XML parse failed: {type(exc).__name__}: {str(exc)[:160]}", "events": []}
 
     for event in raw_events:
-        event["process_name"] = _etw_process_name_for_pid(event.get("pid"), process_starts, trace_end)
+        event["process_name"] = _etw_process_name_for_pid(
+            event.get("pid"), process_starts, float(event.get("ts") or trace_end)
+        )
         event["fields"]["_sentinel_pid_source"] = event["pid_source"]
         event["fields"]["_sentinel_process_attribution"] = (
-            "ETW ProcessStart image event" if event.get("pid") in process_starts
-            else "current process inventory with PID-reuse time guard" if event.get("process_name")
+            "ETW ProcessStart image event at or before event timestamp" if event.get("process_name") and event.get("pid") in process_starts
+            else "current process inventory with event-time PID-reuse guard" if event.get("process_name")
             else "unresolved"
         )
         event.pop("signature", None)
