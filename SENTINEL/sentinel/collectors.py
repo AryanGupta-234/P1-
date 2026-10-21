@@ -6,7 +6,7 @@ import csv, io, os, re, subprocess, time, random, math, shutil, ctypes, json
 from datetime import datetime, timezone
 import psutil
 from . import core
-from .core import log, metric, heartbeat, STATE, CFG, IS_WIN, insight
+from .core import log, metric, heartbeat, STATE, CFG, IS_WIN, insight, LIVE
 from .winutil import resolve_command, run_command
 
 NO_WIN = 0x08000000 if IS_WIN else 0
