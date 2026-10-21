@@ -566,6 +566,26 @@ try {
         if ($userProfile -and $userProfile.LocalPath) {
             $userRoot = $userProfile.LocalPath
             $desktop = Join-Path $userRoot 'Desktop'
+            $usersHive = [Microsoft.Win32.RegistryKey]::OpenBaseKey(
+                [Microsoft.Win32.RegistryHive]::Users,
+                [Microsoft.Win32.RegistryView]::Default
+            )
+            try {
+                $shellFolders = $usersHive.OpenSubKey("$userSid\Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders")
+                if ($shellFolders) {
+                    try {
+                        $desktopValue = $shellFolders.GetValue(
+                            'Desktop', $null,
+                            [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames
+                        )
+                        if ($desktopValue) {
+                            $desktopValue = $desktopValue.Replace('%USERPROFILE%', $userRoot)
+                            $desktop = [Environment]::ExpandEnvironmentVariables($desktopValue)
+                        }
+                    } finally { $shellFolders.Dispose() }
+                }
+            } finally { $usersHive.Dispose() }
+            if (-not $desktop -or $desktop -match '%[^%]+%') { $desktop = Join-Path $userRoot 'Desktop' }
             $userStartMenu = Join-Path $userRoot 'AppData\Roaming\Microsoft\Windows\Start Menu\Programs\SENTINEL'
         }
     }
@@ -573,7 +593,14 @@ try {
     if ($userStartMenu) { Remove-Item $userStartMenu -Recurse -Force -ErrorAction SilentlyContinue }
     $commonStartMenu = Join-Path $env:ProgramData 'Microsoft\Windows\Start Menu\Programs\SENTINEL'
     Remove-Item $commonStartMenu -Recurse -Force -ErrorAction SilentlyContinue
-    Write-Output 'SENTINEL task and shortcuts removed. ProgramData data was kept.'
+
+    $remainingTask = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
+    if ($remainingTask) { throw "Scheduled task $taskName still exists after removal" }
+    if ($desktop -and (Test-Path (Join-Path $desktop 'SENTINEL.lnk'))) {
+        throw "Desktop shortcut still exists: $(Join-Path $desktop 'SENTINEL.lnk')"
+    }
+    if (Test-Path $commonStartMenu) { throw "Common Start Menu shortcut folder still exists: $commonStartMenu" }
+    Write-Output 'SENTINEL task and verified shortcut locations removed. ProgramData data was kept.'
     exit 0
 } catch {
     [Console]::Error.WriteLine("SENTINEL uninstall integration failed: " + $_.Exception.Message)
