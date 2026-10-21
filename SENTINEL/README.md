@@ -149,3 +149,10 @@ The optional sensor reader probes the correct LibreHardwareMonitor WMI namespace
 Game-session teardown now retains a restore_pending record when an undo fails and retries that record at runtime and on the next agent start. ETW parsing retains per-event timestamps, uses process-start image records and PID-reuse checks for process names, and names driver modules only when ETW fields or xperf DPC/ISR output actually identify a .sys module.
 
 These additions have regression tests, but must still be validated on the target Windows laptop with Windows Performance Toolkit, the user's already-running optional sensor provider, and a real disposable game session. A portable test cannot certify device-specific sensor support or live driver-symbol attribution.
+
+
+### Hardware sensors: WMI and loopback REST
+
+SENTINEL reads optional hardware sensors only after you enable the sensor reader and start the sensor provider yourself. It first probes the supported WMI namespaces, then falls back to LibreHardwareMonitor's read-only local `GET http://127.0.0.1:8085/data.json` tree when configured. You can change the local port in the THERMAL sensor settings. The endpoint is loopback-only from SENTINEL's side; it does not follow redirects or call fan-control APIs. A provider configured with HTTP authentication is reported as unavailable because SENTINEL does not store hardware-monitor credentials.
+
+For the REST path, start LibreHardwareMonitor yourself, enable its Web Server / Remote Web Server on localhost (default port 8085), and then enable SENTINEL's optional sensor reader. Availability of CPU package/core and ASUS embedded-controller fan RPM remains dependent on the exact laptop model, firmware and sensor provider. SENTINEL never installs or launches LHM and never writes fan curves.
