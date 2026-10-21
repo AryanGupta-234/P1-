@@ -483,7 +483,7 @@ def test_agent_shutdown_request_uses_a_separate_thread(monkeypatch):
 def test_installer_stops_agent_before_dependency_update_and_preserves_programdata():
     from pathlib import Path
     installer = (Path(__file__).resolve().parents[1] / "install.bat").read_text(encoding="utf-8")
-    stop_at = installer.index('"%PY%" "%SRC%\\agent.py" stop')
+    stop_at = installer.index('%PY% "%SRC%\\agent.py" stop')
     dependencies_at = installer.index("pip install --upgrade")
     copy_at = installer.index("robocopy ")
     assert stop_at < dependencies_at < copy_at
