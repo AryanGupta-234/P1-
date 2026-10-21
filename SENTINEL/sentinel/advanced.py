@@ -1617,12 +1617,26 @@ def _capture_kernel_window_locked(duration: int = 12) -> dict:
                   "source": "Windows Performance Toolkit xperf / NT Kernel Logger", "providers": flags.split("+"),
                   "window_seconds": duration, "error": ""})
     heartbeat("advanced ETW kernel observer", duration, "NT Kernel Logger capture active")
-    # Shutdown can shorten the window; the owned logger is still closed via
-    # xperf -d so the resulting ETL is retained rather than orphaned/discarded.
-    _STOP.wait(duration)
-    stop = _run([xperf, "-d", etl_path], 120)
-    _ETW_OWNED = False
-    _ETW_DONE.set()
+    # Shutdown shortens the wait, but the capture owner must always close its
+    # own logger and release the completion event. A failed -d gets one bounded
+    # owner-only stop attempt; we never stop a logger we did not start.
+    try:
+        _STOP.wait(duration)
+        stop = _run([xperf, "-d", etl_path], 120)
+    except Exception as exc:
+        cleanup_error = ""
+        try:
+            cleanup = _run([xperf, "-stop"], 30)
+            if cleanup.returncode != 0:
+                cleanup_error = (cleanup.stderr or cleanup.stdout or "xperf -stop failed")[:180]
+        except Exception as cleanup_exc:
+            cleanup_error = f"{type(cleanup_exc).__name__}: {str(cleanup_exc)[:140]}"
+        state.update({"recording": None, "state": "unknown", "stopped_at": time.time(),
+                      "error": f"{type(exc).__name__}: {str(exc)[:180]}" + (f"; cleanup: {cleanup_error}" if cleanup_error else "")})
+        raise
+    finally:
+        _ETW_OWNED = False
+        _ETW_DONE.set()
     state.update({"recording": False, "state": "idle" if stop.returncode == 0 else "unknown", "stopped_at": time.time(),
                   "error": "" if stop.returncode == 0 else (stop.stderr or stop.stdout or "xperf stop failed")[:240]})
     if stop.returncode != 0 or not os.path.isfile(etl_path):
@@ -1930,12 +1944,16 @@ def shutdown() -> None:
     _STOP.set()
     if _ETW_OWNED:
         # Let the capture owner close and archive its ETL with xperf -d.
-        if not _ETW_DONE.wait(18):
+        # The capture worker is awakened by _STOP and owns the xperf -d
+        # finalization. Give that bounded finalizer time to complete before using
+        # the emergency stop path, avoiding a concurrent -d / -stop race.
+        if not _ETW_DONE.wait(130):
             xperf = locate_xperf()
             if xperf:
-                try: _run([xperf, "-stop"], 10)
+                try: _run([xperf, "-stop"], 30)
                 except Exception: pass
             _ETW_OWNED = False
+            _ETW_DONE.set()
     active_session_id = STATE.get("advanced", {}).get("active_session_id")
     if active_session_id:
         try:
