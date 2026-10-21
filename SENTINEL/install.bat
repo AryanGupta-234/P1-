@@ -83,7 +83,8 @@ if /I "%SRC%"=="%DEST%" (
   if errorlevel 8 (
     echo ERROR: Application file update failed (Robocopy returned a failure code).
     echo Your ProgramData settings/history have not been deleted.
-    powershell -NoProfile -Command "Start-ScheduledTask -TaskName 'SentinelAgent' -ErrorAction SilentlyContinue"
+    echo The agent remains stopped because the application copy may be incomplete.
+    Rerun install.bat to complete the upgrade.
     goto :fail
   )
 )
