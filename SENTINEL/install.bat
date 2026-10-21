@@ -1,34 +1,58 @@
 @echo off
-setlocal EnableExtensions
-title SENTINEL - Install / Upgrade
+setlocal EnableExtensions DisableDelayedExpansion
+title SENTINEL - Versioned Installer
 
-rem Elevate once. The elevated copy keeps the original source directory.
-net session >nul 2>&1
+set "SENTINEL_INSTALLER=%~f0"
+rem Detect an elevated token explicitly; net session is not a reliable UAC test.
+powershell -NoLogo -NoProfile -NonInteractive -Command "$id=[Security.Principal.WindowsIdentity]::GetCurrent(); $p=[Security.Principal.WindowsPrincipal]::new($id); if($p.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)){exit 0}else{exit 1}" >nul 2>&1
 if errorlevel 1 (
-  echo Requesting administrator permission...
-  powershell -NoProfile -ExecutionPolicy Bypass -Command "Start-Process -FilePath '%~f0' -Verb RunAs -Wait"
-  if errorlevel 1 (
+  echo Requesting Windows administrator permission...
+  powershell -NoLogo -NoProfile -ExecutionPolicy Bypass -Command "$p=Start-Process -FilePath $env:SENTINEL_INSTALLER -Verb RunAs -Wait -PassThru; exit [int]$p.ExitCode"
+  set "ELEVATED_RESULT=%ERRORLEVEL%"
+  if not "%ELEVATED_RESULT%"=="0" (
     echo.
-    echo ERROR: Administrator permission was not granted.
+    echo ERROR: The elevated installer did not complete successfully. Exit code: %ELEVATED_RESULT%
     pause
-    exit /b 1
   )
-  exit /b 0
+  exit /b %ELEVATED_RESULT%
 )
 
 for %%I in ("%~dp0.") do set "SRC=%%~fI"
-set "DEST=%ProgramFiles%\Sentinel"
+set "ROOT=%ProgramFiles%\Sentinel"
+set "VERSIONS=%ROOT%\versions"
+set "VERSION_FILE=%SRC%\VERSION"
 
 echo.
 echo ============================================================
-echo  SENTINEL Windows Installer
-echo  Install / in-place upgrade
+echo  SENTINEL - Versioned Windows Installer
 echo ============================================================
 echo Source : "%SRC%"
-echo Target : "%DEST%"
+echo Root   : "%ROOT%"
 echo.
-echo Your settings, SQLite history, traces and run records are
-echo stored separately in %ProgramData%\Sentinel and are preserved.
+
+if not exist "%VERSION_FILE%" (
+  echo ERROR: Release VERSION file is missing: "%VERSION_FILE%"
+  goto :fail
+)
+set /p "VERSION="<"%VERSION_FILE%"
+if not defined VERSION (
+  echo ERROR: VERSION file is empty.
+  goto :fail
+)
+echo(%VERSION%| findstr /R /X "[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*" >nul
+if errorlevel 1 (
+  echo ERROR: Invalid release version "%VERSION%". Expected MAJOR.MINOR.PATCH, for example 1.0.1.
+  goto :fail
+)
+set "VERSION_DIR=%VERSIONS%\%VERSION%"
+set "STAGING_DIR=%VERSIONS%\.staging-%VERSION%"
+
+echo Release version : %VERSION%
+echo Version folder  : "%VERSION_DIR%"
+echo.
+echo Existing version folders are immutable. A new release installs into
+echo a new version folder; previous versions are retained for rollback.
+echo User settings, SQLite history and traces stay in %ProgramData%\Sentinel.
 echo.
 
 call :findPython
@@ -40,82 +64,152 @@ if not defined PY (
     goto :fail
   )
   winget install -e --id Python.Python.3.12 --scope machine --silent --accept-package-agreements --accept-source-agreements
+  if errorlevel 1 (
+    echo ERROR: Python installation failed.
+    goto :fail
+  )
   call :findPython
 )
 if not defined PY (
   echo ERROR: Python installation could not be detected.
-  echo Close this window, confirm Python 3.12 is installed, and rerun install.bat.
+  echo Install Python 3.11 or 3.12 and rerun install.bat.
   goto :fail
 )
 
-if exist "%DEST%\agent.py" (
-  echo [1/5] Gracefully stopping the existing agent and logon task...
-  %PY% "%SRC%\agent.py" stop
-  if errorlevel 1 (
-    echo ERROR: The existing agent did not stop safely.
-    echo No application files have been replaced. Close the SENTINEL task and rerun this installer.
-    goto :fail
-  )
-) else (
-  echo [1/5] No previous SENTINEL installation found.
-)
-
-echo [2/5] Updating Python dependencies...
-%PY% -m pip install --upgrade --disable-pip-version-check --retries 3 --timeout 30 -r "%SRC%\requirements.txt"
+echo [1/6] Stopping any currently registered SENTINEL agent...
+%PY% "%SRC%\agent.py" stop
 if errorlevel 1 (
-  echo ERROR: Python dependency installation failed.
-  echo The previous agent remains stopped because the Python environment may be partially updated.
-  echo Application files and ProgramData history were not replaced. Rerun install.bat to retry.
+  echo ERROR: The previous SENTINEL agent could not be stopped safely.
+  echo No installed version files have been changed.
   goto :fail
 )
 
-if /I "%SRC%"=="%DEST%" (
-  echo [3/5] Source is already the install directory - skipping file copy.
-) else (
-  echo [3/5] Updating application files in place...
-  if not exist "%DEST%" mkdir "%DEST%"
-  if errorlevel 1 (
-    echo ERROR: Could not create "%DEST%".
+if not exist "%VERSIONS%" mkdir "%VERSIONS%"
+if errorlevel 1 (
+  echo ERROR: Could not create the versions directory.
+  goto :fail
+)
+
+if exist "%VERSION_DIR%" (
+  echo [2/6] Release %VERSION% already exists - verifying without overwriting it...
+  if not exist "%VERSION_DIR%\VERSION" (
+    echo ERROR: The existing version folder has no VERSION marker.
+    echo It has been left untouched. Choose a new release version.
     goto :fail
   )
-  robocopy "%SRC%" "%DEST%" /MIR /R:2 /W:2 /COPY:DAT /DCOPY:DAT /NP /NFL /NDL /NJH /NJS /XD ".git" ".venv" "__pycache__" ".pytest_cache" /XF "*.pyc"
-  rem Robocopy codes 0-7 are success / copy results; 8+ means failure.
+  set "EXISTING_VERSION="
+  set /p "EXISTING_VERSION="<"%VERSION_DIR%\VERSION"
+  if not "%EXISTING_VERSION%"=="%VERSION%" (
+    echo ERROR: Existing folder version mismatch. Nothing was overwritten.
+    goto :fail
+  )
+  if not exist "%VERSION_DIR%\agent.py" goto :incomplete
+  if not exist "%VERSION_DIR%\sentinel\core.py" goto :incomplete
+  if not exist "%VERSION_DIR%\ui\index.html" goto :incomplete
+  if not exist "%VERSION_DIR%\requirements.txt" goto :incomplete
+  echo Immutable version files verified. Reusing this version folder.
+) else (
+  echo [2/6] Preparing fresh version %VERSION% in a staging folder...
+  if exist "%STAGING_DIR%" rmdir /s /q "%STAGING_DIR%"
+  mkdir "%STAGING_DIR%"
+  if errorlevel 1 (
+    echo ERROR: Could not create the version staging folder.
+    goto :fail
+  )
+  robocopy "%SRC%" "%STAGING_DIR%" /E /R:2 /W:2 /COPY:DAT /DCOPY:DAT /NP /NFL /NDL /NJH /NJS /XD ".git" ".venv" "__pycache__" ".pytest_cache" /XF "*.pyc"
+  rem Robocopy codes 0-7 mean success; 8 or above means failure.
   if errorlevel 8 (
-    echo ERROR: Application file update failed (Robocopy returned a failure code).
-    echo Your ProgramData settings/history have not been deleted.
-    echo The agent remains stopped because the application copy may be incomplete.
-    Rerun install.bat to complete the upgrade.
+    echo ERROR: Release file copy failed. The incomplete staging folder will be removed.
+    goto :fail
+  )
+  if not exist "%STAGING_DIR%\VERSION" (
+    echo ERROR: VERSION marker was not copied into the staging folder.
+    goto :fail
+  )
+  if not exist "%STAGING_DIR%\agent.py" (
+    echo ERROR: Agent entry point is missing from the staged release.
+    goto :fail
+  )
+  if not exist "%STAGING_DIR%\sentinel\core.py" (
+    echo ERROR: SENTINEL runtime files are incomplete.
+    goto :fail
+  )
+  if not exist "%STAGING_DIR%\ui\index.html" (
+    echo ERROR: Dashboard files are missing from the staged release.
+    goto :fail
+  )
+  move "%STAGING_DIR%" "%VERSION_DIR%" >nul
+  if errorlevel 1 (
+    echo ERROR: Could not finalize the immutable release directory.
+    goto :fail
+  )
+  echo Fresh version folder created. No previous version was overwritten.
+)
+
+echo [3/6] Creating the isolated Python environment for %VERSION%...
+if not exist "%VERSION_DIR%\.venv\Scripts\python.exe" (
+  %PY% -m venv "%VERSION_DIR%\.venv"
+  if errorlevel 1 (
+    echo ERROR: Could not create the release-specific Python environment.
     goto :fail
   )
 )
-
-cd /d "%DEST%"
+set "VENV_PY=%VERSION_DIR%\.venv\Scripts\python.exe"
+if not exist "%VENV_PY%" (
+  echo ERROR: The version-specific Python interpreter is missing.
+  goto :fail
+)
+echo [4/6] Installing dependencies inside this release only...
+"%VENV_PY%" -m pip install --disable-pip-version-check --retries 3 --timeout 30 -r "%VERSION_DIR%\requirements.txt"
 if errorlevel 1 (
-  echo ERROR: Could not enter "%DEST%".
+  echo ERROR: Dependency installation failed for SENTINEL %VERSION%.
+  echo The immutable application files and all previous versions were preserved.
   goto :fail
 )
 
-echo [4/5] Registering the interactive agent and app launchers...
-%PY% "%DEST%\agent.py" install
+echo [5/6] Registering and verifying task, shortcuts and administrator mode...
+cd /d "%VERSION_DIR%"
 if errorlevel 1 (
-  echo ERROR: Agent task registration or desktop app launch failed.
-  echo Check Task Scheduler ^> SentinelAgent and %ProgramData%\Sentinel.
+  echo ERROR: Could not enter the version directory.
+  goto :fail
+)
+"%VENV_PY%" "%VERSION_DIR%\agent.py" install
+if errorlevel 1 (
+  echo ERROR: SENTINEL did not pass task/shortcut/agent verification.
+  echo Review the diagnostic output above. Existing version folders were not overwritten.
+  goto :fail
+)
+
+rem Update the stable active-version pointer only after the new version is verified.
+>"%ROOT%\active-version.txt.tmp" echo %VERSION%
+move /y "%ROOT%\active-version.txt.tmp" "%ROOT%\active-version.txt" >nul
+if errorlevel 1 (
+  echo ERROR: SENTINEL installed, but the active-version pointer could not be updated.
+  echo The verified version remains at "%VERSION_DIR%".
   goto :fail
 )
 
 echo.
-echo [5/5] Installation / upgrade completed.
+echo ============================================================
+echo  SENTINEL %VERSION% - INSTALLATION COMPLETE
+echo ============================================================
+echo Status       : SUCCESS - task, shortcuts and elevated agent verified
+echo Installed at: "%VERSION_DIR%"
+echo Desktop      : SENTINEL shortcut
+echo Start Menu   : All users - Programs ^> SENTINEL
+echo Agent        : Running with highest available privileges
+echo Data         : "%ProgramData%\Sentinel" (preserved)
+echo Previous versions were not overwritten or removed.
 echo.
-echo SENTINEL is running. Its app window should now be open.
-echo Launch it later from:
-echo   - Desktop: SENTINEL
-echo   - Start Menu: SENTINEL ^> SENTINEL
-echo.
-echo Agent auto-starts at interactive user logon and restarts after failure.
-echo Existing settings, history, traces and run records were preserved.
+echo Open SENTINEL later from the Desktop or Start Menu shortcut.
 echo.
 pause
 exit /b 0
+
+:incomplete
+echo ERROR: The existing release folder is incomplete.
+echo It was not overwritten or deleted. Bump VERSION to create a fresh release folder.
+goto :fail
 
 :findPython
 set "PY="
@@ -123,6 +217,10 @@ where py >nul 2>&1
 if not errorlevel 1 (
   py -3.12 --version >nul 2>&1
   if not errorlevel 1 set "PY=py -3.12"
+  if not defined PY (
+    py -3.11 --version >nul 2>&1
+    if not errorlevel 1 set "PY=py -3.11"
+  )
   if not defined PY (
     py -3 --version >nul 2>&1
     if not errorlevel 1 set "PY=py -3"
@@ -138,8 +236,13 @@ if not defined PY (
 exit /b 0
 
 :fail
+if defined STAGING_DIR if exist "%STAGING_DIR%" rmdir /s /q "%STAGING_DIR%"
 echo.
-echo SENTINEL installation did not finish.
-echo No ProgramData history/configuration was intentionally removed.
+echo ============================================================
+echo  SENTINEL INSTALLATION FAILED
+echo ============================================================
+echo Check the error above. No previous version folder or
+echo ProgramData history was intentionally overwritten or removed.
+echo.
 pause
 exit /b 1
