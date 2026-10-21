@@ -111,7 +111,7 @@ def test_etw_parser_rejects_live_pid_name_when_process_started_after_trace(tmp_p
     assert parsed["unattributed_event_count"] == 1
 
 
-def test_etw_parser_does_not_apply_a_future_pid_reuse_start_to_earlier_events(tmp_path):
+def test_etw_parser_does_not_apply_a_future_pid_reuse_start_to_earlier_events(tmp_path, monkeypatch):
     xml = tmp_path / "pid-reuse-in-trace.xml"
     xml.write_text(
         "<Events>"
@@ -131,18 +131,9 @@ def test_etw_parser_does_not_apply_a_future_pid_reuse_start_to_earlier_events(tm
         + "</Events>",
         encoding="utf-8",
     )
-    monkeypatch_state = {"procs": []}
     # Keep the fallback empty so this test covers only in-trace ProcessStart evidence.
-    from sentinel import core
-    original = advanced.STATE.get("procs")
-    advanced.STATE["procs"] = monkeypatch_state["procs"]
-    try:
-        parsed = advanced._parse_etw_xml(str(xml), trace_end=1792555205.0)
-    finally:
-        if original is None:
-            advanced.STATE.pop("procs", None)
-        else:
-            advanced.STATE["procs"] = original
+    monkeypatch.setitem(advanced.STATE, "procs", [])
+    parsed = advanced._parse_etw_xml(str(xml), trace_end=1792555205.0)
 
     dpc = [item for item in parsed["events"] if item["event_name"].startswith("DPC")]
     assert len(dpc) == 2
