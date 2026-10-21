@@ -38,8 +38,9 @@ NO_WIN = 0x08000000 if IS_WIN else 0
 
 def _admin_error(message):
     """Report an elevation failure even when launched through pythonw.exe."""
-    print(message, file=sys.stderr) if sys.stderr is not None else None
-    if IS_WIN:
+    if sys.stderr is not None:
+        print(message, file=sys.stderr)
+    elif IS_WIN:
         try:
             ctypes.windll.user32.MessageBoxW(
                 None, message, "SENTINEL - Administrator permission required", 0x10
