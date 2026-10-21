@@ -579,3 +579,18 @@ def test_admin_guard_fails_closed_when_uac_is_cancelled(monkeypatch):
     assert agent._ensure_admin() == 1
     assert len(message_boxes) == 1
     assert "requires administrator permissions" in message_boxes[0][1]
+
+
+def test_desktop_opener_restarts_an_existing_non_elevated_agent(monkeypatch):
+    readiness = iter([True, True])
+    calls = {"stop": 0, "start": 0, "launch": 0}
+    monkeypatch.setattr(agent, "IS_WIN", True)
+    monkeypatch.setattr(agent, "_wait_for_agent", lambda _timeout: next(readiness))
+    monkeypatch.setattr(agent, "_running_agent_is_elevated", lambda: False)
+    monkeypatch.setattr(agent, "stop_agent", lambda: calls.__setitem__("stop", calls["stop"] + 1) or 0)
+    monkeypatch.setattr(agent, "pw", lambda _command: SimpleNamespace(returncode=1, stdout="", stderr=""))
+    monkeypatch.setattr(agent, "_start_agent_background", lambda: calls.__setitem__("start", calls["start"] + 1))
+    monkeypatch.setattr(agent, "_launch_hud", lambda: calls.__setitem__("launch", calls["launch"] + 1) or True)
+
+    assert agent.open_app() == 0
+    assert calls == {"stop": 1, "start": 1, "launch": 1}
