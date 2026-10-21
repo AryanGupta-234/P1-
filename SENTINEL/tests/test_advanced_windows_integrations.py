@@ -99,16 +99,55 @@ def test_etw_parser_rejects_live_pid_name_when_process_started_after_trace(tmp_p
     monkeypatch.setitem(
         advanced.STATE,
         "procs",
-        [{"pid": 4242, "create_time": 2000.0, "name": "reused-pid.exe"}],
+        [{"pid": 4242, "create_time": 1792557200.0, "name": "reused-pid.exe"}],
     )
 
-    parsed = advanced._parse_etw_xml(str(xml), trace_end=1000.0)
+    parsed = advanced._parse_etw_xml(str(xml), trace_end=1792555205.0)
 
     assert parsed["ok"] is True
     assert parsed["events"][0]["pid"] == 4242
     assert parsed["events"][0]["process_name"] is None
     assert parsed["process_attribution_count"] == 0
     assert parsed["unattributed_event_count"] == 1
+
+
+def test_etw_parser_does_not_apply_a_future_pid_reuse_start_to_earlier_events(tmp_path):
+    xml = tmp_path / "pid-reuse-in-trace.xml"
+    xml.write_text(
+        "<Events>"
+        + _event(
+            "NT Kernel Logger", 66, "DPC", "Execute", 4242, {},
+            "2026-10-21T04:00:00.500Z",
+        )
+        + _event(
+            "Microsoft-Windows-Kernel-Process", 1, "Process", "Start", 4,
+            {"ProcessID": "4242", "ImageFileName": r"C:\Games\new-game.exe"},
+            "2026-10-21T04:00:01.000Z",
+        )
+        + _event(
+            "NT Kernel Logger", 66, "DPC", "Execute", 4242, {},
+            "2026-10-21T04:00:01.500Z",
+        )
+        + "</Events>",
+        encoding="utf-8",
+    )
+    monkeypatch_state = {"procs": []}
+    # Keep the fallback empty so this test covers only in-trace ProcessStart evidence.
+    from sentinel import core
+    original = advanced.STATE.get("procs")
+    advanced.STATE["procs"] = monkeypatch_state["procs"]
+    try:
+        parsed = advanced._parse_etw_xml(str(xml), trace_end=1792555205.0)
+    finally:
+        if original is None:
+            advanced.STATE.pop("procs", None)
+        else:
+            advanced.STATE["procs"] = original
+
+    dpc = [item for item in parsed["events"] if item["event_name"].startswith("DPC")]
+    assert len(dpc) == 2
+    assert dpc[0]["process_name"] is None
+    assert dpc[1]["process_name"] == "new-game.exe"
 
 
 def test_lhm_reader_supports_asus_cpu_core_and_fan_sensor_names(monkeypatch):
