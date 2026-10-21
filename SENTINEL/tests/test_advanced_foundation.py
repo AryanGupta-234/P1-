@@ -29,7 +29,12 @@ def test_risk_policy_has_six_advisory_specialists_and_dangerous_never_auto():
     assert advanced.risk_tier("etw_capture") == "safe"
     assert advanced.risk_tier("game_profile_apply") == "medium"
     assert advanced.risk_tier("pause_updater_service") == "medium"
-    for kind in ("standby_flush", "fan_control", "trim_bg", "flush_dns", "terminate_process", "bg_priority"):
+    assert advanced.risk_tier("terminate_process") == "medium"
+    close_preview = advanced.action_preview("terminate_process", {})
+    assert close_preview["supported"] is False
+    assert close_preview["automatic_allowed"] is False
+    assert close_preview["undo_available"] is False
+    for kind in ("standby_flush", "fan_control", "trim_bg", "flush_dns", "bg_priority"):
         assert advanced.risk_tier(kind) == "dangerous"
         preview = advanced.action_preview(kind, {})
         assert preview["supported"] is False
@@ -180,18 +185,137 @@ def test_etw_preview_explains_missing_inbox_wpr(monkeypatch):
     assert all("Windows ADK" not in warning for warning in preview["warnings"])
 
 
-def test_wpr_capture_clears_shutdown_event_until_owned_trace_is_closed(monkeypatch, tmp_path):
-    """The inbox WPR session remains owned until its ETL has been finalized."""
+
+
+def test_advanced_status_always_includes_live_metric_contract_without_game(monkeypatch):
+    memory_store(monkeypatch)
+    monkeypatch.setitem(advanced.STATE, "game", None)
+    monkeypatch.setitem(advanced.STATE, "advanced", {})
+    monkeypatch.setitem(advanced.STATE, "kernel", {})
+    monkeypatch.setitem(advanced.STATE, "gpu", {})
+    monkeypatch.setitem(advanced.STATE, "hardware_sensors", {"available": False})
+    monkeypatch.setattr(advanced, "_check_network_evidence", lambda: {"supported": False, "reason": "insufficient samples"})
+    monkeypatch.setattr(advanced, "_cpu_set_inventory", lambda: {"available": False, "reason": "test"})
+
+    payload = advanced.status()
+
+    assert payload["game"] is None
+    assert "live_metrics" in payload
+    assert {"cpu", "mem", "dpc", "irq", "pagesin", "dlat", "ping", "jitter"}.issubset(payload["live_metrics"])
+    assert payload["sessions"] == []
+    assert payload["action_journal"] == []
+    assert payload["tuner_history"] == []
+
+
+def test_etw_capture_dry_run_advertises_bounded_trace_undo():
+    preview = advanced.action_preview("etw_capture", {"duration": 12})
+    assert preview["risk"] == "safe"
+    assert preview["automatic_allowed"] is True
+    assert preview["undo_available"] is True
+    assert "bounded" in " ".join(preview["changes"]).lower()
+
+
+def test_interrupted_session_recovery_closes_sessions_and_clears_active_pointer(monkeypatch):
     conn = memory_store(monkeypatch)
-    conn.execute(
-        "CREATE TABLE trace_archive(ts REAL,file_path TEXT,size_bytes INTEGER,source TEXT,status TEXT)"
-    )
+    conn.execute("INSERT INTO game_sessions(game_key,started_at,before_json,status) VALUES('game.exe',1,'{}','active')")
+    conn.commit()
+    monkeypatch.setitem(advanced.STATE, "advanced", {"active_session_id": 1})
+    def recover(session_id, ts):
+        conn.execute("UPDATE game_sessions SET status='completed',ended_at=? WHERE id=?", (ts, session_id))
+        return {"duration_seconds": 12}
+    monkeypatch.setattr(advanced, "_end_game_session", recover)
+    advanced._recover_interrupted_sessions()
+    assert conn.execute("SELECT status FROM game_sessions WHERE id=1").fetchone()[0] == "completed"
+    assert "active_session_id" not in advanced.STATE["advanced"]
+
+
+def test_restart_reuses_the_same_live_game_process_session(monkeypatch):
+    conn = memory_store(monkeypatch)
+    conn.execute("INSERT INTO game_sessions(game_key,pid,create_time,started_at,before_json,status) VALUES('game.exe',321,100,10,'{}','active')")
+    conn.commit()
+    class FakeProcess:
+        def __init__(self, pid): self.pid = pid
+        def create_time(self): return 100.0
+        def name(self): return "game.exe"
+        def exe(self): return "C:/Games/game.exe"
+    monkeypatch.setattr(advanced.psutil, "Process", FakeProcess)
+    monkeypatch.setitem(advanced.STATE, "advanced", {})
+    monkeypatch.setitem(advanced.STATE, "game", None)
+    monkeypatch.setattr(advanced, "_end_game_session", lambda *a: (_ for _ in ()).throw(AssertionError("must resume live game")))
+    advanced._recover_interrupted_sessions()
+    assert advanced.STATE["advanced"]["active_session_id"] == 1
+    assert advanced.STATE["game"]["pid"] == 321
+    assert advanced._LAST_GAME_ID == "game.exe:321:100.0"
+    assert conn.execute("SELECT status FROM game_sessions WHERE id=1").fetchone()[0] == "active"
+
+
+def test_normal_shutdown_restores_the_active_session(monkeypatch):
+    memory_store(monkeypatch)
+    called = []
+    monkeypatch.setitem(advanced.STATE, "advanced", {"active_session_id": 7})
+    monkeypatch.setitem(advanced.STATE, "game", {"name": "game.exe"})
+    monkeypatch.setattr(advanced, "_end_game_session", lambda sid, ts: called.append(sid) or {"duration_seconds": 10})
+    monkeypatch.setattr(advanced, "_ETW_OWNED", False)
+    monkeypatch.setattr(advanced, "_TIMER_REQUESTS", {})
+    advanced.shutdown()
+    assert called == [7]
+    assert "active_session_id" not in advanced.STATE["advanced"]
+    assert advanced.STATE["game"] is None
+
+
+def test_partial_game_profile_failure_captures_and_restores_priority(monkeypatch):
+    conn = memory_store(monkeypatch)
+    class FakeProc:
+        def __init__(self): self.priority = 3; self.affinity = [0, 1]
+        def nice(self, value=None):
+            if value is not None: self.priority = value
+            return self.priority
+        def cpu_affinity(self, value=None):
+            if value is not None: self.affinity = list(value)
+            return self.affinity
+    proc = FakeProc()
+    conn.execute("INSERT INTO actions VALUES(9,1,'game_profile_apply','failed','','{}')")
+    conn.execute("INSERT INTO action_journal(action_id,kind,risk,created_at,before_json,undo_json,undo_available) VALUES(9,'game_profile_apply','medium',1,'{}',?,1)",
+                 (json.dumps({"kind":"game_profile_apply","pid":321,"create_time":100,"exe":"c:/games/game.exe",
+                              "priority_class":2,"cpu_affinity":[0,1],"default_cpu_sets":None,"background_processes":[]}),))
+    conn.commit()
+    monkeypatch.setattr(advanced, "_process_identity", lambda args: (proc, {"pid":321}))
+    monkeypatch.setattr(advanced, "_get_process_default_cpu_sets", lambda pid: None)
+    # Simulate the priority write succeeding before a later profile step failed.
+    proc.priority = 3
+    advanced.capture_failed_action_state(9)
+    result = advanced.undo_action(9)
+    assert result["ok"] is True
+    assert proc.priority == 2
+
+
+def test_updater_pause_requires_a_running_pre_action_service(monkeypatch):
+    conn = memory_store(monkeypatch)
+    monkeypatch.setattr(advanced, "IS_WIN", True)
+    monkeypatch.setattr(advanced, "_service_state", lambda name: "stopped")
+    conn.execute("INSERT INTO game_sessions(game_key,pid,create_time,started_at,before_json,status) VALUES('game.exe',123,1,1,'{}','active')")
+    conn.commit()
+    monkeypatch.setitem(advanced.STATE, "advanced", {"active_session_id": 1})
+    try:
+        advanced.prepare_action(99, "pause_updater_service", {"service": "gupdate"})
+    except RuntimeError as exc:
+        assert "not running" in str(exc)
+    else:
+        raise AssertionError("SENTINEL must not change an updater that was already stopped")
+
+
+def test_wpr_capture_clears_shutdown_event_until_owned_trace_is_closed(monkeypatch, tmp_path):
+    """WPR remains owned until its ETL is finalized and the completion event is released."""
+    conn = memory_store(monkeypatch)
+    conn.execute("CREATE TABLE trace_archive(ts REAL,file_path TEXT,size_bytes INTEGER,source TEXT,status TEXT)")
     conn.commit()
     monkeypatch.setattr(advanced, "IS_WIN", True)
     monkeypatch.setattr(advanced, "locate_wpr", lambda: r"C:\Windows\System32\wpr.exe")
     monkeypatch.setattr(advanced, "locate_xperf", lambda: None)
     monkeypatch.setattr(advanced.safeguard, "trace_preflight",
         lambda: {"allowed": True, "code": "ready", "reason": "test"})
+    monkeypatch.setattr(advanced.safeguard, "snapshot",
+        lambda **_kwargs: {"process_detection_complete": True, "valorant_active": False})
     monkeypatch.setattr(core, "TRACE_DIR", str(tmp_path))
     monkeypatch.setitem(advanced.STATE, "kernel", {"etw": {"recording": False}})
     advanced._ETW_OWNED = False
@@ -202,6 +326,11 @@ def test_wpr_capture_clears_shutdown_event_until_owned_trace_is_closed(monkeypat
             return False
 
     monkeypatch.setattr(advanced, "_STOP", FastStop())
+    clock = [0.0]
+    def monotonic():
+        clock[0] += 2.0
+        return clock[0]
+    monkeypatch.setattr(advanced.time, "monotonic", monotonic)
     calls = []
 
     class Result:
