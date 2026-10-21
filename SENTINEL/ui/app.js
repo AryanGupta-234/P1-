@@ -529,25 +529,63 @@ function advPowerClockWaterfall() {
 function advRows(rows, empty) {
   return rows.length ? rows.join("") : `<div class="empty">${esc(empty)}</div>`;
 }
+function renderAdvLiveMetrics(metrics) {
+  const definitions = [
+    ["cpu", "CPU LOAD", "%", 1], ["mem", "MEMORY", "%", 1],
+    ["gpu", "GPU LOAD", "%", 1], ["gputemp", "GPU TEMP", "°C", 1],
+    ["dpc", "DPC TIME", "%", 2], ["irq", "INTERRUPT TIME", "%", 2],
+    ["pagesin", "HARD FAULTS", "/s", 1], ["pagesout", "PAGES OUT", "/s", 1],
+    ["dlat", "DISK READ LATENCY", "ms", 2], ["ping", "PING", "ms", 1],
+    ["jitter", "JITTER", "ms", 1], ["netdown", "NETWORK DOWN", "Mb/s", 1],
+  ];
+  const available = definitions.filter(([key]) => {
+    const value = metrics?.[key]?.value;
+    return value != null && Number.isFinite(Number(value));
+  });
+  $("#adv-live-meta").textContent = available.length
+    ? `${available.length} live collector metric(s) · values are measured, not inferred`
+    : "No live samples have arrived yet";
+  $("#adv-live-metrics").innerHTML = available.length
+    ? available.map(([key, label, unit, precision]) => {
+        const item = metrics[key];
+        const value = Number(item.value);
+        const sampleAge = item.sampled_at
+          ? `${Math.max(0, Math.floor(Date.now() / 1000 - Number(item.sampled_at)))}s ago`
+          : "sample time unavailable";
+        return `<div class="adv-live-cell"><small>${label}</small><b>${value.toFixed(precision)}${unit}</b><span>observed · ${esc(sampleAge)}</span></div>`;
+      }).join("")
+    : '<div class="empty">Waiting for CPU, memory, kernel, disk and network collectors. Game baselines and hardware temperatures are separate optional data sources.</div>';
+}
 async function loadAdvanced(force = false) {
   if (advBusy || (!force && Date.now() - advLastLoad < 5000)) return;
   advBusy = true; advLastLoad = Date.now();
   try {
     const d = await api("/api/advanced"); if (d.error) throw new Error(d.error); ADV = d;
+    const loadError = $("#adv-load-error");
+    if (loadError) { loadError.hidden = true; loadError.textContent = ""; }
+    renderAdvLiveMetrics(d.live_metrics || {});
     const game = d.game || null, gpu = d.gpu || {}, hs = d.hardware_sensors || {}, cfg = (d.settings || d.advanced_settings || {});
+    const etw = d.etw_engine || {};
     $("#adv-game").textContent = game?.name || "STANDBY";
     $("#adv-session").textContent = d.sessions?.[0]?.status === "active" ? `Session #${d.sessions[0].id} · ${dur(Date.now()/1000 - d.sessions[0].started_at)}` : "No active session tracked";
-    $("#adv-etw-state").textContent = (d.etw_engine?.state || (d.etw_engine?.available ? "idle" : "unavailable")).toUpperCase();
-    $("#adv-etw-meta").textContent = d.etw_engine?.enabled ? (d.etw_engine?.last_event_count ? `${d.etw_engine.last_event_count} decoded events` : "waiting for trace") : "operator disabled";
-    $("#adv-etw-status").textContent = d.etw_engine?.enabled ? (d.etw_engine?.recording ? "RECORDING" : "ARMED") : "DISABLED";
-    $("#adv-etw-status").className = "tag " + (d.etw_engine?.recording ? "warn" : d.etw_engine?.enabled ? "ok" : "");
-    $("#adv-etw-source").textContent = d.etw_engine?.source || "Windows Performance Toolkit";
-    $("#adv-etw-note").textContent = d.etw_engine?.error || (d.etw_engine?.enabled ? "Bounded 12-second kernel ETW windows can be sampled while a game is active. Not a continuous decoded trace. Existing kernel logger sessions are never taken over." : "Enable the engine and separately opt into automatic captures; manual capture is available below.");
+    $("#adv-etw-state").textContent = (etw.state || (etw.available ? "idle" : "unavailable")).toUpperCase();
+    $("#adv-etw-meta").textContent = etw.available === false
+      ? "xperf unavailable"
+      : etw.enabled ? (etw.last_event_count ? `${etw.last_event_count} decoded events` : "waiting for trace") : "operator disabled";
+    $("#adv-etw-status").textContent = etw.recording ? "RECORDING" : etw.enabled ? "ARMED" : etw.available === false ? "UNAVAILABLE" : "DISABLED";
+    $("#adv-etw-status").className = "tag " + (etw.recording ? "warn" : etw.available === false ? "bad" : etw.enabled ? "ok" : "");
+    $("#adv-etw-source").textContent = etw.source || "Windows Performance Toolkit";
+    $("#adv-etw-note").textContent = etw.error
+      || (etw.available === false
+        ? "Kernel ETW capture is unavailable because xperf.exe was not detected. Install the Windows Performance Toolkit component of the Windows ADK, then restart SENTINEL. PDH counters remain separate from ETW."
+        : etw.enabled
+          ? "Bounded 12-second kernel ETW windows can be sampled while a game is active. This is not a continuous decoded trace. Existing kernel logger sessions are never taken over."
+          : "Automatic ETW sampling is disabled. The CAPTURE button requests one bounded manual trace when xperf is available.");
     const baseEntries = Object.entries(d.baseline || {});
     $("#adv-baseline-count").textContent = baseEntries.reduce((n, [,x])=>n+(x.samples||0),0).toLocaleString();
     $("#adv-baseline-heading").textContent = `${d.game_key || "No active game"} · local hour ${d.baseline_hour ?? "--"}`;
     $("#adv-undo-count").textContent = (d.action_journal || []).filter(x=>x.undo_available && x.changed && !x.reverted_at).length;
-    const cpuItems = (hs.cpu_temperatures || []); const cpuVals = cpuItems.map(x=>Number(x.value)).filter(Number.isFinite);
+    const cpuItems = Array.isArray(hs.cpu_temperatures) ? hs.cpu_temperatures : []; const cpuVals = cpuItems.map(x=>Number(x.value)).filter(Number.isFinite);
     const cpuTemp = cpuVals.length ? Math.max(...cpuVals) : null;
     const sensorProvider = hs.provider || "External hardware monitor";
     const cpuSrc = hs.available
@@ -556,9 +594,9 @@ async function loadAdvanced(force = false) {
     advGauge("adv-cpu-dial", cpuTemp, Number(cfg.cpu_temp_warn_c || 88), "adv-cpu-temp", "adv-cpu-source", cpuSrc);
     const gpuTemp = gpu.temp != null && Number.isFinite(Number(gpu.temp)) ? Number(gpu.temp) : null;
     advGauge("adv-gpu-dial", gpuTemp, Number(cfg.gpu_temp_warn_c || 82), "adv-gpu-temp", "adv-gpu-source", gpu.name ? `${gpu.name} · NVIDIA nvidia-smi` : "NVIDIA telemetry unavailable");
-    $("#adv-cpu-threshold").textContent = `Warning threshold ${fmt(cfg.cpu_temp_warn_c ?? 88, 0)} °C`;
+    $("#adv-cpu-threshold-note").textContent = `Warning threshold ${fmt(cfg.cpu_temp_warn_c ?? 88, 0)} °C`;
     $("#adv-gpu-throttle").textContent = (gpu.throttle || []).length ? `Throttle flags: ${gpu.throttle.join(", ")}` : "No active NVIDIA throttle flag reported";
-    const lhmFans = (hs.fan_rpm || []).filter(x=>Number.isFinite(Number(x.value)) && Number(x.value)>0);
+    const lhmFans = (Array.isArray(hs.fan_rpm) ? hs.fan_rpm : []).filter(x=>Number.isFinite(Number(x.value)) && Number(x.value)>0);
     const fanValue = lhmFans[0]?.value ?? gpu.fan_speed_pct;
     const fanSource = lhmFans.length
       ? `${lhmFans[0].name || "Fan"} · ${sensorProvider} RPM`
@@ -569,7 +607,7 @@ async function loadAdvanced(force = false) {
     $("#adv-fan-source").textContent = fanSource;
     const rotor = $("#adv-fan"); const fanHz = lhmFans.length ? Math.max(.12, Math.min(3, 60/Math.max(1, Number(fanValue)))) : fanValue != null ? Math.max(.45, 4 - Number(fanValue)*.035) : 1.5;
     rotor.style.animationDuration = `${fanHz}s`; rotor.classList.toggle("running", fanValue != null);
-    const cores = hs.per_core_temperatures || [];
+    const cores = Array.isArray(hs.per_core_temperatures) ? hs.per_core_temperatures : [];
     $("#adv-core-meta").textContent = hs.available ? `${cores.length} core temperature sensor(s)` : "Optional LHM sensors only";
     $("#adv-core-map").innerHTML = cores.length ? cores.map((x,i)=>{const n=Number(x.value), pct=Math.max(0,Math.min(100,n/105*100)); return `<div class="core-cell"><b>${esc(x.name || `Core ${i}`)}</b><small>${avNum(n,1)} °C</small><div class="heat-bar"><i style="width:${pct}%"></i></div></div>`;}).join("") : `<div class="empty">${esc(hs.cpu_reason || "Per-core heat sensors are unavailable. Start an external LHM instance and enable the optional reader.")}</div>`;
     $("#adv-gpu-stats").innerHTML = `<div class="row"><b>GPU clock</b><span>${esc(gpu.clk ?? "--")} MHz</span></div><div class="row"><b>Power draw</b><span>${esc(gpu.pwr ?? "--")} W</span></div><div class="row"><b>Power limit</b><span>${esc(gpu.pwrlim ?? "--")} W</span></div><div class="row"><b>GPU utilization</b><span>${esc(gpu.util ?? "--")}%</span></div><div class="row"><b>VRAM</b><span>${esc(gpu.vram ?? "--")} / ${esc(gpu.vramtot ?? "--")} MiB</span></div><div class="row"><b>Fan telemetry</b><span>${esc(gpu.fan_speed_pct == null ? "unavailable" : gpu.fan_speed_pct + "%")}</span></div>`;
@@ -592,7 +630,12 @@ async function loadAdvanced(force = false) {
     if(document.activeElement?.id!=="adv-gpu-threshold")$("#adv-gpu-threshold").value=cfg.gpu_temp_warn_c ?? 82;
     if(document.activeElement?.id!=="adv-lhm-port")$("#adv-lhm-port").value=cfg.lhm_http_port ?? 8085;
     if(game && !$("#adv-profile-game").value)$("#adv-profile-game").value=game.name;
-  } catch(e) { toast(`Advanced telemetry unavailable: ${e.message}`,"warn"); }
+  } catch(e) {
+    const message = `Performance intelligence data could not be loaded: ${e.message || String(e)}`;
+    const errorPanel = $("#adv-load-error");
+    if (errorPanel) { errorPanel.textContent = message; errorPanel.hidden = false; }
+    toast(message, "warn");
+  }
   finally { advBusy = false; }
 }
 function advProfilePayload(){
@@ -610,7 +653,31 @@ function initAdvanced(){
   $("#adv-tuner-start").onclick=async()=>{const kind=$("#adv-tuner-kind").value,args=kind==="timer_resolution"?{milliseconds:1}:{};const r=await api("/api/advanced/tuner/start",{kind,args,metric:$("#adv-tuner-metric").value,direction:$("#adv-tuner-direction").value});if(r.error)return toast(r.error,"bad");toast(`Experiment #${r.action_id} queued. Approve it in CONTROL to start the measured trial.`,"warn");loadActions();loadAdvanced(true);};
   $("#adv-wifi-propose").onclick=async()=>{const r=await api("/api/advanced/propose-wifi",{});if(r.error)return toast(r.error,"warn");toast(`Wi-Fi adjustment #${r.id} requires approval in CONTROL`,"warn");loadActions();};
   $("#adv-updater-propose").onclick=async()=>{const r=await api("/api/advanced/propose-updater",{service:$("#adv-updater").value});if(r.error)return toast(r.error,"bad");toast(`Updater pause #${r.id} requires approval in CONTROL`,"warn");loadActions();};
-  $("#adv-etw-capture").onclick=async()=>{const r=await api("/api/advanced/propose-etw",{duration:12});if(r.error)return toast(r.error,"bad");const run=await api("/api/action/run",{id:r.id,confirmed:true});toast(run.result || "ETW capture requested",run.result?.startsWith("blocked")?"bad":"ok");loadActions();loadAdvanced(true);};
+  $("#adv-etw-capture").onclick=async()=>{
+    const button=$("#adv-etw-capture");
+    button.disabled=true;
+    const original=button.textContent;
+    button.textContent="CHECKING ETW…";
+    try {
+      const proposal=await api("/api/advanced/propose-etw",{duration:12});
+      if(proposal.error) { toast(proposal.error,"bad"); $("#adv-etw-note").textContent=proposal.error; return; }
+      button.textContent="CAPTURING 12s…";
+      const run=await api("/api/action/run",{id:proposal.id,confirmed:true});
+      if(run.error) { toast(run.error,"bad"); $("#adv-etw-note").textContent=run.error; return; }
+      const result=String(run.result || "ETW capture request accepted");
+      toast(result,result.toLowerCase().includes("blocked") || result.toLowerCase().includes("failed") ? "bad" : "ok");
+      $("#adv-etw-note").textContent=result;
+      loadActions();
+      loadAdvanced(true);
+    } catch(error) {
+      const message=error.message || String(error);
+      toast("ETW capture failed: "+message,"bad");
+      $("#adv-etw-note").textContent="ETW capture failed: "+message;
+    } finally {
+      button.disabled=false;
+      button.textContent=original;
+    }
+  };
   $("#adv-settings-save").onclick=async()=>{
     const settings={etw_enabled:$("#adv-etw-enabled").checked,lhm_enabled:$("#adv-lhm-enabled").checked,lhm_http_port:Number($("#adv-lhm-port").value),cpu_temp_warn_c:Number($("#adv-cpu-threshold").value),gpu_temp_warn_c:Number($("#adv-gpu-threshold").value)};
     const r=await api("/api/advanced/settings",settings);if(r.error)return toast(r.error,"bad");
@@ -660,9 +727,60 @@ async function loadIntelligence() {
   finally { ixBusy = false; }
 }
 function renderIXState() {
-  const rows = IX.state.slice(0, 24);
-  $("#ix-state").innerHTML = rows.map(r => `<div class="act ix-state-row"><div class="d"><b>${esc(r.name)}</b><span>${esc(r.collection)} · ${esc(r.status)} · score ${fmt(r.score, 3)}</span><small>${esc(r.evidence_ids.length)} evidence ref(s)${r.evidence_truncated ? " · older refs truncated" : ""} · observed ${esc(new Date(r.last_observed).toLocaleString())}</small></div><div class="ix-actions"><span class="tag mu">${esc(r.evidence_kind)}</span><button class="btn sm" data-state-evidence="${esc(r.evidence_ids.join(","))}">EVIDENCE</button></div><div class="ix-evidence"></div></div>`).join("") || '<div class="empty">No evidence-backed environment rows yet. Refresh after collectors have completed an inventory scan.</div>';
-  $$('[data-state-evidence]').forEach(b => b.onclick = async () => { const ids = b.dataset.stateEvidence; const d = await api("/api/intelligence/observations?ids=" + encodeURIComponent(ids)); if (d.error) return toast(d.error, "warn"); const box = b.closest(".ix-state-row")?.querySelector(".ix-evidence"); if (!box) return; box.innerHTML = d.length ? d.map(e => `<div class="ix-revision"><small>${esc(e.event_type)} · ${esc(e.timestamp)} · ${esc(e.source)}</small><span>${esc(JSON.stringify(e.payload, null, 2))}</span></div>`).join("") : '<div class="empty">Referenced evidence is no longer available.</div>'; });
+  const rows = Array.isArray(IX.state) ? IX.state.slice(0, 24) : [];
+  $("#ix-state").innerHTML = rows.map((r, index) => {
+    const evidenceIds = Array.isArray(r.evidence_ids) ? r.evidence_ids : [];
+    const observed = r.last_observed ? new Date(Number(r.last_observed) * 1000).toLocaleString() : "observation time unavailable";
+    return `<div class="act ix-state-row">
+      <div class="d">
+        <b>${esc(r.name || "Unnamed observation")}</b>
+        <span>${esc(r.collection || "unknown collection")} · ${esc(r.status || "unknown")} · score ${fmt(r.score, 3)}</span>
+        <small>${evidenceIds.length} evidence ref(s)${r.evidence_truncated ? " · older refs truncated" : ""} · observed ${esc(observed)}</small>
+      </div>
+      <div class="ix-actions">
+        <span class="tag mu">${esc(r.evidence_kind || "observed")}</span>
+        <button class="btn sm" data-state-evidence="${esc(evidenceIds.join(","))}" aria-expanded="false" ${evidenceIds.length ? "" : "disabled"}>${evidenceIds.length ? "VIEW EVIDENCE" : "NO EVIDENCE"}</button>
+      </div>
+      <div class="ix-evidence" hidden></div>
+    </div>`;
+  }).join("") || '<div class="empty">No evidence-backed environment rows yet. Refresh after collectors have completed an inventory scan.</div>';
+
+  $('[data-state-evidence]').forEach(button => {
+    button.onclick = async () => {
+      const card = button.closest(".ix-state-row");
+      const box = card?.querySelector(".ix-evidence");
+      if (!box || button.disabled) return;
+      if (!box.hidden) {
+        box.hidden = true;
+        button.setAttribute("aria-expanded", "false");
+        button.textContent = "VIEW EVIDENCE";
+        return;
+      }
+      box.hidden = false;
+      button.setAttribute("aria-expanded", "true");
+      if (box.dataset.loaded === "1") {
+        button.textContent = "HIDE EVIDENCE";
+        return;
+      }
+      button.disabled = true;
+      button.textContent = "LOADING…";
+      box.innerHTML = '<div class="empty">Loading the observations referenced by this state row…</div>';
+      try {
+        const data = await api("/api/intelligence/observations?ids=" + encodeURIComponent(button.dataset.stateEvidence || ""));
+        if (data.error) throw new Error(data.error);
+        box.innerHTML = Array.isArray(data) && data.length
+          ? data.map(item => `<div class="ix-revision"><small>${esc(item.event_type || "observation")} · ${esc(item.timestamp || "time unavailable")} · ${esc(item.source || "unknown source")}</small><span>${esc(JSON.stringify(item.payload ?? {}, null, 2))}</span></div>`).join("")
+          : '<div class="empty">No retained observation rows were found for these evidence references.</div>';
+        box.dataset.loaded = "1";
+        button.textContent = "HIDE EVIDENCE";
+      } catch (error) {
+        box.innerHTML = `<div class="ix-revision"><small>EVIDENCE LOOKUP FAILED</small><span>${esc(error.message || String(error))}</span></div>`;
+        button.textContent = "RETRY EVIDENCE";
+      } finally {
+        button.disabled = false;
+      }
+    };
+  });
 }
 function renderIXMemories() {
   $("#ix-memories").innerHTML = IX.memories.map(m => `<div class="act ix-memory"><div class="d"><b>${esc(m.kind.toUpperCase())} · ${esc(m.verification.toUpperCase())}</b><span>${esc(m.content)}</span><small>${esc(m.sensitivity)} · confidence ${fmt(m.confidence, 2)} · ${m.revisions} revision(s) · ${esc(m.updated_at)}</small></div><div class="ix-actions"><button class="btn sm" data-memory-history="${esc(m.id)}">HISTORY</button><button class="btn sm" data-edit-memory="${esc(m.id)}">REVISE</button><button class="btn sm" data-del-memory="${esc(m.id)}">DELETE</button></div><div class="ix-revisions"></div></div>`).join("") || '<div class="empty">No matching non-sensitive memories. Add an explicit memory above.</div>';
