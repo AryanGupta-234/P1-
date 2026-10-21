@@ -150,6 +150,7 @@ def agent_runtime(*, include_threads=True, include_io=True, include_run=True):
         "parent_pid": os.getppid(),
         "executable": executable,
         "username": username,
+        "version": os.environ.get("SENTINEL_VERSION", "unknown"),
         "is_elevated": is_elevated,
         "session_id": session_id,
         "execution_context": "interactive Windows session" if core.IS_WIN and session_id not in (None, 0) else ("Session 0 / non-interactive" if core.IS_WIN else "non-Windows / demo"),
