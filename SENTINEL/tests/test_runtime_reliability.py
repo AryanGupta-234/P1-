@@ -553,8 +553,8 @@ def test_admin_guard_relaunches_with_runas_and_forwards_all_arguments(monkeypatc
     call = shell_execute.call_args.args
     assert call[1] == "runas"
     assert call[2] == r"C:\Python312\python.exe"
-    assert call[3] == __import__("subprocess").list2cmdline(
-        [agent.__file__, "open", "folder with spaces"]
+    assert call[3] == agent.subprocess.list2cmdline(
+        [agent.os.path.abspath(agent.__file__), "open", "folder with spaces"]
     )
     assert call[4] == agent.HERE
 
