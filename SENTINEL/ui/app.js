@@ -323,6 +323,8 @@ function updateAgentView(runtime, matrix, runs, storage) {
   const currentRun = runtime.run || {};
   $("#ag-run-state").textContent = currentRun.id ? "RUN #" + currentRun.id + " · " + (currentRun.mode || "unknown mode") : "run record unavailable";
   $("#ag-identity").innerHTML = Object.entries({
+    "Release version": runtime.version,
+    "Administrator token": runtime.is_elevated == null ? "unknown" : (runtime.is_elevated ? "elevated" : "not elevated"),
     "Process ID": runtime.pid,
     "Parent PID": runtime.parent_pid,
     "User": runtime.username,
