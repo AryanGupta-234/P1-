@@ -464,6 +464,24 @@ class H(BaseHTTPRequestHandler):
         if not isinstance(body, dict):
             return self._json({"error": "request body must be a JSON object"}, 400)
         p = u.path
+        if p == "/api/process-intelligence/inspect":
+            try:
+                result = security_engine.inspect_process(
+                    int(body.get("pid", 0)),
+                    float(body.get("create_time", 0)),
+                    str(body.get("exe") or ""),
+                    str(body.get("operation") or ""),
+                )
+                log("process-security", f"user requested {result['operation']} inspection for PID {result['pid']}",
+                    "info", executable=result["executable"])
+                return self._json({"ok": True, **result})
+            except (ValueError, TypeError) as exc:
+                return self._json({"error": str(exc)}, 400)
+            except PermissionError as exc:
+                return self._json({"error": str(exc)}, 409)
+            except Exception as exc:
+                log("process-security", f"process inspection failed: {type(exc).__name__}: {str(exc)[:180]}", "warn")
+                return self._json({"error": f"{type(exc).__name__}: {str(exc)[:200]}"}, 503)
         if p == "/api/engines/memory/trim":
             result = memory_engine.clear_working_cache()
             log("memory", f"cleared {result['cleared']} volatile retrieval cache entries; durable memory unchanged", "info")
