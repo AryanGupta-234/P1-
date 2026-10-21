@@ -408,6 +408,7 @@ async function loadAdvanced(force = false) {
     setToggle("adv-etw-enabled",cfg.etw_enabled); setToggle("adv-lhm-enabled",cfg.lhm_enabled); setToggle("adv-etw-auto",!!S?.autopilot?.etw_capture);
     if(document.activeElement?.id!=="adv-cpu-threshold")$("#adv-cpu-threshold").value=cfg.cpu_temp_warn_c ?? 88;
     if(document.activeElement?.id!=="adv-gpu-threshold")$("#adv-gpu-threshold").value=cfg.gpu_temp_warn_c ?? 82;
+    if(document.activeElement?.id!=="adv-lhm-port")$("#adv-lhm-port").value=cfg.lhm_http_port ?? 8085;
     if(game && !$("#adv-profile-game").value)$("#adv-profile-game").value=game.name;
   } catch(e) { toast(`Advanced telemetry unavailable: ${e.message}`,"warn"); }
   finally { advBusy = false; }
@@ -429,7 +430,7 @@ function initAdvanced(){
   $("#adv-updater-propose").onclick=async()=>{const r=await api("/api/advanced/propose-updater",{service:$("#adv-updater").value});if(r.error)return toast(r.error,"bad");toast(`Updater pause #${r.id} requires approval in CONTROL`,"warn");loadActions();};
   $("#adv-etw-capture").onclick=async()=>{const r=await api("/api/advanced/propose-etw",{duration:12});if(r.error)return toast(r.error,"bad");const run=await api("/api/action/run",{id:r.id,confirmed:true});toast(run.result || "ETW capture requested",run.result?.startsWith("blocked")?"bad":"ok");loadActions();loadAdvanced(true);};
   $("#adv-settings-save").onclick=async()=>{
-    const settings={etw_enabled:$("#adv-etw-enabled").checked,lhm_enabled:$("#adv-lhm-enabled").checked,cpu_temp_warn_c:Number($("#adv-cpu-threshold").value),gpu_temp_warn_c:Number($("#adv-gpu-threshold").value)};
+    const settings={etw_enabled:$("#adv-etw-enabled").checked,lhm_enabled:$("#adv-lhm-enabled").checked,lhm_http_port:Number($("#adv-lhm-port").value),cpu_temp_warn_c:Number($("#adv-cpu-threshold").value),gpu_temp_warn_c:Number($("#adv-gpu-threshold").value)};
     const r=await api("/api/advanced/settings",settings);if(r.error)return toast(r.error,"bad");
     const a=await api("/api/config",{autopilot:{etw_capture:$("#adv-etw-auto").checked}});if(a.error)return toast(a.error,"bad");
     toast("Advanced sensor policy saved persistently","ok");loadAdvanced(true);
