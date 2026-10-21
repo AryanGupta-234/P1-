@@ -262,9 +262,6 @@ def propose(kind, args=None, origin="brain", reason=""):
         log("actions", f"REJECTED non-allowlisted action '{kind}' from {origin}", "warn")
         return None
     args = args or {}
-    if kind == "terminate_process" and origin != "user":
-        log("safeguard", "graceful close proposal rejected: only a direct user request is permitted", "warn")
-        return None
     guard = safeguard.check_action(kind, args)
     if not guard["allowed"]:
         log("safeguard", f"{kind} proposal blocked: {guard['reason'][:180]}", "warn")

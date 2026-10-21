@@ -89,3 +89,65 @@ def test_runtime_marks_disabled_process_observer_as_degraded(monkeypatch):
     assert state["mode"] == "safety_degraded"
     assert state["deep_ai_allowed"] is False
     assert state["fast_ai_allowed"] is False
+
+
+
+def test_new_process_observation_retains_safe_review_identity():
+    item = security_engine.observe_process_start({
+        "pid": 5100,
+        "create_time": 123.5,
+        "name": "sample.exe",
+        "exe": r"C:\Users\Public\sample.exe",
+        "parent_name": "explorer.exe",
+        "parent_pid": 800,
+        "session_id": 1,
+        "visible_windows": 1,
+        "onscreen_windows": 1,
+        "path_state": "present",
+    })
+    assert item["pid"] == 5100
+    assert item["create_time"] == 123.5
+    assert item["visible_windows"] == 1
+    assert item["onscreen_windows"] == 1
+    assert item["path_state"] == "present"
+
+
+def test_cloud_and_local_ai_are_both_paused_during_a_game(monkeypatch):
+    now = time.time()
+    monkeypatch.setitem(core.STATE, "procs", [{
+        "pid": 5200, "create_time": now - 10, "name": "game.exe",
+        "exe": r"C:\Games\game.exe",
+    }])
+    monkeypatch.setitem(core.STATE, "proc_scan_at", now)
+    monkeypatch.setitem(core.STATE, "game", {"name": "game.exe", "pid": 5200})
+    local_allowed, _ = ai_engine.inference_allowed("local-model", cloud=False, pause_when_gaming=True, slot="fast")
+    cloud_allowed, _ = ai_engine.inference_allowed("☁ cloud-model", cloud=True, pause_when_gaming=True, slot="fast")
+    assert not local_allowed
+    assert not cloud_allowed
+
+
+def test_valorant_inspection_is_rejected_before_file_access(monkeypatch):
+    monkeypatch.setattr(core, "IS_WIN", True)
+    now = time.time()
+    monkeypatch.setitem(core.STATE, "procs", [{
+        "pid": 4120, "create_time": now - 20, "name": "VALORANT-Win64-Shipping.exe",
+        "exe": r"C:\Riot Games\VALORANT\VALORANT-Win64-Shipping.exe",
+    }])
+    monkeypatch.setitem(core.STATE, "proc_scan_at", now)
+    try:
+        security_engine.inspect_process(4120, now - 20,
+            r"C:\Riot Games\VALORANT\VALORANT-Win64-Shipping.exe", "sha256")
+    except PermissionError as exc:
+        assert "VALORANT is active" in str(exc)
+    else:
+        raise AssertionError("VALORANT inspection should be rejected")
+
+
+def test_process_inspection_rejects_unknown_operations(monkeypatch):
+    monkeypatch.setattr(core, "IS_WIN", True)
+    try:
+        security_engine.inspect_process(100, 123.0, r"C:\test.exe", "dump-memory")
+    except ValueError as exc:
+        assert "operation must be" in str(exc)
+    else:
+        raise AssertionError("unlisted process-inspection operations must be rejected")

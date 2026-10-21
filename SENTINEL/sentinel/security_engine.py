@@ -88,6 +88,9 @@ def observe_process_start(row: dict[str, Any]) -> dict[str, Any]:
         "parent_name": str(row.get("parent_name") or "")[:120],
         "parent_pid": row.get("parent_pid"),
         "session_id": row.get("session_id"),
+        "visible_windows": int(row.get("visible_windows") or 0),
+        "onscreen_windows": int(row.get("onscreen_windows") or 0),
+        "path_state": str(row.get("path_state") or "unknown"),
         "assessment": assessment,
     }
     _RECENT.appendleft(record)
