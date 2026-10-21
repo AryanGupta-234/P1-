@@ -19,6 +19,7 @@ SENTINEL monitors system performance, correlates lag symptoms with likely causes
 - Additive Intelligence workspace: evidence-linked environment state, explicit persistent memory and revisions, local semantic retrieval, dependency-aware goals, reviewed plan drafts, and read-only Windows UI Automation inspection.
 - RAM-aware AI council DEEP-model fallback to FAST under memory pressure; the guard re-enables DEEP after headroom recovers.
 - Windows startup installation through Task Scheduler with restart-on-failure settings.
+- Dedicated Agent runtime view: live agent CPU/RAM, host comparison, threads/handles, collector health, background worker inventory and retained run history.
 
 ## Requirements
 
@@ -44,11 +45,15 @@ The dashboard URL includes a generated access token. Keep it private.
 
 ## Windows installation
 
-For an all-user installation, run `install.bat` from an elevated Windows session (the script requests elevation). The installer copies the project to `%ProgramFiles%\Sentinel`, installs Python dependencies, and registers `SentinelAgent` for the signed-in user at interactive logon with highest available privileges. It is deliberately **not** a Session 0 `SYSTEM` task: desktop-window inspection and user notifications require the interactive session. A restart-on-failure policy is configured.
+For installation, run \`install.bat\` from an elevated Windows session (the script requests elevation). It installs Python dependencies, copies the application to \`%ProgramFiles%\Sentinel\`, and registers \`SentinelAgent\` for the signed-in user at interactive logon with highest available privileges. It is deliberately **not** a Session 0 \`SYSTEM\` task: desktop-window inspection and user notifications require the interactive session. A restart-on-failure policy is configured.
 
-The installer secures `%ProgramData%\Sentinel` so the signed-in user has Modify access and SYSTEM / local Administrators have Full Control. Existing data is preserved. Re-run `install.bat` after upgrading an older installation so the scheduled task principal and ACLs are updated.
+After setup, the installer opens the HUD and creates both a **Desktop** shortcut and a **Start Menu → SENTINEL** entry. These launch the app-window view and start the local agent when it is not already running. You can also use \`python agent.py open\` from the installation directory to open it manually.
 
-To remove the scheduled task and desktop shortcut, run `uninstall.bat` as administrator. Uninstall preserves the SQLite database, settings and trace files; remove `%ProgramData%\Sentinel` yourself only when you intentionally want to erase local history and configuration.
+Run \`install.bat\` again for an in-place upgrade. The installer checks Python/dependencies, stops the existing agent/task before replacing loaded files, updates the application directory, and re-registers the launch task and shortcuts. Robocopy exit codes 0–7 are treated as successful copy results; 8 or greater is a failure. The user's settings, SQLite database, traces and run history remain in \`%ProgramData%\Sentinel\` and are not part of the application-directory mirror.
+
+The installer secures \`%ProgramData%\Sentinel\` so the signed-in user has Modify access and SYSTEM / local Administrators have Full Control. The **AGENT** view shows this agent process's CPU and working-set RAM separately from host CPU/RAM, plus threads, handles, named workers, collector heartbeat health and run history. CPU host share is normalized by the number of logical processors; per-core process CPU can exceed 100%.
+
+To remove the application files, task and shortcuts, run \`uninstall.bat\` as administrator. Uninstall preserves the SQLite database, settings and trace files; remove \`%ProgramData%\Sentinel\` yourself only when you intentionally want to erase local history and configuration.
 
 ## Optional local AI
 
