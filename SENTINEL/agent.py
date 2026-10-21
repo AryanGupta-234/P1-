@@ -300,9 +300,32 @@ def _start_agent_background():
     )
 
 
+def _running_agent_is_elevated():
+    """Read the authenticated runtime integrity flag for an already-running agent."""
+    endpoint = f"{base_url()}/api/agent?{urllib.parse.urlencode({'t': CFG['token']})}"
+    try:
+        request = urllib.request.Request(endpoint, headers={"Cache-Control": "no-cache"})
+        with urllib.request.urlopen(request, timeout=2) as response:
+            payload = json.loads(response.read(1024 * 1024).decode("utf-8"))
+        runtime = payload.get("runtime") if isinstance(payload, dict) else None
+        if isinstance(runtime, dict):
+            return runtime.get("is_elevated")
+    except (OSError, ValueError, urllib.error.URLError, TimeoutError):
+        pass
+    return None
+
+
 def open_app():
     """Normal user-facing opener: ensure the agent is up, then launch the HUD."""
-    if not _wait_for_agent(1.5):
+    agent_ready = _wait_for_agent(1.5)
+    if IS_WIN and agent_ready and _running_agent_is_elevated() is not True:
+        print("The existing SENTINEL agent is not confirmed elevated; restarting it with administrator permissions.")
+        if not stop_agent():
+            print("The previous agent could not be stopped safely; refusing to open a non-elevated session.")
+            return 1
+        agent_ready = False
+
+    if not agent_ready:
         started_by_task = False
         if IS_WIN:
             result = pw(
