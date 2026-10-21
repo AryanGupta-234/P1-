@@ -40,14 +40,14 @@ python -m pip install -r requirements.txt
 python agent.py --demo
 ```
 
-Open the HUD at `http://127.0.0.1:8765/`. For a real Windows telemetry session, run `python agent.py`.
+Open the HUD at `http://127.0.0.1:8765/`. For a real Windows telemetry session, run `python agent.py`. On Windows, every direct CLI launch (including `open`, `--demo`, `stop` and `uninstall`) checks the process token and requests UAC elevation when needed. If elevation is declined or cannot be verified, SENTINEL exits without starting. Non-Windows demo use does not require elevation.
 The dashboard URL includes a generated access token. Keep it private.
 
 ## Windows installation
 
 For installation, run `install.bat` from an elevated Windows session (the script requests elevation). It installs Python dependencies, copies the application to `%ProgramFiles%\Sentinel`, and registers `SentinelAgent` for the signed-in user at interactive logon with highest available privileges. It is deliberately **not** a Session 0 `SYSTEM` task: desktop-window inspection and user notifications require the interactive session. A restart-on-failure policy is configured.
 
-After setup, the installer opens the HUD and creates both a **Desktop** shortcut and a **Start Menu → SENTINEL** entry. These launch the app-window view and start the local agent when it is not already running. You can also use `python agent.py open` from the installation directory to open it manually.
+After setup, the installer opens the HUD and creates both a **Desktop** shortcut and a **Start Menu → SENTINEL** entry. These launch the app-window view and start the local agent when it is not already running. You can also use `python agent.py open` from the installation directory to open it manually. Every Windows launch enforces an elevated administrator token: an unelevated launch invokes the standard Windows UAC prompt, and SENTINEL does not continue if permission is denied. The logon task is registered with **RunLevel Highest** so its normal startup path also runs elevated.
 
 Run `install.bat` again for an in-place upgrade. The installer checks Python/dependencies, stops the existing agent/task before replacing loaded files, updates the application directory, and re-registers the launch task and shortcuts. Robocopy exit codes 0–7 are treated as successful copy results; 8 or greater is a failure. The user's settings, SQLite database, traces and run history remain in `%ProgramData%\Sentinel` and are not part of the application-directory mirror.
 
