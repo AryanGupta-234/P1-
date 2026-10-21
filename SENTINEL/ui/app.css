@@ -508,3 +508,112 @@ td{overflow-wrap:anywhere}
   .agent-resource-pair b{font-size:17px}
   .agent-chart-row{grid-template-columns:86px minmax(0,1fr)}
 }
+
+
+/* Evidence cards: keep the observation text and action controls in separate grid tracks. */
+.ix-state-row{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto;
+  align-items:start;
+  justify-content:initial;
+  min-width:0;
+}
+.ix-state-row>.d{
+  grid-column:1;
+  grid-row:1;
+  min-width:0;
+  overflow-wrap:anywhere;
+}
+.ix-state-row>.ix-actions{
+  grid-column:2;
+  grid-row:1;
+  min-width:0;
+  max-width:min(320px,38vw);
+  align-self:start;
+}
+.ix-state-row>.ix-actions>.tag{
+  max-width:180px;
+  white-space:normal;
+  overflow-wrap:anywhere;
+  text-align:center;
+}
+.ix-state-row>.ix-actions>.btn{
+  flex:0 0 auto;
+  white-space:nowrap;
+  max-width:100%;
+}
+.ix-state-row>.ix-evidence{
+  grid-column:1/-1;
+  grid-row:2;
+  min-width:0;
+  width:100%;
+  max-width:100%;
+  overflow:hidden;
+  overflow-wrap:anywhere;
+}
+.ix-state-row .ix-evidence[hidden]{display:none!important}
+.ix-state-row .ix-evidence .ix-revision{min-width:0;max-width:100%}
+.ix-state-row .ix-evidence .ix-revision span{
+  display:block;
+  min-width:0;
+  max-width:100%;
+  overflow-wrap:anywhere;
+  word-break:break-word;
+  white-space:pre-wrap;
+}
+.ix-state-row .ix-evidence .empty{overflow-wrap:anywhere;white-space:normal}
+
+/* Always give the reversible-performance page live system samples, independent
+   of game-session baselines or optional temperature providers. */
+.adv-live-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(132px,1fr));
+  gap:9px;
+  min-width:0;
+}
+.adv-live-cell{
+  min-width:0;
+  display:grid;
+  gap:5px;
+  padding:11px 12px;
+  border:1px solid rgba(128,155,137,.16);
+  border-radius:13px;
+  background:rgba(5,10,8,.32);
+}
+.adv-live-cell>small{
+  color:var(--dim);
+  font:9px/1.4 var(--mo);
+  letter-spacing:.1em;
+  overflow-wrap:anywhere;
+}
+.adv-live-cell>b{
+  color:var(--tx);
+  font:600 18px/1.2 var(--mo);
+  overflow-wrap:anywhere;
+}
+.adv-live-cell>span{
+  color:var(--soft);
+  font:9px/1.4 var(--mo);
+  overflow-wrap:anywhere;
+}
+.adv-load-error{
+  margin:0 0 12px;
+  border-color:rgba(255,107,56,.35);
+  color:var(--am);
+  overflow-wrap:anywhere;
+}
+@media(max-width:680px){
+  .ix-state-row{
+    grid-template-columns:minmax(0,1fr);
+    gap:9px;
+  }
+  .ix-state-row>.d{grid-column:1;grid-row:1}
+  .ix-state-row>.ix-actions{
+    grid-column:1;
+    grid-row:2;
+    max-width:100%;
+    justify-content:flex-start;
+  }
+  .ix-state-row>.ix-evidence{grid-column:1;grid-row:3}
+  .adv-live-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
