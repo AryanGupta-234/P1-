@@ -345,3 +345,46 @@ def test_game_session_teardown_retries_real_power_plan_undo(monkeypatch):
     assert conn.execute("SELECT status FROM game_sessions WHERE id=1").fetchone()[0] == "completed"
     assert conn.execute("SELECT ended_at FROM game_sessions WHERE id=1").fetchone()[0] == 200.0
 
+def test_game_profile_undo_remains_pending_when_post_apply_snapshot_is_missing(monkeypatch):
+    conn = _memory_store(monkeypatch)
+    conn.execute(
+        """INSERT INTO action_journal(
+            action_id,kind,risk,created_at,before_json,undo_json,undo_available,changed
+        ) VALUES(88,'game_profile_apply','medium',100,'{}',?,1,1)""",
+        (json.dumps({
+            "kind": "game_profile_apply",
+            "pid": 4242,
+            "create_time": 100.0,
+            "exe": "C:/Games/game.exe",
+            "priority_class": 2,
+            "cpu_affinity": [0, 1],
+            "default_cpu_sets": [0, 1],
+            "applied_process_state_captured": False,
+            "applied_default_cpu_sets": None,
+            "background_processes": [],
+            "timer_applied_ms": 0,
+            "power_plan": None,
+        }),),
+    )
+    conn.commit()
+
+    class FakeProc:
+        def nice(self, value=None):
+            return 3
+        def cpu_affinity(self, value=None):
+            return [0, 1]
+
+    monkeypatch.setattr(advanced, "_process_identity", lambda _args: (FakeProc(), {}))
+    monkeypatch.setattr(advanced, "_get_process_default_cpu_sets", lambda _pid: None)
+    monkeypatch.setattr(advanced, "log", lambda *_args, **_kwargs: None)
+
+    result = advanced.undo_action(88)
+    row = conn.execute(
+        "SELECT reverted_at,revert_result FROM action_journal WHERE action_id=88"
+    ).fetchone()
+
+    assert result["ok"] is False
+    assert "post-apply process snapshot unavailable" in result["error"]
+    assert row[0] is None
+    assert "retry required" in row[1]
+
