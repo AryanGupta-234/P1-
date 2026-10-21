@@ -411,6 +411,68 @@ def test_agent_runtime_separates_agent_cpu_ram_from_host_resources(monkeypatch):
     assert runtime["desktop_access_expected"] is True
 
 
+def test_runtime_snapshot_persistence_writes_integrity_stamped_row(monkeypatch):
+    connection = isolated_core_db(monkeypatch)
+
+    result = core.persist_snapshot("kernel.latest", {"source": "test", "samples": 12})
+
+    row = connection.execute(
+        "SELECT payload_json,sha256 FROM runtime_snapshots WHERE snapshot_key=?",
+        ("kernel.latest",),
+    ).fetchone()
+    assert row is not None
+    assert json.loads(row[0]) == {"samples": 12, "source": "test"}
+    assert result["sha256"] == row[1]
+    assert result["bytes"] == len(row[0].encode("utf-8"))
+
+
+def test_kernel_snapshot_failure_includes_exception_detail_and_is_throttled(monkeypatch):
+    from sentinel import collectors
+
+    clock = {"value": 100.0}
+    logs = []
+
+    def fail_snapshot(*_args, **_kwargs):
+        raise NameError("missing snapshot serializer binding")
+
+    monkeypatch.setattr(collectors.time, "monotonic", lambda: clock["value"])
+    monkeypatch.setattr(collectors.time, "time", lambda: 2000.0 + clock["value"])
+    monkeypatch.setattr(collectors.core, "persist_snapshot", fail_snapshot)
+    monkeypatch.setattr(collectors, "log", lambda *args, **kwargs: logs.append((args, kwargs)))
+
+    last_attempt = collectors._persist_kernel_snapshot({"samples": 1}, 0.0)
+    assert last_attempt == 100.0
+    assert len(logs) == 1
+    assert "NameError: missing snapshot serializer binding" in logs[0][0][1]
+
+    clock["value"] = 110.0
+    assert collectors._persist_kernel_snapshot({"samples": 2}, last_attempt) == last_attempt
+    assert len(logs) == 1
+
+    clock["value"] = 131.0
+    assert collectors._persist_kernel_snapshot({"samples": 3}, last_attempt) == 131.0
+    assert len(logs) == 2
+
+
+def test_environment_evidence_cards_have_non_overlapping_responsive_layout():
+    from pathlib import Path
+    import re
+
+    root = Path(__file__).resolve().parents[1]
+    html = (root / "ui" / "index.html").read_text(encoding="utf-8")
+    css = (root / "ui" / "app.css").read_text(encoding="utf-8")
+    script = (root / "ui" / "app.js").read_text(encoding="utf-8")
+    ids = re.findall(r'id="([^"]+)"', html)
+
+    assert len(ids) == len(set(ids)), "dashboard HTML must not contain duplicate element IDs"
+    assert 'id="adv-cpu-threshold-note"' in html
+    assert 'id="adv-live-metrics"' in html
+    assert ".ix-state-row{\n  display:grid;" in css
+    assert ".ix-state-row>.ix-evidence{\n  grid-column:1/-1;" in css
+    assert "aria-expanded" in script
+    assert "renderAdvLiveMetrics" in script
+
+
 def test_agent_runtime_lightweight_stream_skips_worker_and_disk_io_enumeration(monkeypatch):
     process = _fake_agent_process()
     monkeypatch.setattr(server, "_AGENT_PROCESS", process)
