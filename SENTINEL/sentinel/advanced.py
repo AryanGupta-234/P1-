@@ -604,7 +604,9 @@ def _restore(undo: dict) -> str:
         if not re.fullmatch(r"[0-9a-fA-F-]{36}", original): raise ValueError("invalid power-plan restore value")
         current = _power_plan()
         applied = undo.get("applied_plan")
-        if applied and current and current != applied:
+        if not current:
+            raise RuntimeError("active power scheme is unknown; previous scheme was not forced and rollback will retry")
+        if applied and current != applied:
             return "not restored: active power scheme changed after SENTINEL's action; preserving user change"
         r = _run(["powercfg.exe", "/setactive", original], 10)
         if r.returncode != 0: raise RuntimeError("could not restore previous power plan")
@@ -646,19 +648,30 @@ def _restore(undo: dict) -> str:
         target_cpu_set_failed = False
         if process_alive and prior is not None and applied_sets is not None:
             current_sets = _get_process_default_cpu_sets(int(undo["pid"]))
-            if current_sets == applied_sets:
+            if current_sets is None:
+                target_cpu_set_failed = True
+                restore_failures.append("game process CPU Set state is temporarily unreadable")
+            elif current_sets == applied_sets:
                 target_cpu_set_failed = not _set_process_default_cpu_sets(int(undo["pid"]), prior)
+                if target_cpu_set_failed:
+                    restore_failures.append("game process CPU Set restore failed")
             elif current_sets != prior:
                 partial.append("CPU Sets changed independently; left untouched")
         background_failures = 0
+        restore_failures = []
         for item in undo.get("background_processes", []):
             try:
                 bp, _ = _process_identity({"pid": item["pid"], "create_time": item["create_time"], "exe": item["exe"]})
                 old_sets = item.get("default_cpu_sets")
                 applied_bg = item.get("applied_default_cpu_sets")
                 current_bg = _get_process_default_cpu_sets(int(item["pid"]))
-                if old_sets is not None and applied_bg is not None and current_bg == applied_bg:
-                    if not _set_process_default_cpu_sets(int(item["pid"]), old_sets): background_failures += 1
+                if old_sets is not None and applied_bg is not None and current_bg is None:
+                    background_failures += 1
+                    restore_failures.append(f"background PID {item['pid']} CPU Set state is temporarily unreadable")
+                elif old_sets is not None and applied_bg is not None and current_bg == applied_bg:
+                    if not _set_process_default_cpu_sets(int(item["pid"]), old_sets):
+                        background_failures += 1
+                        restore_failures.append(f"background PID {item['pid']} CPU Set restore failed")
                 elif current_bg != old_sets:
                     partial.append(f"background PID {item['pid']} CPU Sets changed independently; left untouched")
             except psutil.NoSuchProcess:
@@ -675,14 +688,17 @@ def _restore(undo: dict) -> str:
             if applied and current and current != applied:
                 partial.append("power plan changed independently; left untouched")
             elif not current:
-                partial.append("active power plan is unknown; previous plan was not forced")
+                restore_failures.append("active power plan is unknown; previous plan was not forced")
             else:
                 r = _run(["powercfg.exe", "/setactive", str(undo["power_plan"])], 10)
-                if r.returncode != 0: partial.append("previous power plan could not be restored")
+                if r.returncode != 0:
+                    restore_failures.append("previous power plan could not be restored")
         details = f"restored eligible game-process settings; {len(undo.get('background_processes', [])) - background_failures} background CPU Set target(s) handled"
         if target_cpu_set_failed: details += "; target CPU Set restore incomplete"
         if background_failures: details += f"; {background_failures} background restore(s) incomplete"
         if partial: details += "; " + "; ".join(partial[:5])
+        if restore_failures:
+            raise RuntimeError(details + "; retry required: " + "; ".join(restore_failures[:5]))
         return details
     if kind == "wifi_max_performance":
         scheme = str(undo.get("scheme") or "")
@@ -690,7 +706,7 @@ def _restore(undo: dict) -> str:
         index = int(undo.get("ac_index"))
         current = _wifi_power_setting()
         if not current:
-            return "not restored: current Wi-Fi power policy could not be read; preserving unknown state"
+            raise RuntimeError("current Wi-Fi power policy could not be read; no value was overwritten and rollback will retry")
         if current.get("scheme") != scheme or current.get("ac_index") != undo.get("applied_ac_index", 0):
             return "not restored: Wi-Fi power policy or active scheme changed after SENTINEL's action; preserving user change"
         r = _run(["powercfg.exe", "/setacvalueindex", scheme, subgroup, setting, hex(index)], 8)
@@ -703,7 +719,9 @@ def _restore(undo: dict) -> str:
             if service.casefold() not in UPDATER_SERVICES: raise ValueError("updater service is not allowlisted")
             current_state = _service_state(service)
             if current_state == "running": return f"updater service {service} is already running; no change made"
-            if current_state != "stopped": return f"not restarted: {service} state is {current_state or 'unknown'}; preserving external state"
+            if current_state is None:
+                raise RuntimeError(f"updater service {service} state is unknown; restore will retry")
+            if current_state != "stopped": return f"not restarted: {service} state is {current_state}; preserving external state"
             r = _run(["sc.exe", "start", service], 15)
             if r.returncode != 0: raise RuntimeError("could not restart previously running updater service")
             return f"restarted previously running updater service {service}"
