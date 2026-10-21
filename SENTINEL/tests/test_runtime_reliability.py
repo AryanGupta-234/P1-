@@ -490,5 +490,5 @@ def test_installer_stops_agent_before_dependency_update_and_preserves_programdat
     assert "if errorlevel 8" in installer
     assert "%ProgramData%\\Sentinel" in installer
     assert "Start Menu" in installer
-    assert "rmdir /S" not in installer.lower()
+    assert "rmdir /s" not in installer.lower()
 
