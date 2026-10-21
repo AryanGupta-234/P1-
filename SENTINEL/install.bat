@@ -48,23 +48,25 @@ if not defined PY (
   goto :fail
 )
 
-echo [1/5] Updating Python dependencies...
-%PY% -m pip install --upgrade --disable-pip-version-check --retries 3 --timeout 30 -r "%SRC%\requirements.txt"
-if errorlevel 1 (
-  echo ERROR: Python dependency installation failed. The existing agent and files were not stopped or replaced.
-  goto :fail
-)
-
 if exist "%DEST%\agent.py" (
-  echo [2/5] Gracefully stopping the existing agent for upgrade...
+  echo [1/5] Gracefully stopping the existing agent and logon task...
   %PY% "%SRC%\agent.py" stop
   if errorlevel 1 (
     echo ERROR: The existing agent did not stop safely.
-    echo Close the SENTINEL window / task and rerun this installer.
+    echo No application files have been replaced. Close the SENTINEL task and rerun this installer.
     goto :fail
   )
 ) else (
-  echo [2/5] No previous SENTINEL installation found.
+  echo [1/5] No previous SENTINEL installation found.
+)
+
+echo [2/5] Updating Python dependencies...
+%PY% -m pip install --upgrade --disable-pip-version-check --retries 3 --timeout 30 -r "%SRC%\requirements.txt"
+if errorlevel 1 (
+  echo ERROR: Python dependency installation failed.
+  echo The existing application files and ProgramData history were not replaced.
+  if exist "%DEST%\agent.py" powershell -NoProfile -Command "Start-ScheduledTask -TaskName 'SentinelAgent' -ErrorAction SilentlyContinue"
+  goto :fail
 )
 
 if /I "%SRC%"=="%DEST%" (
@@ -77,10 +79,11 @@ if /I "%SRC%"=="%DEST%" (
     goto :fail
   )
   robocopy "%SRC%" "%DEST%" /MIR /R:2 /W:2 /COPY:DAT /DCOPY:DAT /NP /NFL /NDL /NJH /NJS /XD ".git" ".venv" "__pycache__" ".pytest_cache" /XF "*.pyc"
-  set "ROBOCOPY_CODE=%ERRORLEVEL%"
-  if %ROBOCOPY_CODE% GEQ 8 (
-    echo ERROR: Application file update failed ^(robocopy exit %ROBOCOPY_CODE%^).
+  rem Robocopy codes 0-7 are success / copy results; 8+ means failure.
+  if errorlevel 8 (
+    echo ERROR: Application file update failed ^(robocopy exit code %ERRORLEVEL%^).
     echo Your ProgramData settings/history have not been deleted.
+    powershell -NoProfile -Command "Start-ScheduledTask -TaskName 'SentinelAgent' -ErrorAction SilentlyContinue"
     goto :fail
   )
 )
