@@ -525,3 +525,55 @@ def test_upgrade_stop_checks_task_even_when_local_port_is_not_listening(monkeypa
     assert agent.stop_agent() == 0
     assert called == ["task-stop"]
 
+
+
+
+def test_admin_guard_is_noop_off_windows(monkeypatch):
+    monkeypatch.setattr(agent, "IS_WIN", False)
+    assert agent._ensure_admin() is None
+
+
+def test_admin_guard_relaunches_with_runas_and_forwards_all_arguments(monkeypatch):
+    shell_execute = __import__("unittest.mock", fromlist=["Mock"]).Mock(return_value=42)
+    shell32 = SimpleNamespace(IsUserAnAdmin=lambda: False, ShellExecuteW=shell_execute)
+    fake_ctypes = SimpleNamespace(
+        windll=SimpleNamespace(
+            shell32=shell32,
+            user32=SimpleNamespace(MessageBoxW=lambda *_args: None),
+        )
+    )
+    monkeypatch.setattr(agent, "ctypes", fake_ctypes)
+    monkeypatch.setattr(agent, "IS_WIN", True)
+    monkeypatch.setattr(agent.sys, "executable", r"C:\Python312\python.exe")
+    monkeypatch.setattr(agent.sys, "argv", [agent.__file__, "open", "folder with spaces"])
+
+    assert agent._ensure_admin() == 0
+    shell_execute.assert_called_once()
+    call = shell_execute.call_args.args
+    assert call[1] == "runas"
+    assert call[2] == r"C:\Python312\python.exe"
+    assert call[3] == __import__("subprocess").list2cmdline(
+        [agent.__file__, "open", "folder with spaces"]
+    )
+    assert call[4] == agent.HERE
+
+
+def test_admin_guard_fails_closed_when_uac_is_cancelled(monkeypatch):
+    from unittest.mock import Mock
+
+    message_boxes = []
+    shell_execute = Mock(return_value=5)
+    fake_ctypes = SimpleNamespace(
+        windll=SimpleNamespace(
+            shell32=SimpleNamespace(IsUserAnAdmin=lambda: False, ShellExecuteW=shell_execute),
+            user32=SimpleNamespace(MessageBoxW=lambda *args: message_boxes.append(args)),
+        )
+    )
+    monkeypatch.setattr(agent, "ctypes", fake_ctypes)
+    monkeypatch.setattr(agent, "IS_WIN", True)
+    monkeypatch.setattr(agent.sys, "argv", [agent.__file__, "open"])
+    monkeypatch.setattr(agent.sys, "stderr", None)
+
+    assert agent._ensure_admin() == 1
+    assert len(message_boxes) == 1
+    assert "requires administrator permissions" in message_boxes[0][1]
