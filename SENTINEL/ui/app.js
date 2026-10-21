@@ -1016,12 +1016,15 @@ function renderEngines(data) {
       esc(row.parent_name || "--") + '</small></div><span class="score">' +
       esc(risk.score ?? 0) + '/100</span></div>';
   }).join("") || '<div class="empty">No process-start review candidates yet. Lifecycle observations begin after the collector warm-up baseline.</div>';
-  const wpr = safe.kernel_trace_allowed ? "WPR ALLOWED BY CURRENT POLICY"
-    : valorant ? "DISABLED DURING VALORANT"
-    : safe.administrator ? "WPR AVAILABLE WHEN SESSION OWNERSHIP IS CLEAR"
-    : "REQUIRES ELEVATION";
+  const wprAvailable = !!data.wpr?.available;
+  const wprState = data.wpr?.state?.state || "idle";
+  const wpr = valorant ? "DISABLED DURING VALORANT"
+    : !wprAvailable ? "WINDOWS WPR.EXE UNAVAILABLE"
+    : !safe.administrator ? "REQUIRES ELEVATION"
+    : wprState === "recording" ? "ANOTHER WPR SESSION IS RECORDING"
+    : safe.kernel_trace_allowed ? "READY · BOUNDED 12s CAPTURE" : "BLOCKED BY SAFEGUARD";
   $("#engine-wpr-state").textContent = wpr;
-  $("#engine-wpr").disabled = !safe.kernel_trace_allowed;
+  $("#engine-wpr").disabled = !safe.kernel_trace_allowed || !wprAvailable || wprState === "recording";
   $("#engine-wpr").title = valorant ? "Tracing is hard-disabled while VALORANT is running."
     : "Propose a bounded WPR trace; an existing recording is never stopped or replaced.";
 }
