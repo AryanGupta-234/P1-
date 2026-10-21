@@ -166,15 +166,19 @@ def _stop_legacy_agent():
 
 
 def stop_agent():
-    """Stop the installed agent cleanly, with a guarded legacy-upgrade fallback."""
-    if not port_busy():
-        print("SENTINEL agent is already stopped.")
-        return 0
-    if _request_graceful_stop():
+    """Stop the logon task and serving process, including one that is still starting."""
+    was_listening = port_busy()
+    if was_listening and _request_graceful_stop():
         print("SENTINEL stopped gracefully; session rollback and run-close hooks completed.")
         return 0
+    # Always stop the registered task, even when it has not opened the local
+    # listener yet. The legacy fallback only terminates a PID corroborated by
+    # agent_runs, executable identity, creation time and agent.py command line.
     if _stop_legacy_agent():
-        print("SENTINEL legacy process/task stopped. Any interrupted game session will be recovered from its journal on next start.")
+        if was_listening:
+            print("SENTINEL legacy process/task stopped. Any interrupted game session will be recovered from its journal on next start.")
+        else:
+            print("SENTINEL scheduled task is stopped; no agent listener remains.")
         return 0
     print("Could not stop the existing SENTINEL listener safely. No unrelated process was terminated.")
     return 1
