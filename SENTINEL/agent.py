@@ -320,7 +320,7 @@ def open_app():
     agent_ready = _wait_for_agent(1.5)
     if IS_WIN and agent_ready and _running_agent_is_elevated() is not True:
         print("The existing SENTINEL agent is not confirmed elevated; restarting it with administrator permissions.")
-        if not stop_agent():
+        if stop_agent() != 0:
             print("The previous agent could not be stopped safely; refusing to open a non-elevated session.")
             return 1
         agent_ready = False
