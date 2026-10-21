@@ -426,6 +426,29 @@ def test_runtime_snapshot_persistence_writes_integrity_stamped_row(monkeypatch):
     assert result["bytes"] == len(row[0].encode("utf-8"))
 
 
+def test_kernel_snapshot_payload_includes_live_metrics(monkeypatch):
+    from sentinel import collectors
+
+    captured = {}
+    monkeypatch.setattr(collectors.time, "monotonic", lambda: 45.0)
+    monkeypatch.setattr(collectors.time, "time", lambda: 2026.0)
+    monkeypatch.setitem(collectors.LIVE, "dpc", 1.25)
+    monkeypatch.setitem(collectors.LIVE, "pagesin", 3.0)
+    monkeypatch.setattr(
+        collectors.core,
+        "persist_snapshot",
+        lambda key, payload: captured.update({"key": key, "payload": payload}),
+    )
+
+    last_attempt = collectors._persist_kernel_snapshot({"samples": 12}, 0.0)
+
+    assert last_attempt == 45.0
+    assert captured["key"] == "kernel.latest"
+    assert captured["payload"]["values"]["dpc"] == 1.25
+    assert captured["payload"]["values"]["pagesin"] == 3.0
+    assert captured["payload"]["pdh"]["samples"] == 12
+
+
 def test_kernel_snapshot_failure_includes_exception_detail_and_is_throttled(monkeypatch):
     from sentinel import collectors
 
