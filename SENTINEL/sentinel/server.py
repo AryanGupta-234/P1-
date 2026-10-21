@@ -385,7 +385,14 @@ class H(BaseHTTPRequestHandler):
         if p == "/api/actions":
             return self._json(actions.list_actions())
         if p == "/api/advanced":
-            return self._json(advanced.status())
+            try:
+                return self._json(advanced.status())
+            except Exception as exc:
+                log("advanced", f"performance status payload failed: {type(exc).__name__}: {str(exc)[:260]}", "error")
+                return self._json({
+                    "error": f"Performance telemetry could not be assembled: {type(exc).__name__}: {str(exc)[:220]}",
+                    "code": "advanced_status_failed",
+                }, 503)
         if p == "/api/advanced/journal":
             return self._json(advanced.list_journal(min(500, int((qs.get("limit") or ["100"])[0]))))
         if p == "/api/intel":
@@ -521,10 +528,38 @@ class H(BaseHTTPRequestHandler):
             if not aid: return self._json({"error": "risk policy refused updater action"}, 409)
             return self._json({"id": aid, "risk": "medium", "requires_confirmation": True}, 201)
         if p == "/api/advanced/propose-etw":
-            duration = max(5, min(20, int(body.get("duration", 12))))
-            aid = actions.propose("etw_capture", {"duration": duration}, origin="user", reason="Operator requested bounded kernel ETW diagnostic sample")
-            if not aid: return self._json({"error": "ETW is unavailable or policy refused the capture"}, 409)
-            return self._json({"id": aid, "risk": "safe", "requires_confirmation": False}, 201)
+            try:
+                duration = max(5, min(20, int(body.get("duration", 12))))
+            except (TypeError, ValueError):
+                return self._json({"error": "ETW capture duration must be an integer between 5 and 20 seconds"}, 400)
+            preview = advanced.action_preview("etw_capture", {"duration": duration})
+            if not preview.get("supported"):
+                warnings = preview.get("warnings") or []
+                detail = "; ".join(str(item) for item in warnings if item)
+                code = "etw_unavailable" if not advanced.IS_WIN or not advanced.locate_xperf() else "etw_policy_refused"
+                if not detail:
+                    detail = "The current SENTINEL policy or Windows environment does not permit this capture."
+                return self._json({
+                    "error": "ETW capture unavailable: " + detail,
+                    "code": code,
+                    "requirement": "Windows Performance Toolkit (xperf.exe)",
+                    "risk": preview.get("risk", "safe"),
+                }, 409)
+            aid = actions.propose(
+                "etw_capture", {"duration": duration}, origin="user",
+                reason="Operator requested bounded kernel ETW diagnostic sample",
+            )
+            if not aid:
+                warnings = preview.get("warnings") or []
+                detail = "; ".join(str(item) for item in warnings if item)
+                return self._json({
+                    "error": "SENTINEL policy refused the ETW proposal" + (f": {detail}" if detail else "."),
+                    "code": "etw_policy_refused",
+                }, 409)
+            return self._json({
+                "id": aid, "risk": "safe", "requires_confirmation": False,
+                "duration": duration, "source": "Windows Performance Toolkit xperf",
+            }, 201)
         if p == "/api/inventory/refresh":
             try:
                 data = inventory.scan()
