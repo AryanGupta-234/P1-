@@ -1054,50 +1054,75 @@ def _end_game_session(session_id: int, ts: float) -> dict:
     """Close a session only after its linked state has been restored or safely refused.
 
     A failed undo leaves the row in restore_pending so the next engine/restart pass
-    can retry it. This prevents a crash between report generation and rollback from
-    silently marking an unrestored session as completed.
+    can retry it. Original end time and telemetry snapshots are frozen on the first
+    teardown attempt, so retries do not inflate session duration or rewrite evidence.
     """
-    rows = db("SELECT game_key,started_at,before_json FROM game_sessions WHERE id=? AND status IN ('active','restore_pending')",
-              (int(session_id),))
+    rows = db(
+        "SELECT game_key,started_at,before_json,ended_at,after_json,report_json "
+        "FROM game_sessions WHERE id=? AND status IN ('active','restore_pending')",
+        (int(session_id),),
+    )
     if not rows:
         return {"ok": False, "error": "no active or restore-pending game session"}
-    game_key, started, before_raw = rows[0]
+    game_key, started, before_raw, previous_ended, after_raw, report_raw = rows[0]
     try:
         before = json.loads(before_raw or "{}")
     except Exception:
         before = {}
-    after = _current_metrics()
+    end_ts = float(previous_ended or ts)
+    try:
+        after = json.loads(after_raw) if after_raw else _current_metrics()
+    except Exception:
+        after = _current_metrics()
     delta = _metrics_delta(before, after)
-    causes = _correlate_window(float(started), ts)
-    report_enabled = CFG.get("advanced", {}).get("auto_report_sessions", True) is True
+    try:
+        report = json.loads(report_raw) if report_raw else {}
+    except Exception:
+        report = {}
+    if not report:
+        report_enabled = CFG.get("advanced", {}).get("auto_report_sessions", True) is True
+        causes = _correlate_window(float(started), end_ts) if report_enabled else []
+        report = {
+            "game": game_key,
+            "duration_seconds": round(max(0.0, end_ts - float(started)), 1),
+            "before": before,
+            "after": after,
+            "delta": delta,
+            "temporal_candidates": causes,
+            "limitations": [
+                "Session snapshots are endpoints, not a controlled A/B experiment.",
+                "Correlated changes are temporal associations, not proven causes.",
+                "FPS/frame-time values are not inferred if no frame telemetry source is available.",
+                "Rollback preserves external changes and may remain pending when Windows refuses a restore.",
+            ],
+        }
     restore_results = _restore_session_actions(int(session_id))
     failures = [item for item in restore_results if not item.get("ok")]
-    report = {
-        "game": game_key,
-        "duration_seconds": round(max(0.0, ts - float(started)), 1),
-        "before": before,
-        "after": after,
-        "delta": delta,
-        "temporal_candidates": causes if report_enabled else [],
+    report.update({
         "restoration": restore_results,
         "restoration_pending": bool(failures),
-        "limitations": [
-            "Session snapshots are endpoints, not a controlled A/B experiment.",
-            "Correlated changes are temporal associations, not proven causes.",
-            "FPS/frame-time values are not inferred if no frame telemetry source is available.",
-            "Rollback preserves external changes and may remain pending when Windows refuses a restore.",
-        ],
-    }
+        "restoration_attempted_at": ts,
+    })
     status = "restore_pending" if failures else "completed"
-    db("UPDATE game_sessions SET ended_at=?,after_json=?,report_json=?,status=? WHERE id=?",
-       (ts, json.dumps(after, sort_keys=True), json.dumps(report, sort_keys=True) if report_enabled else None,
-        status, int(session_id)))
+    db(
+        "UPDATE game_sessions SET ended_at=COALESCE(ended_at,?),after_json=?,report_json=?,status=? WHERE id=?",
+        (end_ts, json.dumps(after, sort_keys=True), json.dumps(report, sort_keys=True), status, int(session_id)),
+    )
     if failures:
-        log("rollback", f"Game session #{session_id} ended but {len(failures)} linked change(s) still need restoration; retry scheduled",
-            "error", session_id=int(session_id), failures=failures[:8])
+        log(
+            "rollback",
+            f"Game session #{session_id} ended but {len(failures)} linked change(s) still need restoration; retry scheduled",
+            "error",
+            session_id=int(session_id),
+            failures=failures[:8],
+        )
     else:
-        log("session", f"Game session ended: {game_key} ({int(max(0.0, ts-float(started)))} s); linked changes restored or safely preserved",
-            "ok", session_id=int(session_id))
+        log(
+            "session",
+            f"Game session ended: {game_key} ({int(max(0.0, end_ts-float(started)))} s); linked changes restored or safely preserved",
+            "ok",
+            session_id=int(session_id),
+        )
     publish("game_session", {"id": int(session_id), "game": game_key, "state": status, "report": report})
     return report
 
