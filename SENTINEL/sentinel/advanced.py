@@ -285,9 +285,20 @@ def action_preview(kind: str, args: dict | None = None) -> dict:
         plan["changes"] = ["Capture a bounded 15-second WPR GeneralProfile.Light ETW trace"]
         plan["warnings"].append("Requires Windows Performance Recorder. Existing WPR recordings will never be stopped or replaced.")
     elif kind == "etw_capture":
-        plan["supported"] = bool(IS_WIN and locate_xperf())
+        xperf = locate_xperf() if IS_WIN else None
+        plan["supported"] = bool(xperf)
         plan["changes"] = ["Capture a bounded NT Kernel Logger window (process, scheduler, DPC/ISR, disk and network providers)"]
-        plan["warnings"].append("Requires Windows Performance Toolkit xperf and permission to start a kernel trace. Existing logger sessions will never be stopped or replaced.")
+        if not IS_WIN:
+            plan["warnings"].append("Kernel ETW capture is Windows-only.")
+        elif not xperf:
+            plan["warnings"].append(
+                "Windows Performance Toolkit xperf.exe was not found. Install the Windows Performance Toolkit component of the Windows ADK, then restart SENTINEL."
+            )
+        else:
+            plan["xperf"] = xperf
+            plan["warnings"].append(
+                "Requires an elevated administrator session and permission to start a kernel trace. Existing logger sessions are never stopped or replaced."
+            )
     else:
         plan["supported"] = False; plan["warnings"].append("Unknown action")
     return plan
@@ -1790,7 +1801,17 @@ def _capture_kernel_window_locked(duration: int = 12) -> dict:
     duration = max(5, min(20, int(duration)))
     status = _run([xperf, "-loggers"], 10)
     if status.returncode != 0:
-        return {"ok": False, "error": "could not inspect ETW logger ownership; refusing to start a kernel session"}
+        detail = ((status.stderr or "") + " " + (status.stdout or "")).strip()
+        lowered = detail.casefold()
+        if "access is denied" in lowered or "access denied" in lowered or "0x80070005" in lowered:
+            reason = "Windows denied access while checking ETW logger ownership. Run SENTINEL from an elevated administrator session and verify local policy permits kernel tracing."
+        else:
+            reason = "Could not inspect ETW logger ownership; refusing to take over an unknown kernel session."
+        if detail:
+            reason += f" xperf exit {status.returncode}: {detail[:220]}"
+        else:
+            reason += f" xperf exit {status.returncode} (no diagnostic text)"
+        return {"ok": False, "error": reason}
     loggers = (status.stdout or "") + (status.stderr or "")
     if "NT Kernel Logger" in loggers or STATE.get("kernel", {}).get("etw", {}).get("recording"):
         return {"ok": False, "error": "a kernel/WPR ETW session is already active; SENTINEL will not stop or replace it"}
@@ -2027,6 +2048,19 @@ def status() -> dict:
         except Exception: evidence = {}
         etw_rows.append({"ts": r[0], "provider": r[1], "event": r[2], "pid": r[3], "tid": r[4], "process": r[5], "module": r[6], "attribution": r[7], "evidence": evidence})
     profiles = db("SELECT display_name,updated_at FROM game_profiles ORDER BY display_name")
+    # Keep the performance page useful before a game session or optional sensor
+    # provider exists. These are direct collector samples, not inferred values.
+    live_metrics = {}
+    for metric_name in (
+        "cpu", "mem", "gpu", "gputemp", "gpuclk", "gpupwr", "dpc", "irq",
+        "pagesin", "pagesout", "pagereads", "pagefaults", "dlat", "dlatxfer",
+        "ping", "jitter", "netdown", "netup", "disk_busy",
+    ):
+        history = core.HIST.get(metric_name) or []
+        live_metrics[metric_name] = {
+            "value": LIVE.get(metric_name),
+            "sampled_at": history[-1][0] if history else None,
+        }
     baseline_events = db("SELECT ts,level,msg,data FROM events WHERE src='baseline' ORDER BY id DESC LIMIT 20")
     correlation_events = []
     for r in baseline_events:
@@ -2037,9 +2071,16 @@ def status() -> dict:
     experiments = db("SELECT id,action_id,metric,before_value,after_value,delta_pct,outcome,detail,started_at,measured_at FROM tuner_experiments ORDER BY id DESC LIMIT 20")
     tuner_history = [{"id": r[0], "action_id": r[1], "metric": r[2], "before": r[3], "after": r[4], "delta_pct": r[5], "outcome": r[6], "detail": r[7], "started_at": r[8], "measured_at": r[9]} for r in experiments]
     adv = STATE.get("advanced", {})
+    network_evidence = adv.get("network_evidence")
+    if not isinstance(network_evidence, dict):
+        network_evidence = _check_network_evidence()
+    cpu_topology = adv.get("cpu_topology")
+    if not isinstance(cpu_topology, dict):
+        cpu_topology = _cpu_set_inventory()
     return {"risk_tiers": RISK_TIERS, "settings": dict(CFG.get("advanced", {})), "game": game, "game_key": key, "baseline_hour": hour, "baseline": baseline,
-            "network_evidence": adv.get("network_evidence", _check_network_evidence()),
-            "cpu_topology": adv.get("cpu_topology", _cpu_set_inventory()),
+            "live_metrics": live_metrics,
+            "network_evidence": network_evidence,
+            "cpu_topology": cpu_topology,
             "etw_engine": STATE.get("kernel", {}).get("etw_engine", {}),
             "hardware_sensors": STATE.get("hardware_sensors", {"available": False, "reason": "not sampled"}),
             "gpu": STATE.get("gpu", {}), "thermal_events": [{"ts": r[0], "sensor": r[1], "event": r[2], "value": r[3], "threshold": r[4], "detail": r[5]} for r in thermal],
