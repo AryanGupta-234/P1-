@@ -120,7 +120,7 @@
           <div class="agent-chart-row"><span>CPU host share</span><svg id="ag-cpu-chart" viewBox="0 0 360 46" role="img" aria-label="Agent CPU usage trend"></svg></div>
           <div class="agent-chart-row"><span>Working set MB</span><svg id="ag-ram-chart" viewBox="0 0 360 46" role="img" aria-label="Agent memory usage trend"></svg></div>
         </div>
-        <div class="agent-io-line"><span>Disk reads <b id="ag-read">--</b></span><span>Disk writes <b id="ag-write">--</b></span><span>Logical CPUs <b id="ag-logical">--</b></span></div>
+        <div class="agent-io-line"><span class="agent-io-label">PROCESS I/O · CUMULATIVE SINCE START</span><span>Disk reads <b id="ag-read">--</b></span><span>Disk writes <b id="ag-write">--</b></span><span>Logical CPUs <b id="ag-logical">--</b></span></div>
         <div class="msg agent-note"><small>Measurement notes</small>CPU host share is the agent's CPU use divided by the machine's logical processor count. Per-core CPU can exceed 100% when multiple cores are busy. RAM is the agent process working set; it is not the total SENTINEL data-directory size. First CPU sample may show 0 while the sampling interval initializes.</div>
       </div>
     </div>
