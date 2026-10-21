@@ -21,19 +21,10 @@ import urllib.request
 import webbrowser
 
 
-# Demo telemetry must never touch the installed production database.
-if "--demo" in sys.argv[1:]:
-    _demo_root = os.environ.get("LOCALAPPDATA") or os.path.expanduser("~")
-    os.environ.setdefault("SENTINEL_HOME", os.path.join(_demo_root, "SentinelDemo"))
-
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from sentinel import core
-from sentinel.core import CFG, IS_WIN, log
-
-TASK = "SentinelAgent"
+# Establish the Windows identity before importing SENTINEL modules that touch
+# ProgramData or initialize the runtime database.
+IS_WIN = os.name == "nt"
 HERE = os.path.dirname(os.path.abspath(__file__))
-PROGRAM_DIR = os.path.join(os.environ.get("ProgramFiles", r"C:\Program Files"), "Sentinel")
-NO_WIN = 0x08000000 if IS_WIN else 0
 
 
 def _admin_error(message):
@@ -90,6 +81,27 @@ def _ensure_admin():
             f"It will not start without elevation ({type(exc).__name__}: {exc})."
         )
         return 1
+
+
+if __name__ == "__main__":
+    _elevation_result = _ensure_admin()
+    if _elevation_result is not None:
+        raise SystemExit(_elevation_result)
+
+
+# Demo telemetry must never touch the installed production database.
+if "--demo" in sys.argv[1:]:
+    _demo_root = os.environ.get("LOCALAPPDATA") or os.path.expanduser("~")
+    os.environ.setdefault("SENTINEL_HOME", os.path.join(_demo_root, "SentinelDemo"))
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from sentinel import core
+from sentinel.core import CFG, IS_WIN, log
+
+TASK = "SentinelAgent"
+HERE = os.path.dirname(os.path.abspath(__file__))
+PROGRAM_DIR = os.path.join(os.environ.get("ProgramFiles", r"C:\Program Files"), "Sentinel")
+NO_WIN = 0x08000000 if IS_WIN else 0
 
 
 def base_url():
@@ -507,7 +519,4 @@ def main():
 
 
 if __name__ == "__main__":
-    _elevation_result = _ensure_admin()
-    if _elevation_result is None:
-        raise SystemExit(main() or 0)
-    raise SystemExit(_elevation_result)
+    raise SystemExit(main() or 0)
