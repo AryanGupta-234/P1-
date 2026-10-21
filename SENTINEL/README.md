@@ -101,7 +101,7 @@ The automated suite includes portable unit and demo/API checks. It does not subs
 - The HTTP server binds to loopback (`127.0.0.1`); it is not designed to be exposed to a network.
 - API requests require the generated local token. Treat the tokenized HUD URL as a credential.
 - Cloud inference is opt-in and uses `SENTINEL_CLOUD_KEY` when provided. Review the data sent to any configured provider before enabling it.
-- The action layer is allowlisted. Actions that adjust process priorities, change the power plan, flush DNS, or capture ETW traces can affect the machine. Automatic execution is disabled by default; proposed actions require approval until an operator explicitly enables autopilot.
+- The action layer is allowlisted and risk-tiered. Medium-risk game, power, timer, Wi-Fi and updater changes require fresh explicit approval. Dangerous actions—including DNS flush, standby-list flush, arbitrary process termination, working-set trimming, broad background-priority changes and fan control—are blocked. Safe ETW captures are bounded and run unattended only after the operator explicitly enables the relevant capture opt-in.
 - The installer registers a highest-available interactive-user scheduled task. Treat the process and its local API token as privileged user-session software; review `agent.py` and `install.bat` before deployment.
 - Use this tool only on systems you own or are authorized to administer.
 
