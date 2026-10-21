@@ -536,6 +536,9 @@ def mark_action_result(action_id: int, result: str, changed: bool) -> None:
 
 
 def apply_game_profile(args: dict) -> str:
+    guard = safeguard.check_action("game_profile_apply", args)
+    if not guard["allowed"]:
+        raise PermissionError(guard["reason"])
     if not IS_WIN: return "skipped (Windows only)"
     proc, ident = _process_identity(args)
     profile = args.get("profile") if isinstance(args.get("profile"), dict) else {}

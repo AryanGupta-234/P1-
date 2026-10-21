@@ -65,3 +65,10 @@ def test_adaptive_runtime_does_not_allow_deep_ai_during_valorant(monkeypatch):
     assert state["mode"] == "valorant_guarded"
     assert not state["deep_ai_allowed"]
     assert not state["wpr_allowed"]
+
+
+def test_disabled_process_monitor_fails_closed(monkeypatch):
+    monkeypatch.setattr(core, "off", lambda _name: True)
+    decision = safeguard.check_action("power_plan")
+    assert not decision["allowed"]
+    assert decision["code"] == "process_state_unknown"

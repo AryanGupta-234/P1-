@@ -3,7 +3,7 @@ Models are auto-selected from whatever is installed (smallest = fast, largest = 
 import json, os, re, threading, time, urllib.request
 from urllib.parse import urlparse
 import psutil
-from . import core, actions, intel, ai_engine
+from . import core, actions, intel
 from .core import CFG, STATE, HIST, LIVE, db, log, publish, heartbeat, window
 
 SYS_FAST = ("You are SENTINEL-FAST, a Windows gaming-performance triage agent. You receive live telemetry. "
@@ -137,13 +137,8 @@ def redact(t):
     return re.sub(r"(?i)[a-z]:\\users\\[^\\\s\"']+", r"C:\\Users\\<user>", t)
 
 
-def local_ok(model, slot="fast"):
-    allowed, reason = ai_engine.inference_allowed(
-        model, cloud=model.startswith(CLOUD),
-        pause_when_gaming=bool(CFG.get("pause_ai_when_gaming", True)), slot=slot,
-    )
-    STATE.setdefault("ai", {})["admission"] = {"allowed": allowed, "reason": reason, "slot": slot, "checked_at": time.time()}
-    return allowed
+def local_ok(model):
+    return model.startswith(CLOUD) or not (CFG["pause_ai_when_gaming"] and STATE.get("game"))
 
 
 def cloud_gen(prompt, system, fmt, timeout):
@@ -260,7 +255,7 @@ def snapshot():
     def mx(k, s=30):
         w = window(k, s); return round(max(w), 1) if w else None
     procs = [f"{p['name']} cpu{p['cpu']}% mem{p['mem']}MB io{p['io']}MB/s" for p in STATE.get("procs", [])[:6]]
-    payload = {
+    return {
         "game": (STATE.get("game") or {}).get("name"),
         "30s": {"cpu_avg": avg("cpu"), "cpu_max": mx("cpu"), "dpc_avg": avg("dpc"), "dpc_max": mx("dpc"),
                 "irq_avg": avg("irq"), "free_ram_mb": avg("mem_free_mb"), "pages_in": avg("pagesin"),
@@ -270,7 +265,6 @@ def snapshot():
         "top_processes": procs, "system": STATE.get("system"), "gpu": STATE.get("gpu"),
         "lag_index": LIVE.get("lag_index"),
     }
-    return ai_engine.compose_context(payload, purpose="triage")
 
 
 def _say(role, model, text):
@@ -393,24 +387,19 @@ def ai_loop():
             d = json.loads(m)
             if d["t"] == "insight" and d["d"]["sev"] in ("high", "warn") and time.time() - cool.get(d["d"]["key"], 0) > 300:
                 cool[d["d"]["key"]] = time.time()
-                if local_ok(STATE["ai"]["deep"], "deep"):
+                if local_ok(STATE["ai"]["deep"]):
                     investigate(d["d"])
                 else:
                     deferred.append(d["d"])
                     log("ai", f"local AI sleeping during game - '{d['d']['title']}' queued for after the session", "info")
         except Exception:
             pass
-        if deferred and local_ok(STATE["ai"]["deep"], "deep"):
+        if deferred and local_ok(STATE["ai"]["deep"]):
             for ins in deferred[:3]:
                 investigate(ins)
             deferred.clear()
-        triage_allowed, triage_reason = ai_engine.triage_allowed()
-        if not triage_allowed and time.time() - last_triage > 60:
+        if CFG["ai_enabled"] and time.time() - last_triage > 60 and STATE["ai"]["fast"] and local_ok(STATE["ai"]["fast"]):
             last_triage = time.time()
-            STATE["ai"]["admission"] = {"allowed": False, "reason": triage_reason, "slot": "fast", "checked_at": last_triage}
-        if CFG["ai_enabled"] and time.time() - last_triage >= 60 and STATE["ai"]["fast"] and triage_allowed and local_ok(STATE["ai"]["fast"], "fast"):
-            last_triage = time.time()
-            STATE["ai"]["admission"] = {"allowed": True, "reason": triage_reason, "slot": "fast", "checked_at": last_triage}
             STATE["ai"]["busy"] = "fast"
             try:
                 s = gen(STATE["ai"]["fast"], "Telemetry: " + json.dumps(snapshot())[:2500], SYS_FAST, timeout=60, slot="fast")

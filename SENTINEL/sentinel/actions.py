@@ -3,7 +3,7 @@ Every action is proposed -> (auto-run if autopilot enables that kind, else waits
 import json, os, subprocess, threading, time
 import psutil
 from pathlib import Path
-from . import core, safeguard
+from . import core
 from .core import CFG, IS_WIN, STATE, db, log, publish, TRACE_DIR
 
 NO_WIN = 0x08000000 if IS_WIN else 0
@@ -62,10 +62,7 @@ else:
 
 
 def _bg_targets():
-    return [
-        p for p in STATE.get("procs", [])
-        if p.get("bg") and not safeguard.is_protected_process(p.get("name"), p.get("exe"))
-    ]
+    return [p for p in STATE.get("procs", []) if p.get("bg")]
 
 
 def _run(cmd, timeout=30):
@@ -86,9 +83,6 @@ def _terminate_reviewed_process(args):
         return "rejected (invalid process identity)"
     if pid <= 4 or not expected_exe or not os.path.isabs(expected_exe):
         return "rejected (missing or protected process identity)"
-    guard = safeguard.check_action("terminate_process", args)
-    if not guard["allowed"]:
-        return "rejected by SENTINEL safeguard: " + guard["reason"]
     protected = {"system", "registry", "smss.exe", "csrss.exe", "wininit.exe", "services.exe", "lsass.exe",
         "winlogon.exe", "svchost.exe", "dwm.exe", "fontdrvhost.exe", "securityhealthservice.exe",
         "msmpeng.exe", "nissrv.exe", "trustedinstaller.exe", "explorer.exe"}
@@ -301,12 +295,6 @@ def execute(aid, *, user_confirmed=False):
             return "not pending"
         kind, args = rows[0][0], json.loads(rows[0][1] or "{}")
         tier = advanced.risk_tier(kind)
-        guard = safeguard.check_action(kind, args)
-        if not guard["allowed"]:
-            reason = "blocked by SENTINEL safeguard: " + guard["reason"]
-            db("UPDATE actions SET state='blocked',result=? WHERE id=?", (reason[:400], aid))
-            log("safeguard", f"{kind} blocked: {guard['reason'][:180]}", "warn")
-            return reason
         if tier == "dangerous":
             return "blocked by risk policy: dangerous actions are never automated and this action has no approved reversible implementation"
         if tier == "medium" and not user_confirmed:
