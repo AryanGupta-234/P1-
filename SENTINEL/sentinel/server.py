@@ -6,6 +6,9 @@ from .core import CFG, STATE, LIVE, HIST, HEART, START, db, log, save_cfg
 
 UI = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "ui")
 MIME = {".html": "text/html; charset=utf-8", ".css": "text/css", ".js": "application/javascript", ".svg": "image/svg+xml"}
+_AGENT_PROCESS = psutil.Process(os.getpid())
+_HTTP_SERVER = None
+_HTTP_SERVER_LOCK = threading.Lock()
 SPARK_KEYS = ["cpu", "dpc", "mem", "mem_free_mb", "pagesin", "pagesout", "pagereads", "pagefaults", "transitionfaults",
               "availablemb", "pagefilepct", "dlat", "dlatxfer", "disk_busy", "gpu", "gputemp", "ping", "jitter",
               "netdown", "netup", "lag_index", "cpuperf", "diskr", "diskw", "irq", "ctx", "conns"]
@@ -61,42 +64,135 @@ def find_reviewable_process(pid, created, exe, rows):
     return None
 
 
-def agent_runtime():
-    process = psutil.Process(os.getpid())
+def agent_runtime(*, include_threads=True, include_io=True, include_run=True):
+    """Measured resource footprint for this agent process, separate from whole-host load.
+
+    cpu_percent is the share of total logical-processor capacity; cpu_one_core_percent
+    is psutil's conventional per-core figure and can exceed 100 on multi-core hosts.
+    """
+    process = _AGENT_PROCESS
     try: executable = process.exe()
     except Exception: executable = sys.executable
     try: username = process.username()
     except Exception: username = "unavailable"
-    try: rss = round(process.memory_info().rss / 2**20, 1)
-    except Exception: rss = None
-    try: memory_pct = round(process.memory_percent(), 2)
+    try:
+        memory = process.memory_info()
+        rss = round(memory.rss / 2**20, 1)
+    except Exception:
+        rss = None
+    try: memory_pct = round(process.memory_percent(), 3)
     except Exception: memory_pct = None
-    try: cpu_pct = round(process.cpu_percent(interval=None), 2)
-    except Exception: cpu_pct = None
+    try:
+        cpu_one_core = round(process.cpu_percent(interval=None), 2)
+    except Exception:
+        cpu_one_core = None
+    logical = max(1, int(psutil.cpu_count(logical=True) or 1))
+    cpu_host = round(cpu_one_core / logical, 3) if cpu_one_core is not None else None
+    try: host_cpu = round(psutil.cpu_percent(interval=None), 1)
+    except Exception: host_cpu = None
+    try:
+        host_memory = psutil.virtual_memory()
+        host_ram = {
+            "total_mb": round(host_memory.total / 2**20),
+            "used_mb": round(host_memory.used / 2**20),
+            "available_mb": round(host_memory.available / 2**20),
+            "percent": round(host_memory.percent, 1),
+        }
+    except Exception:
+        host_ram = None
     try: threads = process.num_threads()
     except Exception: threads = None
     try: handles = process.num_handles() if core.IS_WIN else None
     except Exception: handles = None
-    try:
-        io = process.io_counters()
-        io_read, io_write = int(io.read_bytes), int(io.write_bytes)
-    except Exception:
-        io_read = io_write = None
+    try: process_started_at = float(process.create_time())
+    except Exception: process_started_at = START
+    try: username = process.username()
+    except Exception: username = "unavailable"
     try:
         from .collectors import _session_id
         session_id = _session_id(os.getpid())
     except Exception:
         session_id = None
-    return {"pid": os.getpid(), "parent_pid": os.getppid(), "executable": executable,
-        "username": username, "session_id": session_id,
+    io_read = io_write = None
+    if include_io:
+        try:
+            io = process.io_counters()
+            io_read, io_write = int(io.read_bytes), int(io.write_bytes)
+        except Exception:
+            pass
+    worker_threads = []
+    if include_threads:
+        for thread in threading.enumerate():
+            if thread.name == "MainThread" or thread.name.startswith("Thread-"):
+                continue
+            worker_threads.append({
+                "name": thread.name,
+                "alive": bool(thread.is_alive()),
+                "daemon": bool(thread.daemon),
+            })
+        worker_threads.sort(key=lambda row: row["name"].casefold())
+    run = None
+    if include_run:
+        run_rows = core.db("SELECT id,started_at,run_mode,exit_reason FROM agent_runs WHERE pid=? ORDER BY id DESC LIMIT 1", (os.getpid(),))
+        if run_rows:
+            run = {"id": run_rows[0][0], "started_at": run_rows[0][1], "mode": run_rows[0][2],
+                   "exit_reason": run_rows[0][3]}
+    try: is_running = bool(process.is_running() and process.status() != psutil.STATUS_ZOMBIE)
+    except Exception: is_running = True
+    return {
+        "state": "running" if is_running else "stopped",
+        "pid": os.getpid(),
+        "parent_pid": os.getppid(),
+        "executable": executable,
+        "username": username,
+        "session_id": session_id,
         "execution_context": "interactive Windows session" if core.IS_WIN and session_id not in (None, 0) else ("Session 0 / non-interactive" if core.IS_WIN else "non-Windows / demo"),
         "desktop_access_expected": bool(core.IS_WIN and session_id not in (None, 0)),
-        "uptime_s": round(time.time() - START, 1), "cpu_percent": cpu_pct,
-        "rss_mb": rss, "memory_percent": memory_pct, "threads": threads, "handles": handles,
-        "io_read_bytes": io_read, "io_write_bytes": io_write,
-        "run": (lambda rows: ({"id": rows[0][0], "started_at": rows[0][1], "mode": rows[0][2],
-            "exit_reason": rows[0][3]} if rows else None))(core.db("SELECT id,started_at,run_mode,exit_reason FROM agent_runs ORDER BY id DESC LIMIT 1")),
-        "python": platform.python_version(), "platform": platform.platform()}
+        "process_started_at": process_started_at,
+        "uptime_s": round(max(0.0, time.time() - process_started_at), 1),
+        "cpu_percent": cpu_host,
+        "cpu_one_core_percent": cpu_one_core,
+        "logical_processors": logical,
+        "host_cpu_percent": host_cpu,
+        "rss_mb": rss,
+        "memory_percent": memory_pct,
+        "host_memory": host_ram,
+        "threads": threads,
+        "worker_threads": worker_threads,
+        "handles": handles,
+        "io_read_bytes": io_read,
+        "io_write_bytes": io_write,
+        "run": run,
+        "python": platform.python_version(),
+        "platform": platform.platform(),
+    }
+
+
+def agent_run_history(limit=12):
+    limit = min(50, max(1, int(limit)))
+    rows = core.db(
+        "SELECT id,started_at,stopped_at,pid,executable,run_mode,exit_reason "
+        "FROM agent_runs ORDER BY id DESC LIMIT ?",
+        (limit,),
+    )
+    now = time.time()
+    return [{
+        "id": row[0], "started_at": row[1], "stopped_at": row[2],
+        "pid": row[3], "executable": row[4], "mode": row[5],
+        "exit_reason": row[6],
+        "duration_s": round(max(0.0, (float(row[2]) if row[2] else now) - float(row[1])), 1),
+        "active": row[2] is None,
+    } for row in rows]
+
+
+def request_shutdown():
+    """Ask the serving loop to stop from a different thread after replying to HTTP."""
+    with _HTTP_SERVER_LOCK:
+        server = _HTTP_SERVER
+    if server is None:
+        return False
+    threading.Thread(target=server.shutdown, name="agent-shutdown-request", daemon=True).start()
+    return True
 
 
 def snapshot():
@@ -109,6 +205,8 @@ def snapshot():
         "kernel": STATE.get("kernel", {}),
         "autoruns": STATE.get("autoruns"), "ai": {k: v for k, v in STATE["ai"].items() if k != "transcript"},
         "heart": HEART, "traces": STATE.get("traces", []), "autopilot": CFG["autopilot"],
+        "agent": agent_runtime(include_threads=False, include_io=False, include_run=False),
+        "sensor_matrix": sensor_matrix(),
         "cfg": {"pause": CFG["pause_ai_when_gaming"], "ollama_url": CFG["ollama_url"], "cloud": {k: CFG["cloud"][k] for k in ("enabled", "url", "model")}, "has_key": bool(CFG["cloud"]["key"])},
     }
 
@@ -179,6 +277,22 @@ class H(BaseHTTPRequestHandler):
             if src: sql += " AND src=?"; a.append(src)
             rows = db(sql + " ORDER BY id DESC LIMIT ?", tuple(a + [lim]))
             return self._json([{"id": r[0], "ts": r[1], "level": r[2], "src": r[3], "msg": r[4]} for r in rows][::-1])
+        if p == "/api/agent":
+            runtime = agent_runtime(include_threads=True, include_io=True, include_run=True)
+            matrix = sensor_matrix()
+            runtime["health"] = matrix["status"]
+            return self._json({
+                "runtime": runtime,
+                "sensor_matrix": matrix,
+                "runs": agent_run_history(20),
+                "storage": {"home": core.HOME, "database": core.DB_PATH},
+                "lifecycle": {
+                    "agent_run": runtime.get("run"),
+                    "workers": len(runtime.get("worker_threads") or []),
+                    "monitored_functions": matrix["total"],
+                    "health": matrix["status"],
+                },
+            })
         if p == "/api/status":
             me = psutil.Process()
             n = db("SELECT COUNT(*) FROM events")[0][0]
@@ -319,6 +433,11 @@ class H(BaseHTTPRequestHandler):
         if not isinstance(body, dict):
             return self._json({"error": "request body must be a JSON object"}, 400)
         p = u.path
+        if p == "/api/agent/shutdown":
+            if body.get("confirmed") is not True:
+                return self._json({"error": "explicit confirmation is required to stop the SENTINEL agent"}, 400)
+            accepted = request_shutdown()
+            return self._json({"ok": accepted, "message": "SENTINEL is shutting down gracefully" if accepted else "agent server is not active"}, 202 if accepted else 409)
         if p == "/api/action/run":
             confirmed = body.get("confirmed") is True
             return self._json({"result": actions.execute(int(body.get("id", 0)), user_confirmed=confirmed)})
@@ -537,7 +656,16 @@ class H(BaseHTTPRequestHandler):
 
 
 def serve():
+    global _HTTP_SERVER
     srv = ThreadingHTTPServer(("127.0.0.1", CFG["port"]), H)
     srv.daemon_threads = True
+    with _HTTP_SERVER_LOCK:
+        _HTTP_SERVER = srv
     log("server", f"HUD online at http://127.0.0.1:{CFG['port']}", "ok")
-    srv.serve_forever()
+    try:
+        srv.serve_forever()
+    finally:
+        srv.server_close()
+        with _HTTP_SERVER_LOCK:
+            if _HTTP_SERVER is srv:
+                _HTTP_SERVER = None
