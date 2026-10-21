@@ -482,18 +482,76 @@ def test_agent_shutdown_request_uses_a_separate_thread(monkeypatch):
     assert state["called"] is True
 
 
-def test_installer_stops_agent_before_dependency_update_and_preserves_programdata():
+def test_installer_uses_immutable_version_folders_and_preserves_programdata():
     from pathlib import Path
-    installer = (Path(__file__).resolve().parents[1] / "install.bat").read_text(encoding="utf-8")
+
+    root = Path(__file__).resolve().parents[1]
+    installer = (root / "install.bat").read_text(encoding="utf-8")
+    version = (root / "VERSION").read_text(encoding="utf-8").strip()
+
     stop_at = installer.index('%PY% "%SRC%\\agent.py" stop')
-    dependencies_at = installer.index("pip install --upgrade")
     copy_at = installer.index("robocopy ")
-    assert stop_at < dependencies_at < copy_at
-    assert "/MIR" in installer
-    assert "if errorlevel 8" in installer
-    assert "%ProgramData%\\Sentinel" in installer
+    environment_at = installer.index(" -m venv ")
+    dependencies_at = installer.index("pip install --disable-pip-version-check")
+    registration_at = installer.index('" %VERSION_DIR%\\agent.py" install'.strip())
+    assert stop_at < copy_at < environment_at < dependencies_at < registration_at
+    assert f"set /p \"VERSION=\"<\"%VERSION_FILE%\" " .strip() in installer or 'set /p "VERSION="<"%VERSION_FILE%"' in installer
+    assert "%VERSIONS%\\%VERSION%" in installer
+    assert "%STAGING_DIR%" in installer
+    assert "move \"%STAGING_DIR%\" \"%VERSION_DIR%\" " .strip() in installer or 'move "%STAGING_DIR%" "%VERSION_DIR%"' in installer
+    assert 'if exist "%VERSION_DIR%"' in installer
+    assert "findstr /R /X /C:" in installer
+    assert "/E /R:2 /W:2" in installer
+    assert "/MIR" not in installer
+    assert ".venv\\Scripts\\python.exe" in installer
+    assert "active-version.txt" in installer
+    assert "INSTALLATION COMPLETE" in installer
     assert "Start Menu" in installer
-    assert "rmdir /s" not in installer.lower()
+    assert "%ProgramData%\\Sentinel" in installer
+    assert "setlocal EnableExtensions DisableDelayedExpansion" in installer
+
+
+def test_release_marker_and_runtime_report_a_semantic_version():
+    from pathlib import Path
+    import re
+
+    root = Path(__file__).resolve().parents[1]
+    version = (root / "VERSION").read_text(encoding="utf-8").strip()
+
+    assert re.fullmatch(r"\\d+\\.\\d+\\.\\d+", version)
+    assert agent.APP_VERSION == version
+    assert agent.APP_VERSION_DIR.endswith(os.path.join("versions", version))
+
+
+def test_install_integration_verifies_desktop_and_all_users_shortcuts(monkeypatch, tmp_path):
+    scripts = tmp_path / "Scripts"
+    scripts.mkdir()
+    python_exe = scripts / "python.exe"
+    pythonw_exe = scripts / "pythonw.exe"
+    python_exe.write_text("", encoding="utf-8")
+    pythonw_exe.write_text("", encoding="utf-8")
+    monkeypatch.setattr(agent, "IS_WIN", True)
+    monkeypatch.setattr(agent.sys, "executable", str(python_exe))
+    captured = {}
+
+    def capture_script(script):
+        captured["script"] = script
+        return SimpleNamespace(returncode=1, stdout="", stderr="controlled failure")
+
+    monkeypatch.setattr(agent, "pw", capture_script)
+
+    assert agent.install() == 1
+    script = captured["script"]
+    assert "Win32_ComputerSystem" in script
+    assert "User Shell Folders" in script
+    assert "Join-Path $env:ProgramData 'Microsoft\\Windows\\Start Menu\\Programs\\SENTINEL'" in script
+    assert "(Join-Path $desktop 'SENTINEL.lnk')" in script
+    assert "(Join-Path $commonStartMenu 'SENTINEL.lnk')" in script
+    assert "Test-Path -LiteralPath $item.Path -PathType Leaf" in script
+    assert "$check.TargetPath -ne $pythonw" in script
+    assert "RunLevel Highest" in script
+    assert "INSTALL_DESKTOP=" in script
+    assert "INSTALL_START_MENU=" in script
 
 def test_desktop_opener_uses_running_agent_without_spawning_another(monkeypatch):
     called = {"launch": 0, "start": 0}
