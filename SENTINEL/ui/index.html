@@ -183,12 +183,12 @@
     <div class="panel"><div class="ph">Advanced sensor settings <em>persistent operator controls</em></div><div class="pb adv-form">
       <label class="tog"><span>Enable bounded kernel ETW engine<small>Windows Performance Toolkit required</small></span><input id="adv-etw-enabled" type="checkbox"></label>
       <label class="tog"><span>Automatically capture during games<small>Explicit safe diagnostic opt-in; max one window per 120 seconds</small></span><input id="adv-etw-auto" type="checkbox"></label>
-      <label class="tog"><span>Read optional LibreHardwareMonitor sensors<small>Read-only WMI or 127.0.0.1 REST /data.json; start the monitor yourself</small></span><input id="adv-lhm-enabled" type="checkbox"></label>
+      <label class="tog"><span>Read optional LibreHardwareMonitor sensors<small>Read-only WMI or loopback REST; start LHM yourself and enable its Web Server</small></span><input id="adv-lhm-enabled" type="checkbox"></label>
       <label>LibreHardwareMonitor local HTTP port<input id="adv-lhm-port" type="number" min="1" max="65535" value="8085"></label>
       <label>CPU early-warning threshold °C<input id="adv-cpu-threshold" type="number" min="50" max="110" value="88"></label>
       <label>GPU early-warning threshold °C<input id="adv-gpu-threshold" type="number" min="50" max="110" value="82"></label>
       <button class="btn" id="adv-settings-save">SAVE SENSOR SETTINGS</button>
-      <small>LibreHardwareMonitor CPU/fan coverage depends on hardware, driver availability and its WMI provider. Fan controls are never written; use the manufacturer utility (Armoury Crate on supported ASUS models).</small>
+      <small>REST setup: open LHM → Options → Remote Web Server → Run, keep its listener on localhost, and use the port above (default 8085). SENTINEL only GETs /data.json; authenticated servers are reported unavailable. CPU/fan coverage depends on your ASUS EC/firmware and available drivers. Fan controls are never written; use Armoury Crate for supported ASUS modes.</small>
     </div></div>
     <div class="panel adv-span"><div class="ph">Action dry-run preview <em>no system changes until approved</em></div><div class="pb adv-form">
       <label>Action to inspect<select id="adv-preview-kind"><option value="etw_capture">Bounded kernel ETW capture · safe diagnostic</option><option value="wpr_trace">WPR GeneralProfile.Light trace · safe diagnostic</option><option value="power_plan">Switch to High Performance plan · medium risk</option><option value="timer_resolution">Request 1 ms timer resolution · medium risk</option></select></label>
