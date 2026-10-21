@@ -203,6 +203,7 @@ def _process_path_state(path):
 def fast_loop():
     psutil.cpu_percent(percpu=True)
     t_start = time.time()
+    last_process_scan = 0.0
     while True:
         t0 = time.time()
         now = t0
@@ -229,10 +230,18 @@ def fast_loop():
             metric("ints", (cs.interrupts - _prev["cpu"].interrupts) / dt)
         _prev["cpu"] = cs
         _prev["t"] = now
+        try:
+            from . import runtime_engine
+            process_interval = runtime_engine.process_scan_interval()
+        except Exception:
+            process_interval = 1.0
         if not core.off("processes"):
-            scan_processes(now, now - t_start > WARMUP)
+            if now - last_process_scan >= process_interval:
+                scan_processes(now, now - t_start > WARMUP)
+                last_process_scan = now
         else:
             STATE["procs"] = []; STATE["proc_total"] = 0; STATE["proc_recommendations"] = []
+            STATE["proc_scan_at"] = now
             heartbeat("process inventory", 1, "disabled in Feature Control")
         heartbeat("system+processes", 1, f"{STATE.get('proc_total', 0)} processes tracked")
         sleep_to(t0, 1.0)
@@ -378,6 +387,7 @@ def scan_processes(now, learned):
     rows.sort(key=lambda r: (r["cpu"], r["mem"], r["pid"]), reverse=True)
     STATE["procs"] = rows[:2000]
     STATE["proc_total"] = len(rows)
+    STATE["proc_scan_at"] = now
     metric("procs", len(rows))
 
     # Persist the latest bounded process inventory periodically, not every sample.
@@ -402,6 +412,11 @@ def scan_processes(now, learned):
             log("procwatch", f"start observed: {r['name']} (pid {pid}) · {r['app_kind']}",
                 "debug", executable=r["exe"], parent=r["parent_name"], session_id=r["session_id"],
                 create_time=r["create_time"], visible_windows=r["visible_windows"])
+            try:
+                from . import security_engine
+                security_engine.observe_process_start(r)
+            except Exception as exc:
+                log("process-security", f"start assessment unavailable: {type(exc).__name__}: {str(exc)[:120]}", "warn")
 
     # Advisory only: require repeated high resource use, protect Windows and service processes.
     protected = {"system", "registry", "smss.exe", "csrss.exe", "wininit.exe", "services.exe", "lsass.exe",
