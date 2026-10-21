@@ -1143,41 +1143,128 @@ def _thermal_watch(ts: float) -> None:
 
 
 def _lhm_sample() -> dict:
-    """Read only an already-running LibreHardwareMonitor WMI provider; never launch/install it."""
-    if not IS_WIN: return {"available": False, "reason": "Windows only"}
+    """Read an already-running LHM/OpenHardwareMonitor WMI provider; never launch/install it."""
+    if not IS_WIN:
+        return {"available": False, "reason": "Windows only"}
     config = CFG.get("advanced", {}) if isinstance(CFG.get("advanced"), dict) else {}
     if config.get("lhm_enabled") is not True:
-        return {"available": False, "reason": "Optional LHM reader disabled"}
-    command = ("$ErrorActionPreference='Stop'; "
-               "$s=Get-CimInstance -Namespace 'root\\LibreHardwareMonitor' -ClassName Sensor -ErrorAction Stop | "
-               "Where-Object { $_.Value -ne $null } | Select-Object -First 250 Name,Parent,SensorType,Value,Identifier; "
-               "$s | ConvertTo-Json -Compress -Depth 3")
+        return {"available": False, "reason": "Optional hardware sensor reader disabled"}
+
+    # WMI namespaces use a single backslash. Query both the current
+    # LibreHardwareMonitor namespace and its predecessor for compatibility.
+    command = r"""
+$ErrorActionPreference = 'Stop'
+$providerNamespace = $null
+$sensors = @()
+$probeErrors = @()
+foreach ($ns in @('root\LibreHardwareMonitor', 'root\OpenHardwareMonitor')) {
+    try {
+        $found = @(Get-CimInstance -Namespace $ns -ClassName Sensor -ErrorAction Stop |
+            Where-Object { $null -ne $_.Value } |
+            Select-Object -First 300 Name,Parent,SensorType,Value,Identifier)
+        if ($found.Count -gt 0) {
+            $providerNamespace = $ns
+            $sensors = $found
+            break
+        }
+    } catch {
+        $probeErrors += ($ns + ': ' + $_.Exception.Message)
+    }
+}
+if (-not $providerNamespace) {
+    throw ('No running hardware sensor WMI provider returned data. ' + ($probeErrors -join ' | '))
+}
+[pscustomobject]@{ namespace = $providerNamespace; sensors = @($sensors) } |
+    ConvertTo-Json -Compress -Depth 4
+"""
     try:
-        r = _run(["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", command], 8)
+        r = _run(["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", command], 12)
         if r.returncode != 0:
-            return {"available": False, "reason": (r.stderr or r.stdout or "WMI provider did not respond")[:180]}
+            return {"available": False, "reason": (r.stderr or r.stdout or "WMI provider did not respond")[:220]}
         raw = (r.stdout or "").strip()
-        if not raw: return {"available": False, "reason": "LHM WMI provider returned no sensor data"}
+        if not raw:
+            return {"available": False, "reason": "Hardware sensor WMI provider returned empty output"}
         parsed = json.loads(raw)
-        sensors = parsed if isinstance(parsed, list) else [parsed]
+        if isinstance(parsed, dict) and "sensors" in parsed:
+            provider_namespace = str(parsed.get("namespace") or "unknown")
+            sensor_rows = parsed.get("sensors") or []
+        else:
+            # Older PowerShell script output / test fixtures may contain a bare
+            # CIM sensor array.
+            provider_namespace = "unknown"
+            sensor_rows = parsed if isinstance(parsed, list) else [parsed]
+        if isinstance(sensor_rows, dict):
+            sensor_rows = [sensor_rows]
+
         normalized = []
-        for s in sensors[:250]:
-            if not isinstance(s, dict): continue
-            try: val = float(s.get("Value"))
-            except (TypeError, ValueError): continue
-            if not math.isfinite(val): continue
-            normalized.append({"name": str(s.get("Name") or "")[:120], "parent": str(s.get("Parent") or "")[:180],
-                               "type": str(s.get("SensorType") or "")[:40], "value": val,
-                               "identifier": str(s.get("Identifier") or "")[:220]})
-        if not normalized: return {"available": False, "reason": "LHM namespace exists but contains no numeric sensors"}
-        cpu = [x for x in normalized if x["type"].casefold() == "temperature" and "cpu" in (x["parent"] + x["name"]).casefold()]
-        fan = [x for x in normalized if x["type"].casefold() == "fan"]
-        core_temps = [x for x in cpu if "core" in x["name"].casefold()]
-        return {"available": True, "source": "externally-running LibreHardwareMonitor WMI provider", "checked_at": time.time(),
-                "cpu_temperatures": cpu[:32], "per_core_temperatures": core_temps[:64], "fan_rpm": fan[:32],
-                "sensor_count": len(normalized), "all_sensors": normalized}
+        for sensor in sensor_rows[:300]:
+            if not isinstance(sensor, dict):
+                continue
+            try:
+                value = float(sensor.get("Value"))
+            except (TypeError, ValueError):
+                continue
+            if not math.isfinite(value):
+                continue
+            normalized.append({
+                "name": str(sensor.get("Name") or "")[:120],
+                "parent": str(sensor.get("Parent") or "")[:180],
+                "type": str(sensor.get("SensorType") or "")[:40],
+                "value": value,
+                "identifier": str(sensor.get("Identifier") or "")[:220],
+            })
+        if not normalized:
+            return {"available": False, "reason": "WMI namespace responded but exposed no numeric sensors",
+                    "namespace": provider_namespace}
+
+        cpu_temperatures = []
+        per_core_temperatures = []
+        fan_rpm = []
+        hardware_names = set()
+        for sensor in normalized:
+            name = sensor["name"].casefold()
+            parent = sensor["parent"].casefold()
+            identifier = sensor["identifier"].casefold().replace("\\", "/")
+            kind = sensor["type"].casefold()
+            value = sensor["value"]
+            if sensor["parent"]:
+                hardware_names.add(sensor["parent"])
+            # LHM labels Intel/AMD CPU hardware by model name (e.g. "Intel Core
+            # i5-12500H"), not always with the literal word CPU. Identifiers are
+            # the most stable fallback across vendor naming variations.
+            cpu_hardware = any(token in (parent + " " + identifier) for token in (
+                "intelcpu", "amdcpu", "intel core", "amd ryzen", "cpu", "processor"
+            ))
+            explicitly_gpu = any(token in (parent + " " + name + " " + identifier) for token in (
+                "nvidia", "geforce", "radeon", "graphics", "gpu", "video"
+            ))
+            cpu_named = any(token in name for token in ("cpu package", "cpu core", "processor package"))
+            if kind == "temperature" and -10.0 <= value <= 130.0 and (cpu_hardware or cpu_named) and not explicitly_gpu:
+                cpu_temperatures.append(sensor)
+                if re.search(r"\bcore\s*(?:#|\d|\[)", name) or "cpu core" in name:
+                    per_core_temperatures.append(sensor)
+            if kind == "fan" and 0.0 < value <= 30000.0:
+                fan_rpm.append(sensor)
+
+        return {
+            "available": True,
+            "source": "externally-running hardware-monitor WMI provider",
+            "provider": "LibreHardwareMonitor" if "LibreHardwareMonitor" in provider_namespace else "OpenHardwareMonitor",
+            "namespace": provider_namespace,
+            "checked_at": time.time(),
+            "cpu_temperatures": cpu_temperatures[:48],
+            "per_core_temperatures": per_core_temperatures[:64],
+            "fan_rpm": fan_rpm[:32],
+            "sensor_count": len(normalized),
+            "hardware": sorted(hardware_names)[:40],
+            "cpu_sensor_count": len(cpu_temperatures),
+            "fan_sensor_count": len(fan_rpm),
+            "cpu_reason": "" if cpu_temperatures else "Provider is running, but no CPU temperature sensors were exposed for this hardware",
+            "fan_reason": "" if fan_rpm else "Provider is running, but no fan RPM sensors were exposed; ASUS EC fan telemetry may not be supported",
+        }
     except Exception as exc:
-        return {"available": False, "reason": f"{type(exc).__name__}: {str(exc)[:160]}"}
+        return {"available": False, "reason": f"{type(exc).__name__}: {str(exc)[:200]}"}
+
 
 
 def _hardware_loop() -> None:
@@ -1221,88 +1308,255 @@ def _parse_dpc_report(path: str) -> list[dict]:
     return out
 
 
-def _decode_etl(etl_path: str, trace_id: str) -> dict:
-    """Decode bounded XML metadata and xperf DPC/ISR summary; never invent event semantics."""
+def _etl_local_name(tag: str) -> str:
+    return str(tag).rsplit("}", 1)[-1]
+
+
+def _etw_int(value: Any) -> int | None:
+    try:
+        raw = str(value).strip()
+        if not raw:
+            return None
+        return int(raw, 0)
+    except (TypeError, ValueError):
+        try:
+            return int(str(value).strip())
+        except (TypeError, ValueError):
+            return None
+
+
+def _etw_process_name_for_pid(pid: int | None, process_starts: dict[int, str], trace_end: float) -> str | None:
+    if not pid:
+        return None
+    if pid in process_starts:
+        return process_starts[pid]
+    # The live process list is only a fallback. Reject a PID that was created
+    # after the captured trace window, which is evidence of PID reuse.
+    for row in STATE.get("procs", []):
+        try:
+            if int(row.get("pid", -1)) != int(pid):
+                continue
+            created = float(row.get("create_time"))
+            if created <= trace_end + 1.0:
+                return str(row.get("name") or "") or None
+            return None
+        except (TypeError, ValueError):
+            continue
+    return None
+
+
+def _parse_etw_xml(xml_path: str, trace_end: float | None = None) -> dict:
+    """Parse tracerpt XML into bounded event evidence without guessing attribution."""
+    trace_end = float(trace_end if trace_end is not None else time.time())
+    raw_events: list[dict] = []
+    process_starts: dict[int, str] = {}
+    try:
+        for _, elem in ET.iterparse(xml_path, events=("end",)):
+            if _etl_local_name(elem.tag) != "Event":
+                continue
+            system = next((node for node in elem.iter() if _etl_local_name(node.tag) == "System"), None)
+            if system is None:
+                elem.clear()
+                continue
+
+            def child(parent, wanted):
+                return next((node for node in parent if _etl_local_name(node.tag) == wanted), None)
+
+            provider_node = child(system, "Provider")
+            provider = provider_node.attrib.get("Name", "") if provider_node is not None else ""
+            event_id_node = child(system, "EventID")
+            task_node = child(system, "Task")
+            opcode_node = child(system, "Opcode")
+            event_id = (event_id_node.text or "") if event_id_node is not None else ""
+            task = (task_node.text or "") if task_node is not None else ""
+            opcode = (opcode_node.text or "") if opcode_node is not None else ""
+            execution = child(system, "Execution")
+            header_pid = _etw_int(execution.attrib.get("ProcessID")) if execution is not None else None
+            tid = _etw_int(execution.attrib.get("ThreadID")) if execution is not None else None
+            fields = {}
+            for node in elem.iter():
+                if _etl_local_name(node.tag) == "Data":
+                    key = str(node.attrib.get("Name") or "")[:100]
+                    if key:
+                        fields[key] = (node.text or "")[:220]
+
+            normalized_fields = {
+                re.sub(r"[^a-z0-9]", "", key.casefold()): value for key, value in fields.items()
+            }
+            payload_pid = next((
+                _etw_int(normalized_fields[key])
+                for key in ("processid", "pid", "processidentifier", "targetprocessid")
+                if key in normalized_fields and _etw_int(normalized_fields[key]) is not None
+            ), None)
+            signature = f"{provider} {task} {event_id} {opcode}".casefold()
+            event_name = f"{task or 'Event'}:{event_id or '?'}:{opcode or '?'}"
+            image_value = next((
+                value for key, value in normalized_fields.items()
+                if key in ("imagefilename", "imagename", "processname", "processpath", "filename")
+                and str(value).strip()
+            ), "")
+            image_name = re.split(r"[\\/]", str(image_value).strip().strip('"'))[-1] if image_value else ""
+            target_pid = payload_pid or header_pid
+            if target_pid and image_name and image_name.casefold().endswith((".exe", ".com")) and (
+                ("process" in signature and ("start" in signature or event_id in ("1", "10")))
+            ):
+                process_starts[int(target_pid)] = image_name[:180]
+
+            module_name = None
+            for key, value in fields.items():
+                normalized_key = re.sub(r"[^a-z0-9]", "", key.casefold())
+                if not any(token in normalized_key for token in ("module", "driver", "routine", "image", "file", "path")):
+                    continue
+                match = re.search(r"([a-z0-9_.-]+\.sys)\b", str(value), re.I)
+                if match:
+                    module_name = match.group(1)[:180]
+                    break
+
+            relevant = any(token in signature for token in (
+                "dpc", "interrupt", "cswitch", "disk", "tcp", "process", "thread", "image", "driver", "network"
+            )) or bool(module_name)
+            if relevant and len(raw_events) < 1500:
+                pid = target_pid
+                duration_us = None
+                for key, value in normalized_fields.items():
+                    if any(token in key for token in ("durationus", "dpctimeus", "isrtimeus")):
+                        try:
+                            parsed_duration = float(value)
+                            if math.isfinite(parsed_duration) and parsed_duration >= 0:
+                                duration_us = parsed_duration
+                        except (TypeError, ValueError):
+                            pass
+                        break
+                raw_events.append({
+                    "provider": provider[:180],
+                    "event_name": event_name[:220],
+                    "pid": pid,
+                    "tid": tid,
+                    "pid_source": "event payload" if payload_pid is not None else ("ETW execution header" if header_pid is not None else "unavailable"),
+                    "process_name": None,
+                    "module_name": module_name,
+                    "duration_us": duration_us,
+                    "fields": fields,
+                    "signature": signature,
+                })
+            elem.clear()
+    except Exception as exc:
+        return {"ok": False, "reason": f"ETW XML parse failed: {type(exc).__name__}: {str(exc)[:160]}", "events": []}
+
+    for event in raw_events:
+        event["process_name"] = _etw_process_name_for_pid(event.get("pid"), process_starts, trace_end)
+        event["fields"]["_sentinel_pid_source"] = event["pid_source"]
+        event["fields"]["_sentinel_process_attribution"] = (
+            "ETW ProcessStart image event" if event.get("pid") in process_starts
+            else "current process inventory with PID-reuse time guard" if event.get("process_name")
+            else "unresolved"
+        )
+        event.pop("signature", None)
+        event.pop("pid_source", None)
+    return {
+        "ok": True,
+        "events": raw_events,
+        "process_start_count": len(process_starts),
+        "process_attribution_count": sum(1 for event in raw_events if event.get("process_name")),
+        "unattributed_event_count": sum(1 for event in raw_events if not event.get("process_name") and not event.get("module_name")),
+    }
+
+
+def _decode_etl(etl_path: str, trace_id: str, trace_end: float | None = None) -> dict:
+    """Decode tracerpt metadata and xperf DPC/ISR summary with explicit attribution confidence."""
     trace_dir = os.path.dirname(etl_path)
     xml_path = os.path.join(trace_dir, trace_id + ".xml")
     txt_path = os.path.join(trace_dir, trace_id + "-dpcisr.txt")
-    tracerpt = shutil.which("tracerpt.exe") or r"C:\Windows\System32\tracerpt.exe"
-    if not os.path.isfile(tracerpt): return {"decoded": False, "reason": "tracerpt.exe unavailable"}
+    tracerpt = shutil.which("tracerpt.exe")
+    if not tracerpt:
+        system_root = os.environ.get("SystemRoot", r"C:\Windows")
+        candidates = (
+            os.path.join(system_root, "Sysnative", "tracerpt.exe"),
+            os.path.join(system_root, "System32", "tracerpt.exe"),
+        )
+        tracerpt = next((path for path in candidates if os.path.isfile(path)), None)
+    if not tracerpt:
+        return {"decoded": False, "reason": "tracerpt.exe unavailable", "event_count": 0,
+                "named_driver_modules": [], "process_attribution_count": 0}
     r = _run([tracerpt, etl_path, "-o", xml_path, "-of", "XML", "-y"], 120)
     if r.returncode != 0 or not os.path.isfile(xml_path):
-        return {"decoded": False, "reason": ((r.stderr or r.stdout or "tracerpt failed")[:220])}
-    events = []
+        return {"decoded": False, "reason": ((r.stderr or r.stdout or "tracerpt failed")[:220]),
+                "event_count": 0, "named_driver_modules": [], "process_attribution_count": 0}
     try:
-        # ETL XML may be large; parse event-by-event and retain a hard cap.
-        for _, elem in ET.iterparse(xml_path, events=("end",)):
-            if elem.tag.rsplit("}", 1)[-1] != "Event": continue
-            system = next((x for x in elem.iter() if x.tag.rsplit("}",1)[-1] == "System"), None)
-            if system is None: elem.clear(); continue
-            def child_text(parent, name, attr=None):
-                x = next((z for z in parent if z.tag.rsplit("}",1)[-1] == name), None)
-                return x.attrib.get(attr, "") if x is not None and attr else (x.text or "") if x is not None else ""
-            provider = child_text(system, "Provider", "Name")
-            event_id = child_text(system, "EventID")
-            task = child_text(system, "Task")
-            opcode = child_text(system, "Opcode")
-            exec_node = next((x for x in system if x.tag.rsplit("}",1)[-1] == "Execution"), None)
-            pid = int(exec_node.attrib.get("ProcessID", 0)) if exec_node is not None and exec_node.attrib.get("ProcessID", "").isdigit() else None
-            tid = int(exec_node.attrib.get("ThreadID", 0)) if exec_node is not None and exec_node.attrib.get("ThreadID", "").isdigit() else None
-            fields = {}
-            for node in elem.iter():
-                if node.tag.rsplit("}",1)[-1] == "Data":
-                    key = node.attrib.get("Name", "")[:100]
-                    if key: fields[key] = (node.text or "")[:180]
-            name = f"{task or 'Event'}:{event_id or '?'}:{opcode or '?'}"
-            event_signature = (provider + task + name).casefold()
-            if any(x in event_signature for x in ("dpc", "interrupt", "cswitch", "disk", "tcp", "process", "thread", "image", "driver", "network")):
-                procname = None
-                if pid:
-                    p = next((x for x in STATE.get("procs", []) if int(x.get("pid", -1)) == pid), None)
-                    procname = p.get("name") if p else None
-                module_name = None
-                for field_name, field_value in fields.items():
-                    if any(token in field_name.casefold() for token in ("image", "file", "path", "module")):
-                        candidate = str(field_value).strip().strip('"')
-                        if candidate.casefold().endswith(".sys"):
-                            module_name = os.path.basename(candidate)[:180]
-                            break
-                events.append({"provider": provider[:180], "event_name": name[:220], "pid": pid, "tid": tid,
-                               "process_name": procname, "module_name": module_name, "fields": fields})
-            elem.clear()
-            if len(events) >= 1500: break
-    except Exception as exc:
-        return {"decoded": False, "reason": f"ETW XML parse failed: {type(exc).__name__}: {str(exc)[:140]}"}
-    xperf = locate_xperf()
-    drivers = []
-    if xperf:
-        dr = _run([xperf, "-i", etl_path, "-o", txt_path, "-a", "dpcisr"], 60)
-        if dr.returncode == 0: drivers = _parse_dpc_report(txt_path)
-    trace_ts = time.time()
-    for ev in events:
-        if ev.get("module_name"):
-            attribution = "driver image path explicitly reported in ETW event data"
-        elif ev["pid"]:
-            attribution = "process PID from ETW event header; no driver module in this event"
-        else:
-            attribution = "unresolved; ETW header did not include PID or driver module"
-        db("INSERT INTO etw_attribution(ts,trace_path,provider,event_name,pid,tid,process_name,module_name,duration_us,attribution,evidence_json) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
-           (trace_ts, etl_path, ev["provider"], ev["event_name"], ev["pid"], ev["tid"], ev["process_name"], ev.get("module_name"), None,
-            attribution, json.dumps(ev["fields"], sort_keys=True)))
-    for driver in drivers:
-        db("INSERT INTO etw_attribution(ts,trace_path,provider,event_name,module_name,attribution,evidence_json) VALUES(?,?,?,?,?,?,?)",
-           (trace_ts, etl_path, "NT Kernel Logger", "DPC/ISR summary", driver["module"], driver["attribution"], json.dumps(driver)))
-    # Keep derived event rows but cap report size.
-    try: os.remove(xml_path)
-    except OSError: pass
-    try: os.remove(txt_path)
-    except OSError: pass
-    return {"decoded": True, "event_count": len(events), "named_driver_modules": drivers[:20],
-            "process_attribution_count": sum(1 for x in events if x.get("pid")),
-            "attribution_boundary": "PID attribution is from the ETW event header; DPC/ISR driver names appear only when xperf's report resolves a .sys module. Missing symbols/modules remain unresolved."}
+        parsed = _parse_etw_xml(xml_path, trace_end)
+        if not parsed.get("ok"):
+            return {"decoded": False, "reason": parsed.get("reason", "ETW XML parse failed"),
+                    "event_count": 0, "named_driver_modules": [], "process_attribution_count": 0}
+        events = parsed["events"]
+        xperf = locate_xperf()
+        drivers = []
+        driver_report_available = False
+        if xperf:
+            dr = _run([xperf, "-i", etl_path, "-a", "dpcisr", "-o", txt_path], 60)
+            driver_report_available = dr.returncode == 0 and os.path.isfile(txt_path)
+            if driver_report_available:
+                drivers = _parse_dpc_report(txt_path)
+        trace_ts = float(trace_end if trace_end is not None else time.time())
+        for event in events:
+            if event.get("module_name"):
+                attribution = "driver module explicitly present in decoded ETW event data"
+            elif event.get("process_name"):
+                attribution = "process image from ETW ProcessStart or PID-identity-guarded live inventory"
+            elif event.get("pid"):
+                attribution = "ETW event PID present; process image unresolved"
+            else:
+                attribution = "unresolved; event contains no PID or driver module"
+            db(
+                "INSERT INTO etw_attribution(ts,trace_path,provider,event_name,pid,tid,process_name,module_name,duration_us,attribution,evidence_json) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
+                (trace_ts, etl_path, event["provider"], event["event_name"], event["pid"], event["tid"],
+                 event["process_name"], event["module_name"], event["duration_us"], attribution,
+                 json.dumps(event["fields"], sort_keys=True)),
+            )
+        for driver in drivers:
+            db(
+                "INSERT INTO etw_attribution(ts,trace_path,provider,event_name,module_name,attribution,evidence_json) VALUES(?,?,?,?,?,?,?)",
+                (trace_ts, etl_path, "NT Kernel Logger", "DPC/ISR summary", driver["module"],
+                 driver["attribution"], json.dumps(driver, sort_keys=True)),
+            )
+        return {
+            "decoded": True,
+            "event_count": len(events),
+            "process_start_count": parsed["process_start_count"],
+            "process_attribution_count": parsed["process_attribution_count"],
+            "unattributed_event_count": parsed["unattributed_event_count"],
+            "driver_report_available": driver_report_available,
+            "named_driver_modules": drivers[:20],
+            "event_samples": [{
+                "provider": event["provider"], "event": event["event_name"], "pid": event["pid"],
+                "process": event["process_name"], "module": event["module_name"],
+                "duration_us": event["duration_us"],
+            } for event in events[:100]],
+            "attribution_boundary": (
+                "Process images are resolved from process-start events or a current PID record whose creation "
+                "time is not later than the trace end. Driver modules are named only when decoded event fields "
+                "or xperf's DPC/ISR summary explicitly contain a .sys image. PID reuse and missing symbols remain unresolved."
+            ),
+        }
+    finally:
+        for output in (xml_path, txt_path):
+            try:
+                os.remove(output)
+            except OSError:
+                pass
+
 
 
 def capture_kernel_window(duration: int = 12) -> dict:
+    """Serialize SENTINEL-owned kernel captures so simultaneous requests cannot race logger ownership."""
+    if not _ETW_CAPTURE_LOCK.acquire(blocking=False):
+        return {"ok": False, "error": "another SENTINEL ETW capture is already in progress"}
+    try:
+        return _capture_kernel_window_locked(duration)
+    finally:
+        _ETW_CAPTURE_LOCK.release()
+
+
+def _capture_kernel_window_locked(duration: int = 12) -> dict:
     """Capture one bounded NT Kernel Logger window using xperf (WPT); no session takeover."""
     global _ETW_OWNED
     if not IS_WIN: return {"ok": False, "error": "Windows only"}
@@ -1315,7 +1569,7 @@ def capture_kernel_window(duration: int = 12) -> dict:
     loggers = (status.stdout or "") + (status.stderr or "")
     if "NT Kernel Logger" in loggers or STATE.get("kernel", {}).get("etw", {}).get("recording"):
         return {"ok": False, "error": "a kernel/WPR ETW session is already active; SENTINEL will not stop or replace it"}
-    trace_id = time.strftime("sentinel_kernel_%Y%m%d_%H%M%S")
+    trace_id = _dt.datetime.now().strftime("sentinel_kernel_%Y%m%d_%H%M%S_%f")
     etl_path = os.path.join(core.TRACE_DIR, trace_id + ".etl")
     flags = "PROC_THREAD+LOADER+PROFILE+DISK_IO+DISK_IO_INIT+FILE_IO+FILE_IO_INIT+HARD_FAULTS+INTERRUPT+DPC+CSWITCH+NETWORKTRACE"
     # Reset the completion signal before starting the owned logger. Shutdown may
@@ -1347,7 +1601,7 @@ def capture_kernel_window(duration: int = 12) -> dict:
                   "error": "" if stop.returncode == 0 else (stop.stderr or stop.stdout or "xperf stop failed")[:240]})
     if stop.returncode != 0 or not os.path.isfile(etl_path):
         return {"ok": False, "error": state["error"] or "ETW trace output was not created"}
-    decoded = _decode_etl(etl_path, trace_id)
+    decoded = _decode_etl(etl_path, trace_id, time.time())
     size = os.path.getsize(etl_path)
     db("INSERT OR IGNORE INTO trace_archive(ts,file_path,size_bytes,source,status) VALUES(?,?,?,?,?)",
        (time.time(), etl_path, size, "ETW/xperf NT Kernel Logger", "captured"))
