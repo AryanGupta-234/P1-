@@ -114,10 +114,19 @@ def _stop_legacy_agent():
     terminating that exact process. Never kill a process based on port ownership.
     """
     task_result = pw(
-        f"$ErrorActionPreference='SilentlyContinue'; "
-        f"Stop-ScheduledTask -TaskName {_ps_quote(TASK)} -ErrorAction SilentlyContinue; "
-        f"Start-Sleep -Milliseconds 300"
+        f"$ErrorActionPreference='Stop'; "
+        f"$task = Get-ScheduledTask -TaskName {_ps_quote(TASK)} -ErrorAction SilentlyContinue; "
+        f"if ($task -and $task.State -eq 'Running') {{ "
+        f"Stop-ScheduledTask -TaskName {_ps_quote(TASK)} -ErrorAction Stop; "
+        f"$deadline = (Get-Date).AddSeconds(5); "
+        f"do {{ Start-Sleep -Milliseconds 200; $task = Get-ScheduledTask -TaskName {_ps_quote(TASK)} -ErrorAction SilentlyContinue }} "
+        f"while ($task -and $task.State -eq 'Running' -and (Get-Date) -lt $deadline); "
+        f"if ($task -and $task.State -eq 'Running') {{ throw 'SentinelAgent task is still running' }} "
+        f"}}; Write-Output 'Scheduled task is stopped or absent'"
     )
+    if task_result.returncode != 0:
+        print("Could not stop the SentinelAgent scheduled task: " + (task_result.stderr or task_result.stdout or "PowerShell failed")[:240])
+        return False
     try:
         import psutil
         rows = core.db(
