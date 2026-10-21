@@ -319,3 +319,176 @@ def test_process_rows_deduplicate_by_pid_and_creation_time_only():
     result = collectors.dedupe_process_rows(rows)
     assert len(result) == 3
     assert next(row for row in result if row["pid"] == 10 and row["create_time"] == 100.0)["name"] == "app.exe"
+
+def _fake_agent_process():
+    class FakeProcess:
+        def exe(self):
+            return r"C:\Python312\python.exe"
+        def username(self):
+            return "TEST-PC\\Aryan"
+        def memory_info(self):
+            return SimpleNamespace(rss=64 * 1024 * 1024)
+        def memory_percent(self):
+            return 0.4
+        def cpu_percent(self, interval=None):
+            assert interval is None
+            return 120.0
+        def num_threads(self):
+            return 18
+        def num_handles(self):
+            return 77
+        def create_time(self):
+            return time.time() - 120
+        def io_counters(self):
+            return SimpleNamespace(read_bytes=1024**2 * 3, write_bytes=1024**2 * 5)
+        def is_running(self):
+            return True
+        def status(self):
+            return "running"
+    return FakeProcess()
+
+
+def test_agent_runtime_separates_agent_cpu_ram_from_host_resources(monkeypatch):
+    process = _fake_agent_process()
+    monkeypatch.setattr(server, "_AGENT_PROCESS", process)
+    monkeypatch.setattr(server.psutil, "cpu_count", lambda logical=True: 12)
+    monkeypatch.setattr(server.psutil, "cpu_percent", lambda interval=None: 42.4)
+    monkeypatch.setattr(
+        server.psutil,
+        "virtual_memory",
+        lambda: SimpleNamespace(
+            total=16 * 1024**3,
+            used=10 * 1024**3,
+            available=6 * 1024**3,
+            percent=62.5,
+        ),
+    )
+    monkeypatch.setattr(core, "IS_WIN", True)
+    monkeypatch.setattr(collectors, "_session_id", lambda _pid: 3)
+    monkeypatch.setattr(
+        server.threading,
+        "enumerate",
+        lambda: [
+            SimpleNamespace(name="MainThread", is_alive=lambda: True, daemon=False),
+            SimpleNamespace(name="process inventory", is_alive=lambda: True, daemon=True),
+            SimpleNamespace(name="brain", is_alive=lambda: True, daemon=True),
+            SimpleNamespace(name="stopped worker", is_alive=lambda: False, daemon=True),
+        ],
+    )
+    monkeypatch.setattr(
+        core,
+        "db",
+        lambda _sql, _args=(): [(7, time.time() - 120, "windows-interactive", None)],
+    )
+
+    runtime = server.agent_runtime()
+
+    assert runtime["state"] == "running"
+    assert runtime["rss_mb"] == 64.0
+    assert runtime["memory_percent"] == 0.4
+    assert runtime["cpu_one_core_percent"] == 120.0
+    assert runtime["logical_processors"] == 12
+    assert runtime["cpu_percent"] == 10.0
+    assert runtime["host_cpu_percent"] == 42.4
+    assert runtime["host_memory"] == {
+        "total_mb": 16384,
+        "used_mb": 10240,
+        "available_mb": 6144,
+        "percent": 62.5,
+    }
+    assert runtime["threads"] == 18
+    assert runtime["handles"] == 77
+    assert runtime["io_read_bytes"] == 3 * 1024**2
+    assert runtime["io_write_bytes"] == 5 * 1024**2
+    assert {item["name"] for item in runtime["worker_threads"]} == {
+        "process inventory", "brain", "stopped worker"
+    }
+    assert runtime["run"]["id"] == 7
+    assert runtime["session_id"] == 3
+    assert runtime["desktop_access_expected"] is True
+
+
+def test_agent_runtime_lightweight_stream_skips_worker_and_disk_io_enumeration(monkeypatch):
+    process = _fake_agent_process()
+    monkeypatch.setattr(server, "_AGENT_PROCESS", process)
+    monkeypatch.setattr(server.psutil, "cpu_count", lambda logical=True: 4)
+    monkeypatch.setattr(server.psutil, "cpu_percent", lambda interval=None: 5.0)
+    monkeypatch.setattr(
+        server.psutil,
+        "virtual_memory",
+        lambda: SimpleNamespace(total=8 * 1024**3, used=3 * 1024**3,
+                                available=5 * 1024**3, percent=37.5),
+    )
+    monkeypatch.setattr(core, "IS_WIN", False)
+    monkeypatch.setattr(collectors, "_session_id", lambda _pid: None)
+    monkeypatch.setattr(
+        core,
+        "db",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("lightweight snapshot must not query run history")),
+    )
+
+    runtime = server.agent_runtime(include_threads=False, include_io=False, include_run=False)
+
+    assert runtime["worker_threads"] is None
+    assert runtime["io_read_bytes"] is None
+    assert runtime["io_write_bytes"] is None
+    assert runtime["run"] is None
+    assert runtime["cpu_percent"] == 30.0
+
+
+def test_agent_run_history_exposes_active_and_completed_runs(monkeypatch):
+    now = time.time()
+    monkeypatch.setattr(
+        core,
+        "db",
+        lambda sql, args=(): [
+            (9, now - 20, None, 4321, r"C:\Python\pythonw.exe", "windows-interactive", None),
+            (8, now - 200, now - 100, 3210, r"C:\Python\python.exe", "windows-interactive", "normal shutdown"),
+        ],
+    )
+
+    runs = server.agent_run_history(20)
+
+    assert len(runs) == 2
+    assert runs[0]["active"] is True
+    assert runs[0]["id"] == 9
+    assert runs[1]["active"] is False
+    assert runs[1]["duration_s"] == 100.0
+    assert runs[1]["exit_reason"] == "normal shutdown"
+
+
+def test_agent_shutdown_request_uses_a_separate_thread(monkeypatch):
+    state = {"called": False}
+
+    class FakeServer:
+        def shutdown(self):
+            state["called"] = True
+
+    class FakeThread:
+        def __init__(self, target, name, daemon):
+            self.target = target
+            self.name = name
+            self.daemon = daemon
+        def start(self):
+            self.target()
+
+    monkeypatch.setattr(server, "_HTTP_SERVER", FakeServer())
+    monkeypatch.setattr(server.threading, "Thread", FakeThread)
+
+    assert server.request_shutdown() is True
+    assert state["called"] is True
+
+
+def test_installer_stops_agent_before_dependency_update_and_preserves_programdata():
+    from pathlib import Path
+    installer = (Path(__file__).resolve().parents[1] / "install.bat").read_text(encoding="utf-8")
+    stop_at = installer.index('"%PY%" "%SRC%\\agent.py" stop')
+    dependencies_at = installer.index("pip install --upgrade")
+    copy_at = installer.index("robocopy ")
+    assert stop_at < dependencies_at < copy_at
+    assert "/MIR" in installer
+    assert "if errorlevel 8" in installer
+    assert "%ProgramData%\\Sentinel" in installer
+    assert "Start Menu" in installer
+    assert "rmdir /S" not in installer.lower()
+
