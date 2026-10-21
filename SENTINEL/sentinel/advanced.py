@@ -1057,11 +1057,11 @@ def _end_game_session(session_id: int, ts: float) -> dict:
     can retry it. This prevents a crash between report generation and rollback from
     silently marking an unrestored session as completed.
     """
-    rows = db("SELECT game_key,started_at,before_json,profile_action_id,status FROM game_sessions WHERE id=? AND status IN ('active','restore_pending')",
+    rows = db("SELECT game_key,started_at,before_json FROM game_sessions WHERE id=? AND status IN ('active','restore_pending')",
               (int(session_id),))
     if not rows:
         return {"ok": False, "error": "no active or restore-pending game session"}
-    game_key, started, before_raw, _action_id, previous_status = rows[0]
+    game_key, started, before_raw = rows[0]
     try:
         before = json.loads(before_raw or "{}")
     except Exception:
