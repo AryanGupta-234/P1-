@@ -1373,6 +1373,13 @@ def _parse_etw_xml(xml_path: str, trace_end: float | None = None) -> dict:
             execution = child(system, "Execution")
             header_pid = _etw_int(execution.attrib.get("ProcessID")) if execution is not None else None
             tid = _etw_int(execution.attrib.get("ThreadID")) if execution is not None else None
+            created_node = child(system, "TimeCreated")
+            event_ts = trace_end
+            if created_node is not None and created_node.attrib.get("SystemTime"):
+                try:
+                    event_ts = _dt.datetime.fromisoformat(created_node.attrib["SystemTime"].replace("Z", "+00:00")).timestamp()
+                except (TypeError, ValueError, OverflowError):
+                    event_ts = trace_end
             fields = {}
             for node in elem.iter():
                 if _etl_local_name(node.tag) == "Data":
@@ -1413,7 +1420,7 @@ def _parse_etw_xml(xml_path: str, trace_end: float | None = None) -> dict:
                     break
 
             relevant = any(token in signature for token in (
-                "dpc", "interrupt", "cswitch", "disk", "tcp", "process", "thread", "image", "driver", "network"
+                "dpc", "interrupt", "cswitch", "disk", "tcp", "process", "thread", "image", "driver", "network", "kernel"
             )) or bool(module_name)
             if relevant and len(raw_events) < 1500:
                 pid = target_pid
@@ -1428,6 +1435,7 @@ def _parse_etw_xml(xml_path: str, trace_end: float | None = None) -> dict:
                             pass
                         break
                 raw_events.append({
+                    "ts": float(event_ts),
                     "provider": provider[:180],
                     "event_name": event_name[:220],
                     "pid": pid,
@@ -1508,7 +1516,7 @@ def _decode_etl(etl_path: str, trace_id: str, trace_end: float | None = None) ->
                 attribution = "unresolved; event contains no PID or driver module"
             db(
                 "INSERT INTO etw_attribution(ts,trace_path,provider,event_name,pid,tid,process_name,module_name,duration_us,attribution,evidence_json) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
-                (trace_ts, etl_path, event["provider"], event["event_name"], event["pid"], event["tid"],
+                (event.get("ts") or trace_ts, etl_path, event["provider"], event["event_name"], event["pid"], event["tid"],
                  event["process_name"], event["module_name"], event["duration_us"], attribution,
                  json.dumps(event["fields"], sort_keys=True)),
             )
@@ -1527,7 +1535,7 @@ def _decode_etl(etl_path: str, trace_id: str, trace_end: float | None = None) ->
             "driver_report_available": driver_report_available,
             "named_driver_modules": drivers[:20],
             "event_samples": [{
-                "provider": event["provider"], "event": event["event_name"], "pid": event["pid"],
+                "ts": event.get("ts"), "provider": event["provider"], "event": event["event_name"], "pid": event["pid"],
                 "process": event["process_name"], "module": event["module_name"],
                 "duration_us": event["duration_us"],
             } for event in events[:100]],
