@@ -1007,22 +1007,29 @@ function renderEngines(data) {
   engineProcessRows = recent;
   $("#engine-process-summary").textContent = (process.observed || 0) + " process starts observed · " +
     (process.review_candidates || 0) + " review candidates this run · no automatic termination";
-  $("#engine-process-list").innerHTML = recent.map(row => {
+  $("#engine-process-list").innerHTML = recent.map((row, index) => {
     const risk = row.assessment || {}, tone = risk.level === "high" ? "bad" : risk.level === "review" ? "warn" : "mu";
-    return '<div class="engine-process-row"><span class="tag ' + tone + '">' +
+    const userWindow = row.session_id != null && Number(row.session_id) > 0 &&
+      Number(row.visible_windows || 0) > 0 && Number(row.onscreen_windows || 0) > 0 &&
+      row.path_state === "present" && risk.level !== "protected" && !valorant;
+    return '<div class="engine-process-row" data-process-card="' + index + '"><span class="tag ' + tone + '">' +
       esc((risk.level || "normal").toUpperCase()) + '</span><div><b>' +
       esc(row.name) + ' · PID ' + esc(row.pid) + '</b><small>' +
       esc((risk.reasons || []).join(" · ")) + '</small><small>' +
       esc(row.exe || "executable path unavailable") + ' · parent ' +
       esc(row.parent_name || "--") + '</small></div><span class="score">' +
       esc(risk.score ?? 0) + '/100</span><div class="engine-process-actions">' +
-      '<button class="btn sm" data-process-inspect="signature" data-process-index="' + recent.indexOf(row) + '">VERIFY SIGNATURE</button>' +
-      '<button class="btn sm" data-process-inspect="sha256" data-process-index="' + recent.indexOf(row) + '">SHA-256</button>' +
-      '<button class="btn sm" data-process-inspect="open_location" data-process-index="' + recent.indexOf(row) + '">OPEN LOCATION</button>' +
+      '<button class="btn sm" data-process-inspect="signature" data-process-index="' + index + '">VERIFY SIGNATURE</button>' +
+      '<button class="btn sm" data-process-inspect="sha256" data-process-index="' + index + '">SHA-256</button>' +
+      '<button class="btn sm" data-process-inspect="open_location" data-process-index="' + index + '">OPEN LOCATION</button>' +
+      (userWindow ? '<button class="btn sm or" data-process-close="' + index + '">REQUEST CLOSE</button>' : '') +
       '</div><small class="engine-inspect-result" aria-live="polite"></small></div>';
   }).join("") || '<div class="empty">No process-start review candidates yet. Lifecycle observations begin after the collector warm-up baseline.</div>';
   $("#engine-process-list [data-process-inspect]").forEach(button => {
     button.onclick = () => inspectEngineProcess(+button.dataset.processIndex, button.dataset.processInspect);
+  });
+  $("#engine-process-list [data-process-close]").forEach(button => {
+    button.onclick = () => requestProcessClose(+button.dataset.processClose);
   });
   const wprAvailable = !!data.wpr?.available;
   const wprState = data.wpr?.state?.state || "idle";
@@ -1084,6 +1091,38 @@ async function loadEngines() {
   }
 }
 
+
+async function requestProcessClose(index) {
+  const row = engineProcessRows[index];
+  if (!row || !row.pid || !row.create_time || !row.exe) return toast("Exact process identity is unavailable.", "warn");
+  if (!confirm("Send a normal WM_CLOSE request to " + row.name + " (PID " + row.pid + ")? The app may show a save prompt. SENTINEL will never force-kill it.")) return;
+  const card = document.querySelector('[data-process-card="' + index + '"]');
+  const result = card?.querySelector(".engine-inspect-result");
+  if (result) result.textContent = "REQUESTING USER-APP CLOSE…";
+  try {
+    const proposed = await api("/api/action/propose", {
+      kind: "terminate_process",
+      args: { pid: row.pid, create_time: row.create_time, exe: row.exe },
+      reason: "Operator explicitly requested graceful WM_CLOSE after process review"
+    });
+    if (proposed.error || !proposed.id) throw new Error(proposed.error || "Request was rejected by policy.");
+    const approved = confirm("Review request created. Confirm once more to send WM_CLOSE. No force-termination fallback exists.");
+    if (!approved) {
+      await api("/api/action/dismiss", { id: proposed.id });
+      if (result) result.textContent = "Close request dismissed; process was not touched.";
+      return;
+    }
+    const outcome = await api("/api/action/run", { id: proposed.id, confirmed: true });
+    if (outcome.error) throw new Error(outcome.error);
+    if (result) result.textContent = outcome.result || "WM_CLOSE request processed. The application may remain open.";
+    toast("Graceful close request processed · no force kill", "warn");
+  } catch (error) {
+    if (result) result.textContent = "Close request refused: " + (error.message || "unknown error");
+    toast(error.message || "Close request failed", "bad");
+  } finally {
+    await loadEngines();
+  }
+}
 function initEngines() {
   $("#engine-refresh").onclick = loadEngines;
   $("#engine-rebalance").onclick = async () => {

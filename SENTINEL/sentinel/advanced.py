@@ -37,8 +37,8 @@ RISK_TIERS = {
     "timer_resolution": "medium",
     "wifi_max_performance": "medium",
     "pause_updater_service": "medium",
-    # Actions below are deliberately disabled until a safe, complete undo exists.
-    "terminate_process": "dangerous",
+    # WM_CLOSE is manual-only, identity-bound and never escalates to forced termination.
+    "terminate_process": "medium",
     "trim_bg": "dangerous",
     "flush_dns": "dangerous",
     "standby_flush": "dangerous",
@@ -278,10 +278,38 @@ def action_preview(kind: str, args: dict | None = None) -> dict:
         plan["supported"] = IS_WIN and svc in UPDATER_SERVICES
         plan["changes"] = [f"Stop allowlisted third-party updater service {svc}; restart it on game exit/undo if it was running"]
         plan["warnings"].append("Microsoft Update, Defender and security services are never stopped by this action.")
-    elif kind in ("standby_flush", "fan_control", "trim_bg", "flush_dns", "terminate_process"):
+    elif kind == "terminate_process":
+        plan["undo_available"] = False
+        plan["automatic_allowed"] = False
+        try:
+            pid = int(args.get("pid", 0))
+            created = float(args.get("create_time", 0))
+            exe = os.path.normcase(os.path.abspath(str(args.get("exe") or "")))
+            if not IS_WIN or pid <= 4 or created <= 0 or not os.path.isabs(exe):
+                raise ValueError("exact Windows process identity is required")
+            proc = psutil.Process(pid)
+            with proc.oneshot():
+                current_name = proc.name() or ""
+                current_created = float(proc.create_time())
+                current_exe = os.path.normcase(os.path.abspath(proc.exe() or ""))
+            if safeguard.is_protected_process(current_name, current_exe):
+                raise PermissionError("target is a protected Riot/Vanguard or Windows process")
+            if abs(current_created - created) > 0.02 or current_exe != exe:
+                raise ValueError("process identity changed; refresh the process inventory")
+            from .collectors import _session_id, _physical_window_handles
+            if _session_id(pid) in (None, 0) or not _physical_window_handles(pid):
+                raise ValueError("target must be a visible user-session GUI application")
+            plan["target"] = {"pid": pid, "create_time": created, "exe": exe, "name": current_name}
+            plan["supported"] = True
+            plan["changes"] = ["Send WM_CLOSE to the reviewed application's visible top-level windows; never call TerminateProcess"]
+            plan["warnings"].append("The app may show a save prompt or refuse closure. Explicit operator approval is mandatory.")
+        except Exception as exc:
+            plan["supported"] = False
+            plan["warnings"].append(str(exc))
+    elif kind in ("standby_flush", "fan_control", "trim_bg", "flush_dns"):
         plan["supported"] = False
         plan["undo_available"] = False
-        plan["warnings"].append("This action is not enabled because it cannot meet the reversible-action contract safely.")
+        plan["warnings"].append("This action is disabled because it cannot meet the reversible-action contract safely.")
     elif kind in ("wpr_trace", "etw_capture"):
         wpr = locate_wpr() if IS_WIN else None
         plan["supported"] = bool(IS_WIN and wpr and os.path.isfile(wpr))

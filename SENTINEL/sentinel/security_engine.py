@@ -6,10 +6,12 @@ process. Signature state is deliberately not guessed when Windows has not verifi
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 import subprocess
 import time
-from pathlib import Path
+
+import psutil
 from collections import deque
 from typing import Any
 
@@ -234,8 +236,7 @@ def inspect_process(pid: int, create_time: float, executable: str, operation: st
     explorer = resolve_command("explorer.exe")
     if not explorer:
         raise RuntimeError("Windows Explorer executable was not found")
-    flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
-    subprocess.Popen([explorer, f"/select,{exe}"], close_fds=True, creationflags=flags)
+    subprocess.Popen([explorer, f"/select,{exe}"], close_fds=True)
     result["opened"] = True
     result["interpretation"] = "Opened the executable's folder in Explorer; no file contents were changed."
     return result
