@@ -160,6 +160,8 @@ def check_action(kind: str, args: dict | None = None) -> dict[str, Any]:
                 or target in VALORANT_NAMES):
             return {"allowed": False, "code": "valorant_profile_forbidden", "reason": "VALORANT process profiles are permanently disabled in SENTINEL. No CPU Set, priority, timer, or power changes will be applied to the game."}
 
+    if kind in MUTATING_ACTIONS and not current["process_detection_complete"]:
+        return {"allowed": False, "code": "process_state_unknown", "reason": "The process observer is disabled, stale or incomplete. SENTINEL cannot safely establish that VALORANT is absent, so all system/process mutations and trace capture are blocked."}
     if kind in MUTATING_ACTIONS and current["valorant_active"]:
         return {"allowed": False, "code": "valorant_read_only", "reason": "VALORANT is running. SENTINEL has entered strict read-only mode; all system/process mutations and WPR/ETW captures are blocked."}
 

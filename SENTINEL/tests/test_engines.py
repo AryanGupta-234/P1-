@@ -1,6 +1,6 @@
 import time
 
-from sentinel import core, safeguard, runtime_engine, memory_engine, security_engine
+from sentinel import core, safeguard, runtime_engine, memory_engine, security_engine, ai_engine
 
 
 def test_safeguard_blocks_mutations_during_valorant(monkeypatch):
@@ -72,3 +72,20 @@ def test_disabled_process_monitor_fails_closed(monkeypatch):
     decision = safeguard.check_action("power_plan")
     assert not decision["allowed"]
     assert decision["code"] == "process_state_unknown"
+
+
+def test_unknown_process_state_blocks_mutations_and_inference(monkeypatch):
+    monkeypatch.setattr(core, "off", lambda _name: True)
+    guard = safeguard.snapshot()
+    assert guard["process_detection_complete"] is False
+    assert safeguard.check_action("power_plan")["allowed"] is False
+    allowed, _reason = ai_engine.inference_allowed("local-test-model", cloud=False)
+    assert allowed is False
+
+
+def test_runtime_marks_disabled_process_observer_as_degraded(monkeypatch):
+    monkeypatch.setattr(core, "off", lambda _name: True)
+    state = runtime_engine.evaluate()
+    assert state["mode"] == "safety_degraded"
+    assert state["deep_ai_allowed"] is False
+    assert state["fast_ai_allowed"] is False

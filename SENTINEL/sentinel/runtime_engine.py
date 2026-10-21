@@ -24,9 +24,12 @@ def evaluate() -> dict[str, Any]:
     cpu = core.LIVE.get("cpu")
     cpu_value = float(cpu) if cpu is not None else 0.0
     valorant = bool(guard["valorant_active"])
+    safety_ready = bool(guard["process_detection_complete"])
     playing = bool(game) or valorant
     pressure = available_gib < 1.8 or cpu_value >= 92.0
-    if valorant:
+    if not safety_ready:
+        mode = "safety_degraded"
+    elif valorant:
         mode = "valorant_guarded"
     elif pressure:
         mode = "resource_pressure"
@@ -37,11 +40,12 @@ def evaluate() -> dict[str, Any]:
 
     process_interval = 2.2 if valorant else 1.6 if playing or pressure else 1.0
     inventory_multiplier = 3.0 if valorant else 2.0 if playing or pressure else 1.0
-    deep_allowed = not playing and available_gib >= 4.5 and cpu_value < 78.0
-    fast_allowed = not valorant and available_gib >= 1.8 and cpu_value < 92.0
+    deep_allowed = safety_ready and not playing and available_gib >= 4.5 and cpu_value < 78.0
+    fast_allowed = safety_ready and not valorant and available_gib >= 1.8 and cpu_value < 92.0
     return {
         "mode": mode,
         "valorant_active": valorant,
+        "safety_ready": safety_ready,
         "game_active": playing,
         "cpu_percent": round(cpu_value, 1),
         "available_memory_gib": round(available_gib, 2),
