@@ -497,6 +497,7 @@ def test_installer_stops_agent_before_dependency_update_and_preserves_programdat
 
 def test_desktop_opener_uses_running_agent_without_spawning_another(monkeypatch):
     called = {"launch": 0, "start": 0}
+    monkeypatch.setattr(agent, "_running_agent_is_elevated", lambda: True)
     monkeypatch.setattr(agent, "_wait_for_agent", lambda _timeout: True)
     monkeypatch.setattr(agent, "_launch_hud", lambda: called.__setitem__("launch", called["launch"] + 1) or True)
     monkeypatch.setattr(agent, "_start_agent_background", lambda: called.__setitem__("start", called["start"] + 1))
