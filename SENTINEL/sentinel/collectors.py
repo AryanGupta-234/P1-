@@ -648,7 +648,12 @@ def gpu_loop():
             except Exception:
                 pass
         heartbeat("gpu (nvidia-smi)", 2, STATE.get("gpu", {}).get("name", ""))
-        sleep_to(t0, 2.0)
+        try:
+            from . import runtime_engine
+            interval = runtime_engine.collector_interval("gpu", 2.0)
+        except Exception:
+            interval = 2.0
+        sleep_to(t0, interval)
 
 
 # ------------------------------------------------------------------ network
@@ -674,7 +679,12 @@ def ping_loop():
         else:
             metric("loss", 100)
         heartbeat("latency probe (ping)", 1, f"{host}")
-        sleep_to(t0, 1.0)
+        try:
+            from . import runtime_engine
+            interval = runtime_engine.collector_interval("ping", 1.0)
+        except Exception:
+            interval = 1.0
+        sleep_to(t0, interval)
 
 
 def is_private(ip):
@@ -704,7 +714,12 @@ def net_loop():
         STATE["net"] = conns[:80]
         metric("conns", len(conns))
         heartbeat("network connections", 5, f"{len(conns)} established, {len(_seen_remote)} endpoints learned")
-        sleep_to(t0, 5.0)
+        try:
+            from . import runtime_engine
+            interval = runtime_engine.collector_interval("network", 5.0)
+        except Exception:
+            interval = 5.0
+        sleep_to(t0, interval)
 
 
 # ------------------------------------------------------------------ services / autoruns / event log / config

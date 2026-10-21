@@ -51,7 +51,7 @@ def assess_process(row: dict[str, Any]) -> dict[str, Any]:
         if os.path.basename(path) != name:
             score += 18
             reasons.append("process name differs from executable basename")
-        if row.get("path_state") in ("missing", "inaccessible", "access_denied"):
+        if row.get("path_state") in ("missing", "file_missing_or_unmounted", "inaccessible", "access_denied"):
             score += 15
             reasons.append("executable path is missing or inaccessible")
     if parent in SHELL_PARENTS:

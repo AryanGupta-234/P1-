@@ -392,6 +392,12 @@ class H(BaseHTTPRequestHandler):
                 "ai": ai_engine.status(),
                 "memory": memory_engine.status(),
                 "process_intelligence": security_engine.snapshot(30),
+                "wpr": {
+                    "available": bool(advanced.locate_wpr()),
+                    "recorder": "Windows Performance Recorder / GeneralProfile.Light",
+                    "optional_xperf": bool(advanced.locate_xperf()),
+                    "state": core.STATE.get("kernel", {}).get("etw_engine", {}),
+                },
             })
         if p == "/api/process-intelligence":
             return self._json(security_engine.snapshot(min(120, int((qs.get("limit") or ["40"])[0]))))

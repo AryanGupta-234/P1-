@@ -73,6 +73,17 @@ def inventory_delay(base_seconds: float) -> float:
     return max(5.0, float(base_seconds) * min(4.0, max(1.0, multiplier)))
 
 
+def collector_interval(name: str, base_seconds: float) -> float:
+    """Back off SENTINEL-owned expensive polls when games or resource pressure are detected."""
+    mode = snapshot().get("mode")
+    cadence = {
+        "gpu": 6.0 if mode == "valorant_guarded" else 3.0 if mode in ("game_optimized", "resource_pressure") else float(base_seconds),
+        "ping": 3.0 if mode == "valorant_guarded" else 2.0 if mode in ("game_optimized", "resource_pressure") else float(base_seconds),
+        "network": 10.0 if mode == "valorant_guarded" else 7.0 if mode in ("game_optimized", "resource_pressure") else float(base_seconds),
+    }
+    return max(float(base_seconds), cadence.get(str(name), float(base_seconds)))
+
+
 def loop() -> None:
     while True:
         state = evaluate()

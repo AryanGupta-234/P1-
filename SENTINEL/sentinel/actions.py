@@ -262,6 +262,10 @@ def propose(kind, args=None, origin="brain", reason=""):
         log("actions", f"REJECTED non-allowlisted action '{kind}' from {origin}", "warn")
         return None
     args = args or {}
+    guard = safeguard.check_action(kind, args)
+    if not guard["allowed"]:
+        log("safeguard", f"{kind} proposal blocked: {guard['reason'][:180]}", "warn")
+        return None
     from . import advanced
     try:
         preview = advanced.action_preview(kind, args)
