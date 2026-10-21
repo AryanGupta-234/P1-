@@ -367,8 +367,14 @@ $ErrorActionPreference = 'Stop'
 $taskName = $env:SENTINEL_TASK
 Stop-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
 Unregister-ScheduledTask -TaskName $taskName -Confirm:$false -ErrorAction SilentlyContinue
-$desktop = [Environment]::GetFolderPath('DesktopDirectory')
-$startMenu = Join-Path ([Environment]::GetFolderPath('StartMenu')) 'Programs\SENTINEL'
+$loggedOn = (Get-CimInstance Win32_ComputerSystem -ErrorAction SilentlyContinue).UserName
+if (-not $loggedOn) { $loggedOn = [Security.Principal.WindowsIdentity]::GetCurrent().Name }
+$userSid = ([System.Security.Principal.NTAccount]::new($loggedOn)).Translate([System.Security.Principal.SecurityIdentifier]).Value
+$userProfile = Get-CimInstance Win32_UserProfile -Filter ("SID='{0}'" -f $userSid) -ErrorAction Stop
+if (-not $userProfile -or -not $userProfile.LocalPath) { throw "Interactive user profile path is unavailable" }
+$userRoot = $userProfile.LocalPath
+$desktop = Join-Path $userRoot 'Desktop'
+$startMenu = Join-Path $userRoot 'AppData\Roaming\Microsoft\Windows\Start Menu\Programs\SENTINEL'
 Remove-Item (Join-Path $desktop 'SENTINEL.lnk') -Force -ErrorAction SilentlyContinue
 Remove-Item $startMenu -Recurse -Force -ErrorAction SilentlyContinue
 Write-Output 'SENTINEL task and shortcuts removed. ProgramData was kept.'
