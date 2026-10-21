@@ -145,33 +145,35 @@ if exist "%VERSION_DIR%" (
     echo ERROR: Dashboard files are missing from the staged release.
     goto :fail
   )
-  move "%STAGING_DIR%" "%VERSION_DIR%" >nul
-  if errorlevel 1 (
-    echo ERROR: Could not finalize the immutable release directory.
-    goto :fail
-  )
-  echo Fresh version folder created. No previous version was overwritten.
-)
-
-set "VENV_PY=%VERSION_DIR%\.venv\Scripts\python.exe"
-if "%FRESH_VERSION%"=="1" (
-  echo [3/6] Creating the isolated Python environment for fresh release %VERSION%...
-  %PY% -m venv "%VERSION_DIR%\.venv"
+  echo [3/6] Creating an isolated Python environment in the staging folder...
+  %PY% -m venv "%STAGING_DIR%\.venv"
   if errorlevel 1 (
     echo ERROR: Could not create the release-specific Python environment.
     goto :fail
   )
-  if not exist "%VENV_PY%" (
-    echo ERROR: The version-specific Python interpreter is missing.
+  set "STAGING_PY=%STAGING_DIR%\.venv\Scripts\python.exe"
+  if not exist "%STAGING_PY%" (
+    echo ERROR: The staged release Python interpreter is missing.
     goto :fail
   )
-  echo [4/6] Installing dependencies into this new release only...
-  "%VENV_PY%" -m pip install --disable-pip-version-check --retries 3 --timeout 30 -r "%VERSION_DIR%\requirements.txt"
+  echo [4/6] Installing dependencies before publishing the new release...
+  "%STAGING_PY%" -m pip install --disable-pip-version-check --retries 3 --timeout 30 -r "%STAGING_DIR%\requirements.txt"
   if errorlevel 1 (
     echo ERROR: Dependency installation failed for SENTINEL %VERSION%.
-    echo This new release was not activated. All previous versions were preserved.
+    echo The staging folder will be discarded; existing releases remain untouched.
     goto :fail
   )
+  move "%STAGING_DIR%" "%VERSION_DIR%" >nul
+  if errorlevel 1 (
+    echo ERROR: Could not finalize the complete immutable release directory.
+    goto :fail
+  )
+  echo Fresh version folder and isolated Python environment published successfully.
+)
+
+set "VENV_PY=%VERSION_DIR%\.venv\Scripts\python.exe"
+if "%FRESH_VERSION%"=="1" (
+  echo [5/6] Staged release files and dependencies were verified before publication.
 ) else (
   echo [3/6] Reusing the immutable %VERSION% Python environment...
   echo [4/6] Dependency files are not modified for an existing release.
