@@ -39,6 +39,7 @@
 <nav id="nav">
   <div class="ng">MONITOR</div>
   <button data-v="cmd" class="on"><svg viewBox="0 0 24 24"><path d="M12 2l9 5v10l-9 5-9-5V7z"/><circle cx="12" cy="12" r="3"/></svg><span class="lb">COMMAND</span></button>
+  <button data-v="agent"><svg viewBox="0 0 24 24"><path d="M4 12h3l2-6 4 12 2-6h5"/><circle cx="12" cy="12" r="10"/></svg><span class="lb">AGENT</span></button>
   <button data-v="sys"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="1"/><path d="M8 20h8M12 16v4"/></svg><span class="lb">SYSTEM</span></button>
   <button data-v="act"><svg viewBox="0 0 24 24"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg><span class="lb">ACTIVITY</span></button>
   <button data-v="proc"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16"/><path d="M9 9h6v6H9zM9 1v3M15 1v3M9 20v3M15 20v3M1 9h3M1 15h3M20 9h3M20 15h3"/></svg><span class="lb">PROCESSES</span></button>
@@ -90,6 +91,59 @@
   <div class="panel"><div class="ph">What I'm doing right now<em>live</em></div><div class="feed sm" id="ticker"></div></div>
   <div class="panel"><div class="ph">Lag culprits<em>since start</em></div><div class="pb"><div class="list" id="culp"></div></div></div>
 </div></section>
+
+
+<!-- AGENT RUNTIME / LIFECYCLE -->
+<section class="view" id="v-agent">
+  <div class="agent-overview-head">
+    <div><b>SENTINEL agent runtime</b><small>Live process footprint · worker lifecycle · collector health · restart history</small></div>
+    <div class="agent-head-actions"><span id="ag-state" class="pill ok">CONNECTING</span><button class="btn sm" id="ag-refresh">REFRESH</button></div>
+  </div>
+  <div class="metrics agent-metrics">
+    <div class="metric"><small>AGENT CPU · HOST SHARE</small><b id="ag-cpu">--</b><span id="ag-cpu-sub">Sampling process CPU</span><div class="meter"><i id="ag-cpu-meter"></i></div></div>
+    <div class="metric"><small>AGENT RAM · WORKING SET</small><b id="ag-ram">--</b><span id="ag-ram-sub">Private process footprint</span><div class="meter"><i id="ag-ram-meter"></i></div></div>
+    <div class="metric"><small>ACTIVE THREADS</small><b id="ag-threads">--</b><span id="ag-threads-sub">Worker + request threads</span><div class="meter"><i id="ag-threads-meter"></i></div></div>
+    <div class="metric"><small>WINDOWS HANDLES</small><b id="ag-handles">--</b><span id="ag-handles-sub">Agent process handles</span><div class="meter"><i id="ag-handles-meter"></i></div></div>
+    <div class="metric"><small>AGENT UPTIME</small><b id="ag-uptime">--</b><span id="ag-uptime-sub">Current process run</span><div class="meter"><i id="ag-uptime-meter"></i></div></div>
+  </div>
+  <div class="agent-grid">
+    <div class="panel">
+      <div class="ph">Resource impact <em>agent process vs whole host</em></div>
+      <div class="pb">
+        <div class="agent-resource-pair">
+          <div><small>PROCESS CPU · PER CORE</small><b id="ag-cpu-core">--</b><span id="ag-cpu-core-note">psutil process sample</span></div>
+          <div><small>HOST CPU LOAD</small><b id="ag-host-cpu">--</b><span>All processes / logical CPUs</span></div>
+          <div><small>PROCESS RAM SHARE</small><b id="ag-ram-share">--</b><span>Share of physical memory</span></div>
+          <div><small>HOST RAM USED</small><b id="ag-host-ram">--</b><span id="ag-host-ram-note">Available memory --</span></div>
+        </div>
+        <div class="agent-chart-block"><div class="agent-chart-head"><b>Recent agent footprint</b><small>Live samples while this dashboard is connected</small></div>
+          <div class="agent-chart-row"><span>CPU host share</span><svg id="ag-cpu-chart" viewBox="0 0 360 46" role="img" aria-label="Agent CPU usage trend"></svg></div>
+          <div class="agent-chart-row"><span>Working set MB</span><svg id="ag-ram-chart" viewBox="0 0 360 46" role="img" aria-label="Agent memory usage trend"></svg></div>
+        </div>
+        <div class="agent-io-line"><span>Disk reads <b id="ag-read">--</b></span><span>Disk writes <b id="ag-write">--</b></span><span>Logical CPUs <b id="ag-logical">--</b></span></div>
+        <div class="msg agent-note"><small>Measurement notes</small>CPU host share is the agent's CPU use divided by the machine's logical processor count. Per-core CPU can exceed 100% when multiple cores are busy. RAM is the agent process working set; it is not the total SENTINEL data-directory size. First CPU sample may show 0 while the sampling interval initializes.</div>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="ph">Agent identity &amp; lifecycle <em id="ag-run-state">current run</em></div>
+      <div class="pb kv" id="ag-identity"><div class="empty">Waiting for runtime identity.</div></div>
+      <div class="pb"><div class="agent-storage" id="ag-storage"></div></div>
+    </div>
+    <div class="panel agent-span">
+      <div class="ph">Agent functions &amp; collector health <em><span id="ag-health-summary">waiting for heartbeats</span></em></div>
+      <div class="pb agent-health-counts" id="ag-health-counts"></div>
+      <div class="pb" style="overflow:auto"><table id="ag-workers"></table></div>
+    </div>
+    <div class="panel">
+      <div class="ph">Live background threads <em id="ag-thread-count">runtime process inventory</em></div>
+      <div class="pb list" id="ag-threads-list"><div class="empty">Waiting for active worker threads.</div></div>
+    </div>
+    <div class="panel">
+      <div class="ph">Previous agent runs <em>retained in local SQLite</em></div>
+      <div class="pb list" id="ag-runs"><div class="empty">Run history will appear when the agent API responds.</div></div>
+    </div>
+  </div>
+</section>
 
 <!-- ACTIVITY -->
 <section class="view" id="v-act"><div class="cols2" style="grid-template-columns:1.6fr 1fr">
