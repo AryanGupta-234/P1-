@@ -95,6 +95,7 @@ if errorlevel 1 (
   goto :fail
 )
 
+set "FRESH_VERSION=0"
 if exist "%VERSION_DIR%" (
   echo [2/6] Release %VERSION% already exists - verifying without overwriting it...
   if not exist "%VERSION_DIR%\VERSION" (
@@ -111,8 +112,10 @@ if exist "%VERSION_DIR%" (
   if not exist "%VERSION_DIR%\sentinel\core.py" goto :incomplete
   if not exist "%VERSION_DIR%\ui\index.html" goto :incomplete
   if not exist "%VERSION_DIR%\requirements.txt" goto :incomplete
-  echo Immutable version files verified. Reusing this version folder.
+  if not exist "%VERSION_DIR%\.venv\Scripts\python.exe" goto :incomplete
+  echo Immutable version files and Python environment verified. Reusing this version folder.
 ) else (
+  set "FRESH_VERSION=1"
   echo [2/6] Preparing fresh version %VERSION% in a staging folder...
   if exist "%STAGING_DIR%" rmdir /s /q "%STAGING_DIR%"
   mkdir "%STAGING_DIR%"
@@ -150,25 +153,29 @@ if exist "%VERSION_DIR%" (
   echo Fresh version folder created. No previous version was overwritten.
 )
 
-echo [3/6] Creating the isolated Python environment for %VERSION%...
-if not exist "%VERSION_DIR%\.venv\Scripts\python.exe" (
+set "VENV_PY=%VERSION_DIR%\.venv\Scripts\python.exe"
+if "%FRESH_VERSION%"=="1" (
+  echo [3/6] Creating the isolated Python environment for fresh release %VERSION%...
   %PY% -m venv "%VERSION_DIR%\.venv"
   if errorlevel 1 (
     echo ERROR: Could not create the release-specific Python environment.
     goto :fail
   )
-)
-set "VENV_PY=%VERSION_DIR%\.venv\Scripts\python.exe"
-if not exist "%VENV_PY%" (
-  echo ERROR: The version-specific Python interpreter is missing.
-  goto :fail
-)
-echo [4/6] Installing dependencies inside this release only...
-"%VENV_PY%" -m pip install --disable-pip-version-check --retries 3 --timeout 30 -r "%VERSION_DIR%\requirements.txt"
-if errorlevel 1 (
-  echo ERROR: Dependency installation failed for SENTINEL %VERSION%.
-  echo The immutable application files and all previous versions were preserved.
-  goto :fail
+  if not exist "%VENV_PY%" (
+    echo ERROR: The version-specific Python interpreter is missing.
+    goto :fail
+  )
+  echo [4/6] Installing dependencies into this new release only...
+  "%VENV_PY%" -m pip install --disable-pip-version-check --retries 3 --timeout 30 -r "%VERSION_DIR%\requirements.txt"
+  if errorlevel 1 (
+    echo ERROR: Dependency installation failed for SENTINEL %VERSION%.
+    echo This new release was not activated. All previous versions were preserved.
+    goto :fail
+  )
+) else (
+  echo [3/6] Reusing the immutable %VERSION% Python environment...
+  echo [4/6] Dependency files are not modified for an existing release.
+  if not exist "%VENV_PY%" goto :incomplete
 )
 
 echo [5/6] Registering and verifying task, shortcuts and administrator mode...
