@@ -287,4 +287,10 @@ def loop():
         except Exception as exc:
             heartbeat("system inventory", 600, err=f"{type(exc).__name__}: {str(exc)[:200]}")
             log("inventory", f"inventory scan failed: {type(exc).__name__}: {str(exc)[:200]}", "error")
-        time.sleep(max(5, prof("intervals", "inventory_min") * 60 - (time.time() - t0)))
+        delay = max(5, prof("intervals", "inventory_min") * 60 - (time.time() - t0))
+        try:
+            from . import runtime_engine
+            delay = runtime_engine.inventory_delay(delay)
+        except Exception:
+            pass
+        time.sleep(delay)

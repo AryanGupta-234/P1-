@@ -126,22 +126,3 @@ def snapshot(limit: int = 40) -> dict[str, Any]:
 def reset_session() -> None:
     _RECENT.clear()
     _COUNTS.update(observed=0, review=0)
-
-
-_STARTED = False
-
-
-def _health_loop() -> None:
-    while True:
-        core.STATE["process_intelligence"] = snapshot(40)
-        core.heartbeat("process intelligence engine", 15,
-                       f"{_COUNTS['observed']} starts observed · {_COUNTS['review']} review candidate(s)")
-        time.sleep(15)
-
-
-def start() -> None:
-    global _STARTED
-    if _STARTED:
-        return
-    _STARTED = True
-    core.thread(_health_loop, "process-intelligence-engine")

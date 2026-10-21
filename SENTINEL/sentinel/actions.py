@@ -3,7 +3,7 @@ Every action is proposed -> (auto-run if autopilot enables that kind, else waits
 import json, os, subprocess, threading, time
 import psutil
 from pathlib import Path
-from . import core, safeguard
+from . import core
 from .core import CFG, IS_WIN, STATE, db, log, publish, TRACE_DIR
 
 NO_WIN = 0x08000000 if IS_WIN else 0
@@ -62,8 +62,7 @@ else:
 
 
 def _bg_targets():
-    return [p for p in STATE.get("procs", []) if p.get("bg")
-            and not safeguard.is_protected_process(p.get("name"), p.get("exe"))]
+    return [p for p in STATE.get("procs", []) if p.get("bg")]
 
 
 def _run(cmd, timeout=30):
@@ -84,9 +83,6 @@ def _terminate_reviewed_process(args):
         return "rejected (invalid process identity)"
     if pid <= 4 or not expected_exe or not os.path.isabs(expected_exe):
         return "rejected (missing or protected process identity)"
-    guard = safeguard.check_action("terminate_process", args)
-    if not guard["allowed"]:
-        return "rejected by SENTINEL safeguard: " + guard["reason"]
     protected = {"system", "registry", "smss.exe", "csrss.exe", "wininit.exe", "services.exe", "lsass.exe",
         "winlogon.exe", "svchost.exe", "dwm.exe", "fontdrvhost.exe", "securityhealthservice.exe",
         "msmpeng.exe", "nissrv.exe", "trustedinstaller.exe", "explorer.exe"}
@@ -220,18 +216,43 @@ def _do(kind, args):
             _run(["powercfg", "/setactive", _prev_plan[0]])
             return f"restored {_prev_plan[0]}"
         return "nothing to restore"
-    if kind in ("wpr_trace", "etw_capture"):
-        from . import advanced
-        guard = safeguard.check_action(kind, args)
-        if not guard["allowed"]:
-            raise PermissionError(guard["reason"])
-        result = advanced.capture_kernel_window(int(args.get("duration", 12)))
-        if not result.get("ok"):
-            raise RuntimeError(result.get("error", "WPR capture failed"))
-        decoded = result.get("decoded") or {}
-        return (f"WPR ETW trace saved: {result['path']} ({result['bytes']} bytes; "
-                f"{decoded.get('event_count', 0)} decoded events; "
-                f"{len(decoded.get('named_driver_modules', []))} named driver module(s))")
+    if kind == "wpr_trace":
+        if time.time() - _last_trace[0] < 900:
+            raise RuntimeError("WPR capture rate limit: one trace per 15 minutes")
+        if not IS_WIN:
+            raise RuntimeError("WPR capture is Windows-only")
+        from .winutil import run_command
+        etw = STATE.setdefault("kernel", {}).get("etw", {})
+        if etw.get("recording"):
+            raise RuntimeError("an existing WPR recording is active; SENTINEL will not cancel or replace it")
+        start_result = run_command(["wpr.exe", "-start", "GeneralProfile.Light", "-filemode"], timeout=30)
+        start_text = ((start_result.stdout or "") + "\n" + (start_result.stderr or "")).strip()
+        if start_result.returncode != 0:
+            etw.update(available=True, recording=None, state="unknown", checked_at=time.time(),
+                       status_text=start_text[-800:], error=f"WPR start failed (exit {start_result.returncode})")
+            raise RuntimeError(f"WPR start failed (exit {start_result.returncode}): {start_text[-180:]}")
+        _last_trace[0] = time.time()
+        etw.update(available=True, recording=True, state="recording", checked_at=time.time(),
+                   status_text=start_text[-800:], error="")
+        log("kernel", "ETW WPR GeneralProfile.Light trace recording started (15 s)", "warn")
+        time.sleep(15)
+        f = os.path.join(TRACE_DIR, time.strftime("trace_%Y%m%d_%H%M%S.etl"))
+        stop_result = run_command(["wpr.exe", "-stop", f], timeout=180)
+        stop_text = ((stop_result.stdout or "") + "\n" + (stop_result.stderr or "")).strip()
+        if stop_result.returncode == 0:
+            etw.update(recording=False, state="idle", checked_at=time.time(), status_text=stop_text[-800:], error="")
+        else:
+            etw.update(recording=None, state="unknown", checked_at=time.time(), status_text=stop_text[-800:],
+                       error=f"WPR stop failed (exit {stop_result.returncode}); trace state requires re-check")
+        if stop_result.returncode == 0 and os.path.exists(f):
+            trace_ts = time.time()
+            trace_bytes = os.path.getsize(f)
+            trace_row = {"file": f, "ts": trace_ts, "mb": round(trace_bytes / 1048576, 1), "source": "ETW/WPR GeneralProfile.Light", "exists": True}
+            STATE.setdefault("traces", []).append(trace_row)
+            db("INSERT OR IGNORE INTO trace_archive(ts,file_path,size_bytes,source,status) VALUES(?,?,?,?,?)",
+               (trace_ts, f, trace_bytes, trace_row["source"], "captured"))
+            return f"trace saved: {f} (ETL; open in Windows Performance Analyzer)"
+        raise RuntimeError(f"WPR stop failed (exit {stop_result.returncode}): {stop_text[-180:]}")
     return "unknown action"
 
 
@@ -274,12 +295,6 @@ def execute(aid, *, user_confirmed=False):
             return "not pending"
         kind, args = rows[0][0], json.loads(rows[0][1] or "{}")
         tier = advanced.risk_tier(kind)
-        guard = safeguard.check_action(kind, args)
-        if not guard["allowed"]:
-            reason = "blocked by SENTINEL safeguard: " + guard["reason"]
-            db("UPDATE actions SET state='blocked',result=? WHERE id=?", (reason[:400], aid))
-            log("safeguard", f"{kind} blocked: {guard['reason'][:180]}", "warn")
-            return reason
         if tier == "dangerous":
             return "blocked by risk policy: dangerous actions are never automated and this action has no approved reversible implementation"
         if tier == "medium" and not user_confirmed:

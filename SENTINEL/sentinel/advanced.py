@@ -1992,7 +1992,10 @@ def _advance_game_session(ts: float) -> None:
             if rows: _end_game_session(int(rows[0][0]), ts)
         sid = _start_game_session(game, ts)
         STATE.setdefault("advanced", {})["active_session_id"] = sid
-        profile = get_game_profile(str(game.get("name") or ""))
+        game_name = str(game.get("name") or "").casefold()
+        profile = None if game_name in safeguard.VALORANT_NAMES else get_game_profile(str(game.get("name") or ""))
+        if game_name in safeguard.VALORANT_NAMES:
+            log("safeguard", "VALORANT game session registered as telemetry-only; no game profile can be applied", "warn")
         if profile:
             try:
                 from . import actions
@@ -2052,6 +2055,8 @@ def get_game_profile(game_name: str) -> dict | None:
 
 def save_game_profile(game_name: str, profile: dict) -> dict:
     key = str(game_name or "").casefold().strip()
+    if key in safeguard.VALORANT_NAMES:
+        raise ValueError("VALORANT game profiles are permanently disabled by SENTINEL safeguard")
     if not key or len(key) > 180 or not isinstance(profile, dict): raise ValueError("game name and profile object required")
     priority = str(profile.get("priority", "above_normal"))
     if priority not in ("normal", "below_normal", "above_normal"): raise ValueError("priority must be normal, below_normal or above_normal")
@@ -2241,14 +2246,13 @@ def shutdown() -> None:
     global _STARTED, _ETW_OWNED, _LAST_GAME_ID
     _STOP.set()
     if _ETW_OWNED:
-        # Let the capture owner close and archive its ETL with xperf -d.
-        # The capture worker is awakened by _STOP and owns the xperf -d
-        # finalization. Give that bounded finalizer time to complete before using
-        # the emergency stop path, avoiding a concurrent -d / -stop race.
+        # The capture worker owns the WPR session it started and is woken by _STOP.
+        # Never stop an unknown/external logger. If our own finalizer fails, cancel
+        # only the session guarded by the ownership flag.
         if not _ETW_DONE.wait(130):
-            xperf = locate_xperf()
-            if xperf:
-                try: _run([xperf, "-stop"], 30)
+            wpr = locate_wpr()
+            if _ETW_OWNED and wpr:
+                try: _run([wpr, "-cancel"], 30)
                 except Exception: pass
             _ETW_OWNED = False
             _ETW_DONE.set()
