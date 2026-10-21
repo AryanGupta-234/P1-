@@ -64,8 +64,8 @@ echo [2/5] Updating Python dependencies...
 %PY% -m pip install --upgrade --disable-pip-version-check --retries 3 --timeout 30 -r "%SRC%\requirements.txt"
 if errorlevel 1 (
   echo ERROR: Python dependency installation failed.
-  echo The existing application files and ProgramData history were not replaced.
-  if exist "%DEST%\agent.py" powershell -NoProfile -Command "Start-ScheduledTask -TaskName 'SentinelAgent' -ErrorAction SilentlyContinue"
+  echo The previous agent remains stopped because the Python environment may be partially updated.
+  echo Application files and ProgramData history were not replaced. Rerun install.bat to retry.
   goto :fail
 )
 
