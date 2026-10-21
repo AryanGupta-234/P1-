@@ -1451,7 +1451,7 @@ def _lhm_sample() -> dict:
         merged[key] = row
     if merged:
         rest_used = bool(rest_rows)
-        provider = "LibreHardwareMonitor" if rest_used else "OpenHardwareMonitor / LibreHardwareMonitor"
+        provider = "LibreHardwareMonitor" if rest_used or "root\\LibreHardwareMonitor" in wmi_reason else "OpenHardwareMonitor"
         if rest_used:
             version = ""
             try:
@@ -2052,13 +2052,16 @@ def status() -> dict:
 def settings_update(payload: dict) -> dict:
     if not isinstance(payload, dict): raise ValueError("settings must be an object")
     current = CFG.get("advanced") if isinstance(CFG.get("advanced"), dict) else {}
-    allowed = {"etw_enabled", "lhm_enabled", "cpu_temp_warn_c", "gpu_temp_warn_c", "auto_report_sessions"}
+    allowed = {"etw_enabled", "lhm_enabled", "lhm_http_port", "cpu_temp_warn_c", "gpu_temp_warn_c", "auto_report_sessions"}
     for key, value in payload.items():
         if key not in allowed: raise ValueError(f"unknown advanced setting: {key}")
         if key in ("etw_enabled", "lhm_enabled", "auto_report_sessions") and not isinstance(value, bool): raise ValueError(f"{key} must be boolean")
         if key in ("cpu_temp_warn_c", "gpu_temp_warn_c"):
             if isinstance(value, bool) or not isinstance(value, (int, float)) or not 50 <= float(value) <= 110: raise ValueError(f"{key} must be between 50 and 110 °C")
             value = float(value)
+        if key == "lhm_http_port":
+            if isinstance(value, bool) or not isinstance(value, int) or not 1 <= value <= 65535:
+                raise ValueError("lhm_http_port must be an integer between 1 and 65535")
         current[key] = value
     CFG["advanced"] = current
     core.save_cfg(CFG)
