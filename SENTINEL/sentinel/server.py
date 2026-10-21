@@ -1,5 +1,5 @@
 """HTTP + Server-Sent-Events API. Binds 127.0.0.1 only; every /api call needs the install token."""
-import json, os, threading, time, urllib.parse, psutil, platform, sys, hmac
+import ctypes, json, os, threading, time, urllib.parse, psutil, platform, sys, hmac
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from . import core, actions, ai, intel, inventory, intelligence, advanced
 from .core import CFG, STATE, LIVE, HIST, HEART, START, db, log, save_cfg
@@ -76,6 +76,10 @@ def agent_runtime(*, include_threads=True, include_io=True, include_run=True):
     try: username = process.username()
     except Exception: username = "unavailable"
     try:
+        is_elevated = bool(ctypes.windll.shell32.IsUserAnAdmin()) if core.IS_WIN else None
+    except Exception:
+        is_elevated = None
+    try:
         memory = process.memory_info()
         rss = round(memory.rss / 2**20, 1)
     except Exception:
@@ -146,6 +150,7 @@ def agent_runtime(*, include_threads=True, include_io=True, include_run=True):
         "parent_pid": os.getppid(),
         "executable": executable,
         "username": username,
+        "is_elevated": is_elevated,
         "session_id": session_id,
         "execution_context": "interactive Windows session" if core.IS_WIN and session_id not in (None, 0) else ("Session 0 / non-interactive" if core.IS_WIN else "non-Windows / demo"),
         "desktop_access_expected": bool(core.IS_WIN and session_id not in (None, 0)),
