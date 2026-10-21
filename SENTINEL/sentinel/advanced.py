@@ -646,26 +646,38 @@ def _restore(undo: dict) -> str:
         prior = undo.get("default_cpu_sets")
         applied_sets = undo.get("applied_default_cpu_sets")
         target_cpu_set_failed = False
-        if process_alive and prior is not None and applied_sets is not None:
+        background_failures = 0
+        restore_failures = []
+        if process_alive and prior is not None:
             current_sets = _get_process_default_cpu_sets(int(undo["pid"]))
             if current_sets is None:
                 target_cpu_set_failed = True
                 restore_failures.append("game process CPU Set state is temporarily unreadable")
+            elif applied_sets is None:
+                # Without the post-write value, a non-original value could be a
+                # SENTINEL change or a concurrent operator change. Do not guess.
+                if current_sets != prior:
+                    target_cpu_set_failed = True
+                    restore_failures.append("game process CPU Set post-apply snapshot is unavailable; manual review is required")
             elif current_sets == applied_sets:
                 target_cpu_set_failed = not _set_process_default_cpu_sets(int(undo["pid"]), prior)
                 if target_cpu_set_failed:
                     restore_failures.append("game process CPU Set restore failed")
             elif current_sets != prior:
                 partial.append("CPU Sets changed independently; left untouched")
-        background_failures = 0
-        restore_failures = []
+        if process_alive and not undo.get("applied_process_state_captured"):
+            restore_failures.append("post-apply process snapshot unavailable; process settings were not assumed restored")
         for item in undo.get("background_processes", []):
             try:
                 bp, _ = _process_identity({"pid": item["pid"], "create_time": item["create_time"], "exe": item["exe"]})
                 old_sets = item.get("default_cpu_sets")
                 applied_bg = item.get("applied_default_cpu_sets")
                 current_bg = _get_process_default_cpu_sets(int(item["pid"]))
-                if old_sets is not None and applied_bg is not None and current_bg is None:
+                if old_sets is not None and applied_bg is None:
+                    if current_bg is None or current_bg != old_sets:
+                        background_failures += 1
+                        restore_failures.append(f"background PID {item['pid']} post-apply CPU Set snapshot is unavailable")
+                elif old_sets is not None and applied_bg is not None and current_bg is None:
                     background_failures += 1
                     restore_failures.append(f"background PID {item['pid']} CPU Set state is temporarily unreadable")
                 elif old_sets is not None and applied_bg is not None and current_bg == applied_bg:
@@ -677,8 +689,9 @@ def _restore(undo: dict) -> str:
             except psutil.NoSuchProcess:
                 # Exited background process no longer has a persistent CPU Set assignment.
                 continue
-            except Exception:
+            except Exception as exc:
                 background_failures += 1
+                restore_failures.append(f"background PID {item.get('pid', '?')} CPU Set restore error: {type(exc).__name__}")
         timer_ms = int(undo.get("timer_applied_ms") or 0)
         if timer_ms and _TIMER_REQUESTS.get(timer_ms, 0) > 0:
             _timer_request(timer_ms, begin=False)
