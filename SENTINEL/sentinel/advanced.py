@@ -711,7 +711,7 @@ def _restore(undo: dict) -> str:
         if background_failures: details += f"; {background_failures} background restore(s) incomplete"
         if partial: details += "; " + "; ".join(partial[:5])
         if restore_failures:
-            raise RuntimeError(details + "; retry required: " + "; ".join(restore_failures[:5]))
+            raise RuntimeError("retry required: " + "; ".join(restore_failures[:5]) + "; " + details)
         return details
     if kind == "wifi_max_performance":
         scheme = str(undo.get("scheme") or "")
