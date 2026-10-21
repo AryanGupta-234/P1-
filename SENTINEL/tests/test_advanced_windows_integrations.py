@@ -535,3 +535,17 @@ def test_lhm_rest_reader_refuses_non_success_and_never_follows_redirects(monkeyp
     assert rows == []
     assert "HTTP 401" in reason
 
+def test_xperf_dpcisr_parser_only_emits_explicit_driver_modules(tmp_path):
+    report = tmp_path / "dpcisr.txt"
+    report.write_text(
+        "Module: nvlddmkm.sys Routine: 0xFFFFF 123.4 5.6\n"
+        "Module: tcpip.sys Routine: 0xFFFFA 42.0 2.0\n"
+        "No module name resolved for this DPC\n",
+        encoding="utf-8",
+    )
+
+    drivers = advanced._parse_dpc_report(str(report))
+
+    assert [item["module"] for item in drivers] == ["nvlddmkm.sys", "tcpip.sys"]
+    assert all("xperf dpcisr summary" in item["attribution"] for item in drivers)
+
