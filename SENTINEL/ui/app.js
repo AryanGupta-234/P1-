@@ -13,7 +13,7 @@ const hms = ts => new Date(ts * 1000).toLocaleTimeString([], { hour12: false });
 const dur = s => { s = Math.floor(s); const d = Math.floor(s / 86400), h = Math.floor(s % 86400 / 3600), m = Math.floor(s % 3600 / 60); return (d ? d + "d " : "") + (h || d ? h + "h " : "") + m + "m " + (s % 60) + "s"; };
 
 /* ---------- P1 shell: titles, toasts, splash, starfield ---------- */
-const TITLES = { cmd: "COMMAND", sys: "SYSTEM", act: "ACTIVITY", proc: "PROCESSES", net: "NETWORK", ker: "KERNEL", adv: "TUNER / THERMAL", evi: "EVIDENCE", intelx: "INTELLIGENCE", int: "INTEL FEED", ai: "AI CORE", ctl: "CONTROL", fc: "FEATURES", tsk: "TASKS" };
+const TITLES = { cmd: "COMMAND", agent: "AGENT", sys: "SYSTEM", act: "ACTIVITY", proc: "PROCESSES", net: "NETWORK", ker: "KERNEL", adv: "TUNER / THERMAL", evi: "EVIDENCE", intelx: "INTELLIGENCE", int: "INTEL FEED", ai: "AI CORE", ctl: "CONTROL", fc: "FEATURES", tsk: "TASKS" };
 const VKEYS = Object.keys(TITLES);
 function toast(msg, kind = "") { const b = document.createElement("div"); b.className = "toast " + kind; b.textContent = msg; $("#toasts").append(b); setTimeout(() => b.remove(), 5200); }
 let bootDone = false;
@@ -229,10 +229,188 @@ function buildCtl() {
   $$("#runnow [data-k]").forEach(b => b.onclick = async () => { const r = await api("/api/action/propose", { kind: b.dataset.k }); if (r.id) { await api("/api/action/run", { id: r.id }); toast("Ran: " + NICE[b.dataset.k], "ok"); } loadActions(); });
 }
 
+/* ---------- agent runtime, footprint and lifecycle ---------- */
+let AGENT_DETAIL = null, agentBusy = false, agentLastLoad = 0;
+const AGENT_CPU_HISTORY = [], AGENT_RAM_HISTORY = [];
+
+function agentBytes(value) {
+  if (value == null || !Number.isFinite(Number(value))) return "--";
+  const n = Number(value);
+  if (n >= 1024 ** 3) return (n / 1024 ** 3).toFixed(2) + " GB";
+  if (n >= 1024 ** 2) return (n / 1024 ** 2).toFixed(1) + " MB";
+  return (n / 1024).toFixed(1) + " KB";
+}
+function agentTime(value) {
+  if (!value) return "--";
+  return new Date(Number(value) * 1000).toLocaleString();
+}
+function agentSpark(id, values) {
+  const svg = $("#" + id);
+  if (!svg) return;
+  const data = values.slice(-90).filter(Number.isFinite);
+  if (data.length < 2) {
+    svg.innerHTML = "";
+    return;
+  }
+  const low = Math.min(...data), high = Math.max(...data), span = high - low || 1;
+  const points = data.map((v, i) =>
+    (i / (data.length - 1) * 356 + 2).toFixed(1) + "," + (39 - (v - low) / span * 33).toFixed(1)
+  ).join(" ");
+  svg.innerHTML = "<polyline points=\"" + points + "\"></polyline>";
+}
+function agentPushSample(runtime) {
+  if (!runtime) return;
+  const cpu = Number(runtime.cpu_percent);
+  const ram = Number(runtime.rss_mb);
+  if (Number.isFinite(cpu)) {
+    AGENT_CPU_HISTORY.push(cpu);
+    if (AGENT_CPU_HISTORY.length > 90) AGENT_CPU_HISTORY.shift();
+  }
+  if (Number.isFinite(ram)) {
+    AGENT_RAM_HISTORY.push(ram);
+    if (AGENT_RAM_HISTORY.length > 90) AGENT_RAM_HISTORY.shift();
+  }
+}
+function agentStateClass(state) {
+  if (state === "healthy" || state === "operational" || state === "running") return "ok";
+  if (state === "degraded" || state === "stale") return "warn";
+  if (state === "unavailable" || state === "stopped" || state === "error") return "bad";
+  return "mu";
+}
+function updateAgentView(runtime, matrix, runs, storage) {
+  if (!runtime) return;
+  const logical = Math.max(1, Number(runtime.logical_processors || 1));
+  const cpu = runtime.cpu_percent == null ? null : Number(runtime.cpu_percent);
+  const cpuCore = runtime.cpu_one_core_percent == null ? null : Number(runtime.cpu_one_core_percent);
+  const ram = runtime.rss_mb == null ? null : Number(runtime.rss_mb);
+  const memory = runtime.host_memory || {};
+  const totalRam = Number(memory.total_mb || 0);
+  const ramShare = ram != null && totalRam > 0 ? ram / totalRam * 100 : null;
+  const state = runtime.state || "unknown";
+  const stateEl = $("#ag-state");
+  stateEl.textContent = state.toUpperCase();
+  stateEl.className = "pill " + agentStateClass(state);
+  $("#ag-cpu").textContent = cpu == null ? "--" : cpu.toFixed(2) + "%";
+  $("#ag-cpu-sub").textContent = cpuCore == null ? "Sampling process CPU" : cpuCore.toFixed(1) + "% of one logical CPU";
+  $("#ag-cpu-meter").style.width = Math.max(0, Math.min(100, cpu || 0)) + "%";
+  $("#ag-ram").textContent = ram == null ? "--" : ram.toFixed(1) + " MB";
+  $("#ag-ram-sub").textContent = runtime.memory_percent == null ? "Agent working set" : Number(runtime.memory_percent).toFixed(2) + "% of host RAM";
+  $("#ag-ram-meter").style.width = Math.max(0, Math.min(100, ramShare || 0)) + "%";
+  const threadCount = Number(runtime.threads || 0);
+  $("#ag-threads").textContent = runtime.threads == null ? "--" : String(threadCount);
+  $("#ag-threads-sub").textContent = (runtime.worker_threads || []).length + " named background workers";
+  $("#ag-threads-meter").style.width = Math.max(0, Math.min(100, threadCount / Math.max(1, logical * 8) * 100)) + "%";
+  $("#ag-handles").textContent = runtime.handles == null ? "--" : Number(runtime.handles).toLocaleString();
+  $("#ag-handles-sub").textContent = "Operating-system handles";
+  $("#ag-handles-meter").style.width = Math.max(0, Math.min(100, Number(runtime.handles || 0) / 100)) + "%";
+  const uptime = Number(runtime.uptime_s || 0);
+  $("#ag-uptime").textContent = dur(uptime);
+  $("#ag-uptime-sub").textContent = "PID " + (runtime.pid ?? "--") + " · started " + agentTime(runtime.process_started_at);
+  $("#ag-uptime-meter").style.width = Math.max(2, Math.min(100, uptime / 86400 * 100)) + "%";
+
+  $("#ag-cpu-core").textContent = cpuCore == null ? "--" : cpuCore.toFixed(1) + "%";
+  $("#ag-cpu-core-note").textContent = logical + " logical processor(s) · raw process CPU";
+  $("#ag-host-cpu").textContent = runtime.host_cpu_percent == null ? "--" : Number(runtime.host_cpu_percent).toFixed(1) + "%";
+  $("#ag-ram-share").textContent = ramShare == null ? "--" : ramShare.toFixed(3) + "%";
+  $("#ag-host-ram").textContent = memory.percent == null ? "--" : Number(memory.percent).toFixed(1) + "%";
+  $("#ag-host-ram-note").textContent = memory.available_mb == null ? "Host memory unavailable" : Number(memory.available_mb).toLocaleString() + " MB available";
+  $("#ag-read").textContent = agentBytes(runtime.io_read_bytes);
+  $("#ag-write").textContent = agentBytes(runtime.io_write_bytes);
+  $("#ag-logical").textContent = logical;
+  agentSpark("ag-cpu-chart", AGENT_CPU_HISTORY);
+  agentSpark("ag-ram-chart", AGENT_RAM_HISTORY);
+
+  const currentRun = runtime.run || {};
+  $("#ag-run-state").textContent = currentRun.id ? "RUN #" + currentRun.id + " · " + (currentRun.mode || "unknown mode") : "run record unavailable";
+  $("#ag-identity").innerHTML = Object.entries({
+    "Process ID": runtime.pid,
+    "Parent PID": runtime.parent_pid,
+    "Windows session": runtime.session_id ?? "unknown",
+    "Execution context": runtime.execution_context,
+    "Desktop access": runtime.desktop_access_expected ? "interactive desktop" : "not confirmed",
+    "Python": runtime.python,
+    "Platform": runtime.platform,
+    "Executable": runtime.executable,
+    "Started": agentTime(runtime.process_started_at)
+  }).map(([key, value]) => "<i>" + esc(key) + "</i><span>" + esc(value ?? "--") + "</span>").join("");
+  $("#ag-storage").innerHTML = storage
+    ? "<b>Durable local store</b><br>" + esc(storage.home || "--") + "<br><small>SQLite: " + esc(storage.database || "--") + "</small>"
+    : "";
+
+  matrix = matrix || {status:"pending",healthy:0,degraded:0,stale:0,unavailable:0,total:0,rows:[]};
+  $("#ag-health-summary").textContent = (matrix.status || "pending") + " · " + (matrix.total || 0) + " monitored functions";
+  $("#ag-health-counts").innerHTML = [
+    ["HEALTHY", matrix.healthy || 0, "ok"],
+    ["DEGRADED", matrix.degraded || 0, "warn"],
+    ["STALE", matrix.stale || 0, "warn"],
+    ["UNAVAILABLE", matrix.unavailable || 0, "mu"]
+  ].map(([label, count, tone]) => "<span class=\"tag " + tone + "\">" + label + " " + count + "</span>").join("");
+  const workers = matrix.rows || [];
+  $("#ag-workers").innerHTML = "<tr><th>STATE</th><th>FUNCTION / COLLECTOR</th><th>INTERVAL</th><th>RUNS</th><th>LAST HEARTBEAT / DETAIL</th></tr>"
+    + workers.map(worker => {
+      const tone = agentStateClass(worker.state);
+      const dot = worker.state === "healthy" ? "" : worker.state === "degraded" || worker.state === "stale" ? "late" : worker.state === "unavailable" ? "off" : "dead";
+      const age = worker.age_s == null ? "never" : worker.age_s + "s ago";
+      const detail = worker.error || worker.note || "No detail reported";
+      return "<tr><td><span class=\"dot " + dot + "\"></span><span class=\"tag " + tone + "\">" + esc(worker.state) + "</span></td>"
+        + "<td><b>" + esc(worker.name) + "</b></td><td>" + (worker.every_s ? worker.every_s + "s" : "--") + "</td>"
+        + "<td>" + Number(worker.runs || 0).toLocaleString() + "</td><td>" + esc(age) + "<small>" + esc(detail) + "</small></td></tr>";
+    }).join("") || "<tr><td colspan=\"5\"><div class=\"empty\">No background functions have reported a heartbeat yet.</div></td></tr>";
+
+  const threads = runtime.worker_threads || [];
+  $("#ag-thread-count").textContent = threads.length + " named threads · " + (runtime.threads ?? "--") + " total OS threads";
+  $("#ag-threads-list").innerHTML = threads.map(thread =>
+    "<div class=\"adv-row\"><div><b>" + esc(thread.name) + "</b><small>" + (thread.daemon ? "Background daemon worker" : "Non-daemon thread") + "</small></div>"
+    + "<span class=\"tag " + (thread.alive ? "ok" : "bad") + "\">" + (thread.alive ? "ALIVE" : "STOPPED") + "</span></div>"
+  ).join("") || "<div class=\"empty\">The API worker list is not available yet.</div>";
+
+  const runRows = runs || [];
+  $("#ag-runs").innerHTML = runRows.map(run => {
+    const active = !!run.active;
+    return "<div class=\"agent-run\"><span class=\"run-id\">#" + run.id + "</span>"
+      + "<div class=\"run-detail\"><b>" + esc(run.mode || "unknown run mode") + " · PID " + esc(run.pid) + "</b>"
+      + "<small>" + esc(agentTime(run.started_at)) + " · " + esc(run.executable || "") + "</small>"
+      + "<small>" + esc(run.exit_reason || (active ? "Current process is active" : "No exit reason recorded")) + "</small></div>"
+      + "<div class=\"run-age\"><span class=\"tag " + (active ? "ok" : "mu") + "\">" + (active ? "ACTIVE" : "CLOSED") + "</span><br>" + dur(Number(run.duration_s || 0)) + "</div></div>";
+  }).join("") || "<div class=\"empty\">No agent run history is available.</div>";
+}
+async function loadAgent(force = false) {
+  if (agentBusy || (!force && Date.now() - agentLastLoad < 6000)) return;
+  agentBusy = true;
+  agentLastLoad = Date.now();
+  try {
+    const data = await api("/api/agent");
+    if (data.error) throw new Error(data.error);
+    AGENT_DETAIL = data;
+    if (data.runtime) agentPushSample(data.runtime);
+    updateAgentView(data.runtime, data.sensor_matrix, data.runs, data.storage);
+  } catch (error) {
+    $("#ag-state").textContent = "API LOST";
+    $("#ag-state").className = "pill bad";
+    toast("Agent overview unavailable: " + error.message, "warn");
+  } finally {
+    agentBusy = false;
+  }
+}
+function initAgent() {
+  $("#ag-refresh").onclick = () => loadAgent(true);
+}
+
 /* ---------- main tick ---------- */
 let ctlInitialized = false;
 function onTick(d) {
   S = d; for (const [k, v] of Object.entries(d.live || {})) { (H[k] ||= []).push(v); if (H[k].length > MAXH) H[k].shift(); }
+  if (d.agent) {
+    agentPushSample(d.agent);
+    if (view === "agent") {
+      const previous = AGENT_DETAIL?.runtime || {};
+      const runtime = { ...previous, ...d.agent };
+      if (!d.agent.run) runtime.run = previous.run;
+      if (!d.agent.worker_threads?.length) runtime.worker_threads = previous.worker_threads || [];
+      updateAgentView(runtime, d.sensor_matrix || AGENT_DETAIL?.sensor_matrix, AGENT_DETAIL?.runs, AGENT_DETAIL?.storage);
+      if (Date.now() - agentLastLoad > 8000) loadAgent();
+    }
+  }
   $("#h-up").textContent = dur(d.uptime); updHero();
   if (view === "cmd") { updTiles(); updMetrics(); }
   if (view === "tsk") updTasks();
@@ -248,7 +426,8 @@ function onTick(d) {
 function show(v) {
   view = v; $("#vtitle").textContent = TITLES[v]; try { localStorage.setItem("sv", v); } catch (e) { } $$(".view").forEach(e => e.classList.toggle("on", e.id === "v-" + v)); $$("#nav button").forEach(b => b.classList.toggle("on", b.dataset.v === v));
   if (!S) {
-    if (v === "intelx") loadIntelligence();
+    if (v === "agent") loadAgent(true);
+    else if (v === "intelx") loadIntelligence();
     else if (v === "ker") loadKernelArchive();
     else if (v === "adv") loadAdvanced(true);
     else if (v === "sys") loadSys(true);
@@ -260,7 +439,7 @@ function show(v) {
     else if (v === "ctl") loadActions();
     return;
   }
-  ({ cmd: updTiles, act: () => { updHeart(); renderFeed(); }, proc: () => loadProcesses(true), net: updNet, ker: () => { updKer(); loadKernelArchive(); }, adv: () => loadAdvanced(true), int: loadIntel, intelx: loadIntelligence, ai: updAI, ctl: () => { buildCtl(); loadActions(); ctlInitialized = true; }, sys: () => loadSys(true), evi: loadEvi, tsk: () => { updTasks(); loadHist(); }, fc: loadFC })[v]();
+  ({ cmd: updTiles, agent: () => loadAgent(true), act: () => { updHeart(); renderFeed(); }, proc: () => loadProcesses(true), net: updNet, ker: () => { updKer(); loadKernelArchive(); }, adv: () => loadAdvanced(true), int: loadIntel, intelx: loadIntelligence, ai: updAI, ctl: () => { buildCtl(); loadActions(); ctlInitialized = true; }, sys: () => loadSys(true), evi: loadEvi, tsk: () => { updTasks(); loadHist(); }, fc: loadFC })[v]();
 }
 async function boot() {
   starfield(); $("#bootSkip").onclick = endBoot; let fast = false; try { fast = sessionStorage.getItem("sb") === "1"; } catch (e) { }
@@ -279,10 +458,10 @@ async function boot() {
   const send = () => { const m = $("#ai-in").value.trim(); if (m) { api("/api/chat", { msg: m, mode: $("#ai-mode").value }); $("#ai-in").value = ""; } };
   $("#ai-go").onclick = send; $("#ai-in").onkeydown = e => e.key === "Enter" && send();
   setInterval(() => $("#h-clock").textContent = new Date().toLocaleTimeString([], { hour12: false }), 1000);
-  setInterval(() => { if (view === "int") loadIntel(); if (view === "ctl") loadActions(); }, 15000); loadActions();
+  setInterval(() => { if (view === "int") loadIntel(); if (view === "ctl") loadActions(); if (view === "agent") loadAgent(); }, 15000); loadActions();
   $("#p-q").oninput = () => { clearTimeout(procQueryTimer); procQueryTimer = setTimeout(() => loadProcesses(true), 260); }; $("#p-refresh").onclick = () => loadProcesses(true); $("#n-q").oninput = () => S && updNet();
   $("#a-exp").onclick = () => { const t = LOGS.map(r => `${new Date(r.ts * 1000).toISOString()}\t${r.level}\t${r.src}\t${r.msg}`).join("\n"); const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([t], { type: "text/plain" })); a.download = "sentinel-activity-" + Date.now() + ".log"; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000); toast("Exported " + LOGS.length + " events", "ok"); };
-  initPalette(); initNotify(); initFC(); initIntelligence(); initAdvanced(); bindJ("#metrics"); loadStatus(); setInterval(loadStatus, 15000);
+  initPalette(); initNotify(); initFC(); initIntelligence(); initAdvanced(); initAgent(); bindJ("#metrics"); loadStatus(); setInterval(loadStatus, 15000);
   $("#e-go").onclick = loadEvi; $("#e-csv").onclick = csvExport; $("#e-q").onkeydown = e => e.key === "Enter" && loadEvi(); $("#e-lv").onchange = $("#e-src").onchange = loadEvi;
   $("#sys-refresh").onclick = async () => { const b = $("#sys-refresh"); b.disabled = true; b.textContent = "SCANNING…"; const r = await api("/api/inventory/refresh", {}); b.disabled = false; b.textContent = "REFRESH INVENTORY"; if (r.error) toast(r.error, "bad"); else { toast("System inventory refreshed", "ok"); loadSys(true); } };
   $("#kernel-capture").onclick = async () => { const r = await api("/api/action/propose", { kind: "wpr_trace", reason: "User requested a bounded 15-second Windows Performance Recorder ETW trace" }); if (r.error) return toast(r.error, "bad"); toast("ETW trace queued. Approve it in CONTROL; an existing WPR recording will not be interrupted.", "warn"); loadActions(); };
