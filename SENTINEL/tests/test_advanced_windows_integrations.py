@@ -295,8 +295,8 @@ def test_game_session_teardown_retries_real_power_plan_undo(monkeypatch):
         ) VALUES(77,'power_plan','medium',100,'{}',?,1,1)""",
         (json.dumps({
             "kind": "power_plan",
-            "power_plan": "previous-guid",
-            "applied_plan": "tuned-guid",
+            "power_plan": "381b4222-f694-41f0-9685-ff5bb260df2e",
+            "applied_plan": "8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c",
         }),),
     )
     conn.execute(
@@ -334,13 +334,13 @@ def test_game_session_teardown_retries_real_power_plan_undo(monkeypatch):
     assert "active power scheme is unknown" in journal1[1]
 
     # The same exact action remains retryable once Windows exposes its current state.
-    system["power_plan"] = "tuned-guid"
+    system["power_plan"] = "8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c"
     second = advanced._end_game_session(1, 230.0)
     journal2 = conn.execute(
         "SELECT reverted_at,revert_result FROM action_journal WHERE action_id=77"
     ).fetchone()
     assert second["restoration_pending"] is False
-    assert system["power_plan"] == "previous-guid"
+    assert system["power_plan"] == "381b4222-f694-41f0-9685-ff5bb260df2e"
     assert journal2[0] is not None
     assert conn.execute("SELECT status FROM game_sessions WHERE id=1").fetchone()[0] == "completed"
     assert conn.execute("SELECT ended_at FROM game_sessions WHERE id=1").fetchone()[0] == 200.0
