@@ -283,3 +283,65 @@ def test_startup_retries_restore_pending_session_instead_of_resuming_game(monkey
     assert len(calls) == 1
     assert calls[0][0] == 1
     assert "active_session_id" not in advanced.STATE["advanced"]
+
+def test_game_session_teardown_retries_real_power_plan_undo(monkeypatch):
+    conn = _memory_store(monkeypatch)
+    conn.execute(
+        """INSERT INTO actions VALUES(77,100,'power_plan','done','changed','{}')"""
+    )
+    conn.execute(
+        """INSERT INTO action_journal(
+            action_id,kind,risk,created_at,before_json,undo_json,undo_available,changed
+        ) VALUES(77,'power_plan','medium',100,'{}',?,1,1)""",
+        (json.dumps({
+            "kind": "power_plan",
+            "power_plan": "previous-guid",
+            "applied_plan": "tuned-guid",
+        }),),
+    )
+    conn.execute(
+        """INSERT INTO game_sessions(
+            game_key,pid,create_time,started_at,before_json,status
+        ) VALUES('game.exe',4242,100,100,'{}','active')"""
+    )
+    conn.execute(
+        "INSERT INTO session_actions(session_id,action_id,created_at) VALUES(1,77,101)"
+    )
+    conn.commit()
+    monkeypatch.setitem(advanced.CFG, "advanced", {"auto_report_sessions": True})
+    monkeypatch.setattr(advanced, "_current_metrics", lambda: {"cpu": 20.0})
+    monkeypatch.setattr(advanced, "_correlate_window", lambda *_args: [])
+    monkeypatch.setattr(advanced, "log", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(advanced, "publish", lambda *_args, **_kwargs: None)
+
+    system = {"power_plan": None}
+    monkeypatch.setattr(advanced, "_power_plan", lambda: system["power_plan"])
+
+    def fake_run(args, timeout=15):
+        assert args[:2] == ["powercfg.exe", "/setactive"]
+        system["power_plan"] = args[2]
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(advanced, "_run", fake_run)
+
+    first = advanced._end_game_session(1, 200.0)
+    journal1 = conn.execute(
+        "SELECT reverted_at,revert_result FROM action_journal WHERE action_id=77"
+    ).fetchone()
+    assert first["restoration_pending"] is True
+    assert conn.execute("SELECT status FROM game_sessions WHERE id=1").fetchone()[0] == "restore_pending"
+    assert journal1[0] is None
+    assert "active power scheme is unknown" in journal1[1]
+
+    # The same exact action remains retryable once Windows exposes its current state.
+    system["power_plan"] = "tuned-guid"
+    second = advanced._end_game_session(1, 230.0)
+    journal2 = conn.execute(
+        "SELECT reverted_at,revert_result FROM action_journal WHERE action_id=77"
+    ).fetchone()
+    assert second["restoration_pending"] is False
+    assert system["power_plan"] == "previous-guid"
+    assert journal2[0] is not None
+    assert conn.execute("SELECT status FROM game_sessions WHERE id=1").fetchone()[0] == "completed"
+    assert conn.execute("SELECT ended_at FROM game_sessions WHERE id=1").fetchone()[0] == 200.0
+
