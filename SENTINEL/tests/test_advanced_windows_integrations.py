@@ -157,7 +157,7 @@ def test_lhm_reader_supports_asus_cpu_core_and_fan_sensor_names(monkeypatch):
 
     result = advanced._lhm_sample()
 
-    assert result["available"] is True
+    assert result["available"] is True, result
     assert result["provider"] == "LibreHardwareMonitor"
     assert result["cpu_sensor_count"] == 2
     assert result["fan_sensor_count"] == 1
