@@ -45,15 +45,47 @@ The dashboard URL includes a generated access token. Keep it private.
 
 ## Windows installation
 
-For installation, run `install.bat` from an elevated Windows session (the script requests elevation). It installs Python dependencies, copies the application to `%ProgramFiles%\Sentinel`, and registers `SentinelAgent` for the signed-in user at interactive logon with highest available privileges. It is deliberately **not** a Session 0 `SYSTEM` task: desktop-window inspection and user notifications require the interactive session. A restart-on-failure policy is configured.
+Run `install.bat` from the checked-out `SENTINEL` directory. The installer requests administrator permission through UAC, detects Python 3.11/3.12 (or offers Python 3.12 through winget), and reads the release from `VERSION` (semantic `MAJOR.MINOR.PATCH`).
 
-After setup, the installer opens the HUD and creates both a **Desktop** shortcut and a **Start Menu → SENTINEL** entry. These launch the app-window view and start the local agent when it is not already running. You can also use `python agent.py open` from the installation directory to open it manually. Every Windows launch enforces an elevated administrator token: an unelevated launch invokes the standard Windows UAC prompt, and SENTINEL does not continue if permission is denied. The logon task is registered with **RunLevel Highest** so its normal startup path also runs elevated.
+Each release is installed into its own immutable directory:
 
-Run `install.bat` again for an in-place upgrade. The installer checks Python/dependencies, stops the existing agent/task before replacing loaded files, updates the application directory, and re-registers the launch task and shortcuts. Robocopy exit codes 0–7 are treated as successful copy results; 8 or greater is a failure. The user's settings, SQLite database, traces and run history remain in `%ProgramData%\Sentinel` and are not part of the application-directory mirror.
+```text
+%ProgramFiles%\Sentinel\
+  active-version.txt
+  versions\
+    1.0.0\
+      .venv\
+      agent.py
+      VERSION
+      sentinel\
+      ui\
+    1.0.1\
+      .venv\
+      agent.py
+      VERSION
+      sentinel\
+      ui\
+```
 
-The installer secures `%ProgramData%\Sentinel` so the signed-in user has Modify access and SYSTEM / local Administrators have Full Control. The **AGENT** view shows this agent process's CPU and working-set RAM separately from host CPU/RAM, plus threads, handles, named workers, collector heartbeat health and run history. CPU host share is normalized by the number of logical processors; per-core process CPU can exceed 100%.
+A new version is copied to a staging directory, checked for its required entry point/runtime/dashboard files, and only then moved into its final version directory. Its Python environment and dependencies are created for that release only. The installer does **not** mirror over an existing release folder or upgrade that release's virtual environment. Re-running the same version reuses the existing immutable files; publish a new `VERSION` value for changed code. Previous version folders remain available for rollback, and the active-version pointer changes only after task/shortcut/agent verification succeeds.
 
-To remove the application files, task and shortcuts, run `uninstall.bat` as administrator. Uninstall preserves the SQLite database, settings and trace files; remove `%ProgramData%\Sentinel` yourself only when you intentionally want to erase local history and configuration.
+The installer registers `SentinelAgent` for the signed-in interactive user at logon with **RunLevel Highest** and restart-on-failure settings. It is deliberately **not** a Session 0 `SYSTEM` task: desktop-window inspection and user notifications require the interactive session.
+
+It creates and verifies a **Desktop** shortcut (using the signed-in user's configured Desktop location, including redirected folders), a per-user Start Menu shortcut, and an **All Users Start Menu → SENTINEL** shortcut. It checks that each saved shortcut exists and points to the selected release's `pythonw.exe` and `agent.py open` command. It waits for the authenticated agent API and confirms the running process is elevated before showing `INSTALLATION COMPLETE`. When something fails, the installer prints an error and does not report success.
+
+To install a new release, pull the repository and run the installer again:
+
+```powershell
+git pull origin main
+cd SENTINEL
+.\install.bat
+```
+
+Settings, SQLite history, traces and run records remain separately in `%ProgramData%\Sentinel`; they are never included in a release-folder copy or removed by an upgrade. The **AGENT** view reports process CPU/working-set RAM, host comparison, threads, handles, worker inventory and run history. The **Performance intelligence & reversible tuning** page also shows live collector samples independently of game-session baselines and optional temperature sensors.
+
+ETW capture requires `xperf.exe` from the **Windows Performance Toolkit** component of the Windows ADK, plus Windows permission to start a kernel trace. SENTINEL reports a missing-toolkit or access-denied reason instead of collapsing both into a generic refusal. PDH/typeperf performance counters are displayed separately and are **not** ETW event traces. SENTINEL never takes over an existing kernel logger session.
+
+To remove the application, tasks and shortcuts, run `uninstall.bat` as administrator. It removes the installed version folders but preserves `%ProgramData%\Sentinel`; delete that data directory manually only when you intentionally want to erase local settings, history and traces.
 
 ## Optional local AI
 
