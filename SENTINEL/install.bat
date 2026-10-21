@@ -81,7 +81,7 @@ if /I "%SRC%"=="%DEST%" (
   robocopy "%SRC%" "%DEST%" /MIR /R:2 /W:2 /COPY:DAT /DCOPY:DAT /NP /NFL /NDL /NJH /NJS /XD ".git" ".venv" "__pycache__" ".pytest_cache" /XF "*.pyc"
   rem Robocopy codes 0-7 are success / copy results; 8+ means failure.
   if errorlevel 8 (
-    echo ERROR: Application file update failed ^(robocopy exit code %ERRORLEVEL%^).
+    echo ERROR: Application file update failed (Robocopy returned a failure code).
     echo Your ProgramData settings/history have not been deleted.
     powershell -NoProfile -Command "Start-ScheduledTask -TaskName 'SentinelAgent' -ErrorAction SilentlyContinue"
     goto :fail
