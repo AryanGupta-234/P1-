@@ -242,13 +242,19 @@ def test_failed_game_session_undo_remains_pending_until_retry_succeeds(monkeypat
 
     first = advanced._end_game_session(1, 200.0)
     status1 = conn.execute("SELECT status FROM game_sessions WHERE id=1").fetchone()[0]
+    # A delayed restore retry must not replace the end-of-game evidence snapshot.
+    monkeypatch.setattr(advanced, "_current_metrics", lambda: {"cpu": 99.0})
     second = advanced._end_game_session(1, 230.0)
     status2 = conn.execute("SELECT status FROM game_sessions WHERE id=1").fetchone()[0]
+    saved = conn.execute("SELECT ended_at,after_json,report_json FROM game_sessions WHERE id=1").fetchone()
 
     assert first["restoration_pending"] is True
     assert status1 == "restore_pending"
     assert second["restoration_pending"] is False
     assert status2 == "completed"
+    assert saved[0] == 200.0
+    assert json.loads(saved[1]) == {"cpu": 20.0}
+    assert json.loads(saved[2])["duration_seconds"] == 100.0
     # profile_action_id and session_actions may both reference the same action;
     # teardown must still attempt it exactly once per pass.
     assert attempts == [55, 55]
