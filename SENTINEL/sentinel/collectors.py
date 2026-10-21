@@ -468,6 +468,30 @@ TP = {
 }
 
 
+def _persist_kernel_snapshot(state: dict, last_attempt: float) -> float:
+    """Persist the latest PDH state at a bounded cadence and retain the real failure reason."""
+    now = time.monotonic()
+    if now - last_attempt < 30:
+        return last_attempt
+    # Advance the retry clock before attempting I/O. A broken database must not
+    # emit a warning on every one-second PDH sample.
+    last_attempt = now
+    try:
+        core.persist_snapshot("kernel.latest", {
+            "source": "PDH / typeperf",
+            "pdh": dict(state),
+            "values": {name: LIVE.get(name) for name in set(TP.values())},
+            "captured_at": time.time(),
+        })
+    except Exception as store_exc:
+        log(
+            "storage",
+            f"kernel snapshot persistence failed: {type(store_exc).__name__}: {str(store_exc)[:240]}",
+            "warn",
+        )
+    return last_attempt
+
+
 def typeperf_loop():
     if not IS_WIN:
         return
@@ -514,13 +538,7 @@ def typeperf_loop():
                 samples += 1
                 state.update(samples=samples, last_sample=time.time(), malformed_rows=malformed, unsupported=sorted(unsupported))
                 heartbeat("kernel counters (PDH)", 1, f"{samples} samples; {len(keys)-len(unsupported)} valid counters")
-                if time.monotonic() - last_state_save >= 30:
-                    try:
-                        core.persist_snapshot("kernel.latest", {"source": "PDH / typeperf", "pdh": dict(state),
-                            "values": {name: LIVE.get(name) for name in set(TP.values())}, "captured_at": time.time()})
-                        last_state_save = time.monotonic()
-                    except Exception as store_exc:
-                        log("storage", f"kernel snapshot persistence failed: {type(store_exc).__name__}", "warn")
+                last_state_save = _persist_kernel_snapshot(state, last_state_save)
             try:
                 stderr = (p.stderr.read() if p.stderr else "").strip()
                 code = p.wait(timeout=2)
@@ -584,7 +602,7 @@ def etw_status_loop():
             heartbeat("ETW session status", 30, "recording active" if recording is True else "WPR reports no active trace" if recording is False else "WPR status unverified",
                 err=("" if recording is not None and r.returncode == 0 else kernel["etw"]["error"]))
             try: core.persist_snapshot("kernel.etw.latest", dict(kernel["etw"]))
-            except Exception as store_exc: log("storage", f"ETW status persistence failed: {type(store_exc).__name__}", "warn")
+            except Exception as store_exc: log("storage", f"ETW status persistence failed: {type(store_exc).__name__}: {str(store_exc)[:240]}", "warn")
         except Exception as exc:
             kernel["etw"] = {"available": False, "recording": None, "state": "unknown", "source": "Windows Performance Recorder / ETW",
                 "error": f"{type(exc).__name__}: {str(exc)[:200]}", "checked_at": time.time()}
