@@ -120,8 +120,9 @@ def agent_runtime(*, include_threads=True, include_io=True, include_run=True):
             io_read, io_write = int(io.read_bytes), int(io.write_bytes)
         except Exception:
             pass
-    worker_threads = []
+    worker_threads = None
     if include_threads:
+        worker_threads = []
         for thread in threading.enumerate():
             if thread.name == "MainThread" or thread.name.startswith("Thread-"):
                 continue
