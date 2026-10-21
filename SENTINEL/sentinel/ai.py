@@ -191,6 +191,18 @@ def gen(model, prompt, system, fmt=None, timeout=180, slot=None):
         model = _route_deep_model()
     if not model:
         raise RuntimeError("no eligible model is selected")
+    allowed, admission_reason = ai_engine.inference_allowed(
+        model,
+        cloud=model.startswith(CLOUD),
+        pause_when_gaming=bool(CFG.get("pause_ai_when_gaming", True)),
+        slot=slot or "fast",
+    )
+    STATE.setdefault("ai", {})["admission"] = {
+        "allowed": allowed, "reason": admission_reason,
+        "slot": slot or "fast", "checked_at": time.time(),
+    }
+    if not allowed:
+        raise RuntimeError(admission_reason)
     a = STATE["ai"]
     started = time.time()
     start_mono = time.monotonic()
