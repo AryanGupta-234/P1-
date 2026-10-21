@@ -130,9 +130,13 @@ def _stop_legacy_agent():
                 process = psutil.Process(int(pid))
                 created = float(process.create_time())
                 command_line = process.cmdline()
+                accepted_scripts = {
+                    os.path.normcase(os.path.abspath(os.path.join(HERE, "agent.py"))),
+                    os.path.normcase(os.path.abspath(os.path.join(PROGRAM_DIR, "agent.py"))),
+                }
                 exact_agent = any(
                     os.path.basename(str(part).strip('"')).casefold() == "agent.py"
-                    and os.path.normcase(os.path.abspath(str(part).strip('"'))) == os.path.normcase(os.path.join(HERE, "agent.py"))
+                    and os.path.normcase(os.path.abspath(str(part).strip('"'))) in accepted_scripts
                     for part in command_line
                 )
                 same_process = (
