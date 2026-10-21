@@ -70,6 +70,9 @@ _TIMER_REQUESTS: dict[int, int] = {}
 _LAST_GPU_THROTTLE: tuple[str, ...] = ()
 _ETW_DONE = threading.Event()
 _ETW_DONE.set()
+_ETW_CAPTURE_LOCK = threading.Lock()
+_UNDO_LOCK = threading.RLock()
+_LAST_SESSION_RESTORE_RETRY = 0.0
 
 
 def _ensure_schema() -> None:
@@ -765,23 +768,24 @@ def capture_failed_action_state(action_id: int) -> None:
 
 
 def undo_action(action_id: int) -> dict:
-    rows = db("SELECT undo_json,undo_available,reverted_at FROM action_journal WHERE action_id=?", (int(action_id),))
-    if not rows: return {"ok": False, "error": "no undo journal exists for this action"}
-    if not rows[0][1]: return {"ok": False, "error": "this action has no safe automatic undo"}
-    if rows[0][2]: return {"ok": False, "error": "this action has already been reverted"}
-    try:
-        undo = json.loads(rows[0][0] or "{}")
-        result = _restore(undo)
-        db("UPDATE action_journal SET reverted_at=?,revert_result=? WHERE action_id=? AND reverted_at IS NULL",
-           (time.time(), result, int(action_id)))
-        log("rollback", f"Action #{action_id}: {result}", "ok")
-        return {"ok": True, "result": result}
-    except Exception as exc:
-        result = f"{type(exc).__name__}: {str(exc)[:180]}"
-        db("UPDATE action_journal SET revert_result=? WHERE action_id=?", (result, int(action_id)))
-        log("rollback", f"Action #{action_id} rollback failed: {result}", "error")
-        return {"ok": False, "error": result}
-
+    """Perform a journaled undo at most once per process; concurrent callers serialize."""
+    with _UNDO_LOCK:
+        rows = db("SELECT undo_json,undo_available,reverted_at FROM action_journal WHERE action_id=?", (int(action_id),))
+        if not rows: return {"ok": False, "error": "no undo journal exists for this action"}
+        if not rows[0][1]: return {"ok": False, "error": "this action has no safe automatic undo"}
+        if rows[0][2]: return {"ok": False, "error": "this action has already been reverted"}
+        try:
+            undo = json.loads(rows[0][0] or "{}")
+            result = _restore(undo)
+            db("UPDATE action_journal SET reverted_at=?,revert_result=? WHERE action_id=? AND reverted_at IS NULL",
+               (time.time(), result, int(action_id)))
+            log("rollback", f"Action #{action_id}: {result}", "ok")
+            return {"ok": True, "result": result}
+        except Exception as exc:
+            result = f"{type(exc).__name__}: {str(exc)[:180]}"
+            db("UPDATE action_journal SET revert_result=? WHERE action_id=?", (result, int(action_id)))
+            log("rollback", f"Action #{action_id} rollback failed: {result}", "error")
+            return {"ok": False, "error": result}
 
 def revert_all() -> dict:
     rows = db("SELECT action_id FROM action_journal WHERE undo_available=1 AND changed=1 AND reverted_at IS NULL ORDER BY id DESC LIMIT 500")
@@ -1001,51 +1005,101 @@ def _start_game_session(game: dict, ts: float) -> int:
     return int(sid)
 
 
+def _restore_session_actions(session_id: int) -> list[dict]:
+    """Restore only journaled changes linked to this session; dismiss stale proposals."""
+    ids: list[int] = []
+    profile_rows = db("SELECT profile_action_id FROM game_sessions WHERE id=?", (int(session_id),))
+    if profile_rows and profile_rows[0][0]:
+        ids.append(int(profile_rows[0][0]))
+    linked = db("SELECT action_id FROM session_actions WHERE session_id=? ORDER BY created_at DESC", (int(session_id),))
+    ids.extend(int(row[0]) for row in linked)
+    outcomes: list[dict] = []
+    for action_id in dict.fromkeys(ids):
+        journal = db("SELECT changed,reverted_at FROM action_journal WHERE action_id=?", (action_id,))
+        if journal:
+            if journal[0][0] and not journal[0][1]:
+                result = undo_action(action_id)
+                outcomes.append({"action_id": action_id, **result})
+            continue
+        action_rows = db("SELECT state FROM actions WHERE id=?", (action_id,))
+        if action_rows and action_rows[0][0] == "pending":
+            try:
+                from . import actions
+                actions.dismiss(action_id)
+                outcomes.append({"action_id": action_id, "ok": True, "result": "pending proposal dismissed because its game session ended"})
+            except Exception as exc:
+                outcomes.append({"action_id": action_id, "ok": False, "error": f"could not dismiss pending action: {type(exc).__name__}: {str(exc)[:140]}"})
+    return outcomes
+
+
 def _end_game_session(session_id: int, ts: float) -> dict:
-    rows = db("SELECT game_key,started_at,before_json,profile_action_id FROM game_sessions WHERE id=? AND status='active'", (session_id,))
-    if not rows: return {"ok": False, "error": "no active game session"}
-    game_key, started, before_raw, action_id = rows[0]
-    try: before = json.loads(before_raw or "{}")
-    except Exception: before = {}
+    """Close a session only after its linked state has been restored or safely refused.
+
+    A failed undo leaves the row in restore_pending so the next engine/restart pass
+    can retry it. This prevents a crash between report generation and rollback from
+    silently marking an unrestored session as completed.
+    """
+    rows = db("SELECT game_key,started_at,before_json,profile_action_id,status FROM game_sessions WHERE id=? AND status IN ('active','restore_pending')",
+              (int(session_id),))
+    if not rows:
+        return {"ok": False, "error": "no active or restore-pending game session"}
+    game_key, started, before_raw, _action_id, previous_status = rows[0]
+    try:
+        before = json.loads(before_raw or "{}")
+    except Exception:
+        before = {}
     after = _current_metrics()
     delta = _metrics_delta(before, after)
     causes = _correlate_window(float(started), ts)
     report_enabled = CFG.get("advanced", {}).get("auto_report_sessions", True) is True
-    report = {"game": game_key, "duration_seconds": round(ts-started, 1), "before": before, "after": after,
-              "delta": delta, "temporal_candidates": causes if report_enabled else [],
-              "limitations": ["Session snapshots are endpoints, not a controlled A/B experiment.", "Correlated changes are temporal associations, not proven causes.", "FPS/frame-time values are not inferred if no frame telemetry source is available."]}
-    db("UPDATE game_sessions SET ended_at=?,after_json=?,report_json=?,status='completed' WHERE id=?",
-       (ts, json.dumps(after, sort_keys=True), json.dumps(report, sort_keys=True) if report_enabled else None, session_id))
-    # Automatically restore only the exact SENTINEL-approved profile action
-    # attached to this session, never arbitrary user/system settings.
-    if action_id:
-        journal = db("SELECT changed,reverted_at FROM action_journal WHERE action_id=?", (int(action_id),))
-        if journal and journal[0][0] and not journal[0][1]:
-            undo_action(int(action_id))
-        elif not journal:
-            action_rows = db("SELECT state FROM actions WHERE id=?", (int(action_id),))
-            if action_rows and action_rows[0][0] == "pending":
-                from . import actions
-                actions.dismiss(int(action_id))
-    linked = db("SELECT action_id FROM session_actions WHERE session_id=? ORDER BY created_at DESC", (int(session_id),))
-    for linked_row in linked:
-        linked_id = int(linked_row[0])
-        journal = db("SELECT changed,reverted_at FROM action_journal WHERE action_id=?", (linked_id,))
-        if journal and journal[0][0] and not journal[0][1]:
-            undo_action(linked_id)
-        elif not journal:
-            action_rows = db("SELECT state FROM actions WHERE id=?", (linked_id,))
-            if action_rows and action_rows[0][0] == "pending":
-                from . import actions
-                actions.dismiss(linked_id)
-    log("session", f"Game session ended: {game_key} ({int(ts-started)} s)", "ok", session_id=session_id)
-    publish("game_session", {"id": session_id, "game": game_key, "state": "completed", "report": report})
+    restore_results = _restore_session_actions(int(session_id))
+    failures = [item for item in restore_results if not item.get("ok")]
+    report = {
+        "game": game_key,
+        "duration_seconds": round(max(0.0, ts - float(started)), 1),
+        "before": before,
+        "after": after,
+        "delta": delta,
+        "temporal_candidates": causes if report_enabled else [],
+        "restoration": restore_results,
+        "restoration_pending": bool(failures),
+        "limitations": [
+            "Session snapshots are endpoints, not a controlled A/B experiment.",
+            "Correlated changes are temporal associations, not proven causes.",
+            "FPS/frame-time values are not inferred if no frame telemetry source is available.",
+            "Rollback preserves external changes and may remain pending when Windows refuses a restore.",
+        ],
+    }
+    status = "restore_pending" if failures else "completed"
+    db("UPDATE game_sessions SET ended_at=?,after_json=?,report_json=?,status=? WHERE id=?",
+       (ts, json.dumps(after, sort_keys=True), json.dumps(report, sort_keys=True) if report_enabled else None,
+        status, int(session_id)))
+    if failures:
+        log("rollback", f"Game session #{session_id} ended but {len(failures)} linked change(s) still need restoration; retry scheduled",
+            "error", session_id=int(session_id), failures=failures[:8])
+    else:
+        log("session", f"Game session ended: {game_key} ({int(max(0.0, ts-float(started)))} s); linked changes restored or safely preserved",
+            "ok", session_id=int(session_id))
+    publish("game_session", {"id": int(session_id), "game": game_key, "state": status, "report": report})
     return report
 
-
 def _service_loop_restore_on_game_end(session_id: int) -> None:
-    rows = db("SELECT profile_action_id FROM game_sessions WHERE id=?", (session_id,))
-    if rows and rows[0][0]: undo_action(int(rows[0][0]))
+    """Compatibility wrapper for older callers; uses the unified session journal."""
+    _restore_session_actions(int(session_id))
+
+
+def _retry_pending_session_restores(ts: float) -> None:
+    global _LAST_SESSION_RESTORE_RETRY
+    if ts - _LAST_SESSION_RESTORE_RETRY < 30:
+        return
+    _LAST_SESSION_RESTORE_RETRY = ts
+    rows = db("SELECT id FROM game_sessions WHERE status='restore_pending' ORDER BY ended_at LIMIT 20")
+    for row in rows:
+        try:
+            _end_game_session(int(row[0]), ts)
+        except Exception as exc:
+            log("rollback", f"Session #{int(row[0])} restore retry failed: {type(exc).__name__}: {str(exc)[:140]}",
+                "error", session_id=int(row[0]))
 
 
 def _cpu_temperature_threshold(sensor: str) -> float:
@@ -1393,6 +1447,7 @@ def _engine_loop() -> None:
         ts = time.time()
         try:
             _advance_game_session(ts)
+            _retry_pending_session_restores(ts)
             _sample_active_game(ts)
             _evaluate_tuner(ts)
             _etw_schedule(ts)
@@ -1518,33 +1573,43 @@ def settings_update(payload: dict) -> dict:
 
 
 def _recover_interrupted_sessions() -> None:
-    """Resume a still-running game session or restore actions from a stale one."""
-    global _LAST_GAME_ID
-    rows = db("SELECT id,game_key,pid,create_time,started_at FROM game_sessions WHERE status='active' ORDER BY id")
+    """Resume a live session, but retry any teardown that was already requested."""
+    global _LAST_GAME_ID, _LAST_SESSION_RESTORE_RETRY
+    rows = db("SELECT id,game_key,pid,create_time,started_at,status FROM game_sessions WHERE status IN ('active','restore_pending') ORDER BY id")
     recovered = 0
     resumed_session_id = None
     for row in rows:
-        session_id, game_key, pid, create_time, started_at = row
-        # A previous Sentinel process may have exited while the game was still
-        # running. Resume the exact process instance rather than reverting its
-        # game profile underneath an active game.
+        session_id, game_key, pid, create_time, started_at, status = row
+        # restore_pending means session teardown already began (including clean
+        # shutdown); never silently resume it and leave its temporary tuning active.
+        if status == "restore_pending":
+            try:
+                _end_game_session(int(session_id), time.time())
+                recovered += 1
+            except Exception as exc:
+                log("rollback", f"Pending session #{session_id} recovery failed: {type(exc).__name__}: {str(exc)[:160]}", "error")
+            continue
         if pid and create_time:
             try:
                 proc = psutil.Process(int(pid))
                 actual_create = float(proc.create_time())
                 if abs(actual_create - float(create_time)) <= 0.02:
+                    if resumed_session_id is not None:
+                        # Do not restore an additional active session while another
+                        # exact live game identity has already been resumed.
+                        log("rollback", f"Multiple active session records detected; leaving session #{session_id} untouched for review",
+                            "warn", session_id=int(session_id))
+                        continue
                     name = proc.name()
                     exe = proc.exe()
                     STATE["game"] = {"name": name, "pid": int(pid), "create_time": actual_create,
                                      "since": float(started_at), "exe": exe}
-                    if resumed_session_id is None:
-                        resumed_session_id = int(session_id)
-                        STATE.setdefault("advanced", {})["active_session_id"] = resumed_session_id
-                        _LAST_GAME_ID = f"{name}:{int(pid)}:{actual_create}"
-                        log("session", f"Resumed game session #{session_id} after Sentinel restart", "ok", game=game_key)
-                        continue
+                    resumed_session_id = int(session_id)
+                    STATE.setdefault("advanced", {})["active_session_id"] = resumed_session_id
+                    _LAST_GAME_ID = f"{name}:{int(pid)}:{actual_create}"
+                    log("session", f"Resumed game session #{session_id} after Sentinel restart", "ok", game=game_key)
+                    continue
             except psutil.AccessDenied:
-                # Identity cannot be validated; fail closed and leave state untouched.
                 log("rollback", f"Could not verify PID {pid} for interrupted session #{session_id}; leaving actions untouched", "warn")
                 continue
             except psutil.NoSuchProcess:
@@ -1561,8 +1626,9 @@ def _recover_interrupted_sessions() -> None:
     if resumed_session_id is None:
         STATE.setdefault("advanced", {}).pop("active_session_id", None)
         _LAST_GAME_ID = None
+    _LAST_SESSION_RESTORE_RETRY = 0.0
     if recovered:
-        log("rollback", f"Recovered {recovered} interrupted game session(s); attempted session-scoped undo", "warn")
+        log("rollback", f"Recovered or retried {recovered} interrupted game-session teardown(s)", "warn")
 
 
 def start() -> None:
