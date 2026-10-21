@@ -675,3 +675,10 @@ td{overflow-wrap:anywhere}
   .ix-state-row>.ix-evidence{grid-column:1;grid-row:3}
   .adv-live-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
 }
+
+
+.engine-process-actions{grid-column:2/-1;display:flex;gap:6px;flex-wrap:wrap;margin-top:2px}
+.engine-process-actions .btn{font-size:8px;padding:5px 8px;letter-spacing:.08em}
+.engine-process-actions .btn:disabled{opacity:.45;cursor:wait}
+.engine-inspect-result{grid-column:2/-1;display:block;max-width:100%;overflow-wrap:anywhere;color:#8fdcf0;font:8px/1.6 var(--mo)}
+@media(max-width:460px){.engine-process-actions,.engine-inspect-result{grid-column:1/-1}.engine-process-actions .btn{flex:1 1 30%}}

@@ -90,11 +90,12 @@ def _read_process_state() -> tuple[bool, bool, float, str]:
     complete = True
     error = ""
     try:
-        for proc in psutil.process_iter(attrs=["name"]):
+        for proc in psutil.process_iter(attrs=["name", "exe"]):
             try:
                 info = proc.info
                 name = os.path.basename(str(info.get("name") or "")).casefold()
-                if name in VALORANT_NAMES:
+                exe = os.path.basename(str(info.get("exe") or "")).casefold()
+                if name in VALORANT_NAMES or exe in VALORANT_NAMES:
                     active = True
                     break
             except (psutil.NoSuchProcess, psutil.ZombieProcess):

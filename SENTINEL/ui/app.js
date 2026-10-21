@@ -949,7 +949,7 @@ function initFC() {
 
 /* ---------- palette + alerts ---------- */
 /* ---------- independent Engine Deck ---------- */
-let ENGINE = null;
+let ENGINE = null, engineProcessRows = [];
 const engineFacts = rows => rows.map(([label, value]) =>
   "<div><i>" + esc(label) + "</i><b>" + esc(value ?? "--") + "</b></div>"
 ).join("");
@@ -1004,6 +1004,7 @@ function renderEngines(data) {
   ]);
   const process = data.process_intelligence || {};
   const recent = Array.isArray(process.recent) ? process.recent.slice(0, 8) : [];
+  engineProcessRows = recent;
   $("#engine-process-summary").textContent = (process.observed || 0) + " process starts observed · " +
     (process.review_candidates || 0) + " review candidates this run · no automatic termination";
   $("#engine-process-list").innerHTML = recent.map(row => {
@@ -1014,8 +1015,15 @@ function renderEngines(data) {
       esc((risk.reasons || []).join(" · ")) + '</small><small>' +
       esc(row.exe || "executable path unavailable") + ' · parent ' +
       esc(row.parent_name || "--") + '</small></div><span class="score">' +
-      esc(risk.score ?? 0) + '/100</span></div>';
+      esc(risk.score ?? 0) + '/100</span><div class="engine-process-actions">' +
+      '<button class="btn sm" data-process-inspect="signature" data-process-index="' + recent.indexOf(row) + '">VERIFY SIGNATURE</button>' +
+      '<button class="btn sm" data-process-inspect="sha256" data-process-index="' + recent.indexOf(row) + '">SHA-256</button>' +
+      '<button class="btn sm" data-process-inspect="open_location" data-process-index="' + recent.indexOf(row) + '">OPEN LOCATION</button>' +
+      '</div><small class="engine-inspect-result" aria-live="polite"></small></div>';
   }).join("") || '<div class="empty">No process-start review candidates yet. Lifecycle observations begin after the collector warm-up baseline.</div>';
+  $("#engine-process-list [data-process-inspect]").forEach(button => {
+    button.onclick = () => inspectEngineProcess(+button.dataset.processIndex, button.dataset.processInspect);
+  });
   const wprAvailable = !!data.wpr?.available;
   const wprState = data.wpr?.state?.state || "idle";
   const wpr = valorant ? "DISABLED DURING VALORANT"
@@ -1029,6 +1037,41 @@ function renderEngines(data) {
     : "Propose a bounded WPR trace; an existing recording is never stopped or replaced.";
 }
 
+
+async function inspectEngineProcess(index, operation) {
+  const row = engineProcessRows[index];
+  if (!row || !row.pid || !row.create_time || !row.exe) return toast("Exact process identity is unavailable; refresh the process list.", "warn");
+  if (operation === "sha256" && !confirm("Hash this executable file using streamed SHA-256? This reads the file (up to 2 GiB) and may use disk/CPU briefly.")) return;
+  const card = document.querySelectorAll("#engine-process-list .engine-process-row")[index];
+  const result = card?.querySelector(".engine-inspect-result");
+  if (result) result.textContent = "INSPECTION RUNNING…";
+  const controls = card ? Array.from(card.querySelectorAll("[data-process-inspect]")) : [];
+  controls.forEach(control => control.disabled = true);
+  try {
+    const response = await api("/api/process-intelligence/inspect", {
+      pid: row.pid, create_time: row.create_time, exe: row.exe, operation
+    });
+    if (response.error) throw new Error(response.error);
+    let message = "";
+    if (operation === "signature") {
+      const signature = response.signature || {};
+      message = "Authenticode: " + (signature.status || "Unknown") +
+        (signature.signer ? " · " + signature.signer : "") +
+        (signature.thumbprint ? " · " + signature.thumbprint : "");
+    } else if (operation === "sha256") {
+      message = "SHA-256: " + response.digest;
+    } else {
+      message = "Executable folder opened in Explorer.";
+    }
+    if (result) result.textContent = message + " · " + (response.interpretation || "");
+    toast(operation === "open_location" ? "Opened executable location" : operation.toUpperCase() + " inspection complete", "ok");
+  } catch (error) {
+    if (result) result.textContent = "Inspection refused/failed: " + (error.message || "unknown error");
+    toast(error.message || "Process inspection failed", "warn");
+  } finally {
+    controls.forEach(control => control.disabled = false);
+  }
+}
 async function loadEngines() {
   try {
     const data = await api("/api/engines");

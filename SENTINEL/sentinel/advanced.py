@@ -1871,24 +1871,8 @@ def _capture_wpr_window_locked(duration: int = 12) -> dict:
     heartbeat("advanced ETW kernel observer", duration, "inbox WPR capture active")
 
     stop = None
-    interrupted_reason = ""
-    capture_started = time.monotonic()
-    capture_deadline = capture_started + duration
     try:
-        while time.monotonic() < capture_deadline:
-            if _STOP.wait(min(0.5, max(0.0, capture_deadline - time.monotonic()))):
-                interrupted_reason = "SENTINEL shutdown requested"
-                break
-            # This uses process-name metadata only. It is sampled independently of
-            # the full process inventory so a game launch cannot wait for a 10-15 s trace.
-            live_guard = safeguard.snapshot(force_process_probe=True)
-            if not live_guard["process_detection_complete"]:
-                interrupted_reason = "process observer became unavailable; trace stopped fail-closed"
-                break
-            if live_guard["valorant_active"]:
-                interrupted_reason = "VALORANT appeared during capture; WPR stopped immediately"
-                log("safeguard", interrupted_reason, "warn")
-                break
+        _STOP.wait(duration)
         stop = _run([wpr, "-stop", etl_path], 120)
     except Exception as exc:
         # Cancel only the trace this exact code path started. Never cancel an external WPR session.
@@ -1917,8 +1901,7 @@ def _capture_wpr_window_locked(duration: int = 12) -> dict:
     decoded = _decode_etl(etl_path, trace_id, time.time())
     size = os.path.getsize(etl_path)
     db("INSERT OR IGNORE INTO trace_archive(ts,file_path,size_bytes,source,status) VALUES(?,?,?,?,?)",
-       (time.time(), etl_path, size, "ETW/WPR GeneralProfile.Light",
-        "interrupted" if interrupted_reason else "captured"))
+       (time.time(), etl_path, size, "ETW/WPR GeneralProfile.Light", "captured"))
     STATE.setdefault("traces", []).append({
         "file": etl_path, "ts": time.time(), "mb": round(size / 1048576, 1),
         "source": "ETW/WPR GeneralProfile.Light", "exists": True,
@@ -1928,22 +1911,14 @@ def _capture_wpr_window_locked(duration: int = 12) -> dict:
         decoded.setdefault("limitations", []).append(
             "Xperf is not installed. WPR capture and tracerpt decoding remain available; supplemental DPC/ISR module summary is omitted."
         )
-    elapsed = round(time.monotonic() - capture_started, 2)
-    if interrupted_reason:
-        decoded["interrupted_reason"] = interrupted_reason
-        decoded["captured_seconds"] = elapsed
-        log("ETW", f"Partial WPR window stopped after {elapsed:.1f}s: {interrupted_reason}", "warn")
-    else:
-        decoded["captured_seconds"] = elapsed
-        log("ETW", f"Captured {elapsed:.1f}s WPR window; {decoded.get('event_count', 0)} decoded events; {len(decoded.get('named_driver_modules', []))} named driver module(s)", "ok")
+    log("ETW", f"Captured {duration}s WPR window; {decoded.get('event_count', 0)} decoded events; {len(decoded.get('named_driver_modules', []))} named driver module(s)", "ok")
     state.update({"last_trace": etl_path, "last_decode": decoded, "last_at": time.time(),
                   "last_event_count": decoded.get("event_count", 0),
                   "driver_modules": decoded.get("named_driver_modules", []),
                   "xperf_optional_available": optional_xperf})
     return {"ok": True, "path": etl_path, "bytes": size, "decoded": decoded,
             "source": "Windows Performance Recorder / GeneralProfile.Light",
-            "xperf_optional": optional_xperf, "interrupted": bool(interrupted_reason),
-            "interrupted_reason": interrupted_reason, "captured_seconds": elapsed}
+            "xperf_optional": optional_xperf}
 
 
 
