@@ -219,6 +219,16 @@ def gen(model, prompt, system, fmt=None, timeout=180, slot=None):
     a["usage"]["requests"] = int(a["usage"].get("requests", 0)) + 1
     try:
         with _inference_lock:
+            # A game can launch while this request waits for the serialized model slot.
+            # Re-run admission immediately before any provider receives telemetry.
+            allowed, admission_reason = ai_engine.inference_allowed(
+                model,
+                cloud=model.startswith(CLOUD),
+                pause_when_gaming=bool(CFG.get("pause_ai_when_gaming", True)),
+                slot=slot or "fast",
+            )
+            if not allowed:
+                raise RuntimeError(admission_reason)
             if model.startswith(CLOUD):
                 output = cloud_gen(prompt, system, fmt, timeout)
                 prompt_tokens = output_tokens = None

@@ -230,43 +230,6 @@ def _do(kind, args):
             _run(["powercfg", "/setactive", _prev_plan[0]])
             return f"restored {_prev_plan[0]}"
         return "nothing to restore"
-    if kind == "wpr_trace":
-        if time.time() - _last_trace[0] < 900:
-            raise RuntimeError("WPR capture rate limit: one trace per 15 minutes")
-        if not IS_WIN:
-            raise RuntimeError("WPR capture is Windows-only")
-        from .winutil import run_command
-        etw = STATE.setdefault("kernel", {}).get("etw", {})
-        if etw.get("recording"):
-            raise RuntimeError("an existing WPR recording is active; SENTINEL will not cancel or replace it")
-        start_result = run_command(["wpr.exe", "-start", "GeneralProfile.Light", "-filemode"], timeout=30)
-        start_text = ((start_result.stdout or "") + "\n" + (start_result.stderr or "")).strip()
-        if start_result.returncode != 0:
-            etw.update(available=True, recording=None, state="unknown", checked_at=time.time(),
-                       status_text=start_text[-800:], error=f"WPR start failed (exit {start_result.returncode})")
-            raise RuntimeError(f"WPR start failed (exit {start_result.returncode}): {start_text[-180:]}")
-        _last_trace[0] = time.time()
-        etw.update(available=True, recording=True, state="recording", checked_at=time.time(),
-                   status_text=start_text[-800:], error="")
-        log("kernel", "ETW WPR GeneralProfile.Light trace recording started (15 s)", "warn")
-        time.sleep(15)
-        f = os.path.join(TRACE_DIR, time.strftime("trace_%Y%m%d_%H%M%S.etl"))
-        stop_result = run_command(["wpr.exe", "-stop", f], timeout=180)
-        stop_text = ((stop_result.stdout or "") + "\n" + (stop_result.stderr or "")).strip()
-        if stop_result.returncode == 0:
-            etw.update(recording=False, state="idle", checked_at=time.time(), status_text=stop_text[-800:], error="")
-        else:
-            etw.update(recording=None, state="unknown", checked_at=time.time(), status_text=stop_text[-800:],
-                       error=f"WPR stop failed (exit {stop_result.returncode}); trace state requires re-check")
-        if stop_result.returncode == 0 and os.path.exists(f):
-            trace_ts = time.time()
-            trace_bytes = os.path.getsize(f)
-            trace_row = {"file": f, "ts": trace_ts, "mb": round(trace_bytes / 1048576, 1), "source": "ETW/WPR GeneralProfile.Light", "exists": True}
-            STATE.setdefault("traces", []).append(trace_row)
-            db("INSERT OR IGNORE INTO trace_archive(ts,file_path,size_bytes,source,status) VALUES(?,?,?,?,?)",
-               (trace_ts, f, trace_bytes, trace_row["source"], "captured"))
-            return f"trace saved: {f} (ETL; open in Windows Performance Analyzer)"
-        raise RuntimeError(f"WPR stop failed (exit {stop_result.returncode}): {stop_text[-180:]}")
     return "unknown action"
 
 
