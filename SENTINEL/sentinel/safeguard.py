@@ -64,7 +64,7 @@ def _admin_status() -> bool:
         return False
 
 
-def _read_process_state(*, force_probe: bool = False) -> tuple[bool, bool, float, str]:
+def _read_process_state() -> tuple[bool, bool, float, str]:
     """Return (Valorant active, scan complete, scan age, source).
 
     A fresh collector snapshot is preferred. A short metadata-only psutil probe is used
@@ -74,11 +74,8 @@ def _read_process_state(*, force_probe: bool = False) -> tuple[bool, bool, float
     now = time.time()
     scanned_at = float(core.STATE.get("proc_scan_at") or 0.0)
     age = max(0.0, now - scanned_at) if scanned_at else float("inf")
-    if core.off("processes"):
-        return False, False, age, "process_monitor_disabled"
-
     rows = core.STATE.get("procs") or []
-    if not force_probe and scanned_at and age <= 4.0:
+    if scanned_at and age <= 4.0:
         active = any(
             str(row.get("name") or "").casefold() in VALORANT_NAMES
             or os.path.basename(str(row.get("exe") or "")).casefold() in VALORANT_NAMES
@@ -86,7 +83,7 @@ def _read_process_state(*, force_probe: bool = False) -> tuple[bool, bool, float
         )
         return active, True, age, "collector_snapshot"
 
-    if not force_probe and now - float(_probe_cache.get("at") or 0.0) <= 1.5:
+    if now - float(_probe_cache.get("at") or 0.0) <= 1.5:
         return bool(_probe_cache["valorant"]), bool(_probe_cache["complete"]), age, "live_process_probe_cache"
 
     active = False
@@ -114,9 +111,9 @@ def _read_process_state(*, force_probe: bool = False) -> tuple[bool, bool, float
     return active, complete, age, "live_process_probe"
 
 
-def snapshot(*, force_process_probe: bool = False) -> dict[str, Any]:
+def snapshot() -> dict[str, Any]:
     """Expose the effective safety posture and the evidence used to choose it."""
-    active, complete, age, source = _read_process_state(force_probe=force_process_probe)
+    active, complete, age, source = _read_process_state()
     vanguard = core.STATE.get("services", {}).get("vanguard", {})
     vgc = str(vanguard.get("vgc") or "unknown").casefold()
     vgk = str(vanguard.get("vgk") or "unknown").casefold()

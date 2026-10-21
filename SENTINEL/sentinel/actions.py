@@ -3,7 +3,7 @@ Every action is proposed -> (auto-run if autopilot enables that kind, else waits
 import json, os, subprocess, threading, time
 import psutil
 from pathlib import Path
-from . import core
+from . import core, safeguard
 from .core import CFG, IS_WIN, STATE, db, log, publish, TRACE_DIR
 
 NO_WIN = 0x08000000 if IS_WIN else 0
@@ -12,14 +12,14 @@ KINDS = {
     "bg_priority": "Lower memory + I/O priority of background apps while gaming (CPU speed untouched)",
     "flush_dns": "Flush the DNS resolver cache",
     "power_plan": "Switch to High performance power plan (previous plan saved for undo)",
-    "wpr_trace": "Record a 15 s ETW kernel trace (Windows Performance Recorder) for deep analysis",
+    "wpr_trace": "Record a bounded 12-15 s WPR GeneralProfile.Light trace (no Xperf install required)",
     "trim_bg": "Trim working sets of background apps to free RAM for the game",
     "terminate_process": "Request graceful close of a reviewed user app window (no force-kill)",
     "undo_power_plan": "Restore the previous power plan (legacy; use the journal undo)",
     "game_profile_apply": "Apply an approved reversible per-game priority / CPU Set / power / timer profile",
     "timer_resolution": "Request a reversible 1–2 ms multimedia timer period for the game session",
     "wifi_max_performance": "Use evidence-gated Wi-Fi adapter maximum-performance AC policy (reversible)",
-    "etw_capture": "Capture a bounded NT Kernel Logger ETW window and decode DPC/ISR/process evidence",
+    "etw_capture": "Capture a bounded WPR ETW window; Xperf is optional for supplemental DPC/ISR summaries",
     "pause_updater_service": "Temporarily pause an allowlisted third-party updater (approval required; undo restarts it)",
 }
 _last_trace = [0.0]
@@ -62,7 +62,10 @@ else:
 
 
 def _bg_targets():
-    return [p for p in STATE.get("procs", []) if p.get("bg")]
+    return [
+        p for p in STATE.get("procs", [])
+        if p.get("bg") and not safeguard.is_protected_process(p.get("name"), p.get("exe"))
+    ]
 
 
 def _run(cmd, timeout=30):
@@ -83,6 +86,9 @@ def _terminate_reviewed_process(args):
         return "rejected (invalid process identity)"
     if pid <= 4 or not expected_exe or not os.path.isabs(expected_exe):
         return "rejected (missing or protected process identity)"
+    guard = safeguard.check_action("terminate_process", args)
+    if not guard["allowed"]:
+        return "rejected by SENTINEL safeguard: " + guard["reason"]
     protected = {"system", "registry", "smss.exe", "csrss.exe", "wininit.exe", "services.exe", "lsass.exe",
         "winlogon.exe", "svchost.exe", "dwm.exe", "fontdrvhost.exe", "securityhealthservice.exe",
         "msmpeng.exe", "nissrv.exe", "trustedinstaller.exe", "explorer.exe"}
@@ -139,6 +145,9 @@ def _terminate_reviewed_process(args):
 
 
 def _do(kind, args):
+    guard = safeguard.check_action(kind, args)
+    if not guard["allowed"]:
+        raise PermissionError("blocked by SENTINEL safeguard: " + guard["reason"])
     if kind == "bg_priority":
         n = 0
         for p in _bg_targets():
@@ -205,12 +214,17 @@ def _do(kind, args):
                 time.sleep(0.4)
                 continue
         raise RuntimeError(f"SCM did not confirm {service} stopped (last state: {state or 'unknown'}); attempted rollback will preserve uncertain state")
-    if kind == "etw_capture":
+    if kind in ("etw_capture", "wpr_trace"):
         from . import advanced
         result = advanced.capture_kernel_window(int(args.get("duration", 12)))
         if not result.get("ok"):
-            raise RuntimeError(result.get("error", "ETW capture failed"))
-        return f"ETW capture saved: {result['path']} ({result['bytes']} bytes; {result['decoded'].get('event_count',0)} decoded events)"
+            raise RuntimeError(result.get("error", "WPR capture failed"))
+        decoded = result.get("decoded") if isinstance(result.get("decoded"), dict) else {}
+        return (
+            f"WPR ETW trace saved: {result['path']} ({result['bytes']} bytes; "
+            f"{decoded.get('event_count', 0)} decoded events; "
+            f"{len(decoded.get('named_driver_modules', []))} named driver module(s))"
+        )
     if kind == "undo_power_plan":
         if _prev_plan[0]:
             _run(["powercfg", "/setactive", _prev_plan[0]])
@@ -299,6 +313,12 @@ def execute(aid, *, user_confirmed=False):
             return "not pending"
         kind, args = rows[0][0], json.loads(rows[0][1] or "{}")
         tier = advanced.risk_tier(kind)
+        guard = safeguard.check_action(kind, args)
+        if not guard["allowed"]:
+            reason = "blocked by SENTINEL safeguard: " + guard["reason"]
+            db("UPDATE actions SET state='blocked',result=? WHERE id=?", (reason[:400], aid))
+            log("safeguard", f"{kind} execution blocked: {guard['reason'][:180]}", "warn")
+            return reason
         if tier == "dangerous":
             return "blocked by risk policy: dangerous actions are never automated and this action has no approved reversible implementation"
         if tier == "medium" and not user_confirmed:

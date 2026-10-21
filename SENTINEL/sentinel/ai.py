@@ -3,7 +3,7 @@ Models are auto-selected from whatever is installed (smallest = fast, largest = 
 import json, os, re, threading, time, urllib.request
 from urllib.parse import urlparse
 import psutil
-from . import core, actions, intel
+from . import core, actions, intel, ai_engine
 from .core import CFG, STATE, HIST, LIVE, db, log, publish, heartbeat, window
 
 SYS_FAST = ("You are SENTINEL-FAST, a Windows gaming-performance triage agent. You receive live telemetry. "
@@ -137,8 +137,14 @@ def redact(t):
     return re.sub(r"(?i)[a-z]:\\users\\[^\\\s\"']+", r"C:\\Users\\<user>", t)
 
 
-def local_ok(model):
-    return model.startswith(CLOUD) or not (CFG["pause_ai_when_gaming"] and STATE.get("game"))
+def local_ok(model, slot="fast"):
+    allowed, _reason = ai_engine.inference_allowed(
+        model,
+        cloud=model.startswith(CLOUD),
+        pause_when_gaming=bool(CFG.get("pause_ai_when_gaming", True)),
+        slot=slot,
+    )
+    return allowed
 
 
 def cloud_gen(prompt, system, fmt, timeout):
@@ -217,8 +223,8 @@ def gen(model, prompt, system, fmt=None, timeout=180, slot=None):
                 output = cloud_gen(prompt, system, fmt, timeout)
                 prompt_tokens = output_tokens = None
             else:
-                if not local_ok(model):
-                    raise RuntimeError("local model paused while gaming")
+                if not local_ok(model, slot or "fast"):
+                    raise RuntimeError("local model paused by the active runtime/safeguard policy")
                 body = {"model": model, "prompt": prompt, "system": system, "stream": False,
                         "options": {"temperature": 0.2, "num_ctx": 4096}}
                 if fmt:
@@ -261,13 +267,13 @@ def gen(model, prompt, system, fmt=None, timeout=180, slot=None):
         a["current_model"] = ""
 
 
-def snapshot():
+def snapshot(query="", purpose="triage"):
     def avg(k, s=30):
         w = window(k, s); return round(sum(w) / len(w), 1) if w else None
     def mx(k, s=30):
         w = window(k, s); return round(max(w), 1) if w else None
     procs = [f"{p['name']} cpu{p['cpu']}% mem{p['mem']}MB io{p['io']}MB/s" for p in STATE.get("procs", [])[:6]]
-    return {
+    payload = {
         "game": (STATE.get("game") or {}).get("name"),
         "30s": {"cpu_avg": avg("cpu"), "cpu_max": mx("cpu"), "dpc_avg": avg("dpc"), "dpc_max": mx("dpc"),
                 "irq_avg": avg("irq"), "free_ram_mb": avg("mem_free_mb"), "pages_in": avg("pagesin"),
@@ -277,6 +283,7 @@ def snapshot():
         "top_processes": procs, "system": STATE.get("system"), "gpu": STATE.get("gpu"),
         "lag_index": LIVE.get("lag_index"),
     }
+    return ai_engine.compose_context(payload, query=str(query or "")[:600], purpose=purpose)
 
 
 def _say(role, model, text):
@@ -305,7 +312,8 @@ def investigate(ins):
     if not a["deep"]:
         return
     with _lock:
-        snap = snapshot()
+        insight_query = f"{ins.get('title', '')} {ins.get('detail', '')} {ins.get('culprit', '')}".strip()
+        snap = snapshot(query=insight_query, purpose="investigation")
         refs = intel.lookup(f"{ins['title']} Windows", False)[:4] if ins.get("title") else []
         refs_txt = "\n".join(f"- {r['src']}: {r['title']} ({r['url']})" for r in refs)
         ctx = json.dumps(snap)[:2500]
@@ -353,6 +361,7 @@ def chat(msg, mode="council"):
             "recent_etw_events": status.get("etw_events", [])[:12], "thermal_events": status.get("thermal_events", [])[:12],
             "session_reports": status.get("session_reports", [])[:2],
         }
+        packet = ai_engine.compose_context(packet, query=msg, purpose="investigation")
         q = f"Specialist task: {mode}\nUser question: {msg}\nMeasured local evidence (JSON): {json.dumps(packet, default=str)[:10000]}"
         sysq = ("You are one of SENTINEL's specialist analysts. " + advanced.SPECIALISTS[mode] +
                 " Use only evidence in the payload, clearly label missing/unknown measurements, state confidence and limitations. "
@@ -363,7 +372,7 @@ def chat(msg, mode="council"):
         out = gen(model, q, sysq, timeout=240 if slot == "deep" else 120, slot=slot)
         _say(mode, model, out)
         return out
-    ctx = json.dumps(snapshot())[:2500]
+    ctx = json.dumps(snapshot(query=msg, purpose="investigation"), default=str)[:6000]
     q = f"User question: {msg}\nLive telemetry: {ctx}"
     sysq = "You are SENTINEL, the user's Windows gaming-performance agent. Answer concisely and concretely using the telemetry."
     if mode == "fast" or a["fast"] == a["deep"]:
@@ -377,48 +386,5 @@ def chat(msg, mode="council"):
 
 
 def ai_loop():
-    """Continuous: attach to Ollama, run fast triage every minute, deep investigation on notable insights."""
-    q = core.subscribe()
-    last_triage = 0
-    cool = {}
-    deferred = []
-    while True:
-        if not CFG.get("ai_enabled", True):
-            STATE["ai"]["status"] = "AI council disabled in settings"
-            heartbeat("AI council (Ollama)", 60, "disabled in settings")
-            time.sleep(5); continue
-        if not STATE["ai"]["online"]:
-            if refresh_models():
-                a = STATE["ai"]
-                log("ai", f"Ollama online. FAST={a['fast']}  DEEP={a['deep']}  ({len(a['models'])} models installed)", "ok")
-            else:
-                heartbeat("AI council (Ollama)", 60, "Ollama offline - waiting")
-                time.sleep(15); continue
-        try:
-            m = q.get(timeout=5)
-            d = json.loads(m)
-            if d["t"] == "insight" and d["d"]["sev"] in ("high", "warn") and time.time() - cool.get(d["d"]["key"], 0) > 300:
-                cool[d["d"]["key"]] = time.time()
-                if local_ok(STATE["ai"]["deep"]):
-                    investigate(d["d"])
-                else:
-                    deferred.append(d["d"])
-                    log("ai", f"local AI sleeping during game - '{d['d']['title']}' queued for after the session", "info")
-        except Exception:
-            pass
-        if deferred and local_ok(STATE["ai"]["deep"]):
-            for ins in deferred[:3]:
-                investigate(ins)
-            deferred.clear()
-        if CFG["ai_enabled"] and time.time() - last_triage > 60 and STATE["ai"]["fast"] and local_ok(STATE["ai"]["fast"]):
-            last_triage = time.time()
-            STATE["ai"]["busy"] = "fast"
-            try:
-                s = gen(STATE["ai"]["fast"], "Telemetry: " + json.dumps(snapshot())[:2500], SYS_FAST, timeout=60, slot="fast")
-                STATE["ai"]["status"] = s
-                publish("ai_status", {"text": s, "ts": time.time()})
-                heartbeat("AI council (Ollama)", 60, f"fast={STATE['ai']['fast']} deep={STATE['ai']['deep']}")
-            except Exception as e:
-                STATE["ai"]["online"] = False
-                log("ai", f"Ollama lost: {str(e)[:60]}", "warn")
-            STATE["ai"]["busy"] = ""
+    """Compatibility alias; the independent AI Orchestrator owns scheduling."""
+    return ai_engine.loop()
