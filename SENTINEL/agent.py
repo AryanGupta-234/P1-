@@ -116,12 +116,12 @@ def _stop_legacy_agent():
     task_result = pw(
         f"$ErrorActionPreference='Stop'; "
         f"$task = Get-ScheduledTask -TaskName {_ps_quote(TASK)} -ErrorAction SilentlyContinue; "
-        f"if ($task -and $task.State -eq 'Running') {{ "
+        f"if ($task -and $task.State -notin @('Ready','Disabled')) {{ "
         f"Stop-ScheduledTask -TaskName {_ps_quote(TASK)} -ErrorAction Stop; "
         f"$deadline = (Get-Date).AddSeconds(5); "
         f"do {{ Start-Sleep -Milliseconds 200; $task = Get-ScheduledTask -TaskName {_ps_quote(TASK)} -ErrorAction SilentlyContinue }} "
-        f"while ($task -and $task.State -eq 'Running' -and (Get-Date) -lt $deadline); "
-        f"if ($task -and $task.State -eq 'Running') {{ throw 'SentinelAgent task is still running' }} "
+        f"while ($task -and $task.State -notin @('Ready','Disabled') -and (Get-Date) -lt $deadline); "
+        f"if ($task -and $task.State -notin @('Ready','Disabled')) {{ throw 'SentinelAgent task is still active' }} "
         f"}}; Write-Output 'Scheduled task is stopped or absent'"
     )
     if task_result.returncode != 0:
