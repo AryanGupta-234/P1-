@@ -145,35 +145,24 @@ if exist "%VERSION_DIR%" (
     echo ERROR: Dashboard files are missing from the staged release.
     goto :fail
   )
-  echo [3/6] Creating an isolated Python environment in the staging folder...
-  %PY% -m venv "%STAGING_DIR%\.venv"
-  if errorlevel 1 (
-    echo ERROR: Could not create the release-specific Python environment.
-    goto :fail
-  )
-  set "STAGING_PY=%STAGING_DIR%\.venv\Scripts\python.exe"
-  if not exist "%STAGING_PY%" (
-    echo ERROR: The staged release Python interpreter is missing.
-    goto :fail
-  )
-  echo [4/6] Installing dependencies before publishing the new release...
-  "%STAGING_PY%" -m pip install --disable-pip-version-check --retries 3 --timeout 30 -r "%STAGING_DIR%\requirements.txt"
-  if errorlevel 1 (
-    echo ERROR: Dependency installation failed for SENTINEL %VERSION%.
-    echo The staging folder will be discarded; existing releases remain untouched.
-    goto :fail
-  )
   move "%STAGING_DIR%" "%VERSION_DIR%" >nul
   if errorlevel 1 (
-    echo ERROR: Could not finalize the complete immutable release directory.
+    echo ERROR: Could not finalize the new release application files.
+    if exist "%VERSION_DIR%" rmdir /s /q "%VERSION_DIR%"
     goto :fail
   )
-  echo Fresh version folder and isolated Python environment published successfully.
+  echo Fresh application files published. The release-specific environment is created in place next.
 )
 
 set "VENV_PY=%VERSION_DIR%\.venv\Scripts\python.exe"
 if "%FRESH_VERSION%"=="1" (
-  echo [5/6] Staged release files and dependencies were verified before publication.
+  echo [3/6] Creating the isolated Python environment in the final release folder...
+  %PY% -m venv "%VERSION_DIR%\.venv"
+  if errorlevel 1 goto :fresh_environment_failed
+  if not exist "%VENV_PY%" goto :fresh_environment_failed
+  echo [4/6] Installing dependencies into the new release environment...
+  "%VENV_PY%" -m pip install --disable-pip-version-check --retries 3 --timeout 30 -r "%VERSION_DIR%\requirements.txt"
+  if errorlevel 1 goto :fresh_environment_failed
 ) else (
   echo [3/6] Reusing the immutable %VERSION% Python environment...
   echo [4/6] Dependency files are not modified for an existing release.
@@ -218,6 +207,12 @@ echo Open SENTINEL later from the Desktop or Start Menu shortcut.
 echo.
 pause
 exit /b 0
+
+:fresh_environment_failed
+echo ERROR: The new SENTINEL %VERSION% Python environment or dependency setup failed.
+echo Removing only this unpublished version folder. Previous releases remain untouched.
+if exist "%VERSION_DIR%" rmdir /s /q "%VERSION_DIR%"
+goto :fail
 
 :incomplete
 echo ERROR: The existing release folder is incomplete.
