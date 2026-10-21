@@ -586,8 +586,10 @@ def test_installer_uses_immutable_version_folders_and_preserves_programdata():
     assert 'move "%STAGING_DIR%" "%VERSION_DIR%"' in installer
     assert 'set "FRESH_VERSION=0"' in installer
     assert 'set "FRESH_VERSION=1"' in installer
-    assert 'set "STAGING_PY=%STAGING_DIR%\\.venv\\Scripts\\python.exe"' in installer
-    assert installer.index('"%STAGING_PY%" -m pip install') < installer.index('move "%STAGING_DIR%" "%VERSION_DIR%"')
+    assert 'set "VENV_PY=%VERSION_DIR%\\.venv\\Scripts\\python.exe"' in installer
+    assert '%PY% -m venv "%VERSION_DIR%\\.venv"' in installer
+    assert installer.index('"%VENV_PY%" -m pip install') < installer.index('"%VENV_PY%" "%VERSION_DIR%\\agent.py" install')
+    assert ":fresh_environment_failed" in installer
     assert 'if "%FRESH_VERSION%"=="1"' in installer
     assert 'if exist "%VERSION_DIR%"' in installer
     assert "findstr /R /X /C:" in installer
