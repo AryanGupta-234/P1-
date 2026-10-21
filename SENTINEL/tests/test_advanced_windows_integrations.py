@@ -184,6 +184,7 @@ def test_lhm_reader_supports_asus_cpu_core_and_fan_sensor_names(monkeypatch):
         return SimpleNamespace(returncode=0, stdout=json.dumps(payload), stderr="")
 
     monkeypatch.setattr(advanced, "_run", fake_run)
+    monkeypatch.setattr(advanced, "_lhm_rest_sensors", lambda _port: ([], "loopback REST server not enabled"))
 
     result = advanced._lhm_sample()
 
@@ -387,4 +388,150 @@ def test_game_profile_undo_remains_pending_when_post_apply_snapshot_is_missing(m
     assert "post-apply process snapshot unavailable" in result["error"]
     assert row[0] is None
     assert "retry required" in row[1]
+
+def test_lhm_rest_fallback_reads_loopback_data_json_and_maps_asus_fans(monkeypatch):
+    monkeypatch.setattr(advanced, "IS_WIN", True)
+    monkeypatch.setitem(advanced.CFG, "advanced", {"lhm_enabled": True, "lhm_http_port": 8085})
+    monkeypatch.setattr(advanced, "_lhm_wmi_sensors", lambda: ([], "WMI namespace unavailable"))
+
+    tree = {
+        "Version": "0.9.6",
+        "Text": "Sensor",
+        "Children": [
+            {
+                "Text": "Intel Core i5-12500H",
+                "HardwareId": "/intelcpu/0",
+                "Children": [
+                    {
+                        "Text": "Temperatures",
+                        "Children": [
+                            {
+                                "Text": "CPU Package",
+                                "SensorId": "/intelcpu/0/temperature/0",
+                                "Type": "Temperature",
+                                "RawValue": "76.5 °C",
+                                "Children": [],
+                            },
+                            {
+                                "Text": "Core #0",
+                                "SensorId": "/intelcpu/0/temperature/1",
+                                "Type": "Temperature",
+                                "RawValue": "74.0 °C",
+                                "Children": [],
+                            },
+                        ],
+                    }
+                ],
+            },
+            {
+                "Text": "ASUS Embedded Controller",
+                "HardwareId": "/lpc/asus_ec",
+                "Children": [
+                    {
+                        "Text": "Fans",
+                        "Children": [
+                            {
+                                "Text": "CPU Fan",
+                                "SensorId": "/lpc/asus_ec/fan/0",
+                                "Type": "Fan",
+                                "RawValue": "2300 RPM",
+                                "Children": [],
+                            }
+                        ],
+                    }
+                ],
+            },
+            {
+                "Text": "NVIDIA GeForce RTX",
+                "HardwareId": "/nvidiagpu/0",
+                "Children": [
+                    {
+                        "Text": "GPU Core",
+                        "SensorId": "/nvidiagpu/0/temperature/0",
+                        "Type": "Temperature",
+                        "RawValue": "65.0 °C",
+                        "Children": [],
+                    }
+                ],
+            },
+        ],
+    }
+
+    class FakeResponse:
+        status = 200
+        reason = "OK"
+
+        def read(self, _limit=-1):
+            return json.dumps(tree).encode("utf-8")
+
+    class FakeConnection:
+        def __init__(self, host, port, timeout):
+            assert host == "127.0.0.1"
+            assert port == 8085
+            assert timeout == 3
+            self.request_args = None
+            self.closed = False
+
+        def request(self, method, path, headers=None):
+            self.request_args = (method, path, headers or {})
+            assert method == "GET"
+            assert path == "/data.json"
+            assert self.request_args[2].get("Accept") == "application/json"
+
+        def getresponse(self):
+            return FakeResponse()
+
+        def close(self):
+            self.closed = True
+
+    connections = []
+
+    def connection_factory(*args, **kwargs):
+        connection = FakeConnection(*args, **kwargs)
+        connections.append(connection)
+        return connection
+
+    monkeypatch.setattr(advanced, "HTTPConnection", connection_factory)
+
+    result = advanced._lhm_sample()
+
+    assert result["available"] is True, result
+    assert result["provider"] == "LibreHardwareMonitor 0.9.6"
+    assert result["source"] == "loopback REST /data.json"
+    assert result["rest_used"] is True
+    assert result["cpu_sensor_count"] == 2
+    assert result["per_core_temperatures"][0]["name"] == "Core #0"
+    assert result["fan_sensor_count"] == 1
+    assert result["fan_rpm"][0]["value"] == 2300.0
+    assert result["fan_rpm"][0]["parent"].startswith("ASUS Embedded Controller")
+    assert all("GPU" not in item["name"] for item in result["cpu_temperatures"])
+    assert connections[0].closed is True
+
+
+def test_lhm_rest_reader_refuses_non_success_and_never_follows_redirects(monkeypatch):
+    class UnauthorizedResponse:
+        status = 401
+        reason = "Unauthorized"
+
+        def read(self, _limit=-1):
+            return b"auth required"
+
+    class FakeConnection:
+        def __init__(self, host, port, timeout):
+            assert host == "127.0.0.1"
+            self.calls = []
+
+        def request(self, method, path, headers=None):
+            self.calls.append((method, path))
+
+        def getresponse(self):
+            return UnauthorizedResponse()
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(advanced, "HTTPConnection", FakeConnection)
+    rows, reason = advanced._lhm_rest_sensors(8085)
+    assert rows == []
+    assert "HTTP 401" in reason
 
