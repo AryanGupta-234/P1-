@@ -141,3 +141,11 @@ The demo mode is synthetic. It must never be used to validate actual Windows SCM
 ## License
 
 No license is currently specified. All rights remain with the copyright holder unless a license is added.
+
+### Windows integration reliability notes
+
+The optional sensor reader probes the correct LibreHardwareMonitor WMI namespace and the legacy OpenHardwareMonitor namespace, classifies Intel/AMD CPU package/core sensors by hardware identity, and reports when an ASUS embedded-controller fan sensor is not exposed. SENTINEL never installs or launches either provider.
+
+Game-session teardown now retains a restore_pending record when an undo fails and retries that record at runtime and on the next agent start. ETW parsing retains per-event timestamps, uses process-start image records and PID-reuse checks for process names, and names driver modules only when ETW fields or xperf DPC/ISR output actually identify a .sys module.
+
+These additions have regression tests, but must still be validated on the target Windows laptop with Windows Performance Toolkit, the user's already-running optional sensor provider, and a real disposable game session. A portable test cannot certify device-specific sensor support or live driver-symbol attribution.
