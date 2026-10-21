@@ -1079,23 +1079,35 @@ def _end_game_session(session_id: int, ts: float) -> dict:
         report = json.loads(report_raw) if report_raw else {}
     except Exception:
         report = {}
+    report_enabled = CFG.get("advanced", {}).get("auto_report_sessions", True) is True
+    persist_report = bool(report_raw) or report_enabled
     if not report:
-        report_enabled = CFG.get("advanced", {}).get("auto_report_sessions", True) is True
-        causes = _correlate_window(float(started), end_ts) if report_enabled else []
-        report = {
-            "game": game_key,
-            "duration_seconds": round(max(0.0, end_ts - float(started)), 1),
-            "before": before,
-            "after": after,
-            "delta": delta,
-            "temporal_candidates": causes,
-            "limitations": [
-                "Session snapshots are endpoints, not a controlled A/B experiment.",
-                "Correlated changes are temporal associations, not proven causes.",
-                "FPS/frame-time values are not inferred if no frame telemetry source is available.",
-                "Rollback preserves external changes and may remain pending when Windows refuses a restore.",
-            ],
-        }
+        if report_enabled:
+            causes = _correlate_window(float(started), end_ts)
+            report = {
+                "game": game_key,
+                "duration_seconds": round(max(0.0, end_ts - float(started)), 1),
+                "before": before,
+                "after": after,
+                "delta": delta,
+                "temporal_candidates": causes,
+                "limitations": [
+                    "Session snapshots are endpoints, not a controlled A/B experiment.",
+                    "Correlated changes are temporal associations, not proven causes.",
+                    "FPS/frame-time values are not inferred if no frame telemetry source is available.",
+                    "Rollback preserves external changes and may remain pending when Windows refuses a restore.",
+                ],
+            }
+        else:
+            # Keep teardown status visible to the runtime/UI without persisting the
+            # performance report when the operator has disabled session reporting.
+            report = {
+                "game": game_key,
+                "duration_seconds": round(max(0.0, end_ts - float(started)), 1),
+                "restoration": [],
+                "restoration_pending": True,
+                "report_disabled": True,
+            }
     restore_results = _restore_session_actions(int(session_id))
     failures = [item for item in restore_results if not item.get("ok")]
     report.update({
@@ -1106,7 +1118,8 @@ def _end_game_session(session_id: int, ts: float) -> dict:
     status = "restore_pending" if failures else "completed"
     db(
         "UPDATE game_sessions SET ended_at=COALESCE(ended_at,?),after_json=?,report_json=?,status=? WHERE id=?",
-        (end_ts, json.dumps(after, sort_keys=True), json.dumps(report, sort_keys=True), status, int(session_id)),
+        (end_ts, json.dumps(after, sort_keys=True), json.dumps(report, sort_keys=True) if persist_report else None,
+         status, int(session_id)),
     )
     if failures:
         log(
