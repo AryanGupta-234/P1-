@@ -187,6 +187,7 @@
 <!-- ADVANCED PERFORMANCE / REVERSIBILITY -->
 <section class="view" id="v-adv">
   <div class="row" style="margin-bottom:10px"><div><b>Performance intelligence &amp; reversible tuning</b><small>Evidence first · dry run · snapshot · approval · measure · rollback.</small></div><button class="btn or" id="adv-refresh">REFRESH TELEMETRY</button></div>
+  <div class="msg adv-load-error" id="adv-load-error" hidden></div>
   <div class="metrics" id="adv-metrics">
     <div class="metric"><small>ACTIVE GAME</small><b id="adv-game">--</b><span id="adv-session">No session tracked</span></div>
     <div class="metric"><small>ETW ENGINE</small><b id="adv-etw-state">--</b><span id="adv-etw-meta">Windows Performance Toolkit</span></div>
@@ -194,9 +195,12 @@
     <div class="metric"><small>REVERSIBLE CHANGES</small><b id="adv-undo-count">--</b><span>journaled and not reverted</span></div>
   </div>
   <div class="adv-grid">
+    <div class="panel adv-span"><div class="ph">Latest system measurements <em id="adv-live-meta">waiting for collector samples</em></div>
+      <div class="pb"><div id="adv-live-metrics" class="adv-live-grid"><div class="empty">Live CPU, memory, kernel, disk and network samples will appear here as collectors report them.</div></div></div>
+    </div>
     <div class="panel adv-span"><div class="ph">Thermal headroom <em>measured sensors only</em></div>
       <div class="pb heat-grid">
-        <div class="heat-card"><div class="heat-dial" id="adv-cpu-dial"><div><b id="adv-cpu-temp">--</b><small>CPU °C</small></div></div><div class="heat-meta"><b>CPU package</b><small id="adv-cpu-source">Optional external sensor not enabled</small><small id="adv-cpu-threshold">Warning threshold -- °C</small></div></div>
+        <div class="heat-card"><div class="heat-dial" id="adv-cpu-dial"><div><b id="adv-cpu-temp">--</b><small>CPU °C</small></div></div><div class="heat-meta"><b>CPU package</b><small id="adv-cpu-source">Optional external sensor not enabled</small><small id="adv-cpu-threshold-note">Warning threshold -- °C</small></div></div>
         <div class="heat-card"><div class="heat-dial" id="adv-gpu-dial"><div><b id="adv-gpu-temp">--</b><small>GPU °C</small></div></div><div class="heat-meta"><b>GPU temperature</b><small id="adv-gpu-source">NVIDIA nvidia-smi</small><small id="adv-gpu-throttle">No active throttle flag reported</small></div></div>
         <div class="heat-card"><div class="fan-wrap"><svg id="adv-fan" class="fan-rotor" viewBox="0 0 100 100" aria-label="Fan speed visualization"><circle cx="50" cy="50" r="46"/><g><path d="M50 47 C30 10 53 5 58 13 C65 24 54 37 53 47Z"/><path d="M53 50 C90 30 95 53 87 58 C76 65 63 54 53 53Z"/><path d="M50 53 C70 90 47 95 42 87 C35 76 46 63 47 53Z"/><path d="M47 50 C10 70 5 47 13 42 C24 35 37 46 47 47Z"/></g><circle cx="50" cy="50" r="8"/></svg></div><div class="heat-meta"><b>Fan telemetry</b><strong id="adv-fan-value">--</strong><small id="adv-fan-source">RPM unavailable</small></div></div>
       </div>
