@@ -1,44 +1,100 @@
 @echo off
-setlocal EnableExtensions
-title SENTINEL - Uninstall
+setlocal EnableExtensions DisableDelayedExpansion
+title SENTINEL - Versioned Uninstaller
+set "SENTINEL_UNINSTALLER=%~f0"
 
-net session >nul 2>&1
-if errorlevel 1 (
-  echo Requesting administrator permission...
-  powershell -NoProfile -ExecutionPolicy Bypass -Command "Start-Process -FilePath '%~f0' -Verb RunAs -Wait"
-  exit /b 0
+powershell -NoLogo -NoProfile -NonInteractive -Command "$id=[Security.Principal.WindowsIdentity]::GetCurrent(); $p=[Security.Principal.WindowsPrincipal]::new($id); if($p.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)){exit 0}else{exit 1}" >nul 2>&1
+if errorlevel 1 goto :elevate
+goto :admin_ok
+
+:elevate
+echo Requesting Windows administrator permission...
+powershell -NoLogo -NoProfile -ExecutionPolicy Bypass -Command "$p=Start-Process -FilePath $env:SENTINEL_UNINSTALLER -Verb RunAs -Wait -PassThru; exit [int]$p.ExitCode"
+if errorlevel 1 goto :elevation_failed
+exit /b 0
+
+:elevation_failed
+echo.
+echo ERROR: The elevated uninstaller did not complete successfully.
+pause
+exit /b 1
+
+:admin_ok
+set "ROOT=%ProgramFiles%\Sentinel"
+set "AGENT="
+set "PYTHON="
+set "VERSION="
+
+if exist "%ROOT%\active-version.txt" set /p "VERSION="<"%ROOT%\active-version.txt"
+if defined VERSION (
+  echo(%VERSION%| findstr /R /X "[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*" >nul
+  if errorlevel 1 (
+    echo WARNING: The active version marker is invalid. Falling back to legacy detection.
+    set "VERSION="
+  )
+)
+if defined VERSION (
+  set "AGENT=%ROOT%\versions\%VERSION%\agent.py"
+  set "PYTHON=%ROOT%\versions\%VERSION%\.venv\Scripts\python.exe"
 )
 
-set "DEST=%ProgramFiles%\Sentinel"
-set "PY="
-where py >nul 2>&1 && set "PY=py -3"
-if not defined PY where python >nul 2>&1 && set "PY=python"
-if not defined PY (
-  echo ERROR: Python 3 is not available; cannot cleanly remove the agent task.
-  echo Do not delete the application directory until the task has been removed.
+if defined VERSION if exist "%AGENT%" if exist "%PYTHON%" goto :run_uninstaller
+
+rem Backward compatibility for the pre-versioned installation layout.
+if exist "%ROOT%\agent.py" (
+  set "AGENT=%ROOT%\agent.py"
+  set "PYTHON="
+)
+if defined AGENT goto :run_uninstaller
+
+echo ERROR: No installed SENTINEL agent entry point was found at "%ROOT%".
+echo The application folder has not been deleted.
+pause
+exit /b 1
+
+:run_uninstaller
+echo.
+echo ============================================================
+echo  SENTINEL - Uninstall
+echo ============================================================
+if defined VERSION echo Installed release: %VERSION%
+echo Removing scheduled task and shortcuts...
+if defined PYTHON (
+  "%PYTHON%" "%AGENT%" uninstall
+) else (
+  set "PY="
+  where py >nul 2>&1
+  if not errorlevel 1 set "PY=py -3"
+  if not defined PY where python >nul 2>&1 && set "PY=python"
+  if not defined PY (
+    echo ERROR: Python 3 was not found. The installation was not removed.
+    pause
+    exit /b 1
+  )
+  %PY% "%AGENT%" uninstall
+)
+if errorlevel 1 (
+  echo ERROR: Task/shortcut removal failed. Application files were preserved.
   pause
   exit /b 1
 )
 
-if exist "%DEST%\agent.py" (
-  %PY% "%DEST%\agent.py" uninstall
-  if errorlevel 1 (
-    echo ERROR: SENTINEL agent/task removal failed.
-    pause
-    exit /b 1
-  )
-  rd /s /q "%DEST%"
-  if exist "%DEST%" (
-    echo ERROR: Could not remove all application files from "%DEST%".
-    pause
-    exit /b 1
-  )
+echo Removing installed version folders...
+rd /s /q "%ROOT%"
+if exist "%ROOT%" (
+  echo ERROR: Could not remove all application version folders.
+  echo ProgramData history remains untouched.
+  pause
+  exit /b 1
 )
 
 echo.
-echo SENTINEL application files, logon task and shortcuts have been removed.
-echo Settings, SQLite history and traces are preserved in %ProgramData%\Sentinel.
-echo Delete that folder manually only if you also want to erase all local history.
+echo ============================================================
+echo  SENTINEL UNINSTALLED SUCCESSFULLY
+echo ============================================================
+echo Application versions, task and shortcuts have been removed.
+echo Settings, SQLite history and traces remain in %ProgramData%\Sentinel.
+echo Delete that folder manually only if you intentionally want to erase local data.
 echo.
 pause
 exit /b 0
