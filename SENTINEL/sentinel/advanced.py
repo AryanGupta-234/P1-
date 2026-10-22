@@ -345,9 +345,24 @@ def prepare_action(action_id: int, kind: str, args: dict, *, dry_run: bool = Fal
         session_id = STATE.get("advanced", {}).get("active_session_id")
         if not session_id:
             raise RuntimeError(f"{kind} requires an active tracked game session; no change was made")
-    recent = db("SELECT created_at FROM action_journal WHERE kind=? ORDER BY id DESC LIMIT 1", (kind,))
-    if recent and now - float(recent[0][0]) < 30:
-        raise RuntimeError("rate limited: wait 30 seconds before repeating this action")
+    # Cool down an exact action target, not every action of the same kind.
+    # This lets independent safe proposals proceed while preventing rapid repeats
+    # against the same process, service, profile or system setting.
+    fingerprint = json.dumps(args or {}, sort_keys=True, separators=(",", ":"), default=str)
+    recent = db(
+        "SELECT j.created_at,a.args FROM action_journal j "
+        "JOIN actions a ON a.id=j.action_id WHERE j.kind=? ORDER BY j.id DESC LIMIT 30",
+        (kind,),
+    )
+    for created_at, raw_args in recent:
+        try:
+            previous_fingerprint = json.dumps(json.loads(raw_args or "{}"), sort_keys=True,
+                                              separators=(",", ":"), default=str)
+        except (TypeError, ValueError):
+            previous_fingerprint = str(raw_args or "")
+        if previous_fingerprint == fingerprint and now - float(created_at) < 30:
+            remaining = max(1, int(30 - (now - float(created_at))))
+            raise RuntimeError(f"rate limited: same action target may be repeated in {remaining} seconds")
     global_recent = db("SELECT COUNT(*) FROM action_journal WHERE created_at>=?", (now - 60,))
     if global_recent and int(global_recent[0][0]) >= 3:
         raise RuntimeError("global rate limit: no more than three state-changing actions per minute")
@@ -1223,7 +1238,9 @@ def _cpu_temperature_threshold(sensor: str) -> float:
 def _thermal_watch(ts: float) -> None:
     global _LAST_GPU_THROTTLE
     hardware = STATE.get("hardware_sensors", {})
-    cpu_values = hardware.get("cpu_temperatures") or []
+    # ACPI thermal zones are board/platform readings, not calibrated CPU-package
+    # telemetry; display them but do not apply CPU-package warning thresholds.
+    cpu_values = [] if hardware.get("cpu_source") == "Windows ACPI WMI" else (hardware.get("cpu_temperatures") or [])
     cpu_max = max((float(x.get("value")) for x in cpu_values if isinstance(x.get("value"), (int, float))), default=None)
     try: gpu_temp = float((STATE.get("gpu") or {}).get("temp"))
     except (TypeError, ValueError): gpu_temp = None
@@ -1467,13 +1484,77 @@ def _lhm_sensor_result(sensor_rows: list[dict], provider: str, source: str, name
     }
 
 
+def _acpi_thermal_sample() -> dict:
+    """Read Windows ACPI thermal zones when a hardware monitor is not available.
+
+    These are platform thermal-zone readings, not guaranteed CPU package/core sensors.
+    """
+    if not IS_WIN:
+        return {"available": False, "reason": "Windows ACPI thermal zones are Windows-only"}
+    command = r"""
+$ErrorActionPreference='Stop'
+$rows=@(Get-CimInstance -Namespace root/wmi -ClassName MSAcpi_ThermalZoneTemperature -ErrorAction Stop |
+    Select-Object InstanceName,CurrentTemperature)
+$items=@()
+foreach($row in $rows) {
+    $raw=[double]$row.CurrentTemperature
+    $c=[math]::Round(($raw / 10.0) - 273.15, 1)
+    if($c -ge -10 -and $c -le 130) {
+        $items += [pscustomobject]@{Name=[string]$row.InstanceName;Value=$c;SensorType='ACPI thermal zone'}
+    }
+}
+[pscustomobject]@{sensors=@($items);count=$items.Count} | ConvertTo-Json -Compress -Depth 4
+"""
+    try:
+        result = _run(["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", command], 12)
+        if result.returncode != 0:
+            detail = (result.stderr or result.stdout or "ACPI thermal provider unavailable").strip()
+            return {"available": False, "reason": f"Windows ACPI WMI: {detail[:180]}"}
+        payload = json.loads((result.stdout or "").strip().lstrip("\ufeff"))
+        rows = payload.get("sensors", []) if isinstance(payload, dict) else []
+        if isinstance(rows, dict):
+            rows = [rows]
+        readings = []
+        for index, row in enumerate(rows[:32]):
+            if not isinstance(row, dict):
+                continue
+            value = _lhm_number(row.get("Value"))
+            if value is None or not -10 <= value <= 130:
+                continue
+            readings.append({
+                "name": ("ACPI zone " + str(index + 1) + " · " + str(row.get("Name") or "unnamed"))[:120],
+                "parent": "Windows ACPI thermal zone",
+                "type": "ACPI thermal zone",
+                "value": value,
+                "identifier": str(row.get("Name") or "")[:220],
+            })
+        if not readings:
+            return {"available": False, "reason": "Windows ACPI WMI returned no supported thermal-zone readings"}
+        return {
+            "available": True, "provider": "Windows ACPI WMI",
+            "source": "root/wmi MSAcpi_ThermalZoneTemperature",
+            "cpu_source": "Windows ACPI WMI", "checked_at": time.time(),
+            "cpu_temperatures": readings, "per_core_temperatures": [],
+            "fan_rpm": [], "sensor_count": len(readings), "cpu_sensor_count": len(readings),
+            "fan_sensor_count": 0, "hardware": ["ACPI thermal zones"],
+            "cpu_reason": "Platform thermal-zone reading; not guaranteed to represent CPU package temperature",
+            "fan_reason": "Windows ACPI thermal zones do not expose fan RPM",
+        }
+    except Exception as exc:
+        return {"available": False, "reason": f"Windows ACPI WMI: {type(exc).__name__}: {str(exc)[:160]}"}
+
+
 def _lhm_sample() -> dict:
     """Read an already-running local LHM provider; prefer REST data.json, with legacy WMI fallback."""
     if not IS_WIN:
         return {"available": False, "reason": "Windows only"}
     config = CFG.get("advanced", {}) if isinstance(CFG.get("advanced"), dict) else {}
     if config.get("lhm_enabled") is not True:
-        return {"available": False, "reason": "Optional hardware sensor reader disabled"}
+        fallback = _acpi_thermal_sample()
+        if fallback.get("available"):
+            fallback["lhm_status"] = "Optional LibreHardwareMonitor reader disabled"
+            return fallback
+        return {"available": False, "reason": "Optional LHM reader disabled; " + fallback.get("reason", "ACPI fallback unavailable")}
     try:
         port = int(config.get("lhm_http_port", 8085))
     except (TypeError, ValueError):
@@ -1505,10 +1586,21 @@ def _lhm_sample() -> dict:
         result["wmi_status"] = wmi_reason
         result["rest_status"] = rest_reason
         result["rest_used"] = rest_used
+        if not result.get("cpu_temperatures"):
+            fallback = _acpi_thermal_sample()
+            if fallback.get("available"):
+                result["cpu_temperatures"] = fallback["cpu_temperatures"]
+                result["cpu_source"] = fallback["cpu_source"]
+                result["cpu_reason"] = fallback["cpu_reason"]
+                result["acpi_status"] = "ACPI fallback supplied platform thermal-zone readings"
         return result
+    fallback = _acpi_thermal_sample()
+    if fallback.get("available"):
+        fallback["lhm_status"] = f"WMI: {wmi_reason}; local REST: {rest_reason}"[:260]
+        return fallback
     return {
         "available": False,
-        "reason": f"WMI: {wmi_reason}; local REST: {rest_reason}"[:260],
+        "reason": f"WMI: {wmi_reason}; local REST: {rest_reason}; ACPI: {fallback.get('reason', 'unavailable')}"[:260],
         "wmi_status": wmi_reason,
         "rest_status": rest_reason,
         "namespace": f"http://127.0.0.1:{port}/data.json",
