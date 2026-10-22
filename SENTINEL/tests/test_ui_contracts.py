@@ -10,7 +10,7 @@ def test_multiple_dom_nodes_use_collection_selector_before_for_each():
     invalid = [
         (line_number, line.strip())
         for line_number, line in enumerate(source.splitlines(), 1)
-        if re.search(r'(?<!\\$)\\$\\s*\\([^)]*\\)\\s*\\.forEach', line)
+        if re.search(r'(?<!\$)\$\s*\([^)]*\)\s*\.forEach', line)
     ]
     assert not invalid, "Single-element querySelector() used with forEach(): " + repr(invalid)
 
