@@ -612,7 +612,7 @@ async function loadAdvanced(force = false) {
     const cpuTemp = cpuVals.length ? Math.max(...cpuVals) : null;
     const sensorProvider = hs.provider || "External hardware monitor";
     const cpuSrc = hs.available
-      ? `${sensorProvider} · ${cpuItems.length} CPU temperature sensor(s)${cpuItems.length ? "" : " · " + (hs.cpu_reason || "CPU sensor not exposed")}`
+      ? `${hs.cpu_source || sensorProvider} · ${cpuItems.length} temperature reading(s)${hs.cpu_reason ? " · " + hs.cpu_reason : cpuItems.length ? "" : " · CPU sensor not exposed"}`
       : (hs.reason || "Optional sensor provider unavailable");
     advGauge("adv-cpu-dial", cpuTemp, Number(cfg.cpu_temp_warn_c || 88), "adv-cpu-temp", "adv-cpu-source", cpuSrc);
     const gpuTemp = gpu.temp != null && Number.isFinite(Number(gpu.temp)) ? Number(gpu.temp) : null;
@@ -631,7 +631,7 @@ async function loadAdvanced(force = false) {
     const rotor = $("#adv-fan"); const fanHz = lhmFans.length ? Math.max(.12, Math.min(3, 60/Math.max(1, Number(fanValue)))) : fanValue != null ? Math.max(.45, 4 - Number(fanValue)*.035) : 1.5;
     rotor.style.animationDuration = `${fanHz}s`; rotor.classList.toggle("running", fanValue != null);
     const cores = Array.isArray(hs.per_core_temperatures) ? hs.per_core_temperatures : [];
-    $("#adv-core-meta").textContent = hs.available ? `${cores.length} core temperature sensor(s)` : "Optional LHM sensors only";
+    $("#adv-core-meta").textContent = cores.length ? `${cores.length} per-core temperature sensor(s)` : hs.available ? "Per-core sensors not exposed by this provider" : "Hardware temperature provider unavailable";
     $("#adv-core-map").innerHTML = cores.length ? cores.map((x,i)=>{const n=Number(x.value), pct=Math.max(0,Math.min(100,n/105*100)); return `<div class="core-cell"><b>${esc(x.name || `Core ${i}`)}</b><small>${avNum(n,1)} °C</small><div class="heat-bar"><i style="width:${pct}%"></i></div></div>`;}).join("") : `<div class="empty">${esc(hs.cpu_reason || "Per-core heat sensors are unavailable. Start an external LHM instance and enable the optional reader.")}</div>`;
     $("#adv-gpu-stats").innerHTML = `<div class="row"><b>GPU clock</b><span>${esc(gpu.clk ?? "--")} MHz</span></div><div class="row"><b>Power draw</b><span>${esc(gpu.pwr ?? "--")} W</span></div><div class="row"><b>Power limit</b><span>${esc(gpu.pwrlim ?? "--")} W</span></div><div class="row"><b>GPU utilization</b><span>${esc(gpu.util ?? "--")}%</span></div><div class="row"><b>VRAM</b><span>${esc(gpu.vram ?? "--")} / ${esc(gpu.vramtot ?? "--")} MiB</span></div><div class="row"><b>Fan telemetry</b><span>${esc(gpu.fan_speed_pct == null ? "unavailable" : gpu.fan_speed_pct + "%")}</span></div>`;
     advSpark("adv-clock-spark","gpuclk"); advSpark("adv-power-spark","gpupwr"); advPowerClockWaterfall();
