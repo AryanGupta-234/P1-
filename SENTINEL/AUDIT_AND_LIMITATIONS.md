@@ -172,3 +172,12 @@ Regression coverage was added in tests/test_advanced_windows_integrations.py for
 - The Control window exposes the autonomy master and reversible-medium policy, and pending actions display their risk score, priority and confidence. The 30-second cooldown is now scoped to the same action kind and exact target arguments; the existing global three-actions-per-minute budget remains.
 - Thermal collection now probes Windows ACPI thermal zones when the optional LHM reader is disabled or unavailable. These are labeled as platform thermal-zone readings, not CPU-package/core measurements, and are not used for CPU-package threshold alerts. LHM remains read-only and opt-in; fan RPM and per-core readings still depend on hardware/provider support.
 - This source-level update has not been executed on the target Windows host in this session. Validate Control-window automation, rollback, ACPI provider output, NVIDIA GPU temperature, and sensor health on the actual machine before relying on automatic tuning. Unsupported or empty hardware providers must remain explicitly unavailable rather than synthesized.
+
+
+## v1.0.6 engineering additions
+
+- Added a managed, checksum-pinned LibreHardwareMonitor v0.9.6 dependency with bounded ZIP extraction and a loopback-only read-only sensor endpoint.
+- Expanded normalized hardware telemetry beyond temperatures/fans to expose CPU/GPU temperature, clock, power, voltage and load measurements plus a device/type/unit inventory. Unsupported readings remain unavailable rather than inferred.
+- Fixed the Intelligence evidence selector to use the collection query helper, and normalized API collection payloads before rendering state, memories, goals and draft plans.
+- Replaced the multi-column splash card and diagnostic copy with a compact centered startup ignition animation and one progress indicator.
+- Hardware coverage still requires target-machine verification. Fan RPM, voltage, power and CPU clocks depend on firmware/embedded-controller support; optional PawnIO installation remains an operator decision.
