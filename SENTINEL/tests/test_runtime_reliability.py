@@ -637,9 +637,12 @@ def test_install_integration_verifies_desktop_and_all_users_shortcuts(monkeypatc
     script = captured["script"]
     assert "Win32_ComputerSystem" in script
     assert "User Shell Folders" in script
-    assert "Join-Path $env:ProgramData 'Microsoft\\Windows\\Start Menu\\Programs\\SENTINEL'" in script
+    assert "Join-Path $env:ProgramData 'Microsoft\\Windows\\Start Menu\\Programs'" in script
+    assert "Join-Path $commonPrograms 'SENTINEL'" in script
     assert "(Join-Path $desktop 'SENTINEL.lnk')" in script
-    assert "(Join-Path $commonStartMenu 'SENTINEL.lnk')" in script
+    assert "(Join-Path $userPrograms 'SENTINEL.lnk')" in script
+    assert "(Join-Path $commonPrograms 'SENTINEL.lnk')" in script
+    assert "(Join-Path $commonStartMenuGroup 'SENTINEL.lnk')" in script
     assert "Test-Path -LiteralPath $item.Path -PathType Leaf" in script
     assert "$check.TargetPath -ne $pythonw" in script
     assert "RunLevel Highest" in script
