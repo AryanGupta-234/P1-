@@ -387,6 +387,23 @@ def db(sql, args=(), many=False):
         _db.commit()
         return rows
 
+def insert_id(sql, args=()):
+    """Execute one INSERT and return its row id under the same SQLite lock.
+
+    Do not emulate this with INSERT followed by SELECT MAX(id): another thread
+    can insert between those statements and cause actions to be associated with
+    the wrong caller.
+    """
+    if not isinstance(sql, str) or not sql.lstrip().upper().startswith("INSERT"):
+        raise ValueError("insert_id accepts INSERT statements only")
+    with _db_lock:
+        cur = _db.execute(sql, args)
+        row_id = cur.lastrowid
+        _db.commit()
+        if row_id is None:
+            raise RuntimeError("SQLite did not return an inserted row id")
+        return int(row_id)
+
 def persist_snapshot(key, payload):
     """Persist the latest bounded runtime view by key; avoids unbounded per-second history."""
     if not isinstance(key, str) or not key or len(key) > 64:
