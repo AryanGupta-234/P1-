@@ -250,8 +250,8 @@ def propose(kind, args=None, origin="brain", reason=""):
         detail = "; ".join(str(item) for item in (preview.get("warnings") or []) if item)
         log("actions", f"REJECTED {kind}: {detail[:260] or 'risk policy'}", "warn")
         return None
-    # Only explicitly opted-in SAFE diagnostic actions may run automatically.
-    # Medium risk always needs a fresh approval; dangerous actions never run.
+    # SAFE diagnostics retain per-action opt-in. Eligible reversible MEDIUM actions
+    # may auto-approve only through the separate scored policy; dangerous stays blocked.
     from . import approval_engine
     tier = advanced.risk_tier(kind)
     journal_ready = tier == "safe" or tier == "medium"
@@ -366,7 +366,7 @@ def list_actions(limit=40):
             safeguard={"allowed": True},
             auto_medium_enabled=bool(CFG.get("approval_policy", {}).get("auto_approve_reversible_medium", False)),
             automation_enabled=bool(core.get_profile()["automation"]),
-            reversible=bool(meta[1]),
+            reversible=r[2] in approval_engine.AUTO_MEDIUM_ALLOWLIST,
         )
         decoded.append({"id": r[0], "ts": r[1], "kind": r[2], "desc": KINDS.get(r[2], r[2]),
             "state": r[3], "origin": r[4], "result": r[5], "args": args,
