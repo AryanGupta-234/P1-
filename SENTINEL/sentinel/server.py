@@ -2,7 +2,7 @@
 import ctypes, json, os, threading, time, urllib.parse, psutil, platform, sys, hmac
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from . import core, actions, ai, intel, inventory, intelligence, advanced
-from . import safeguard, runtime_engine, memory_engine, ai_engine, security_engine
+from . import safeguard, runtime_engine, memory_engine, ai_engine, security_engine, hardware_provider
 from .core import CFG, STATE, LIVE, HIST, HEART, START, db, log, save_cfg
 
 UI = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "ui")
@@ -403,9 +403,13 @@ class H(BaseHTTPRequestHandler):
             })
         if p == "/api/process-intelligence":
             return self._json(security_engine.snapshot(min(120, int((qs.get("limit") or ["40"])[0]))))
+        if p == "/api/hardware/provider":
+            return self._json(hardware_provider.status())
         if p == "/api/advanced":
             try:
-                return self._json(advanced.status())
+                payload = advanced.status()
+                payload["hardware_provider"] = hardware_provider.status()
+                return self._json(payload)
             except Exception as exc:
                 log("advanced", f"performance status payload failed: {type(exc).__name__}: {str(exc)[:260]}", "error")
                 return self._json({
@@ -466,6 +470,28 @@ class H(BaseHTTPRequestHandler):
         if not isinstance(body, dict):
             return self._json({"error": "request body must be a JSON object"}, 400)
         p = u.path
+        if p == "/api/hardware/provider/start":
+            try:
+                result = hardware_provider.install_and_start()
+                if result.get("installed"):
+                    settings = CFG.setdefault("advanced", {})
+                    settings["lhm_enabled"] = True
+                    settings["lhm_http_port"] = int(result.get("port") or 8085)
+                    save_cfg(CFG)
+                STATE["hardware_provider"] = hardware_provider.status()
+                log("hardware-provider", result.get("message", "LibreHardwareMonitor start requested"),
+                    "ok" if result.get("connected") else "warn",
+                    version=result.get("version"), connected=bool(result.get("connected")),
+                    sensor_count=int(result.get("sensor_count") or 0))
+                return self._json({**result, "provider": STATE["hardware_provider"]},
+                                  200 if result.get("connected") else 202)
+            except PermissionError as exc:
+                return self._json({"error": str(exc)}, 403)
+            except (ValueError, TypeError) as exc:
+                return self._json({"error": str(exc)}, 400)
+            except Exception as exc:
+                log("hardware-provider", f"provider installation/start failed: {type(exc).__name__}: {str(exc)[:200]}", "error")
+                return self._json({"error": f"{type(exc).__name__}: {str(exc)[:220]}"}, 503)
         if p == "/api/process-intelligence/inspect":
             try:
                 result = security_engine.inspect_process(
