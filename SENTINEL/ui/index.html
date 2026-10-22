@@ -5,32 +5,20 @@
 <link rel="stylesheet" href="app.css"></head>
 <body><div class="ambient"></div><canvas id="starfield"></canvas>
 <div class="boot" id="boot">
- <div class="boot-grid"></div><div class="boot-scanline"></div><div class="boot-corners"></div>
- <div class="boot-card">
-  <div class="boot-visual" aria-hidden="true">
-   <div class="boot-reactor">
-    <i class="reactor-orbit orbit-a"></i><i class="reactor-orbit orbit-b"></i><i class="reactor-orbit orbit-c"></i>
-    <i class="reactor-cross"></i><i class="reactor-core"></i><span class="reactor-label">S / 01</span>
-   </div>
-   <div class="boot-visual-meta"><span>NEURAL CORE</span><b>ONLINE SEQUENCE</b><span>WINDOWS NODE / LOCAL</span></div>
+  <div class="boot-grid" aria-hidden="true"></div>
+  <div class="boot-scanline" aria-hidden="true"></div>
+  <div class="boot-identity">
+    <div class="boot-reactor" aria-hidden="true">
+      <i class="reactor-orbit orbit-a"></i><i class="reactor-orbit orbit-b"></i><i class="reactor-orbit orbit-c"></i>
+      <i class="reactor-core"></i>
+    </div>
+    <div class="boot-title">SENTINEL</div>
+    <div class="boot-sub">SECURE SYSTEM STARTUP</div>
+    <div class="boot-track"><div class="boot-progress" id="bootProgress"></div></div>
+    <div class="boot-stage"><span id="bootStage">POWERING SYSTEM</span><b id="bootPct">00%</b></div>
+    <div id="bootLog" hidden></div>
+    <button class="boot-skip" id="bootSkip">SKIP INTRO</button>
   </div>
-  <div class="boot-content">
-   <div class="boot-topline"><span class="boot-led"></span> AUTONOMOUS INTELLIGENCE SYSTEM <em>BUILD 1.0.5</em></div>
-   <div class="boot-title">SENTINEL<span> / ENGINE DECK</span></div>
-   <div class="boot-sub">PERFORMANCE INTELLIGENCE · DEFENSIVE AUTOMATION · ADAPTIVE RUNTIME</div>
-   <div class="boot-copy">Bringing the local intelligence stack online. Telemetry and working memory remain on this device; cloud inference and user-triggered web lookups use external providers only when configured.</div>
-   <div class="boot-engine-grid">
-    <div class="boot-engine" id="boot-safe"><i></i><span>SAFEGUARD</span><b>CHECKING</b></div>
-    <div class="boot-engine" id="boot-runtime"><i></i><span>RUNTIME</span><b>CHECKING</b></div>
-    <div class="boot-engine" id="boot-ai"><i></i><span>AI ORCHESTRATOR</span><b>CHECKING</b></div>
-    <div class="boot-engine" id="boot-memory"><i></i><span>MEMORY</span><b>CHECKING</b></div>
-   </div>
-   <div class="boot-track"><div class="boot-progress" id="bootProgress"></div></div>
-   <div class="boot-stage"><span id="bootStage">INITIALIZING CORE</span><b id="bootPct">00%</b></div>
-   <div class="boot-log" id="bootLog"><div>Visual shell ready · waiting for authenticated agent</div></div>
-   <div class="boot-footer"><button class="boot-skip" id="bootSkip">ENTER COMMAND DECK <span>↗</span></button><span>NO CUSTOM KERNEL DRIVER · LOCAL-FIRST</span></div>
-  </div>
- </div>
 </div>
 <div id="toasts" aria-live="polite"></div>
 <div class="pal" id="pal"><div class="pal-box" role="dialog" aria-modal="true" aria-label="Command palette">
@@ -273,6 +261,7 @@
       <div class="pb"><div id="adv-live-metrics" class="adv-live-grid"><div class="empty">Live CPU, memory, kernel, disk and network samples will appear here as collectors report them.</div></div></div>
     </div>
     <div class="panel adv-span"><div class="ph">Thermal headroom <em>measured sensors only</em></div>
+      <div class="pb adv-provider-bar"><div><b>HARDWARE SENSOR ENGINE</b><small id="adv-provider-status">Not installed · official package is checksum-verified before extraction.</small></div><button class="btn or" id="adv-provider-install">INSTALL SENSOR ENGINE</button></div>
       <div class="pb heat-grid">
         <div class="heat-card"><div class="heat-dial" id="adv-cpu-dial"><div><b id="adv-cpu-temp">--</b><small id="adv-cpu-label">CPU °C</small></div></div><div class="heat-meta"><b id="adv-cpu-title">CPU package</b><small id="adv-cpu-source">Optional external sensor not enabled</small><small id="adv-cpu-threshold-note">Warning threshold -- °C</small></div></div>
         <div class="heat-card"><div class="heat-dial" id="adv-gpu-dial"><div><b id="adv-gpu-temp">--</b><small>GPU °C</small></div></div><div class="heat-meta"><b>GPU temperature</b><small id="adv-gpu-source">NVIDIA nvidia-smi</small><small id="adv-gpu-throttle">No active throttle flag reported</small></div></div>
@@ -280,7 +269,8 @@
       </div>
       <div class="pb"><div class="ph" style="padding:8px 0;border:0">Per-core temperature map <em id="adv-core-meta">Optional LHM sensors only</em></div><div id="adv-core-map" class="core-heatmap"><div class="empty">Per-core sensor data is unavailable. Platform ACPI readings, when exposed by Windows, are shown separately.</div></div></div>
     </div>
-    <div class="panel"><div class="ph">GPU clocks &amp; power <em>nvidia-smi</em></div><div class="pb kv" id="adv-gpu-stats"></div><div class="pb"><div class="adv-spark-row"><span>GPU clock</span><svg id="adv-clock-spark" viewBox="0 0 260 44"></svg></div><div class="adv-spark-row"><span>GPU power</span><svg id="adv-power-spark" viewBox="0 0 260 44"></svg></div><div class="adv-waterfall-wrap"><div class="adv-waterfall-heading">Time-aligned power / clock waterfall <em>last 60 samples</em></div><svg id="adv-power-clock-waterfall" viewBox="0 0 560 150" role="img" aria-label="GPU clock and power waterfall, earlier to recent"></svg><div class="adv-waterfall-legend"><span><i class="clock"></i> GPU clock (MHz)</span><span><i class="power"></i> GPU power (W)</span><span>Earlier → recent</span></div></div></div></div>
+    <div class="panel adv-span"><div class="ph">Detected hardware sensors <em id="adv-sensor-count">waiting for provider</em></div><div class="pb sensor-inventory" id="adv-sensor-inventory"><div class="empty">Start the sensor engine to enumerate supported temperatures, clocks, fans, voltage, power and load readings.</div></div></div>
+    <div class="panel"><div class="ph">Hardware clocks, power &amp; voltage <em>provider measurements first · NVIDIA fallback</em></div><div class="pb kv" id="adv-gpu-stats"></div><div class="pb"><div class="adv-spark-row"><span>GPU clock</span><svg id="adv-clock-spark" viewBox="0 0 260 44"></svg></div><div class="adv-spark-row"><span>GPU power</span><svg id="adv-power-spark" viewBox="0 0 260 44"></svg></div><div class="adv-waterfall-wrap"><div class="adv-waterfall-heading">Time-aligned power / clock waterfall <em>last 60 samples</em></div><svg id="adv-power-clock-waterfall" viewBox="0 0 560 150" role="img" aria-label="GPU clock and power waterfall, earlier to recent"></svg><div class="adv-waterfall-legend"><span><i class="clock"></i> GPU clock (MHz)</span><span><i class="power"></i> GPU power (W)</span><span>Earlier → recent</span></div></div></div></div>
     <div class="panel"><div class="ph">Thermal / power limit timeline <em>sensor transitions, no inferred events</em></div><div class="pb list" id="adv-thermal-timeline"><div class="empty">Waiting for sensor transitions.</div></div></div>
     <div class="panel"><div class="ph">Live ETW kernel engine <em id="adv-etw-source">periodic bounded trace windows</em></div><div class="pb">
       <div class="row"><span class="tag" id="adv-etw-status">DISABLED</span><button class="btn sm or" id="adv-etw-capture">CAPTURE 12s ETW</button></div>
@@ -315,12 +305,12 @@
     <div class="panel"><div class="ph">Advanced sensor settings <em>persistent operator controls</em></div><div class="pb adv-form">
       <label class="tog"><span>Enable bounded kernel ETW engine<small>Windows Performance Toolkit required</small></span><input id="adv-etw-enabled" type="checkbox"></label>
       <label class="tog"><span>Automatically capture during games<small>Explicit safe diagnostic opt-in; max one window per 120 seconds</small></span><input id="adv-etw-auto" type="checkbox"></label>
-      <label class="tog"><span>Read optional LibreHardwareMonitor sensors<small>Read-only WMI or loopback REST; start LHM yourself and enable its Web Server</small></span><input id="adv-lhm-enabled" type="checkbox"></label>
+      <label class="tog"><span>Enable hardware sensor polling<small>Read-only local sensor collection; managed provider is started by SENTINEL</small></span><input id="adv-lhm-enabled" type="checkbox"></label>
       <label>LibreHardwareMonitor local HTTP port<input id="adv-lhm-port" type="number" min="1" max="65535" value="8085"></label>
       <label>CPU early-warning threshold °C<input id="adv-cpu-threshold" type="number" min="50" max="110" value="88"></label>
       <label>GPU early-warning threshold °C<input id="adv-gpu-threshold" type="number" min="50" max="110" value="82"></label>
       <button class="btn" id="adv-settings-save">SAVE SENSOR SETTINGS</button>
-      <small>REST setup: open LHM → Options → Remote Web Server → Run, keep its listener on localhost, and use the port above (default 8085). SENTINEL only GETs /data.json; authenticated servers are reported unavailable. CPU/fan coverage depends on your ASUS EC/firmware and available drivers. Fan controls are never written; use Armoury Crate for supported ASUS modes.</small>
+      <small>The INSTALL SENSOR ENGINE control downloads the official LibreHardwareMonitor release and verifies its published SHA-256 before extraction. Its HTTP endpoint is bound to 127.0.0.1 only. Some readings may require LibreHardwareMonitor's optional PawnIO driver; SENTINEL never accepts that prompt or installs the driver automatically. Available sensors depend on ASUS firmware/embedded-controller support. SENTINEL never changes fan curves.</small>
     </div></div>
     <div class="panel adv-span"><div class="ph">Action dry-run preview <em>no system changes until approved</em></div><div class="pb adv-form">
       <label>Action to inspect<select id="adv-preview-kind"><option value="etw_capture">Bounded kernel ETW capture · safe diagnostic</option><option value="wpr_trace">WPR GeneralProfile.Light trace · safe diagnostic</option><option value="power_plan">Switch to High Performance plan · medium risk</option><option value="timer_resolution">Request 1 ms timer resolution · medium risk</option></select></label>
