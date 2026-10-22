@@ -3,7 +3,7 @@ Every action is proposed -> (auto-run if autopilot enables that kind, else waits
 import json, os, subprocess, threading, time
 import psutil
 from pathlib import Path
-from . import core
+from . import core, safeguard
 from .core import CFG, IS_WIN, STATE, db, log, publish, TRACE_DIR
 
 NO_WIN = 0x08000000 if IS_WIN else 0
@@ -12,14 +12,14 @@ KINDS = {
     "bg_priority": "Lower memory + I/O priority of background apps while gaming (CPU speed untouched)",
     "flush_dns": "Flush the DNS resolver cache",
     "power_plan": "Switch to High performance power plan (previous plan saved for undo)",
-    "wpr_trace": "Record a 15 s ETW kernel trace (Windows Performance Recorder) for deep analysis",
+    "wpr_trace": "Record a bounded WPR GeneralProfile.Light ETW trace; Xperf is optional",
     "trim_bg": "Trim working sets of background apps to free RAM for the game",
     "terminate_process": "Request graceful close of a reviewed user app window (no force-kill)",
     "undo_power_plan": "Restore the previous power plan (legacy; use the journal undo)",
     "game_profile_apply": "Apply an approved reversible per-game priority / CPU Set / power / timer profile",
     "timer_resolution": "Request a reversible 1–2 ms multimedia timer period for the game session",
     "wifi_max_performance": "Use evidence-gated Wi-Fi adapter maximum-performance AC policy (reversible)",
-    "etw_capture": "Capture a bounded NT Kernel Logger ETW window and decode DPC/ISR/process evidence",
+    "etw_capture": "Capture a bounded WPR ETW trace; Xperf is optional for supplemental DPC/ISR summaries",
     "pause_updater_service": "Temporarily pause an allowlisted third-party updater (approval required; undo restarts it)",
 }
 _last_trace = [0.0]
@@ -62,7 +62,10 @@ else:
 
 
 def _bg_targets():
-    return [p for p in STATE.get("procs", []) if p.get("bg")]
+    return [
+        p for p in STATE.get("procs", [])
+        if p.get("bg") and not safeguard.is_protected_process(p.get("name"), p.get("exe"))
+    ]
 
 
 def _run(cmd, timeout=30):
@@ -139,6 +142,11 @@ def _terminate_reviewed_process(args):
 
 
 def _do(kind, args):
+    # The proposal and approval may have been created before a protected game launched.
+    # Recheck immediately before every state-changing operation.
+    guard = safeguard.check_action(kind, args)
+    if not guard["allowed"]:
+        raise PermissionError("blocked by SENTINEL safeguard: " + guard["reason"])
     if kind == "bg_priority":
         n = 0
         for p in _bg_targets():
@@ -205,7 +213,7 @@ def _do(kind, args):
                 time.sleep(0.4)
                 continue
         raise RuntimeError(f"SCM did not confirm {service} stopped (last state: {state or 'unknown'}); attempted rollback will preserve uncertain state")
-    if kind == "etw_capture":
+    if kind in ("etw_capture", "wpr_trace"):
         from . import advanced
         result = advanced.capture_kernel_window(int(args.get("duration", 12)))
         if not result.get("ok"):
@@ -216,43 +224,6 @@ def _do(kind, args):
             _run(["powercfg", "/setactive", _prev_plan[0]])
             return f"restored {_prev_plan[0]}"
         return "nothing to restore"
-    if kind == "wpr_trace":
-        if time.time() - _last_trace[0] < 900:
-            raise RuntimeError("WPR capture rate limit: one trace per 15 minutes")
-        if not IS_WIN:
-            raise RuntimeError("WPR capture is Windows-only")
-        from .winutil import run_command
-        etw = STATE.setdefault("kernel", {}).get("etw", {})
-        if etw.get("recording"):
-            raise RuntimeError("an existing WPR recording is active; SENTINEL will not cancel or replace it")
-        start_result = run_command(["wpr.exe", "-start", "GeneralProfile.Light", "-filemode"], timeout=30)
-        start_text = ((start_result.stdout or "") + "\n" + (start_result.stderr or "")).strip()
-        if start_result.returncode != 0:
-            etw.update(available=True, recording=None, state="unknown", checked_at=time.time(),
-                       status_text=start_text[-800:], error=f"WPR start failed (exit {start_result.returncode})")
-            raise RuntimeError(f"WPR start failed (exit {start_result.returncode}): {start_text[-180:]}")
-        _last_trace[0] = time.time()
-        etw.update(available=True, recording=True, state="recording", checked_at=time.time(),
-                   status_text=start_text[-800:], error="")
-        log("kernel", "ETW WPR GeneralProfile.Light trace recording started (15 s)", "warn")
-        time.sleep(15)
-        f = os.path.join(TRACE_DIR, time.strftime("trace_%Y%m%d_%H%M%S.etl"))
-        stop_result = run_command(["wpr.exe", "-stop", f], timeout=180)
-        stop_text = ((stop_result.stdout or "") + "\n" + (stop_result.stderr or "")).strip()
-        if stop_result.returncode == 0:
-            etw.update(recording=False, state="idle", checked_at=time.time(), status_text=stop_text[-800:], error="")
-        else:
-            etw.update(recording=None, state="unknown", checked_at=time.time(), status_text=stop_text[-800:],
-                       error=f"WPR stop failed (exit {stop_result.returncode}); trace state requires re-check")
-        if stop_result.returncode == 0 and os.path.exists(f):
-            trace_ts = time.time()
-            trace_bytes = os.path.getsize(f)
-            trace_row = {"file": f, "ts": trace_ts, "mb": round(trace_bytes / 1048576, 1), "source": "ETW/WPR GeneralProfile.Light", "exists": True}
-            STATE.setdefault("traces", []).append(trace_row)
-            db("INSERT OR IGNORE INTO trace_archive(ts,file_path,size_bytes,source,status) VALUES(?,?,?,?,?)",
-               (trace_ts, f, trace_bytes, trace_row["source"], "captured"))
-            return f"trace saved: {f} (ETL; open in Windows Performance Analyzer)"
-        raise RuntimeError(f"WPR stop failed (exit {stop_result.returncode}): {stop_text[-180:]}")
     return "unknown action"
 
 
@@ -262,6 +233,13 @@ def propose(kind, args=None, origin="brain", reason=""):
         log("actions", f"REJECTED non-allowlisted action '{kind}' from {origin}", "warn")
         return None
     args = args or {}
+    if kind == "terminate_process" and origin != "user":
+        log("safeguard", "graceful close proposal rejected: only a direct user request is permitted", "warn")
+        return None
+    guard = safeguard.check_action(kind, args)
+    if not guard["allowed"]:
+        log("safeguard", f"{kind} proposal blocked: {guard['reason'][:180]}", "warn")
+        return None
     from . import advanced
     try:
         preview = advanced.action_preview(kind, args)
@@ -295,6 +273,12 @@ def execute(aid, *, user_confirmed=False):
             return "not pending"
         kind, args = rows[0][0], json.loads(rows[0][1] or "{}")
         tier = advanced.risk_tier(kind)
+        guard = safeguard.check_action(kind, args)
+        if not guard["allowed"]:
+            reason = "blocked by SENTINEL safeguard: " + guard["reason"]
+            db("UPDATE actions SET state='blocked',result=? WHERE id=?", (reason[:400], aid))
+            log("safeguard", f"{kind} execution blocked: {guard['reason'][:180]}", "warn")
+            return reason
         if tier == "dangerous":
             return "blocked by risk policy: dangerous actions are never automated and this action has no approved reversible implementation"
         if tier == "medium" and not user_confirmed:

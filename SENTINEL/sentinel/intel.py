@@ -57,6 +57,14 @@ def recent(limit=12):
 def watch_loop():
     time.sleep(20)
     while True:
+        try:
+            from . import runtime_engine
+            if runtime_engine.snapshot().get("game_active"):
+                heartbeat("intel crawler (MS Learn + GitHub)", 21600, "deferred while a game is active to reduce background network and CPU work")
+                time.sleep(60)
+                continue
+        except Exception:
+            pass
         for q in WATCH:
             try:
                 lookup(q)

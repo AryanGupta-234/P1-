@@ -29,7 +29,12 @@ def test_risk_policy_has_six_advisory_specialists_and_dangerous_never_auto():
     assert advanced.risk_tier("etw_capture") == "safe"
     assert advanced.risk_tier("game_profile_apply") == "medium"
     assert advanced.risk_tier("pause_updater_service") == "medium"
-    for kind in ("standby_flush", "fan_control", "trim_bg", "flush_dns", "terminate_process", "bg_priority"):
+    assert advanced.risk_tier("terminate_process") == "medium"
+    close_preview = advanced.action_preview("terminate_process", {})
+    assert close_preview["supported"] is False
+    assert close_preview["automatic_allowed"] is False
+    assert close_preview["undo_available"] is False
+    for kind in ("standby_flush", "fan_control", "trim_bg", "flush_dns", "bg_priority"):
         assert advanced.risk_tier(kind) == "dangerous"
         preview = advanced.action_preview(kind, {})
         assert preview["supported"] is False
@@ -168,14 +173,18 @@ def test_game_profile_undo_after_game_exit_still_restores_global_power_state(mon
     assert "restored eligible" in result
 
 
-def test_etw_preview_explains_missing_windows_performance_toolkit(monkeypatch):
+def test_etw_preview_explains_missing_inbox_wpr(monkeypatch):
     monkeypatch.setattr(advanced, "IS_WIN", True)
-    monkeypatch.setattr(advanced, "locate_xperf", lambda: None)
+    monkeypatch.setattr(advanced, "locate_wpr", lambda: None)
+    monkeypatch.setattr(advanced.safeguard, "check_action", lambda *_args, **_kwargs: {"allowed": True, "code": "allowed", "reason": "test"})
 
     preview = advanced.action_preview("etw_capture", {"duration": 12})
 
     assert preview["supported"] is False
-    assert any("xperf.exe" in warning and "Windows ADK" in warning for warning in preview["warnings"])
+    assert any("wpr.exe" in warning.lower() for warning in preview["warnings"])
+    assert all("Windows ADK" not in warning for warning in preview["warnings"])
+
+
 
 
 def test_advanced_status_always_includes_live_metric_contract_without_game(monkeypatch):
@@ -295,25 +304,33 @@ def test_updater_pause_requires_a_running_pre_action_service(monkeypatch):
         raise AssertionError("SENTINEL must not change an updater that was already stopped")
 
 
-def test_etw_capture_clears_shutdown_event_until_owned_trace_is_closed(monkeypatch, tmp_path):
-    """Shutdown must not observe a stale, pre-set completion event for a new trace."""
+def test_wpr_capture_clears_shutdown_event_until_owned_trace_is_closed(monkeypatch, tmp_path):
+    """WPR remains owned until its ETL is finalized and the completion event is released."""
     conn = memory_store(monkeypatch)
-    conn.execute(
-        "CREATE TABLE trace_archive(ts REAL,file_path TEXT,size_bytes INTEGER,source TEXT,status TEXT)"
-    )
+    conn.execute("CREATE TABLE trace_archive(ts REAL,file_path TEXT,size_bytes INTEGER,source TEXT,status TEXT)")
     conn.commit()
     monkeypatch.setattr(advanced, "IS_WIN", True)
-    monkeypatch.setattr(advanced, "locate_xperf", lambda: r"C:\WPT\xperf.exe")
+    monkeypatch.setattr(advanced, "locate_wpr", lambda: r"C:\Windows\System32\wpr.exe")
+    monkeypatch.setattr(advanced, "locate_xperf", lambda: None)
+    monkeypatch.setattr(advanced.safeguard, "trace_preflight",
+        lambda: {"allowed": True, "code": "ready", "reason": "test"})
+    monkeypatch.setattr(advanced.safeguard, "snapshot",
+        lambda **_kwargs: {"process_detection_complete": True, "valorant_active": False})
     monkeypatch.setattr(core, "TRACE_DIR", str(tmp_path))
     monkeypatch.setitem(advanced.STATE, "kernel", {"etw": {"recording": False}})
     advanced._ETW_OWNED = False
-    advanced._ETW_DONE.set()  # the module's idle state
+    advanced._ETW_DONE.set()
 
     class FastStop:
         def wait(self, _seconds):
             return False
 
     monkeypatch.setattr(advanced, "_STOP", FastStop())
+    clock = [0.0]
+    def monotonic():
+        clock[0] += 2.0
+        return clock[0]
+    monkeypatch.setattr(advanced.time, "monotonic", monotonic)
     calls = []
 
     class Result:
@@ -325,17 +342,15 @@ def test_etw_capture_clears_shutdown_event_until_owned_trace_is_closed(monkeypat
 
     def fake_run(args, timeout=15):
         calls.append(list(args))
-        if args[1] == "-loggers":
-            return Result(args, "No other kernel logger is active")
-        if args[1] == "-on":
+        if args[1] == "-status":
+            return Result(args, "There is no recording")
+        if args[1] == "-start":
             return Result(args)
-        if args[1] == "-d":
-            # This assertion catches the regression: completion must remain
-            # unset until the owned xperf -d has finished writing the ETL.
+        if args[1] == "-stop":
             assert advanced._ETW_DONE.is_set() is False
             Path(args[-1]).write_bytes(b"synthetic ETL")
             return Result(args)
-        raise AssertionError(f"unexpected xperf command: {args}")
+        raise AssertionError(f"unexpected WPR command: {args}")
 
     monkeypatch.setattr(advanced, "_run", fake_run)
     monkeypatch.setattr(advanced, "_decode_etl", lambda *_args: {
@@ -345,7 +360,9 @@ def test_etw_capture_clears_shutdown_event_until_owned_trace_is_closed(monkeypat
     result = advanced.capture_kernel_window(5)
 
     assert result["ok"] is True
-    assert any(call[1] == "-d" for call in calls)
+    assert any(call[1] == "-start" for call in calls)
+    assert any(call[1] == "-stop" for call in calls)
+    assert result["xperf_optional"] is False
     assert advanced._ETW_OWNED is False
     assert advanced._ETW_DONE.is_set() is True
     assert conn.execute("SELECT COUNT(*) FROM trace_archive").fetchone()[0] == 1

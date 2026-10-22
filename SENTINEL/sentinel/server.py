@@ -2,6 +2,7 @@
 import ctypes, json, os, threading, time, urllib.parse, psutil, platform, sys, hmac
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from . import core, actions, ai, intel, inventory, intelligence, advanced
+from . import safeguard, runtime_engine, memory_engine, ai_engine, security_engine
 from .core import CFG, STATE, LIVE, HIST, HEART, START, db, log, save_cfg
 
 UI = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "ui")
@@ -384,6 +385,22 @@ class H(BaseHTTPRequestHandler):
             return self._json([dict(zip(("id", "ts", "sev", "key", "title", "detail", "culprit"), r)) for r in rows])
         if p == "/api/actions":
             return self._json(actions.list_actions())
+        if p == "/api/engines":
+            return self._json({
+                "safeguard": safeguard.snapshot(),
+                "runtime": runtime_engine.snapshot(),
+                "ai": ai_engine.status(),
+                "memory": memory_engine.status(),
+                "process_intelligence": security_engine.snapshot(30),
+                "wpr": {
+                    "available": bool(advanced.locate_wpr()),
+                    "recorder": "Windows Performance Recorder / GeneralProfile.Light",
+                    "optional_xperf": bool(advanced.locate_xperf()),
+                    "state": core.STATE.get("kernel", {}).get("etw_engine", {}),
+                },
+            })
+        if p == "/api/process-intelligence":
+            return self._json(security_engine.snapshot(min(120, int((qs.get("limit") or ["40"])[0]))))
         if p == "/api/advanced":
             try:
                 return self._json(advanced.status())
@@ -447,6 +464,33 @@ class H(BaseHTTPRequestHandler):
         if not isinstance(body, dict):
             return self._json({"error": "request body must be a JSON object"}, 400)
         p = u.path
+        if p == "/api/process-intelligence/inspect":
+            try:
+                result = security_engine.inspect_process(
+                    int(body.get("pid", 0)),
+                    float(body.get("create_time", 0)),
+                    str(body.get("exe") or ""),
+                    str(body.get("operation") or ""),
+                )
+                log("process-security", f"user requested {result['operation']} inspection for PID {result['pid']}",
+                    "info", executable=result["executable"])
+                return self._json({"ok": True, **result})
+            except (ValueError, TypeError) as exc:
+                return self._json({"error": str(exc)}, 400)
+            except PermissionError as exc:
+                return self._json({"error": str(exc)}, 409)
+            except Exception as exc:
+                log("process-security", f"process inspection failed: {type(exc).__name__}: {str(exc)[:180]}", "warn")
+                return self._json({"error": f"{type(exc).__name__}: {str(exc)[:200]}"}, 503)
+        if p == "/api/engines/memory/trim":
+            result = memory_engine.clear_working_cache()
+            log("memory", f"cleared {result['cleared']} volatile retrieval cache entries; durable memory unchanged", "info")
+            return self._json({"ok": True, **result})
+        if p == "/api/engines/runtime/rebalance":
+            policy = runtime_engine.evaluate()
+            policy["updated_at"] = time.time()
+            core.STATE["runtime_engine"] = policy
+            return self._json({"ok": True, "runtime": policy})
         if p == "/api/agent/shutdown":
             if body.get("confirmed") is not True:
                 return self._json({"error": "explicit confirmation is required to stop the SENTINEL agent"}, 400)
@@ -529,36 +573,31 @@ class H(BaseHTTPRequestHandler):
             return self._json({"id": aid, "risk": "medium", "requires_confirmation": True}, 201)
         if p == "/api/advanced/propose-etw":
             try:
-                duration = max(5, min(20, int(body.get("duration", 12))))
+                duration = max(5, min(15, int(body.get("duration", 12))))
             except (TypeError, ValueError):
-                return self._json({"error": "ETW capture duration must be an integer between 5 and 20 seconds"}, 400)
+                return self._json({"error": "WPR capture duration must be an integer between 5 and 15 seconds"}, 400)
             preview = advanced.action_preview("etw_capture", {"duration": duration})
             if not preview.get("supported"):
                 warnings = preview.get("warnings") or []
                 detail = "; ".join(str(item) for item in warnings if item)
-                code = "etw_unavailable" if not advanced.IS_WIN or not advanced.locate_xperf() else "etw_policy_refused"
-                if not detail:
-                    detail = "The current SENTINEL policy or Windows environment does not permit this capture."
+                guard = preview.get("safeguard") or {}
+                code = guard.get("code") or ("wpr_unavailable" if not advanced.locate_wpr() else "wpr_policy_refused")
                 return self._json({
-                    "error": "ETW capture unavailable: " + detail,
+                    "error": "WPR capture unavailable: " + (detail or "The current safeguard or Windows environment does not permit this capture."),
                     "code": code,
-                    "requirement": "Windows Performance Toolkit (xperf.exe)",
+                    "requirement": "Windows Performance Recorder (wpr.exe); Xperf is optional",
                     "risk": preview.get("risk", "safe"),
                 }, 409)
             aid = actions.propose(
                 "etw_capture", {"duration": duration}, origin="user",
-                reason="Operator requested bounded kernel ETW diagnostic sample",
+                reason="Operator requested a bounded inbox WPR ETW diagnostic sample",
             )
             if not aid:
-                warnings = preview.get("warnings") or []
-                detail = "; ".join(str(item) for item in warnings if item)
-                return self._json({
-                    "error": "SENTINEL policy refused the ETW proposal" + (f": {detail}" if detail else "."),
-                    "code": "etw_policy_refused",
-                }, 409)
+                return self._json({"error": "SENTINEL policy refused the WPR proposal.", "code": "wpr_policy_refused"}, 409)
             return self._json({
                 "id": aid, "risk": "safe", "requires_confirmation": False,
-                "duration": duration, "source": "Windows Performance Toolkit xperf",
+                "duration": duration, "source": "Windows Performance Recorder / GeneralProfile.Light",
+                "xperf_optional": bool(advanced.locate_xperf()),
             }, 201)
         if p == "/api/inventory/refresh":
             try:

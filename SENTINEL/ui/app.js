@@ -13,7 +13,7 @@ const hms = ts => new Date(ts * 1000).toLocaleTimeString([], { hour12: false });
 const dur = s => { s = Math.floor(s); const d = Math.floor(s / 86400), h = Math.floor(s % 86400 / 3600), m = Math.floor(s % 3600 / 60); return (d ? d + "d " : "") + (h || d ? h + "h " : "") + m + "m " + (s % 60) + "s"; };
 
 /* ---------- P1 shell: titles, toasts, splash, starfield ---------- */
-const TITLES = { cmd: "COMMAND", agent: "AGENT", sys: "SYSTEM", act: "ACTIVITY", proc: "PROCESSES", net: "NETWORK", ker: "KERNEL", adv: "TUNER / THERMAL", evi: "EVIDENCE", intelx: "INTELLIGENCE", int: "INTEL FEED", ai: "AI CORE", ctl: "CONTROL", fc: "FEATURES", tsk: "TASKS" };
+const TITLES = { cmd: "COMMAND", eng: "ENGINE DECK", agent: "AGENT", sys: "SYSTEM", act: "ACTIVITY", proc: "PROCESSES", net: "NETWORK", ker: "KERNEL", adv: "TUNER / THERMAL", evi: "EVIDENCE", intelx: "INTELLIGENCE", int: "INTEL FEED", ai: "AI CORE", ctl: "CONTROL", fc: "FEATURES", tsk: "TASKS" };
 const VKEYS = Object.keys(TITLES);
 function toast(msg, kind = "") { const b = document.createElement("div"); b.className = "toast " + kind; b.textContent = msg; $("#toasts").append(b); setTimeout(() => b.remove(), 5200); }
 let bootDone = false;
@@ -429,7 +429,8 @@ function onTick(d) {
 function show(v) {
   view = v; $("#vtitle").textContent = TITLES[v]; try { localStorage.setItem("sv", v); } catch (e) { } $$(".view").forEach(e => e.classList.toggle("on", e.id === "v-" + v)); $$("#nav button").forEach(b => b.classList.toggle("on", b.dataset.v === v));
   if (!S) {
-    if (v === "agent") loadAgent(true);
+    if (v === "eng") loadEngines();
+    else if (v === "agent") loadAgent(true);
     else if (v === "intelx") loadIntelligence();
     else if (v === "ker") loadKernelArchive();
     else if (v === "adv") loadAdvanced(true);
@@ -442,13 +443,32 @@ function show(v) {
     else if (v === "ctl") loadActions();
     return;
   }
-  ({ cmd: updTiles, agent: () => loadAgent(true), act: () => { updHeart(); renderFeed(); }, proc: () => loadProcesses(true), net: updNet, ker: () => { updKer(); loadKernelArchive(); }, adv: () => loadAdvanced(true), int: loadIntel, intelx: loadIntelligence, ai: updAI, ctl: () => { buildCtl(); loadActions(); ctlInitialized = true; }, sys: () => loadSys(true), evi: loadEvi, tsk: () => { updTasks(); loadHist(); }, fc: loadFC })[v]();
+  ({ cmd: updTiles, eng: loadEngines, agent: () => loadAgent(true), act: () => { updHeart(); renderFeed(); }, proc: () => loadProcesses(true), net: updNet, ker: () => { updKer(); loadKernelArchive(); }, adv: () => loadAdvanced(true), int: loadIntel, intelx: loadIntelligence, ai: updAI, ctl: () => { buildCtl(); loadActions(); ctlInitialized = true; }, sys: () => loadSys(true), evi: loadEvi, tsk: () => { updTasks(); loadHist(); }, fc: loadFC })[v]();
 }
 async function boot() {
   starfield(); $("#bootSkip").onclick = endBoot; let fast = false; try { fast = sessionStorage.getItem("sb") === "1"; } catch (e) { }
   bp(8, "LOADING INTERFACE", "Building tiles and filters"); buildTiles(); buildChips(); $$("#nav button").forEach(b => b.onclick = () => show(b.dataset.v));
   bp(18, "AUTHENTICATING", TOKEN ? "Access token found" : "No access token", TOKEN ? "ok" : "bad"); if (!TOKEN) { endBoot(); document.body.innerHTML = '<div style="padding:40px;font:16px var(--mo);color:#ff6b38">No access token. Open SENTINEL from its desktop shortcut.</div>'; return; }
-  bp(34, "READING TELEMETRY", "Fetching history, events and insights"); const [hist, ev, ins] = await Promise.all([api("/api/history?secs=300"), api("/api/events?limit=300"), api("/api/insights")]);
+  const setBootEngine = (id, text, cls) => {
+    const node = $("#boot-" + id);
+    if (!node) return;
+    node.classList.remove("ready", "warn");
+    if (cls) node.classList.add(cls);
+    const state = node.querySelector("b");
+    if (state) state.textContent = text;
+  };
+  for (const id of ["safe", "runtime", "ai", "memory"]) setBootEngine(id, "SYNCING");
+  bp(34, "READING TELEMETRY", "Fetching history, events, insights and engine policy"); const [hist, ev, ins, engines] = await Promise.all([api("/api/history?secs=300"), api("/api/events?limit=300"), api("/api/insights"), api("/api/engines")]);
+  if (!engines.error) {
+    setBootEngine("safe", engines.safeguard?.valorant_active ? "INTERLOCK" : engines.safeguard?.mode === "fail_closed_unknown" ? "FAIL-CLOSED" : "READY",
+      engines.safeguard?.valorant_active || engines.safeguard?.mode === "fail_closed_unknown" ? "warn" : "ready");
+    setBootEngine("runtime", String(engines.runtime?.mode || "READY").toUpperCase().replaceAll("_", " "), "ready");
+    setBootEngine("ai", engines.ai?.fast_triage_allowed ? "ADMITTED" : "GATED", engines.ai?.fast_triage_allowed ? "ready" : "warn");
+    setBootEngine("memory", String(engines.memory?.level || "READY").toUpperCase(), "ready");
+    if (engines.safeguard?.valorant_active) bp(42, "VALORANT INTERLOCK", "Strict read-only mode armed", "ok");
+  } else {
+    for (const id of ["safe", "runtime", "ai", "memory"]) setBootEngine(id, "API UNKNOWN", "warn");
+  }
   if (hist.error) { endBoot(); document.body.innerHTML = '<div style="padding:40px;font:16px var(--mo);color:#f05252">Access denied - bad token. Open SENTINEL from its desktop shortcut.</div>'; return; }
   for (const [k, a] of Object.entries(hist)) H[k] = a.map(p => p[1]).slice(-MAXH);
   ev.forEach(addLog); INS = ins; renderIns();
@@ -464,7 +484,8 @@ async function boot() {
   setInterval(() => { if (view === "int") loadIntel(); if (view === "ctl") loadActions(); if (view === "agent") loadAgent(); }, 15000); loadActions();
   $("#p-q").oninput = () => { clearTimeout(procQueryTimer); procQueryTimer = setTimeout(() => loadProcesses(true), 260); }; $("#p-refresh").onclick = () => loadProcesses(true); $("#n-q").oninput = () => S && updNet();
   $("#a-exp").onclick = () => { const t = LOGS.map(r => `${new Date(r.ts * 1000).toISOString()}\t${r.level}\t${r.src}\t${r.msg}`).join("\n"); const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([t], { type: "text/plain" })); a.download = "sentinel-activity-" + Date.now() + ".log"; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000); toast("Exported " + LOGS.length + " events", "ok"); };
-  initPalette(); initNotify(); initFC(); initIntelligence(); initAdvanced(); initAgent(); bindJ("#metrics"); loadStatus(); setInterval(loadStatus, 15000);
+  initPalette(); initNotify(); initFC(); initIntelligence(); initAdvanced(); initAgent(); initEngines(); bindJ("#metrics"); loadStatus(); setInterval(loadStatus, 15000);
+  setInterval(() => { if (view === "eng") loadEngines(); }, 8000);
   $("#e-go").onclick = loadEvi; $("#e-csv").onclick = csvExport; $("#e-q").onkeydown = e => e.key === "Enter" && loadEvi(); $("#e-lv").onchange = $("#e-src").onchange = loadEvi;
   $("#sys-refresh").onclick = async () => { const b = $("#sys-refresh"); b.disabled = true; b.textContent = "SCANNING…"; const r = await api("/api/inventory/refresh", {}); b.disabled = false; b.textContent = "REFRESH INVENTORY"; if (r.error) toast(r.error, "bad"); else { toast("System inventory refreshed", "ok"); loadSys(true); } };
   $("#kernel-capture").onclick = async () => { const r = await api("/api/action/propose", { kind: "wpr_trace", reason: "User requested a bounded 15-second Windows Performance Recorder ETW trace" }); if (r.error) return toast(r.error, "bad"); toast("ETW trace queued. Approve it in CONTROL; an existing WPR recording will not be interrupted.", "warn"); loadActions(); };
@@ -927,6 +948,214 @@ function initFC() {
 }
 
 /* ---------- palette + alerts ---------- */
+/* ---------- independent Engine Deck ---------- */
+let ENGINE = null, engineProcessRows = [];
+const engineFacts = rows => rows.map(([label, value]) =>
+  "<div><i>" + esc(label) + "</i><b>" + esc(value ?? "--") + "</b></div>"
+).join("");
+
+function renderEngines(data) {
+  ENGINE = data || {};
+  const safe = data.safeguard || {}, runtime = data.runtime || {}, ai = data.ai || {}, mem = data.memory || {};
+  const valorant = safe.mode === "valorant_read_only";
+  $("#engine-health").textContent = valorant ? "VALORANT / READ ONLY" : safe.mode === "fail_closed_unknown" ? "FAIL-CLOSED" : "POLICY ONLINE";
+  $("#engine-health").className = "pill " + (valorant ? "game" : safe.mode === "fail_closed_unknown" ? "bad" : "ok");
+  $("#engine-guard-banner").classList.toggle("hot", valorant || safe.mode === "fail_closed_unknown");
+  $("#engine-guard-title").textContent = valorant ? "VALORANT SAFETY INTERLOCK ACTIVE" : safe.mode === "fail_closed_unknown" ? "PROCESS STATE UNKNOWN · MUTATIONS LOCKED" : "SAFETY POLICY ONLINE";
+  $("#engine-guard-detail").textContent = valorant
+    ? "Telemetry only. No WPR/ETW capture, process tuning, power changes, service control or other system mutations."
+    : safe.policy_note || "Backend action policy is active.";
+  $("#engine-guard-mode").textContent = String(safe.mode || "UNKNOWN").replaceAll("_", " ").toUpperCase();
+  $("#engine-safe-state").textContent = valorant ? "STRICT READ-ONLY" : safe.system_mutations_allowed ? "GUARDED / ACTIVE" : "FAIL-CLOSED";
+  $("#engine-safe-facts").innerHTML = engineFacts([
+    ["VALORANT", safe.valorant_active ? "DETECTED" : "NOT DETECTED"],
+    ["PROCESS MONITOR", safe.process_detection_complete ? "HEALTHY" : "UNKNOWN / DISABLED"],
+    ["ADMIN CONTEXT", safe.administrator ? "ELEVATED" : "NOT ELEVATED"],
+    ["KERNEL TRACE", safe.kernel_trace_allowed ? "PERMITTED BY POLICY" : "BLOCKED"],
+    ["VANGUARD VGC", safe.vanguard_services?.vgc || "UNKNOWN"],
+    ["VANGUARD VGK", safe.vanguard_services?.vgk || "UNKNOWN"]
+  ]);
+  $("#engine-runtime-state").textContent = String(runtime.mode || "UNKNOWN").replaceAll("_", " ").toUpperCase();
+  $("#engine-runtime-facts").innerHTML = engineFacts([
+    ["HOST CPU", runtime.cpu_percent == null ? "--" : fmt(runtime.cpu_percent, 1) + "%"],
+    ["AVAILABLE RAM", runtime.available_memory_gib == null ? "--" : fmt(runtime.available_memory_gib, 2) + " GiB"],
+    ["PROCESS SCAN", runtime.process_scan_interval_s == null ? "--" : fmt(runtime.process_scan_interval_s, 1) + " s"],
+    ["INVENTORY SCALE", runtime.inventory_interval_multiplier == null ? "--" : runtime.inventory_interval_multiplier + "×"],
+    ["FAST AI", runtime.fast_ai_allowed ? "ADMITTED" : "DEFERRED"],
+    ["DEEP AI", runtime.deep_ai_allowed ? "ADMITTED" : "DEFERRED"]
+  ]);
+  $("#engine-ai-state").textContent = ai.fast_triage_allowed ? "ORCHESTRATOR READY" : "RESOURCE / GAME GATED";
+  $("#engine-ai-facts").innerHTML = engineFacts([
+    ["FAST TRIAGE", ai.fast_triage_allowed ? "ADMITTED" : "DEFERRED"],
+    ["DEEP MODEL", ai.deep_allowed ? "ADMITTED" : "DEFERRED"],
+    ["FAST REASON", ai.fast_triage_reason || "--"],
+    ["DEEP REASON", ai.deep_reason || "--"],
+    ["TRANSPORT", ai.model_transport || "AI CORE"],
+    ["EXECUTION AUTHORITY", "DETERMINISTIC POLICY"]
+  ]);
+  $("#engine-memory-state").textContent = String(mem.level || "UNKNOWN").toUpperCase() + " MEMORY PRESSURE";
+  $("#engine-memory-facts").innerHTML = engineFacts([
+    ["AVAILABLE RAM", mem.available_gib == null ? "--" : fmt(mem.available_gib, 2) + " GiB"],
+    ["RAM USED", mem.used_percent == null ? "--" : fmt(mem.used_percent, 1) + "%"],
+    ["CACHE", mem.cache_entries == null ? "--" : mem.cache_entries + " entries"],
+    ["TRIAGE BUDGET", mem.budgets?.triage_chars ?? "--"],
+    ["INVESTIGATION BUDGET", mem.budgets?.investigation_chars ?? "--"],
+    ["DURABLE STORE", "SQLITE / PRESERVED"]
+  ]);
+  const process = data.process_intelligence || {};
+  const recent = Array.isArray(process.recent) ? process.recent.slice(0, 8) : [];
+  engineProcessRows = recent;
+  $("#engine-process-summary").textContent = (process.observed || 0) + " process starts observed · " +
+    (process.review_candidates || 0) + " review candidates this run · no automatic termination";
+  $("#engine-process-list").innerHTML = recent.map((row, index) => {
+    const risk = row.assessment || {}, tone = risk.level === "high" ? "bad" : risk.level === "review" ? "warn" : "mu";
+    const userWindow = row.session_id != null && Number(row.session_id) > 0 &&
+      Number(row.visible_windows || 0) > 0 && Number(row.onscreen_windows || 0) > 0 &&
+      row.path_state === "present" && risk.level !== "protected" && !valorant;
+    return '<div class="engine-process-row" data-process-card="' + index + '"><span class="tag ' + tone + '">' +
+      esc((risk.level || "normal").toUpperCase()) + '</span><div><b>' +
+      esc(row.name) + ' · PID ' + esc(row.pid) + '</b><small>' +
+      esc((risk.reasons || []).join(" · ")) + '</small><small>' +
+      esc(row.exe || "executable path unavailable") + ' · parent ' +
+      esc(row.parent_name || "--") + '</small></div><span class="score">' +
+      esc(risk.score ?? 0) + '/100</span><div class="engine-process-actions">' +
+      '<button class="btn sm" data-process-inspect="signature" data-process-index="' + index + '">VERIFY SIGNATURE</button>' +
+      '<button class="btn sm" data-process-inspect="sha256" data-process-index="' + index + '">SHA-256</button>' +
+      '<button class="btn sm" data-process-inspect="open_location" data-process-index="' + index + '">OPEN LOCATION</button>' +
+      (userWindow ? '<button class="btn sm or" data-process-close="' + index + '">REQUEST CLOSE</button>' : '') +
+      '</div><small class="engine-inspect-result" aria-live="polite"></small></div>';
+  }).join("") || '<div class="empty">No process-start review candidates yet. Lifecycle observations begin after the collector warm-up baseline.</div>';
+  $("#engine-process-list [data-process-inspect]").forEach(button => {
+    button.onclick = () => inspectEngineProcess(+button.dataset.processIndex, button.dataset.processInspect);
+  });
+  $("#engine-process-list [data-process-close]").forEach(button => {
+    button.onclick = () => requestProcessClose(+button.dataset.processClose);
+  });
+  const wprAvailable = !!data.wpr?.available;
+  const wprState = data.wpr?.state?.state || "idle";
+  const wpr = valorant ? "DISABLED DURING VALORANT"
+    : !wprAvailable ? "WINDOWS WPR.EXE UNAVAILABLE"
+    : !safe.administrator ? "REQUIRES ELEVATION"
+    : wprState === "recording" ? "ANOTHER WPR SESSION IS RECORDING"
+    : safe.kernel_trace_allowed ? "READY · BOUNDED 12s CAPTURE" : "BLOCKED BY SAFEGUARD";
+  $("#engine-wpr-state").textContent = wpr;
+  $("#engine-wpr").disabled = !safe.kernel_trace_allowed || !wprAvailable || wprState === "recording";
+  $("#engine-wpr").title = valorant ? "Tracing is hard-disabled while VALORANT is running."
+    : "Propose a bounded WPR trace; an existing recording is never stopped or replaced.";
+}
+
+async function loadEngines() {
+  try {
+    const data = await api("/api/engines");
+    if (data.error) throw new Error(data.error);
+    renderEngines(data);
+  } catch (error) {
+    $("#engine-health").textContent = "ENGINE API UNAVAILABLE";
+    $("#engine-health").className = "pill bad";
+    toast("Engine status: " + (error.message || "unavailable"), "warn");
+  }
+}
+
+async function inspectEngineProcess(index, operation) {
+  const row = engineProcessRows[index];
+  if (!row || !row.pid || !row.create_time || !row.exe) return toast("Exact process identity is unavailable; refresh the process list.", "warn");
+  if (operation === "sha256" && !confirm("Hash this executable file using streamed SHA-256? This reads the file (up to 2 GiB) and may use disk/CPU briefly.")) return;
+  const card = document.querySelector('[data-process-card="' + index + '"]');
+  const result = card?.querySelector(".engine-inspect-result");
+  if (result) result.textContent = "INSPECTION RUNNING…";
+  const controls = card ? Array.from(card.querySelectorAll("[data-process-inspect]")) : [];
+  controls.forEach(control => control.disabled = true);
+  try {
+    const response = await api("/api/process-intelligence/inspect", {
+      pid: row.pid, create_time: row.create_time, exe: row.exe, operation
+    });
+    if (response.error) throw new Error(response.error);
+    let message = "";
+    if (operation === "signature") {
+      const signature = response.signature || {};
+      message = "Authenticode: " + (signature.status || "Unknown") +
+        (signature.signer ? " · " + signature.signer : "") +
+        (signature.thumbprint ? " · " + signature.thumbprint : "");
+    } else if (operation === "sha256") {
+      message = "SHA-256: " + response.digest;
+    } else {
+      message = "Executable folder opened in Explorer.";
+    }
+    if (result) result.textContent = message + " · " + (response.interpretation || "");
+    toast(operation === "open_location" ? "Opened executable location" : operation.toUpperCase() + " inspection complete", "ok");
+  } catch (error) {
+    if (result) result.textContent = "Inspection refused/failed: " + (error.message || "unknown error");
+    toast(error.message || "Process inspection failed", "warn");
+  } finally {
+    controls.forEach(control => control.disabled = false);
+  }
+}
+
+async function requestProcessClose(index) {
+  const row = engineProcessRows[index];
+  if (!row || !row.pid || !row.create_time || !row.exe) return toast("Exact process identity is unavailable.", "warn");
+  if (!confirm("Send a normal WM_CLOSE request to " + row.name + " (PID " + row.pid + ")? The app may show a save prompt. SENTINEL will never force-kill it.")) return;
+  const card = document.querySelector('[data-process-card="' + index + '"]');
+  const result = card?.querySelector(".engine-inspect-result");
+  if (result) result.textContent = "REQUESTING USER-APP CLOSE…";
+  try {
+    const proposed = await api("/api/action/propose", {
+      kind: "terminate_process",
+      args: { pid: row.pid, create_time: row.create_time, exe: row.exe },
+      reason: "Operator explicitly requested graceful WM_CLOSE after process review"
+    });
+    if (proposed.error || !proposed.id) throw new Error(proposed.error || "Request was rejected by policy.");
+    if (!confirm("Review request created. Confirm once more to send WM_CLOSE. No force-termination fallback exists.")) {
+      await api("/api/action/dismiss", { id: proposed.id });
+      if (result) result.textContent = "Close request dismissed; process was not touched.";
+      return;
+    }
+    const outcome = await api("/api/action/run", { id: proposed.id, confirmed: true });
+    if (outcome.error) throw new Error(outcome.error);
+    if (result) result.textContent = outcome.result || "WM_CLOSE request processed. The application may remain open.";
+    toast("Graceful close request processed · no force kill", "warn");
+  } catch (error) {
+    if (result) result.textContent = "Close request refused: " + (error.message || "unknown error");
+    toast(error.message || "Close request failed", "bad");
+  } finally {
+    await loadEngines();
+  }
+}
+
+function initEngines() {
+  $("#engine-refresh").onclick = loadEngines;
+  $("#engine-rebalance").onclick = async () => {
+    const button = $("#engine-rebalance"); button.disabled = true;
+    try {
+      const result = await api("/api/engines/runtime/rebalance", {});
+      if (result.error) throw new Error(result.error);
+      toast("Adaptive runtime policy re-evaluated", "ok"); await loadEngines();
+    } catch (error) { toast(error.message || "Policy refresh failed", "bad"); }
+    finally { button.disabled = false; }
+  };
+  $("#engine-memory-trim").onclick = async () => {
+    const button = $("#engine-memory-trim"); button.disabled = true;
+    try {
+      const result = await api("/api/engines/memory/trim", {});
+      if (result.error) throw new Error(result.error);
+      toast("Cleared " + (result.cleared || 0) + " working-cache entries · durable memories preserved", "ok");
+      await loadEngines();
+    } catch (error) { toast(error.message || "Memory cache cleanup failed", "bad"); }
+    finally { button.disabled = false; }
+  };
+  $("#engine-process-view").onclick = () => show("proc");
+  $("#engine-wpr").onclick = async () => {
+    const button = $("#engine-wpr"); button.disabled = true;
+    try {
+      const result = await api("/api/advanced/propose-etw", { duration: 12 });
+      if (result.error) throw new Error(result.error);
+      toast("WPR trace proposal created. Open CONTROL to inspect its status.", "ok");
+      await loadActions(); show("ctl");
+    } catch (error) { toast(error.message || "WPR proposal rejected", "warn"); await loadEngines(); }
+    finally { button.disabled = false; }
+  };
+}
+
 let palSel = 0, palItems = [];
 function palAll() { return [...VKEYS.map((k, i) => ({ g: "SCREENS", ic: String(i + 1), t: TITLES[k], d: "Open " + TITLES[k].toLowerCase(), tag: "OPEN", go: () => show(k) })), ...Object.keys(NICE).map(k => ({ g: "ACTIONS", ic: "RUN", t: NICE[k], d: "Propose and run on this PC (allowlisted)", tag: "RUN", go: async () => { const r = await api("/api/action/propose", { kind: k }); if (r.id) { await api("/api/action/run", { id: r.id }); toast("Ran: " + NICE[k], "ok"); } loadActions(); } })), { g: "ACTIONS", ic: "LOG", t: "Export activity log", d: "Download the stream as a text file", tag: "SAVE", go: () => $("#a-exp").click() }, { g: "ACTIONS", ic: "BELL", t: "Enable desktop alerts", d: "Notify on serious lag and process review insights", tag: "ASK", go: () => $("#notifyBtn").click() }]; }
 function palRender() {

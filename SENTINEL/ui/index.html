@@ -4,16 +4,34 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cpath d='M32 4l24 14v28L32 60 8 46V18z' fill='none' stroke='%23b8e65b' stroke-width='4'/%3E%3Ccircle cx='32' cy='32' r='8' fill='%23ff6b38'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="app.css"></head>
 <body><div class="ambient"></div><canvas id="starfield"></canvas>
-<div class="boot" id="boot"><div class="boot-grid"></div><div class="boot-card">
- <div class="boot-emblem"><div class="boot-mark">S1</div></div>
- <div class="boot-title">SENTINEL / PERFORMANCE GUARDIAN</div>
- <div class="boot-sub">NATIVE WINDOWS GAMING INTELLIGENCE / LOCAL ONLY / NODE 01</div>
- <div class="boot-copy">Opening the local command channel. Telemetry stays local; optional cloud inference and user-triggered web lookups contact external providers.</div>
- <div class="boot-track"><div class="boot-progress" id="bootProgress"></div></div>
- <div class="boot-stage"><span id="bootStage">INITIALIZING CORE</span><b id="bootPct">00%</b></div>
- <div class="boot-log" id="bootLog"><div>Interface loader ready</div></div>
- <button class="boot-skip" id="bootSkip">ENTER COMMAND DECK &gt;&gt;</button>
-</div></div>
+<div class="boot" id="boot">
+ <div class="boot-grid"></div><div class="boot-scanline"></div><div class="boot-corners"></div>
+ <div class="boot-card">
+  <div class="boot-visual" aria-hidden="true">
+   <div class="boot-reactor">
+    <i class="reactor-orbit orbit-a"></i><i class="reactor-orbit orbit-b"></i><i class="reactor-orbit orbit-c"></i>
+    <i class="reactor-cross"></i><i class="reactor-core"></i><span class="reactor-label">S / 01</span>
+   </div>
+   <div class="boot-visual-meta"><span>NEURAL CORE</span><b>ONLINE SEQUENCE</b><span>WINDOWS NODE / LOCAL</span></div>
+  </div>
+  <div class="boot-content">
+   <div class="boot-topline"><span class="boot-led"></span> AUTONOMOUS INTELLIGENCE SYSTEM <em>BUILD 1.0.2</em></div>
+   <div class="boot-title">SENTINEL<span> / ENGINE DECK</span></div>
+   <div class="boot-sub">PERFORMANCE INTELLIGENCE · DEFENSIVE AUTOMATION · ADAPTIVE RUNTIME</div>
+   <div class="boot-copy">Bringing the local intelligence stack online. Telemetry and working memory remain on this device; cloud inference and user-triggered web lookups use external providers only when configured.</div>
+   <div class="boot-engine-grid">
+    <div class="boot-engine" id="boot-safe"><i></i><span>SAFEGUARD</span><b>CHECKING</b></div>
+    <div class="boot-engine" id="boot-runtime"><i></i><span>RUNTIME</span><b>CHECKING</b></div>
+    <div class="boot-engine" id="boot-ai"><i></i><span>AI ORCHESTRATOR</span><b>CHECKING</b></div>
+    <div class="boot-engine" id="boot-memory"><i></i><span>MEMORY</span><b>CHECKING</b></div>
+   </div>
+   <div class="boot-track"><div class="boot-progress" id="bootProgress"></div></div>
+   <div class="boot-stage"><span id="bootStage">INITIALIZING CORE</span><b id="bootPct">00%</b></div>
+   <div class="boot-log" id="bootLog"><div>Visual shell ready · waiting for authenticated agent</div></div>
+   <div class="boot-footer"><button class="boot-skip" id="bootSkip">ENTER COMMAND DECK <span>↗</span></button><span>NO CUSTOM KERNEL DRIVER · LOCAL-FIRST</span></div>
+  </div>
+ </div>
+</div>
 <div id="toasts" aria-live="polite"></div>
 <div class="pal" id="pal"><div class="pal-box" role="dialog" aria-modal="true" aria-label="Command palette">
  <input id="pal-q" type="search" autocomplete="off" spellcheck="false" placeholder="Jump to a screen or run an action...">
@@ -52,6 +70,7 @@
   <button data-v="int"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M16 16l5 5"/></svg><span class="lb">INTEL FEED</span></button>
   <button data-v="ai"><svg viewBox="0 0 24 24"><circle cx="6" cy="12" r="3"/><circle cx="18" cy="6" r="3"/><circle cx="18" cy="18" r="3"/><path d="M9 11l6-4M9 13l6 4"/></svg><span class="lb">AI CORE</span></button>
   <div class="ng">OPERATIONS</div>
+  <button data-v="eng"><svg viewBox="0 0 24 24"><path d="M12 2l2.2 3.2 3.8.4.4 3.8L22 12l-3.6 2.6-.4 3.8-3.8.4L12 22l-2.2-3.2-3.8-.4-.4-3.8L2 12l3.6-2.6.4-3.8 3.8-.4z"/><circle cx="12" cy="12" r="3"/></svg><span class="lb">ENGINE DECK</span></button>
   <button data-v="ctl"><svg viewBox="0 0 24 24"><path d="M5 3v18M12 3v18M19 3v18"/><rect x="3" y="7" width="4" height="4" fill="#080b0c"/><rect x="10" y="13" width="4" height="4" fill="#080b0c"/><rect x="17" y="5" width="4" height="4" fill="#080b0c"/></svg><span class="lb">CONTROL</span><span class="badge" id="b-act" hidden>0</span></button>
   <button data-v="fc"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2"/></svg><span class="lb">FEATURES</span></button>
   <button data-v="tsk"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/><path d="M17 16l2 2 3-4"/></svg><span class="lb">TASKS</span></button>
@@ -92,6 +111,61 @@
   <div class="panel"><div class="ph">Lag culprits<em>since start</em></div><div class="pb"><div class="list" id="culp"></div></div></div>
 </div></section>
 
+
+<!-- ENGINE DECK -->
+<section class="view" id="v-eng">
+ <div class="engine-head">
+  <div><small class="engine-kicker">SENTINEL / AUTONOMOUS CONTROL PLANE</small><h2>ENGINE DECK</h2><p>Independent policy engines · adaptive workload control · observable decisions</p></div>
+  <div class="engine-head-actions"><span class="pill ok" id="engine-health">SYNCING</span><button class="btn sm" id="engine-refresh">REFRESH</button></div>
+ </div>
+ <div class="engine-guard-banner" id="engine-guard-banner">
+  <div class="engine-guard-icon">◇</div><div><b id="engine-guard-title">SAFETY POLICY INITIALIZING</b><small id="engine-guard-detail">Reading process identities and active protection services.</small></div>
+  <span class="tag" id="engine-guard-mode">UNKNOWN</span>
+ </div>
+ <div class="engine-grid">
+  <article class="panel engine-card">
+   <div class="ph">01 / SAFEGUARD <em>POLICY AUTHORITY</em></div><div class="pb">
+    <div class="engine-state" id="engine-safe-state">CHECKING</div><div class="engine-facts" id="engine-safe-facts"></div>
+    <small class="engine-note">Backend-enforced deny rules. VALORANT detection forces telemetry-only operation; WPR, ETW, process tuning and system mutations are rejected.</small>
+   </div>
+  </article>
+  <article class="panel engine-card">
+   <div class="ph">02 / ADAPTIVE RUNTIME <em>LOAD SHEDDING</em></div><div class="pb">
+    <div class="engine-state" id="engine-runtime-state">CHECKING</div><div class="engine-facts" id="engine-runtime-facts"></div>
+    <div class="engine-actions"><button class="btn sm" id="engine-rebalance">RE-EVALUATE POLICY</button></div>
+    <small class="engine-note">Reduces SENTINEL's own polling, inventory and local inference workload. Does not alter Windows power, CPU affinity, or process priorities.</small>
+   </div>
+  </article>
+  <article class="panel engine-card">
+   <div class="ph">03 / AI ORCHESTRATOR <em>MODEL ADMISSION</em></div><div class="pb">
+    <div class="engine-state" id="engine-ai-state">CHECKING</div><div class="engine-facts" id="engine-ai-facts"></div>
+    <small class="engine-note">FAST/DEEP admission is deterministic and resource-aware. Model output is advisory; the action engine and safeguards remain authoritative.</small>
+   </div>
+  </article>
+  <article class="panel engine-card">
+   <div class="ph">04 / UNIFIED MEMORY <em>CONTEXT GOVERNOR</em></div><div class="pb">
+    <div class="engine-state" id="engine-memory-state">CHECKING</div><div class="engine-facts" id="engine-memory-facts"></div>
+    <div class="engine-actions"><button class="btn sm or" id="engine-memory-trim">CLEAR WORKING CACHE</button></div>
+    <small class="engine-note">Coordinates bounded prompt context and short-lived retrieval cache. Durable SQLite memories are never deleted by cache cleanup.</small>
+   </div>
+  </article>
+  <article class="panel engine-card engine-span">
+   <div class="ph">05 / PROCESS INTELLIGENCE <em>NEW SPAWN MONITOR</em><span class="sp"></span><button class="btn sm" id="engine-process-view">OPEN PROCESS MONITOR</button></div>
+   <div class="pb">
+    <div class="engine-security-summary" id="engine-process-summary">Waiting for process lifecycle observations.</div>
+    <div class="engine-process-list" id="engine-process-list"></div>
+    <small class="engine-note">Explainable metadata heuristics only. A flagged process is a review candidate—not a malware verdict. SENTINEL does not silently terminate or quarantine processes.</small>
+   </div>
+  </article>
+  <article class="panel engine-card engine-span">
+   <div class="ph">06 / DEEP CAPTURE <em>WINDOWS PERFORMANCE RECORDER</em></div>
+   <div class="pb engine-capture">
+    <div><div class="engine-state" id="engine-wpr-state">WPR STATUS UNKNOWN</div><small class="engine-note">Uses inbox <b>wpr.exe</b> with bounded GeneralProfile.Light capture. Xperf is optional and not required to record.</small></div>
+    <button class="btn or" id="engine-wpr">PROPOSE 12s WPR CAPTURE</button>
+   </div>
+  </article>
+ </div>
+</section>
 
 <!-- AGENT RUNTIME / LIFECYCLE -->
 <section class="view" id="v-agent">

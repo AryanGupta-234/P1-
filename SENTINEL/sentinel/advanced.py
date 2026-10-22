@@ -24,7 +24,7 @@ from typing import Any
 
 import psutil
 
-from . import core
+from . import core, safeguard
 from .core import CFG, IS_WIN, LIVE, STATE, db, heartbeat, insight, log, publish
 
 RISK_TIERS = {
@@ -37,8 +37,8 @@ RISK_TIERS = {
     "timer_resolution": "medium",
     "wifi_max_performance": "medium",
     "pause_updater_service": "medium",
-    # Actions below are deliberately disabled until a safe, complete undo exists.
-    "terminate_process": "dangerous",
+    # WM_CLOSE is manual-only, identity-bound and never escalates to forced termination.
+    "terminate_process": "medium",
     "trim_bg": "dangerous",
     "flush_dns": "dangerous",
     "standby_flush": "dangerous",
@@ -108,6 +108,9 @@ def _ensure_schema() -> None:
     db("""CREATE TABLE IF NOT EXISTS thermal_events(
         id INTEGER PRIMARY KEY AUTOINCREMENT, ts REAL NOT NULL, sensor TEXT NOT NULL,
         event TEXT NOT NULL, value REAL, threshold REAL, detail TEXT NOT NULL DEFAULT '')""")
+    db("""CREATE TABLE IF NOT EXISTS game_profiles(
+        game_key TEXT PRIMARY KEY, display_name TEXT NOT NULL,
+        profile_json TEXT NOT NULL, updated_at REAL NOT NULL)""")
     db("CREATE INDEX IF NOT EXISTS ix_adv_journal_created ON action_journal(created_at)")
     db("CREATE INDEX IF NOT EXISTS ix_adv_baseline_lookup ON personal_baselines(game_key,hour_local)")
     db("CREATE INDEX IF NOT EXISTS ix_adv_sessions_started ON game_sessions(started_at)")
@@ -275,32 +278,55 @@ def action_preview(kind: str, args: dict | None = None) -> dict:
         plan["supported"] = IS_WIN and svc in UPDATER_SERVICES
         plan["changes"] = [f"Stop allowlisted third-party updater service {svc}; restart it on game exit/undo if it was running"]
         plan["warnings"].append("Microsoft Update, Defender and security services are never stopped by this action.")
-    elif kind in ("standby_flush", "fan_control", "trim_bg", "flush_dns", "terminate_process"):
+    elif kind == "terminate_process":
+        plan["undo_available"] = False
+        plan["automatic_allowed"] = False
+        try:
+            pid = int(args.get("pid", 0))
+            created = float(args.get("create_time", 0))
+            exe = os.path.normcase(os.path.abspath(str(args.get("exe") or "")))
+            if not IS_WIN or pid <= 4 or created <= 0 or not os.path.isabs(exe):
+                raise ValueError("exact Windows process identity is required")
+            proc = psutil.Process(pid)
+            with proc.oneshot():
+                current_name = proc.name() or ""
+                current_created = float(proc.create_time())
+                current_exe = os.path.normcase(os.path.abspath(proc.exe() or ""))
+            if safeguard.is_protected_process(current_name, current_exe):
+                raise PermissionError("target is a protected Riot/Vanguard or Windows process")
+            if abs(current_created - created) > 0.02 or current_exe != exe:
+                raise ValueError("process identity changed; refresh the process inventory")
+            from .collectors import _session_id, _physical_window_handles
+            if _session_id(pid) in (None, 0) or not _physical_window_handles(pid):
+                raise ValueError("target must be a visible user-session GUI application")
+            plan["target"] = {"pid": pid, "create_time": created, "exe": exe, "name": current_name}
+            plan["supported"] = True
+            plan["changes"] = ["Send WM_CLOSE to the reviewed application's visible top-level windows; never call TerminateProcess"]
+            plan["warnings"].append("The app may show a save prompt or refuse closure. Explicit operator approval is mandatory.")
+        except Exception as exc:
+            plan["supported"] = False
+            plan["warnings"].append(str(exc))
+    elif kind in ("standby_flush", "fan_control", "trim_bg", "flush_dns"):
         plan["supported"] = False
         plan["undo_available"] = False
         plan["warnings"].append("This action is not enabled because it cannot meet the reversible-action contract safely.")
-    elif kind == "wpr_trace":
-        wpr = shutil.which("wpr.exe") or (r"C:\Windows\System32\wpr.exe" if IS_WIN else None)
+    elif kind in ("wpr_trace", "etw_capture"):
+        wpr = locate_wpr() if IS_WIN else None
         plan["supported"] = bool(IS_WIN and wpr and os.path.isfile(wpr))
-        plan["changes"] = ["Capture a bounded 15-second WPR GeneralProfile.Light ETW trace"]
-        plan["warnings"].append("Requires Windows Performance Recorder. Existing WPR recordings will never be stopped or replaced.")
-    elif kind == "etw_capture":
-        xperf = locate_xperf() if IS_WIN else None
-        plan["supported"] = bool(xperf)
-        plan["changes"] = ["Capture a bounded NT Kernel Logger window (process, scheduler, DPC/ISR, disk and network providers)"]
-        if not IS_WIN:
-            plan["warnings"].append("Kernel ETW capture is Windows-only.")
-        elif not xperf:
-            plan["warnings"].append(
-                "Windows Performance Toolkit xperf.exe was not found. Install the Windows Performance Toolkit component of the Windows ADK, then restart SENTINEL."
-            )
+        plan["changes"] = ["Capture a bounded 12-15 second Windows Performance Recorder GeneralProfile.Light ETW trace"]
+        plan["warnings"].append("Uses Windows WPR; Xperf is optional for supplemental DPC/ISR module summaries.")
+        if not plan["supported"]:
+            plan["warnings"].append("WPR command-line tool was not found. No ADK download is required when Windows already provides C:\\Windows\\System32\\wpr.exe.")
         else:
-            plan["xperf"] = xperf
-            plan["warnings"].append(
-                "Requires an elevated administrator session and permission to start a kernel trace. Existing logger sessions are never stopped or replaced."
-            )
+            plan["wpr"] = wpr
+            plan["warnings"].append("This installed agent requires an elevated administrator session. Existing WPR recordings are never stopped or replaced.")
     else:
         plan["supported"] = False; plan["warnings"].append("Unknown action")
+    guard = safeguard.check_action(kind, args)
+    if not guard["allowed"]:
+        plan["supported"] = False
+        plan["warnings"].append(guard["reason"])
+        plan["safeguard"] = guard
     return plan
 
 
@@ -538,6 +564,9 @@ def mark_action_result(action_id: int, result: str, changed: bool) -> None:
 
 
 def apply_game_profile(args: dict) -> str:
+    guard = safeguard.check_action("game_profile_apply", args)
+    if not guard["allowed"]:
+        raise PermissionError(guard["reason"])
     if not IS_WIN: return "skipped (Windows only)"
     proc, ident = _process_identity(args)
     profile = args.get("profile") if isinstance(args.get("profile"), dict) else {}
@@ -1501,7 +1530,16 @@ def _hardware_loop() -> None:
         _STOP.wait(5)
 
 
+def locate_wpr() -> str | None:
+    """Find the inbox Windows Performance Recorder; no ADK install is assumed."""
+    for candidate in (shutil.which("wpr.exe"), r"C:\Windows\System32\wpr.exe", r"C:\Windows\Sysnative\wpr.exe"):
+        if candidate and os.path.isfile(candidate):
+            return candidate
+    return None
+
+
 def locate_xperf() -> str | None:
+    """Optional WPT decoder enhancement; never required to record an ETL trace."""
     for candidate in (shutil.which("xperf.exe"), r"C:\Program Files (x86)\Windows Kits\10\Windows Performance Toolkit\xperf.exe",
                       r"C:\Program Files\Windows Kits\10\Windows Performance Toolkit\xperf.exe"):
         if candidate and os.path.isfile(candidate): return candidate
@@ -1783,94 +1821,136 @@ def _decode_etl(etl_path: str, trace_id: str, trace_end: float | None = None) ->
 
 
 def capture_kernel_window(duration: int = 12) -> dict:
-    """Serialize SENTINEL-owned kernel captures so simultaneous requests cannot race logger ownership."""
+    """Capture a short WPR ETW window without taking ownership of another session."""
     if not _ETW_CAPTURE_LOCK.acquire(blocking=False):
         return {"ok": False, "error": "another SENTINEL ETW capture is already in progress"}
     try:
-        return _capture_kernel_window_locked(duration)
+        return _capture_wpr_window_locked(duration)
     finally:
         _ETW_CAPTURE_LOCK.release()
 
 
-def _capture_kernel_window_locked(duration: int = 12) -> dict:
-    """Capture one bounded NT Kernel Logger window using xperf (WPT); no session takeover."""
+def _wpr_recording_state(result: subprocess.CompletedProcess) -> bool | None:
+    """Only accept known WPR status phrases; unknown output is never treated as idle."""
+    if result.returncode != 0:
+        return None
+    output = ((result.stdout or "") + "\n" + (result.stderr or "")).casefold()
+    active = ("recording is in progress", "recording is active", "wpr is recording",
+              "profile is running", "recording profile")
+    inactive = ("not recording", "no recording", "not in progress", "no active recording",
+                "there is no recording", "no trace profile running", "no trace profiles running",
+                "there are no trace profiles running", "not currently recording",
+                "not running", "not active", "no profile is running", "no active profile")
+    has_active = any(marker in output for marker in active)
+    has_inactive = any(marker in output for marker in inactive)
+    if has_active and not has_inactive:
+        return True
+    if has_inactive and not has_active:
+        return False
+    return None
+
+
+def _capture_wpr_window_locked(duration: int = 12) -> dict:
+    """Record a bounded GeneralProfile.Light trace with inbox WPR; decode is best-effort."""
     global _ETW_OWNED
-    if not IS_WIN: return {"ok": False, "error": "Windows only"}
-    xperf = locate_xperf()
-    if not xperf: return {"ok": False, "error": "Windows Performance Toolkit xperf.exe is not installed"}
-    duration = max(5, min(20, int(duration)))
-    status = _run([xperf, "-loggers"], 10)
-    if status.returncode != 0:
+    if not IS_WIN:
+        return {"ok": False, "error": "WPR capture is Windows-only"}
+    guard = safeguard.trace_preflight()
+    if not guard["allowed"]:
+        return {"ok": False, "error": guard["reason"], "code": guard["code"]}
+    wpr = locate_wpr()
+    if not wpr:
+        return {"ok": False, "error": "Windows Performance Recorder (wpr.exe) is unavailable; no additional tracing component will be installed"}
+    duration = max(5, min(15, int(duration)))
+
+    status = _run([wpr, "-status"], 12)
+    recording = _wpr_recording_state(status)
+    if recording is None:
         detail = ((status.stderr or "") + " " + (status.stdout or "")).strip()
-        lowered = detail.casefold()
-        if "access is denied" in lowered or "access denied" in lowered or "0x80070005" in lowered:
-            reason = "Windows denied access while checking ETW logger ownership. Run SENTINEL from an elevated administrator session and verify local policy permits kernel tracing."
-        else:
-            reason = "Could not inspect ETW logger ownership; refusing to take over an unknown kernel session."
-        if detail:
-            reason += f" xperf exit {status.returncode}: {detail[:220]}"
-        else:
-            reason += f" xperf exit {status.returncode} (no diagnostic text)"
-        return {"ok": False, "error": reason}
-    loggers = (status.stdout or "") + (status.stderr or "")
-    if "NT Kernel Logger" in loggers or STATE.get("kernel", {}).get("etw", {}).get("recording"):
-        return {"ok": False, "error": "a kernel/WPR ETW session is already active; SENTINEL will not stop or replace it"}
-    trace_id = _dt.datetime.now().strftime("sentinel_kernel_%Y%m%d_%H%M%S_%f")
+        return {"ok": False, "error": f"WPR session ownership is unknown; capture refused. {detail[:220]}"}
+    if recording:
+        return {"ok": False, "error": "A WPR recording already exists. SENTINEL will not stop, cancel, or replace another recording."}
+
+    # Re-check immediately before start to close the process-launch race.
+    guard = safeguard.trace_preflight()
+    if not guard["allowed"]:
+        return {"ok": False, "error": guard["reason"], "code": guard["code"]}
+
+    trace_id = _dt.datetime.now().strftime("sentinel_wpr_%Y%m%d_%H%M%S_%f")
     etl_path = os.path.join(core.TRACE_DIR, trace_id + ".etl")
-    flags = "PROC_THREAD+LOADER+PROFILE+DISK_IO+DISK_IO_INIT+FILE_IO+FILE_IO_INIT+HARD_FAULTS+INTERRUPT+DPC+CSWITCH+NETWORKTRACE"
-    # Reset the completion signal before starting the owned logger. Shutdown may
-    # race with this worker as soon as ownership is published below; it must see
-    # an unset event and wait for xperf -d to finish writing the ETL.
+    state = STATE.setdefault("kernel", {}).setdefault("etw_engine", {})
     _ETW_DONE.clear()
     try:
-        start = _run([xperf, "-on", flags, "-stackwalk", "CSwitch+ReadyThread+DPC+ISR", "-BufferSize", "1024",
-                      "-MaxBuffers", "256", "-MaxFile", "256", "-FileMode", "Circular"], 20)
+        start = _run([wpr, "-start", "GeneralProfile.Light", "-filemode"], 30)
     except Exception:
         _ETW_DONE.set()
         raise
     if start.returncode != 0:
         _ETW_DONE.set()
-        return {"ok": False, "error": ((start.stderr or start.stdout or "xperf start failed")[:260])}
+        detail = ((start.stderr or "") + " " + (start.stdout or "")).strip()
+        return {"ok": False, "error": f"WPR start failed (exit {start.returncode}): {detail[:240]}"}
+
     _ETW_OWNED = True
-    state = STATE.setdefault("kernel", {}).setdefault("etw_engine", {})
-    state.update({"available": True, "recording": True, "state": "recording", "started_at": time.time(),
-                  "source": "Windows Performance Toolkit xperf / NT Kernel Logger", "providers": flags.split("+"),
-                  "window_seconds": duration, "error": ""})
-    heartbeat("advanced ETW kernel observer", duration, "NT Kernel Logger capture active")
-    # Shutdown shortens the wait, but the capture owner must always close its
-    # own logger and release the completion event. A failed -d gets one bounded
-    # owner-only stop attempt; we never stop a logger we did not start.
+    state.update({
+        "available": True, "recording": True, "state": "recording",
+        "started_at": time.time(), "source": "Windows Performance Recorder / GeneralProfile.Light",
+        "window_seconds": duration, "error": "", "recorder": wpr,
+        "decoder": "tracerpt + optional Xperf DPC/ISR summary",
+    })
+    heartbeat("advanced ETW kernel observer", duration, "inbox WPR capture active")
+
+    stop = None
     try:
         _STOP.wait(duration)
-        stop = _run([xperf, "-d", etl_path], 120)
+        stop = _run([wpr, "-stop", etl_path], 120)
     except Exception as exc:
-        cleanup_error = ""
-        try:
-            cleanup = _run([xperf, "-stop"], 30)
-            if cleanup.returncode != 0:
-                cleanup_error = (cleanup.stderr or cleanup.stdout or "xperf -stop failed")[:180]
-        except Exception as cleanup_exc:
-            cleanup_error = f"{type(cleanup_exc).__name__}: {str(cleanup_exc)[:140]}"
-        state.update({"recording": None, "state": "unknown", "stopped_at": time.time(),
-                      "error": f"{type(exc).__name__}: {str(exc)[:180]}" + (f"; cleanup: {cleanup_error}" if cleanup_error else "")})
+        # WPR exposes a machine-wide session, not a durable per-process ownership
+        # token. If stop fails, ownership can no longer be proven; do not issue a
+        # global -cancel that might stop a recording started by another tool.
+        state.update({
+            "recording": None,
+            "state": "unknown",
+            "stopped_at": time.time(),
+            "error": (
+                f"{type(exc).__name__}: {str(exc)[:160]}; WPR ownership became unknown, "
+                "so SENTINEL left the session untouched for operator review"
+            ),
+        })
         raise
     finally:
         _ETW_OWNED = False
         _ETW_DONE.set()
-    state.update({"recording": False, "state": "idle" if stop.returncode == 0 else "unknown", "stopped_at": time.time(),
-                  "error": "" if stop.returncode == 0 else (stop.stderr or stop.stdout or "xperf stop failed")[:240]})
+
+    detail = ((stop.stderr or "") + " " + (stop.stdout or "")).strip()
+    state.update({"recording": False if stop.returncode == 0 else None,
+                  "state": "idle" if stop.returncode == 0 else "unknown",
+                  "stopped_at": time.time(),
+                  "error": "" if stop.returncode == 0 else f"WPR stop failed (exit {stop.returncode}): {detail[:200]}"})
     if stop.returncode != 0 or not os.path.isfile(etl_path):
-        return {"ok": False, "error": state["error"] or "ETW trace output was not created"}
+        return {"ok": False, "error": state["error"] or "WPR did not create the ETL output"}
+
     decoded = _decode_etl(etl_path, trace_id, time.time())
     size = os.path.getsize(etl_path)
     db("INSERT OR IGNORE INTO trace_archive(ts,file_path,size_bytes,source,status) VALUES(?,?,?,?,?)",
-       (time.time(), etl_path, size, "ETW/xperf NT Kernel Logger", "captured"))
-    STATE.setdefault("traces", []).append({"file": etl_path, "ts": time.time(), "mb": round(size/1048576, 1),
-                                             "source": "ETW/xperf NT Kernel Logger", "exists": True})
-    log("ETW", f"Captured {duration}s kernel ETW window; {decoded.get('event_count', 0)} decoded events; {len(decoded.get('named_driver_modules', []))} named driver module(s)", "ok")
-    state.update({"last_trace": etl_path, "last_decode": decoded, "last_at": time.time(), "last_event_count": decoded.get("event_count", 0),
-                  "driver_modules": decoded.get("named_driver_modules", [])})
-    return {"ok": True, "path": etl_path, "bytes": size, "decoded": decoded}
+       (time.time(), etl_path, size, "ETW/WPR GeneralProfile.Light", "captured"))
+    STATE.setdefault("traces", []).append({
+        "file": etl_path, "ts": time.time(), "mb": round(size / 1048576, 1),
+        "source": "ETW/WPR GeneralProfile.Light", "exists": True,
+    })
+    optional_xperf = bool(locate_xperf())
+    if not optional_xperf:
+        decoded.setdefault("limitations", []).append(
+            "Xperf is not installed. WPR capture and tracerpt decoding remain available; supplemental DPC/ISR module summary is omitted."
+        )
+    log("ETW", f"Captured {duration}s WPR window; {decoded.get('event_count', 0)} decoded events; {len(decoded.get('named_driver_modules', []))} named driver module(s)", "ok")
+    state.update({"last_trace": etl_path, "last_decode": decoded, "last_at": time.time(),
+                  "last_event_count": decoded.get("event_count", 0),
+                  "driver_modules": decoded.get("named_driver_modules", []),
+                  "xperf_optional_available": optional_xperf})
+    return {"ok": True, "path": etl_path, "bytes": size, "decoded": decoded,
+            "source": "Windows Performance Recorder / GeneralProfile.Light",
+            "xperf_optional": optional_xperf}
+
 
 
 def _capture_thread() -> None:
@@ -1888,7 +1968,8 @@ def _etw_schedule(ts: float) -> None:
     enabled = config.get("etw_enabled") is True
     game = STATE.get("game")
     state = STATE.setdefault("kernel", {}).setdefault("etw_engine", {})
-    state.setdefault("available", bool(locate_xperf()) if IS_WIN else False)
+    state.setdefault("available", bool(locate_wpr()) if IS_WIN else False)
+    state.setdefault("recorder", "Windows Performance Recorder (inbox)")
     state.setdefault("state", "idle" if IS_WIN else "unavailable")
     state["enabled"] = enabled
     if not enabled:
@@ -1899,8 +1980,15 @@ def _etw_schedule(ts: float) -> None:
         return
     if not IS_WIN:
         state.update(state="unavailable", error="Windows only"); return
+    if safeguard.snapshot()["valorant_active"]:
+        heartbeat("advanced ETW kernel observer", 0, "VALORANT detected; kernel tracing hard-disabled")
+        return
+    guard = safeguard.check_action("etw_capture")
+    if not guard["allowed"]:
+        heartbeat("advanced ETW kernel observer", 0, guard["reason"])
+        return
     if not game:
-        heartbeat("advanced ETW kernel observer", 0, "armed; waiting for configured game process")
+        heartbeat("advanced ETW kernel observer", 0, "armed; waiting for configured non-protected game process")
         return
     if ts - _LAST_ETW < 120: return
     _LAST_ETW = ts
@@ -1938,7 +2026,10 @@ def _advance_game_session(ts: float) -> None:
             if rows: _end_game_session(int(rows[0][0]), ts)
         sid = _start_game_session(game, ts)
         STATE.setdefault("advanced", {})["active_session_id"] = sid
-        profile = get_game_profile(str(game.get("name") or ""))
+        game_name = str(game.get("name") or "").casefold()
+        profile = None if game_name in safeguard.VALORANT_NAMES else get_game_profile(str(game.get("name") or ""))
+        if game_name in safeguard.VALORANT_NAMES:
+            log("safeguard", "VALORANT game session registered as telemetry-only; no game profile can be applied", "warn")
         if profile:
             try:
                 from . import actions
@@ -1998,6 +2089,8 @@ def get_game_profile(game_name: str) -> dict | None:
 
 def save_game_profile(game_name: str, profile: dict) -> dict:
     key = str(game_name or "").casefold().strip()
+    if key in safeguard.VALORANT_NAMES:
+        raise ValueError("VALORANT game profiles are permanently disabled by SENTINEL safeguard")
     if not key or len(key) > 180 or not isinstance(profile, dict): raise ValueError("game name and profile object required")
     priority = str(profile.get("priority", "above_normal"))
     if priority not in ("normal", "below_normal", "above_normal"): raise ValueError("priority must be normal, below_normal or above_normal")
@@ -2085,6 +2178,7 @@ def status() -> dict:
             "hardware_sensors": STATE.get("hardware_sensors", {"available": False, "reason": "not sampled"}),
             "gpu": STATE.get("gpu", {}), "thermal_events": [{"ts": r[0], "sensor": r[1], "event": r[2], "value": r[3], "threshold": r[4], "detail": r[5]} for r in thermal],
             "etw_events": etw_rows, "sessions": recent_sessions, "session_reports": session_reports,
+            "safeguard": safeguard.snapshot(),
             "correlation_events": correlation_events,
             "game_profiles": [{"game": r[0], "updated_at": r[1]} for r in profiles],
             "action_journal": journal, "tuner_history": tuner_history, "specialists": list(SPECIALISTS)}
@@ -2186,15 +2280,14 @@ def shutdown() -> None:
     global _STARTED, _ETW_OWNED, _LAST_GAME_ID
     _STOP.set()
     if _ETW_OWNED:
-        # Let the capture owner close and archive its ETL with xperf -d.
-        # The capture worker is awakened by _STOP and owns the xperf -d
-        # finalization. Give that bounded finalizer time to complete before using
-        # the emergency stop path, avoiding a concurrent -d / -stop race.
+        # Wait for the capture owner. If its finalizer cannot prove session
+        # ownership, never issue a global WPR stop/cancel during agent shutdown.
         if not _ETW_DONE.wait(130):
-            xperf = locate_xperf()
-            if xperf:
-                try: _run([xperf, "-stop"], 30)
-                except Exception: pass
+            STATE.setdefault("kernel", {}).setdefault("etw_engine", {}).update({
+                "recording": None,
+                "state": "unknown",
+                "error": "WPR finalizer did not complete; no global stop/cancel was issued because session ownership is unknown",
+            })
             _ETW_OWNED = False
             _ETW_DONE.set()
     active_session_id = STATE.get("advanced", {}).get("active_session_id")

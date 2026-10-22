@@ -3,7 +3,7 @@ Models are auto-selected from whatever is installed (smallest = fast, largest = 
 import json, os, re, threading, time, urllib.request
 from urllib.parse import urlparse
 import psutil
-from . import core, actions, intel
+from . import core, actions, intel, ai_engine, memory_engine
 from .core import CFG, STATE, HIST, LIVE, db, log, publish, heartbeat, window
 
 SYS_FAST = ("You are SENTINEL-FAST, a Windows gaming-performance triage agent. You receive live telemetry. "
@@ -191,6 +191,18 @@ def gen(model, prompt, system, fmt=None, timeout=180, slot=None):
         model = _route_deep_model()
     if not model:
         raise RuntimeError("no eligible model is selected")
+    allowed, admission_reason = ai_engine.inference_allowed(
+        model,
+        cloud=model.startswith(CLOUD),
+        pause_when_gaming=bool(CFG.get("pause_ai_when_gaming", True)),
+        slot=slot or "fast",
+    )
+    STATE.setdefault("ai", {})["admission"] = {
+        "allowed": allowed, "reason": admission_reason,
+        "slot": slot or "fast", "checked_at": time.time(),
+    }
+    if not allowed:
+        raise RuntimeError(admission_reason)
     a = STATE["ai"]
     started = time.time()
     start_mono = time.monotonic()
@@ -255,7 +267,7 @@ def snapshot():
     def mx(k, s=30):
         w = window(k, s); return round(max(w), 1) if w else None
     procs = [f"{p['name']} cpu{p['cpu']}% mem{p['mem']}MB io{p['io']}MB/s" for p in STATE.get("procs", [])[:6]]
-    return {
+    payload = {
         "game": (STATE.get("game") or {}).get("name"),
         "30s": {"cpu_avg": avg("cpu"), "cpu_max": mx("cpu"), "dpc_avg": avg("dpc"), "dpc_max": mx("dpc"),
                 "irq_avg": avg("irq"), "free_ram_mb": avg("mem_free_mb"), "pages_in": avg("pagesin"),
@@ -265,6 +277,7 @@ def snapshot():
         "top_processes": procs, "system": STATE.get("system"), "gpu": STATE.get("gpu"),
         "lag_index": LIVE.get("lag_index"),
     }
+    return ai_engine.compose_context(payload, purpose="triage")
 
 
 def _say(role, model, text):
@@ -296,7 +309,12 @@ def investigate(ins):
         snap = snapshot()
         refs = intel.lookup(f"{ins['title']} Windows", False)[:4] if ins.get("title") else []
         refs_txt = "\n".join(f"- {r['src']}: {r['title']} ({r['url']})" for r in refs)
-        ctx = json.dumps(snap)[:2500]
+        context = ai_engine.compose_context(
+            snap,
+            query=str(ins.get("title", "")) + " " + str(ins.get("detail", "")),
+            purpose="investigation",
+        )
+        ctx = json.dumps(context, default=str)[:7600]
         a["busy"] = "fast"
         try:
             draft = gen(a["fast"], f"Problem detected: {ins['title']} | {ins.get('detail','')} | culprit: {ins.get('culprit','')}\nTelemetry: {ctx}", SYS_FAST, timeout=90, slot="fast")
@@ -351,8 +369,9 @@ def chat(msg, mode="council"):
         out = gen(model, q, sysq, timeout=240 if slot == "deep" else 120, slot=slot)
         _say(mode, model, out)
         return out
-    ctx = json.dumps(snapshot())[:2500]
-    q = f"User question: {msg}\nLive telemetry: {ctx}"
+    context = ai_engine.compose_context(snapshot(), query=msg, purpose="investigation")
+    ctx = json.dumps(context, default=str)[:7600]
+    q = f"User question: {msg}\nLive telemetry and relevant non-sensitive local memory: {ctx}"
     sysq = "You are SENTINEL, the user's Windows gaming-performance agent. Answer concisely and concretely using the telemetry."
     if mode == "fast" or a["fast"] == a["deep"]:
         out = gen(a["fast"], q, sysq, timeout=120, slot="fast"); _say("fast", a["fast"], out); return out
