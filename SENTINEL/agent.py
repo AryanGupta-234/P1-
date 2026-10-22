@@ -419,9 +419,11 @@ try {
     if (-not $userProfile -or -not $userProfile.LocalPath) { throw "Profile path unavailable for interactive user $loggedOn" }
     $userRoot = $userProfile.LocalPath
 
-    # Honour Desktop redirection (including OneDrive) from the actual user's
-    # loaded profile instead of assuming C:\Users\name\Desktop.
+    # Resolve the interactive user's actual shell folders from that user's loaded
+    # registry hive. This works with redirected/OneDrive Desktop paths and does not
+    # accidentally put shortcuts on the elevated administrator's profile.
     $desktop = $null
+    $userPrograms = $null
     $usersHive = [Microsoft.Win32.RegistryKey]::OpenBaseKey(
         [Microsoft.Win32.RegistryHive]::Users,
         [Microsoft.Win32.RegistryView]::Default
@@ -430,22 +432,48 @@ try {
         $shellFolders = $usersHive.OpenSubKey("$userSid\Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders")
         if ($shellFolders) {
             try {
-                $desktopValue = $shellFolders.GetValue(
-                    'Desktop', $null,
-                    [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames
-                )
-                if ($desktopValue) {
-                    $desktopValue = $desktopValue.Replace('%USERPROFILE%', $userRoot)
-                    $desktop = [Environment]::ExpandEnvironmentVariables($desktopValue)
+                foreach ($entry in @(
+                    @{ Name = 'Desktop'; Target = 'desktop' },
+                    @{ Name = 'Programs'; Target = 'programs' }
+                )) {
+                    $value = $shellFolders.GetValue(
+                        $entry.Name, $null,
+                        [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames
+                    )
+                    if ($value) {
+                        $value = $value.Replace('%USERPROFILE%', $userRoot)
+                        $value = $value.Replace('%APPDATA%', (Join-Path $userRoot 'AppData\Roaming'))
+                        $value = $value.Replace('%LOCALAPPDATA%', (Join-Path $userRoot 'AppData\Local'))
+                        $value = [Environment]::ExpandEnvironmentVariables($value)
+                        if ($value -match '%[^%]+%') { continue }
+                        if ($entry.Target -eq 'desktop') { $desktop = $value }
+                        if ($entry.Target -eq 'programs') { $userPrograms = $value }
+                    }
                 }
             } finally { $shellFolders.Dispose() }
         }
     } finally { $usersHive.Dispose() }
-    if (-not $desktop -or $desktop -match '%[^%]+%') { $desktop = Join-Path $userRoot 'Desktop' }
 
-    $userStartMenu = Join-Path $userRoot 'AppData\Roaming\Microsoft\Windows\Start Menu\Programs\SENTINEL'
-    $commonStartMenu = Join-Path $env:ProgramData 'Microsoft\Windows\Start Menu\Programs\SENTINEL'
-    New-Item -ItemType Directory -Force -Path $desktop, $userStartMenu, $commonStartMenu | Out-Null
+    if (-not $desktop) { $desktop = Join-Path $userRoot 'Desktop' }
+    if (-not $userPrograms) {
+        $userPrograms = Join-Path $userRoot 'AppData\Roaming\Microsoft\Windows\Start Menu\Programs'
+    }
+    $commonPrograms = Join-Path $env:ProgramData 'Microsoft\Windows\Start Menu\Programs'
+    $userStartMenuGroup = Join-Path $userPrograms 'SENTINEL'
+    $commonStartMenuGroup = Join-Path $commonPrograms 'SENTINEL'
+
+    # Top-level Start Menu shortcuts make SENTINEL searchable directly from Start.
+    # Group shortcuts are also provided for users who prefer a tidy Programs folder.
+    $shortcutTargets = @(
+        @{ Path = (Join-Path $desktop 'SENTINEL.lnk'); Kind = 'Desktop'; Folder = $desktop },
+        @{ Path = (Join-Path $userPrograms 'SENTINEL.lnk'); Kind = 'User Start Menu (searchable)'; Folder = $userPrograms },
+        @{ Path = (Join-Path $userStartMenuGroup 'SENTINEL.lnk'); Kind = 'User Start Menu folder'; Folder = $userStartMenuGroup },
+        @{ Path = (Join-Path $commonPrograms 'SENTINEL.lnk'); Kind = 'All Users Start Menu (searchable)'; Folder = $commonPrograms },
+        @{ Path = (Join-Path $commonStartMenuGroup 'SENTINEL.lnk'); Kind = 'All Users Start Menu folder'; Folder = $commonStartMenuGroup }
+    )
+    foreach ($directory in ($shortcutTargets | ForEach-Object { $_.Folder } | Select-Object -Unique)) {
+        New-Item -ItemType Directory -Force -Path $directory | Out-Null
+    }
 
     New-Item -ItemType Directory -Force -Path $store | Out-Null
     & icacls.exe $store /inheritance:r | Out-Null
@@ -473,25 +501,23 @@ try {
 
     $wsh = New-Object -ComObject WScript.Shell
     $shortcutArgs = ('"{0}" open' -f $script)
-    $shortcutTargets = @(
-        @{ Path = (Join-Path $desktop 'SENTINEL.lnk'); Kind = 'Desktop' },
-        @{ Path = (Join-Path $userStartMenu 'SENTINEL.lnk'); Kind = 'User Start Menu' },
-        @{ Path = (Join-Path $commonStartMenu 'SENTINEL.lnk'); Kind = 'All Users Start Menu' }
-    )
     foreach ($item in $shortcutTargets) {
         $link = $wsh.CreateShortcut($item.Path)
         $link.TargetPath = $pythonw
         $link.Arguments = $shortcutArgs
         $link.WorkingDirectory = $workdir
         $link.Description = "SENTINEL $version - performance and agent dashboard"
+        $link.IconLocation = "$pythonw,0"
         $link.Save()
+
         if (-not (Test-Path -LiteralPath $item.Path -PathType Leaf)) {
             throw "$($item.Kind) shortcut was not created: $($item.Path)"
         }
         $check = $wsh.CreateShortcut($item.Path)
-        if ($check.TargetPath -ne $pythonw -or $check.Arguments -ne $shortcutArgs) {
+        if ($check.TargetPath -ne $pythonw -or $check.Arguments -ne $shortcutArgs -or $check.WorkingDirectory -ne $workdir) {
             throw "$($item.Kind) shortcut points to an unexpected target: $($item.Path)"
         }
+        Write-Output ("SHORTCUT_OK=" + $item.Kind + "|" + $item.Path)
     }
 
     Start-ScheduledTask -TaskName $taskName -ErrorAction Stop
@@ -499,8 +525,8 @@ try {
     Write-Output "INSTALL_USER=$loggedOn"
     Write-Output "INSTALL_TASK=$taskName"
     Write-Output "INSTALL_DESKTOP=$((Join-Path $desktop 'SENTINEL.lnk'))"
-    Write-Output "INSTALL_START_MENU=$((Join-Path $commonStartMenu 'SENTINEL.lnk'))"
-    Write-Output "INSTALL_USER_START_MENU=$((Join-Path $userStartMenu 'SENTINEL.lnk'))"
+    Write-Output "INSTALL_START_MENU=$((Join-Path $commonPrograms 'SENTINEL.lnk'))"
+    Write-Output "INSTALL_USER_START_MENU=$((Join-Path $userPrograms 'SENTINEL.lnk'))"
     Write-Output "INSTALL_DATA=$store"
     exit 0
 } catch {
@@ -559,13 +585,12 @@ try {
 
     $loggedOn = (Get-CimInstance Win32_ComputerSystem -ErrorAction SilentlyContinue).UserName
     $desktop = $null
-    $userStartMenu = $null
+    $userPrograms = $null
     if ($loggedOn) {
         $userSid = ([System.Security.Principal.NTAccount]::new($loggedOn)).Translate([System.Security.Principal.SecurityIdentifier]).Value
         $userProfile = Get-CimInstance Win32_UserProfile -Filter ("SID='{0}'" -f $userSid) -ErrorAction Stop
         if ($userProfile -and $userProfile.LocalPath) {
             $userRoot = $userProfile.LocalPath
-            $desktop = Join-Path $userRoot 'Desktop'
             $usersHive = [Microsoft.Win32.RegistryKey]::OpenBaseKey(
                 [Microsoft.Win32.RegistryHive]::Users,
                 [Microsoft.Win32.RegistryView]::Default
@@ -574,32 +599,53 @@ try {
                 $shellFolders = $usersHive.OpenSubKey("$userSid\Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders")
                 if ($shellFolders) {
                     try {
-                        $desktopValue = $shellFolders.GetValue(
-                            'Desktop', $null,
-                            [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames
-                        )
-                        if ($desktopValue) {
-                            $desktopValue = $desktopValue.Replace('%USERPROFILE%', $userRoot)
-                            $desktop = [Environment]::ExpandEnvironmentVariables($desktopValue)
+                        foreach ($entry in @(@{Name='Desktop';Target='desktop'},@{Name='Programs';Target='programs'})) {
+                            $value = $shellFolders.GetValue($entry.Name, $null,
+                                [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)
+                            if (-not $value) { continue }
+                            $value = $value.Replace('%USERPROFILE%', $userRoot)
+                            $value = $value.Replace('%APPDATA%', (Join-Path $userRoot 'AppData\Roaming'))
+                            $value = $value.Replace('%LOCALAPPDATA%', (Join-Path $userRoot 'AppData\Local'))
+                            $value = [Environment]::ExpandEnvironmentVariables($value)
+                            if ($value -match '%[^%]+%') { continue }
+                            if ($entry.Target -eq 'desktop') { $desktop = $value }
+                            if ($entry.Target -eq 'programs') { $userPrograms = $value }
                         }
                     } finally { $shellFolders.Dispose() }
                 }
             } finally { $usersHive.Dispose() }
-            if (-not $desktop -or $desktop -match '%[^%]+%') { $desktop = Join-Path $userRoot 'Desktop' }
-            $userStartMenu = Join-Path $userRoot 'AppData\Roaming\Microsoft\Windows\Start Menu\Programs\SENTINEL'
+            if (-not $desktop) { $desktop = Join-Path $userRoot 'Desktop' }
+            if (-not $userPrograms) { $userPrograms = Join-Path $userRoot 'AppData\Roaming\Microsoft\Windows\Start Menu\Programs' }
         }
     }
-    if ($desktop) { Remove-Item (Join-Path $desktop 'SENTINEL.lnk') -Force -ErrorAction SilentlyContinue }
-    if ($userStartMenu) { Remove-Item $userStartMenu -Recurse -Force -ErrorAction SilentlyContinue }
-    $commonStartMenu = Join-Path $env:ProgramData 'Microsoft\Windows\Start Menu\Programs\SENTINEL'
-    Remove-Item $commonStartMenu -Recurse -Force -ErrorAction SilentlyContinue
+    $commonPrograms = Join-Path $env:ProgramData 'Microsoft\Windows\Start Menu\Programs'
+    $commonGroup = Join-Path $commonPrograms 'SENTINEL'
+    if ($desktop) {
+        Remove-Item (Join-Path $desktop 'SENTINEL.lnk') -Force -ErrorAction SilentlyContinue
+        $fallbackDesktop = Join-Path $userRoot 'Desktop'
+        if ($fallbackDesktop -ne $desktop) {
+            Remove-Item (Join-Path $fallbackDesktop 'SENTINEL.lnk') -Force -ErrorAction SilentlyContinue
+        }
+    }
+    if ($userPrograms) {
+        Remove-Item (Join-Path $userPrograms 'SENTINEL.lnk') -Force -ErrorAction SilentlyContinue
+        Remove-Item (Join-Path $userPrograms 'SENTINEL') -Recurse -Force -ErrorAction SilentlyContinue
+    }
+    Remove-Item (Join-Path $commonPrograms 'SENTINEL.lnk') -Force -ErrorAction SilentlyContinue
+    Remove-Item $commonGroup -Recurse -Force -ErrorAction SilentlyContinue
 
     $remainingTask = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
     if ($remainingTask) { throw "Scheduled task $taskName still exists after removal" }
     if ($desktop -and (Test-Path (Join-Path $desktop 'SENTINEL.lnk'))) {
         throw "Desktop shortcut still exists: $(Join-Path $desktop 'SENTINEL.lnk')"
     }
-    if (Test-Path $commonStartMenu) { throw "Common Start Menu shortcut folder still exists: $commonStartMenu" }
+    if ($userPrograms -and (Test-Path (Join-Path $userPrograms 'SENTINEL.lnk'))) {
+        throw "User Start Menu shortcut still exists: $(Join-Path $userPrograms 'SENTINEL.lnk')"
+    }
+    if (Test-Path (Join-Path $commonPrograms 'SENTINEL.lnk')) {
+        throw "All Users Start Menu shortcut still exists: $(Join-Path $commonPrograms 'SENTINEL.lnk')"
+    }
+    if (Test-Path $commonGroup) { throw "Common Start Menu shortcut folder still exists: $commonGroup" }
     Write-Output 'SENTINEL task and verified shortcut locations removed. ProgramData data was kept.'
     exit 0
 } catch {
