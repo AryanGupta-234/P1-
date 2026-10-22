@@ -387,7 +387,7 @@ def list_actions(limit=40):
             "state": r[3], "origin": r[4], "result": r[5], "args": args,
             "risk": risk_label, "risk_score": approval["risk_score"], "priority_score": approval["priority_score"],
             "priority": approval["priority"], "confidence": approval["confidence"],
-            "approval_decision": approval["decision"],
+            "approval_decision": approval["decision"], "approval_reason": approval["reason"],
             "undo_available": bool(meta[1]), "changed": bool(meta[2]),
             "reverted_at": meta[3], "revert_result": meta[4]})
     return decoded
