@@ -1,7 +1,7 @@
 """HTTP + Server-Sent-Events API. Binds 127.0.0.1 only; every /api call needs the install token."""
 import ctypes, json, os, threading, time, urllib.parse, psutil, platform, sys, hmac
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from . import core, actions, ai, intel, inventory, intelligence, advanced
+from . import core, actions, ai, intel, inventory, intelligence, advanced, activity_engine
 from . import safeguard, runtime_engine, memory_engine, ai_engine, security_engine, hardware_provider
 from .core import CFG, STATE, LIVE, HIST, HEART, START, db, log, save_cfg
 
@@ -405,6 +405,12 @@ class H(BaseHTTPRequestHandler):
             return self._json(security_engine.snapshot(min(120, int((qs.get("limit") or ["40"])[0]))))
         if p == "/api/hardware/provider":
             return self._json(hardware_provider.status())
+        if p == "/api/activity":
+            try:
+                return self._json(activity_engine.snapshot())
+            except Exception as exc:
+                log("activity", f"activity snapshot failed: {type(exc).__name__}: {str(exc)[:180]}", "error")
+                return self._json({"error": f"{type(exc).__name__}: {str(exc)[:180]}"}, 503)
         if p == "/api/advanced":
             try:
                 payload = advanced.status()
@@ -559,6 +565,22 @@ class H(BaseHTTPRequestHandler):
             if body.get("confirmed") is not True:
                 return self._json({"error": "explicit confirmation is required to revert every outstanding SENTINEL change"}, 400)
             return self._json(advanced.revert_all())
+        if p == "/api/activity/settings":
+            try:
+                result = activity_engine.update_settings(body)
+                log("activity", "foreground activity policy updated", "info",
+                    semantic_context=result["settings"]["semantic_context"],
+                    suggestions_enabled=result["settings"]["suggestions_enabled"],
+                    auto_launch=result["settings"]["auto_launch_learned_apps"])
+                return self._json(result)
+            except (ValueError, TypeError) as exc:
+                return self._json({"error": str(exc)}, 400)
+        if p == "/api/activity/launch":
+            try:
+                result = activity_engine.launch_app(str(body.get("app_key", "")))
+                return self._json(result, 200 if result.get("ok") else 409)
+            except (ValueError, TypeError) as exc:
+                return self._json({"error": str(exc)}, 400)
         if p == "/api/advanced/settings":
             try: return self._json(advanced.settings_update(body))
             except (ValueError, TypeError) as exc: return self._json({"error": str(exc)}, 400)
