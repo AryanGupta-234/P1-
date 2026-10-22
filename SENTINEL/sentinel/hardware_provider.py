@@ -27,6 +27,8 @@ import psutil
 from . import core
 
 VERSION = "0.9.6"
+EXECUTABLE_NAMES = ("LibreHardwareMonitor.Windows.Forms.exe", "LibreHardwareMonitor.exe")
+PROCESS_NAMES = frozenset(name.casefold() for name in EXECUTABLE_NAMES)
 PORT = 8085
 ARCHIVE_URL = "https://github.com/LibreHardwareMonitor/LibreHardwareMonitor/releases/download/v0.9.6/LibreHardwareMonitor.zip"
 ARCHIVE_SHA256 = "086d9f1b5a99e643edc2cfaaac16051685b551e4c5ac0b32a57c58c0e529c001"
@@ -47,7 +49,13 @@ def _find_executable(root: Path | None = None) -> Path | None:
     base = root or install_root()
     if not base.is_dir():
         return None
-    return next((p for p in base.rglob("LibreHardwareMonitor.exe") if p.is_file()), None)
+    # The upstream Windows Forms project sets AssemblyName to
+    # LibreHardwareMonitor.Windows.Forms. Some packaged releases rename it.
+    for executable_name in EXECUTABLE_NAMES:
+        found = next((p for p in base.rglob(executable_name) if p.is_file()), None)
+        if found is not None:
+            return found
+    return None
 
 
 def _config_path(executable: Path) -> Path:
@@ -134,7 +142,10 @@ def _extract_archive(archive_path: Path, destination: Path) -> Path:
 
     executable = _find_executable(destination)
     if executable is None:
-        raise ValueError("official release archive did not contain LibreHardwareMonitor.exe")
+        raise ValueError(
+            "official release archive did not contain a supported executable: "
+            + ", ".join(EXECUTABLE_NAMES)
+        )
     required = ("LibreHardwareMonitorLib.dll", "Aga.Controls.dll", "OxyPlot.dll", "OxyPlot.WindowsForms.dll")
     missing = [name for name in required if not (executable.parent / name).is_file()]
     if missing:
@@ -221,7 +232,7 @@ def _process_running(executable: Path | None = None) -> bool:
                 actual = process.info.get("exe")
                 if expected and actual and os.path.normcase(os.path.abspath(actual)) == expected:
                     return True
-                if name == "librehardwaremonitor.exe" and (not expected or not actual):
+                if name in PROCESS_NAMES and (not expected or not actual):
                     return True
             except (psutil.NoSuchProcess, psutil.AccessDenied, OSError):
                 continue
