@@ -30,3 +30,14 @@ installed by SENTINEL.
 ## Third-party hardware sensor provider
 
 The optional managed LibreHardwareMonitor provider is downloaded only from the official GitHub v0.9.6 release and checked against its pinned SHA-256 digest before archive extraction. Extraction rejects traversal paths, symlinks, oversized archives and missing required files. Its HTTP listener is configured on IPv4 loopback only (`127.0.0.1:8085`); SENTINEL uses read-only GET requests and never calls fan-control endpoints. Installing the provider is an explicit operator action. Any optional PawnIO driver prompt is owned by LibreHardwareMonitor and requires the operator's decision; SENTINEL does not accept it or install drivers automatically.
+
+
+## Foreground Activity Intelligence privacy and application launching
+
+The activity service observes only the foreground HWND's process identity, executable path, window class, local idle duration and a bounded title string used transiently for local semantic tokenization. Raw titles are never persisted. URLs, email addresses and credential-oriented title contexts are removed before term extraction. The service does not collect browser page contents, browser history, keystrokes, form values or screenshots. Stored records contain process identity, duration counters, timestamps, generated topic terms and app-transition statistics. Activity retention defaults to 90 days and is configurable.
+
+Learned auto-launch is disabled by default and has its own explicit switch. Candidates must be based on repeated observed transitions and a confidence threshold; their executable must already have been observed and must resolve to a local existing EXE under the configured Program Files or user-installed application roots. UNC paths, arbitrary commands and unobserved paths are refused. Launches are suppressed during games/fullscreen contexts and by global/per-app cooldowns. SENTINEL never launches an application from a title, URL, semantic token or model-generated command.
+
+## Automatic ETW sampling
+
+Automatic WPR sampling requires both the Performance ETW engine toggle and the separate ETW automatic-sampling opt-in. Its 12-second WPR GeneralProfile.Light captures are rate-limited and use the same VALORANT and WPR session ownership safeguards as manual trace capture. WPR (`wpr.exe`) is required; Xperf is optional for supplemental driver-module decoding. The ETW opt-in does not grant permission to unrelated state-changing actions.
