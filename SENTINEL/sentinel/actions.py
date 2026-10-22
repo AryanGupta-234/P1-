@@ -368,9 +368,10 @@ def list_actions(limit=40):
             automation_enabled=bool(core.get_profile()["automation"]),
             reversible=r[2] in approval_engine.AUTO_MEDIUM_ALLOWLIST,
         )
+        risk_label = meta[0] if journal else tier
         decoded.append({"id": r[0], "ts": r[1], "kind": r[2], "desc": KINDS.get(r[2], r[2]),
             "state": r[3], "origin": r[4], "result": r[5], "args": args,
-            "risk": meta[0], "risk_score": approval["risk_score"], "priority_score": approval["priority_score"],
+            "risk": risk_label, "risk_score": approval["risk_score"], "priority_score": approval["priority_score"],
             "priority": approval["priority"], "confidence": approval["confidence"],
             "approval_decision": approval["decision"],
             "undo_available": bool(meta[1]), "changed": bool(meta[2]),
