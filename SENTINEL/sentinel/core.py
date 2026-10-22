@@ -46,6 +46,18 @@ DEFAULTS = {
     "advanced": {
         "etw_enabled": False, "lhm_enabled": False, "cpu_temp_warn_c": 88.0,
         "gpu_temp_warn_c": 82.0, "lhm_http_port": 8085, "auto_report_sessions": True,
+        "etw_auto_interval_s": 300,
+    },
+    "activity": {
+        "enabled": True,
+        "semantic_context": True,
+        "suggestions_enabled": True,
+        "auto_launch_learned_apps": False,
+        "sample_interval_s": 2,
+        "idle_after_seconds": 90,
+        "retention_days": 90,
+        "min_launch_observations": 8,
+        "auto_launch_cooldown_s": 7200,
     },
 }
 
@@ -194,6 +206,12 @@ def load_cfg():
                 try:
                     number = int(value)
                     cfg["advanced"][key] = max(1, min(65535, number))
+                except (TypeError, ValueError, OverflowError):
+                    cfg["advanced"][key] = default
+            elif key == "etw_auto_interval_s":
+                try:
+                    number = int(value)
+                    cfg["advanced"][key] = max(120, min(900, number))
                 except (TypeError, ValueError, OverflowError):
                     cfg["advanced"][key] = default
             else:
