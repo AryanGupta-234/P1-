@@ -179,7 +179,7 @@ def check_action(kind: str, args: dict | None = None) -> dict[str, Any]:
         if not current["process_detection_complete"]:
             return {"allowed": False, "code": "game_state_unknown", "reason": "Could not reliably confirm game presence. Trace capture is blocked until process monitoring is healthy."}
         if not current["administrator"]:
-            return {"allowed": False, "code": "elevation_required", "reason": "WPR system trace requires an elevated administrator or Performance Log Users context."}
+            return {"allowed": False, "code": "elevation_required", "reason": "This SENTINEL installation requires an elevated administrator session for WPR tracing."}
 
     if kind in PROCESS_ACTIONS and not current["process_detection_complete"]:
         return {"allowed": False, "code": "process_state_unknown", "reason": "Process inventory is stale or incomplete. Refresh process identities before attempting a process change."}
@@ -197,4 +197,4 @@ def trace_preflight() -> dict[str, Any]:
     result = check_action("etw_capture")
     if not result["allowed"]:
         return result
-    return {"allowed": True, "code": "ready", "reason": "No VALORANT process detected, process monitor is healthy, and administrator rights are present."}
+    return {"allowed": True, "code": "ready", "reason": "No VALORANT process detected, process monitor is healthy, and the elevated-administrator requirement is satisfied."}

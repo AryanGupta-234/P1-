@@ -319,7 +319,7 @@ def action_preview(kind: str, args: dict | None = None) -> dict:
             plan["warnings"].append("WPR command-line tool was not found. No ADK download is required when Windows already provides C:\\Windows\\System32\\wpr.exe.")
         else:
             plan["wpr"] = wpr
-            plan["warnings"].append("Requires administrator or Performance Log Users permissions. Existing WPR recordings are never stopped or replaced.")
+            plan["warnings"].append("This installed agent requires an elevated administrator session. Existing WPR recordings are never stopped or replaced.")
     else:
         plan["supported"] = False; plan["warnings"].append("Unknown action")
     guard = safeguard.check_action(kind, args)

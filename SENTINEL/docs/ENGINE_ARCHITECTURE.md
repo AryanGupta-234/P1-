@@ -181,3 +181,6 @@ The local API remains authenticated and loopback-bound. The UI is an operator su
 ## Validation boundary
 
 CI validates Python behavior across supported Python versions, Python compilation, JavaScript syntax, and the existing AIE suite. A green CI run does not test live Vanguard compatibility, WPR permission on every Windows build, hardware performance, or the absence of anti-cheat false positives. Those are separate target-machine validation items.
+
+
+**Elevation:** the current installed-agent policy accepts an elevated administrator session for WPR. Performance Log Users-only operation is not enabled by the Safeguard in this release.
