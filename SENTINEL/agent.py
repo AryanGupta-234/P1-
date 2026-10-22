@@ -682,7 +682,7 @@ def main():
         print(f"Port {CFG['port']} is already in use by another local process; SENTINEL was not started.")
         return 1
 
-    from sentinel import collectors, brain, ai, intel, server, advanced
+    from sentinel import collectors, brain, ai, intel, server, advanced, activity_engine
     from sentinel import runtime_engine, memory_engine, security_engine
     try:
         core.STATE["traces"] = [
@@ -714,6 +714,8 @@ def main():
     log("core", f"SENTINEL starting (pid {os.getpid()}, {'Windows' if IS_WIN else 'demo'}, run {run_id})", "ok")
     advanced.start()
     atexit.register(advanced.shutdown)
+    activity_engine.start()
+    atexit.register(activity_engine.shutdown)
     runtime_engine.start()
     memory_engine.start()
     security_engine.start()
@@ -726,6 +728,7 @@ def main():
     try:
         server.serve()
     finally:
+        activity_engine.shutdown()
         advanced.shutdown()
         close_run()
     return 0
