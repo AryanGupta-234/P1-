@@ -46,3 +46,25 @@ def test_provider_rejects_zip_slip_entries(tmp_path: Path):
         archive.writestr("../escape.txt", b"bad")
     with pytest.raises(ValueError, match="unsafe path"):
         hardware_provider._extract_archive(archive_path, tmp_path / "out")
+
+def test_provider_config_respects_a_valid_persisted_port(monkeypatch):
+    monkeypatch.setattr(
+        hardware_provider.core,
+        "CFG",
+        {"advanced": {"lhm_http_port": 8123}},
+    )
+    assert hardware_provider.configured_port() == 8123
+    root = ET.fromstring(hardware_provider._config_xml())
+    values = {node.attrib["key"]: node.attrib["value"] for node in root.findall("./appSettings/add")}
+    assert values["listenerPort"] == "8123"
+
+
+def test_provider_config_rejects_an_invalid_persisted_port(monkeypatch):
+    monkeypatch.setattr(
+        hardware_provider.core,
+        "CFG",
+        {"advanced": {"lhm_http_port": 70000}},
+    )
+    assert hardware_provider.configured_port() == 8085
+    assert hardware_provider._probe(70000)["connected"] is False
+
