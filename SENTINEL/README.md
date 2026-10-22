@@ -195,3 +195,12 @@ These additions have regression tests, but must still be validated on the target
 SENTINEL reads optional hardware sensors only after you enable the sensor reader and start the sensor provider yourself. It first probes the supported WMI namespaces, then falls back to LibreHardwareMonitor's read-only local `GET http://127.0.0.1:8085/data.json` tree when configured. You can change the local port in the THERMAL sensor settings. The endpoint is loopback-only from SENTINEL's side; it does not follow redirects or call fan-control APIs. A provider configured with HTTP authentication is reported as unavailable because SENTINEL does not store hardware-monitor credentials.
 
 For the REST path, start LibreHardwareMonitor yourself, enable its Web Server / Remote Web Server on localhost (default port 8085), and then enable SENTINEL's optional sensor reader. Availability of CPU package/core and ASUS embedded-controller fan RPM remains dependent on the exact laptop model, firmware and sensor provider. SENTINEL never installs or launches LHM and never writes fan curves.
+
+
+## Managed hardware sensor provider (v1.0.6)
+
+The Performance view can install and launch the official LibreHardwareMonitor Windows release from its explicit **Install Sensor Engine** control. SENTINEL pins release v0.9.6, verifies the published SHA-256 before extraction, bounds archive size and paths, and configures its HTTP sensor endpoint on `127.0.0.1:8085` only. Collection is read-only and the provider is restarted if its managed process exits while sensor polling is enabled.
+
+The dashboard enumerates provider readings with device, sensor class and unit, including temperatures, CPU/GPU clocks, power, voltage, load and fan RPM when firmware exposes them. A zero-RPM fan value is preserved as an observed stopped-fan state. NVIDIA telemetry remains a separate fallback source. Windows ACPI values are identified as platform thermal zones rather than CPU package readings.
+
+**Hardware limits:** LibreHardwareMonitor cannot create a sensor that firmware or the embedded controller does not expose. Laptop fan RPM, fan curves, CPU package power/voltage and some clock domains may remain unavailable on a particular ASUS model. No values are synthesized. Some sensor access may require LibreHardwareMonitor's optional PawnIO driver; SENTINEL does not silently accept the provider's driver prompt or install a kernel driver. The local endpoint is not exposed to the network.
