@@ -30,3 +30,23 @@ def test_managed_sensor_provider_ui_and_boot_contract_are_present():
     for element_id in ("bootProgress", "bootPct", "bootStage", "bootLog", "bootSkip"):
         assert f'id="{element_id}"' in html
     assert "boot().catch(error =>" in app
+
+
+def test_activity_workspace_and_learned_launch_are_connected():
+    html = (ROOT / "ui" / "index.html").read_text(encoding="utf-8")
+    app = (ROOT / "ui" / "app.js").read_text(encoding="utf-8")
+    assert 'data-v="activityx"' in html
+    assert 'id="v-activityx"' in html
+    assert 'id="ax-auto-launch"' in html
+    assert 'id="ax-hour-chart"' in html
+    assert 'api("/api/activity/launch"' in app
+    assert "function renderActivityIntelligence(" in app
+
+
+def test_dashboard_uses_wpr_as_capture_requirement_and_xperf_as_optional():
+    html = (ROOT / "ui" / "index.html").read_text(encoding="utf-8")
+    app = (ROOT / "ui" / "app.js").read_text(encoding="utf-8")
+    assert "wpr.exe" in app
+    assert "Xperf is optional" in app
+    assert 'id="adv-etw-interval"' in html
+    assert "etw_auto_interval_s" in app
