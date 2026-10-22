@@ -214,6 +214,7 @@ def snapshot():
         "autoruns": STATE.get("autoruns"), "ai": {k: v for k, v in STATE["ai"].items() if k != "transcript"},
         "heart": HEART, "traces": STATE.get("traces", []), "autopilot": CFG["autopilot"],
         "approval_policy": CFG.get("approval_policy", {"auto_approve_reversible_medium": False}),
+        "automation_master": core.get_profile()["automation"],
         "agent": agent_runtime(include_threads=False, include_io=False, include_run=False),
         "sensor_matrix": sensor_matrix(),
         "cfg": {"pause": CFG["pause_ai_when_gaming"], "ollama_url": CFG["ollama_url"], "cloud": {k: CFG["cloud"][k] for k in ("enabled", "url", "model")}, "has_key": bool(CFG["cloud"]["key"])},
