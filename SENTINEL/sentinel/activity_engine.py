@@ -124,6 +124,12 @@ def _ensure_schema() -> None:
     core.db("CREATE INDEX IF NOT EXISTS ix_activity_sessions_started ON activity_sessions(started_at)")
     core.db("CREATE INDEX IF NOT EXISTS ix_activity_sessions_app ON activity_sessions(app_key,started_at)")
     core.db("CREATE INDEX IF NOT EXISTS ix_activity_transitions_lookup ON activity_transitions(from_app_key,weekday_local,hour_local)")
+    # Upgrade the early development schema without losing already observed app identities.
+    columns = {str(row[0]) for row in core.db("SELECT name FROM pragma_table_info('activity_apps')")}
+    if "focus_sessions" not in columns:
+        core.db("ALTER TABLE activity_apps ADD COLUMN focus_sessions INTEGER NOT NULL DEFAULT 0")
+        if "launches" in columns:
+            core.db("UPDATE activity_apps SET focus_sessions=launches")
     core.db("CREATE INDEX IF NOT EXISTS ix_activity_tasks_seen ON activity_tasks(last_seen)")
 
 
@@ -660,6 +666,8 @@ def snapshot() -> dict[str, Any]:
     current = dict(stats.get("current") or {}) if isinstance(stats.get("current"), dict) else {}
     day_cut = now - 86400
     week_cut = now - 7 * 86400
+    total_apps_rows = core.db("SELECT COUNT(*) FROM activity_apps")
+    total_apps_observed = int(total_apps_rows[0][0]) if total_apps_rows else 0
     app_rows = core.db(
         "SELECT a.app_key,a.app_name,a.executable,a.focus_sessions,"
         "COALESCE(SUM(CASE WHEN s.started_at>=? THEN s.foreground_seconds ELSE 0 END),0),"
@@ -744,7 +752,7 @@ def snapshot() -> dict[str, Any]:
             "idle_seconds": round(max(0.0, daily_foreground - daily_active), 1),
             "apps_observed": len([app for app in apps if app["last_seen"] >= day_cut]),
         },
-        "apps": apps, "hourly": hourly, "tasks": tasks,
+        "apps": apps, "total_apps_observed": total_apps_observed, "hourly": hourly, "tasks": tasks,
         "recent_sessions": recent, "suggestions": suggestions,
         "privacy": {
             "raw_window_titles_persisted": False,
