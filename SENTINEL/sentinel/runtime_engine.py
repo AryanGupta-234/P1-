@@ -38,7 +38,7 @@ def evaluate() -> dict[str, Any]:
     else:
         mode = "balanced"
 
-    process_interval = 2.2 if valorant else 1.6 if playing or pressure else 1.0
+    process_interval = 2.2 if valorant else 1.8 if playing else 1.6 if pressure else 1.0
     inventory_multiplier = 3.0 if valorant else 2.0 if playing or pressure else 1.0
     deep_allowed = safety_ready and not playing and available_gib >= 4.5 and cpu_value < 78.0
     fast_allowed = safety_ready and not valorant and available_gib >= 1.8 and cpu_value < 92.0

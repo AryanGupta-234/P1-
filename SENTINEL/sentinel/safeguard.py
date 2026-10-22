@@ -72,6 +72,11 @@ def _read_process_state() -> tuple[bool, bool, float, str]:
     on an old game-presence observation.
     """
     now = time.time()
+    try:
+        if core.off("processes"):
+            return False, False, float("inf"), "process_observer_disabled"
+    except Exception:
+        return False, False, float("inf"), "process_observer_policy_error"
     scanned_at = float(core.STATE.get("proc_scan_at") or 0.0)
     age = max(0.0, now - scanned_at) if scanned_at else float("inf")
     rows = core.STATE.get("procs") or []
@@ -149,9 +154,9 @@ def check_action(kind: str, args: dict | None = None) -> dict[str, Any]:
     current = snapshot()
     target_name = str(args.get("name") or args.get("process_name") or "")
     target_exe = str(args.get("exe") or args.get("path") or "")
-    if is_protected_process(target_name, target_exe):
-        return {"allowed": False, "code": "protected_target", "reason": "Target is a protected Riot/Vanguard or Windows process; SENTINEL will not modify it."}
 
+    # Give the dedicated game-profile interlock its stable policy code before the
+    # broader process deny-list handles all other Riot/Vanguard identities.
     if kind == "game_profile_apply":
         profile_game = str(args.get("game") or args.get("game_name") or "").casefold()
         active_game = str((core.STATE.get("game") or {}).get("name") or "").casefold()
@@ -159,6 +164,9 @@ def check_action(kind: str, args: dict | None = None) -> dict[str, Any]:
         if (profile_game in VALORANT_NAMES or active_game in VALORANT_NAMES
                 or target in VALORANT_NAMES):
             return {"allowed": False, "code": "valorant_profile_forbidden", "reason": "VALORANT process profiles are permanently disabled in SENTINEL. No CPU Set, priority, timer, or power changes will be applied to the game."}
+
+    if is_protected_process(target_name, target_exe):
+        return {"allowed": False, "code": "protected_target", "reason": "Target is a protected Riot/Vanguard or Windows process; SENTINEL will not modify it."}
 
     if kind in MUTATING_ACTIONS and not current["process_detection_complete"]:
         return {"allowed": False, "code": "process_state_unknown", "reason": "The process observer is disabled, stale or incomplete. SENTINEL cannot safely establish that VALORANT is absent, so all system/process mutations and trace capture are blocked."}

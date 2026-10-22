@@ -1838,7 +1838,8 @@ def _wpr_recording_state(result: subprocess.CompletedProcess) -> bool | None:
     active = ("recording is in progress", "recording is active", "wpr is recording",
               "profile is running", "recording profile")
     inactive = ("not recording", "no recording", "not in progress", "no active recording",
-                "there is no recording", "no trace profile running", "not currently recording",
+                "there is no recording", "no trace profile running", "no trace profiles running",
+                "there are no trace profiles running", "not currently recording",
                 "not running", "not active", "no profile is running", "no active profile")
     has_active = any(marker in output for marker in active)
     has_inactive = any(marker in output for marker in inactive)

@@ -1,6 +1,7 @@
 import time
 
-from sentinel import core, safeguard, runtime_engine, memory_engine, security_engine, ai_engine
+from sentinel import core, safeguard, runtime_engine, memory_engine, security_engine, ai_engine, advanced
+from types import SimpleNamespace
 
 
 def test_safeguard_blocks_mutations_during_valorant(monkeypatch):
@@ -89,3 +90,10 @@ def test_runtime_marks_disabled_process_observer_as_degraded(monkeypatch):
     assert state["mode"] == "safety_degraded"
     assert state["deep_ai_allowed"] is False
     assert state["fast_ai_allowed"] is False
+
+
+def test_wpr_status_parser_recognizes_documented_active_and_inactive_messages():
+    active = SimpleNamespace(returncode=0, stdout="WPR recording is in progress...\\nTime since start: 00:00:05", stderr="")
+    inactive = SimpleNamespace(returncode=0, stdout="There are no trace profiles running.", stderr="")
+    assert advanced._wpr_recording_state(active) is True
+    assert advanced._wpr_recording_state(inactive) is False
