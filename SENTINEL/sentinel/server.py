@@ -213,6 +213,7 @@ def snapshot():
         "kernel": STATE.get("kernel", {}),
         "autoruns": STATE.get("autoruns"), "ai": {k: v for k, v in STATE["ai"].items() if k != "transcript"},
         "heart": HEART, "traces": STATE.get("traces", []), "autopilot": CFG["autopilot"],
+        "approval_policy": CFG.get("approval_policy", {"auto_approve_reversible_medium": False}),
         "agent": agent_runtime(include_threads=False, include_io=False, include_run=False),
         "sensor_matrix": sensor_matrix(),
         "cfg": {"pause": CFG["pause_ai_when_gaming"], "ollama_url": CFG["ollama_url"], "cloud": {k: CFG["cloud"][k] for k in ("enabled", "url", "model")}, "has_key": bool(CFG["cloud"]["key"])},
@@ -648,6 +649,14 @@ class H(BaseHTTPRequestHandler):
                         if key not in CFG["autopilot"]: raise ValueError(f"unknown autopilot setting: {key}")
                         if not isinstance(value, bool): raise ValueError(f"autopilot.{key} must be a boolean")
                         CFG["autopilot"][key] = value
+                approval_policy = body.get("approval_policy")
+                if approval_policy is not None:
+                    if not isinstance(approval_policy, dict): raise ValueError("approval_policy settings must be an object")
+                    allowed_policy_keys = {"auto_approve_reversible_medium"}
+                    for key, value in approval_policy.items():
+                        if key not in allowed_policy_keys: raise ValueError(f"unknown approval policy setting: {key}")
+                        if not isinstance(value, bool): raise ValueError(f"approval_policy.{key} must be a boolean")
+                        CFG.setdefault("approval_policy", {})[key] = value
                 save_cfg(CFG)
                 ai.refresh_models()
                 revision = core.config_revision()
