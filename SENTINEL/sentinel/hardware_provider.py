@@ -63,11 +63,26 @@ def _config_path(executable: Path) -> Path:
     return executable.with_suffix(".config")
 
 
-def _config_xml() -> bytes:
+def configured_port() -> int:
+    advanced = core.CFG.get("advanced") if isinstance(core.CFG.get("advanced"), dict) else {}
+    value = advanced.get("lhm_http_port", PORT)
+    if isinstance(value, bool):
+        return PORT
+    try:
+        port = int(value)
+    except (TypeError, ValueError, OverflowError):
+        return PORT
+    return port if 1 <= port <= 65535 else PORT
+
+
+def _config_xml(port: int | None = None) -> bytes:
+    listener_port = configured_port() if port is None else int(port)
+    if not 1 <= listener_port <= 65535:
+        raise ValueError("sensor-provider port must be between 1 and 65535")
     settings = {
         "runWebServerMenuItem": "True",
         "listenerIp": "127.0.0.1",
-        "listenerPort": str(PORT),
+        "listenerPort": str(listener_port),
         "authenticationEnabled": "False",
         "mainboardMenuItem": "True",
         "cpuMenuItem": "True",
@@ -89,10 +104,10 @@ def _config_xml() -> bytes:
     return ET.tostring(root, encoding="utf-8", xml_declaration=True)
 
 
-def _write_config(executable: Path) -> Path:
+def _write_config(executable: Path, port: int | None = None) -> Path:
     path = _config_path(executable)
     temporary = path.with_suffix(path.suffix + ".tmp")
-    temporary.write_bytes(_config_xml())
+    temporary.write_bytes(_config_xml(port))
     os.replace(temporary, path)
     return path
 
@@ -241,10 +256,13 @@ def _process_running(executable: Path | None = None) -> bool:
     return False
 
 
-def _probe() -> dict[str, Any]:
+def _probe(port: int | None = None) -> dict[str, Any]:
+    listener_port = configured_port() if port is None else int(port)
+    if not 1 <= listener_port <= 65535:
+        return {"connected": False, "sensor_count": 0, "reason": "sensor-provider port is outside the valid range"}
     connection = None
     try:
-        connection = http.client.HTTPConnection("127.0.0.1", PORT, timeout=2.0)
+        connection = http.client.HTTPConnection("127.0.0.1", listener_port, timeout=2.0)
         connection.request("GET", "/data.json", headers={"Accept": "application/json", "Connection": "close"})
         response = connection.getresponse()
         if response.status != 200:
@@ -267,6 +285,8 @@ def _probe() -> dict[str, Any]:
             children = node.get("Children")
             if isinstance(children, list):
                 stack.extend(child for child in children[:1000] if isinstance(child, dict))
+        if not isinstance(document.get("Version"), str) or not isinstance(document.get("Children"), list):
+            return {"connected": False, "sensor_count": 0, "reason": "loopback endpoint did not return a LibreHardwareMonitor hardware tree"}
         return {"connected": True, "sensor_count": count, "reason": ""}
     except Exception as exc:
         return {"connected": False, "sensor_count": 0, "reason": f"{type(exc).__name__}: {str(exc)[:160]}"}
@@ -279,17 +299,18 @@ def _probe() -> dict[str, Any]:
 
 
 def status() -> dict[str, Any]:
+    port = configured_port()
     executable = _find_executable()
     running = _process_running(executable) if executable else False
-    probe = _probe()
+    probe = _probe(port)
     return {
         "installed": executable is not None,
         "running": running,
         "connected": bool(probe["connected"]),
         "sensor_count": int(probe["sensor_count"]),
         "version": VERSION if executable else None,
-        "port": PORT,
-        "endpoint": f"http://127.0.0.1:{PORT}/data.json",
+        "port": port,
+        "endpoint": f"http://127.0.0.1:{port}/data.json",
         "executable": str(executable) if executable else None,
         "reason": probe["reason"],
         "driver_policy": "LibreHardwareMonitor may show its optional PawnIO driver prompt; SENTINEL never accepts or installs that driver automatically.",
@@ -313,7 +334,7 @@ def start_if_installed() -> dict[str, Any]:
             return status()
         _LAST_START_ATTEMPT = now
         try:
-            _write_config(executable)
+            _write_config(executable, configured_port())
             flags = getattr(subprocess, "DETACHED_PROCESS", 0) | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
             subprocess.Popen(
                 [str(executable)], cwd=str(executable.parent),
@@ -334,8 +355,9 @@ def install_and_start() -> dict[str, Any]:
     if not core.IS_WIN:
         raise RuntimeError("LibreHardwareMonitor can only be installed on Windows")
     executable = _install()
-    _write_config(executable)
-    if not _process_running(executable) and not _probe()["connected"]:
+    port = configured_port()
+    _write_config(executable, port)
+    if not _process_running(executable) and not _probe(port)["connected"]:
         flags = getattr(subprocess, "DETACHED_PROCESS", 0) | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
         subprocess.Popen(
             [str(executable)], cwd=str(executable.parent),
@@ -343,10 +365,10 @@ def install_and_start() -> dict[str, Any]:
             close_fds=True, creationflags=flags,
         )
     deadline = time.monotonic() + 7.0
-    probe = _probe()
+    probe = _probe(port)
     while not probe["connected"] and time.monotonic() < deadline:
         time.sleep(0.35)
-        probe = _probe()
+        probe = _probe(port)
     provider_status = status()
     connected = bool(probe["connected"])
     message = (
@@ -357,7 +379,7 @@ def install_and_start() -> dict[str, Any]:
     return {
         "ok": True, "installed": True, "running": provider_status["running"] or connected,
         "connected": connected, "sensor_count": int(probe["sensor_count"]),
-        "version": VERSION, "port": PORT, "message": message,
+        "version": VERSION, "port": port, "message": message,
         "first_run_note": provider_status["driver_policy"],
         "provider": provider_status,
     }
