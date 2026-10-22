@@ -1244,6 +1244,16 @@ def _thermal_watch(ts: float) -> None:
     cpu_max = max((float(x.get("value")) for x in cpu_values if isinstance(x.get("value"), (int, float))), default=None)
     try: gpu_temp = float((STATE.get("gpu") or {}).get("temp"))
     except (TypeError, ValueError): gpu_temp = None
+    if gpu_temp is None:
+        # External hardware-monitor GPU temperatures remain a valid measured source
+        # when NVIDIA's nvidia-smi path is absent (for example, an AMD/iGPU device).
+        gpu_values = [
+            _lhm_number(item.get("value"))
+            for item in hardware.get("gpu_temperatures", [])
+            if isinstance(item, dict)
+        ]
+        gpu_values = [value for value in gpu_values if value is not None and -10 <= value <= 130]
+        gpu_temp = max(gpu_values) if gpu_values else None
     for sensor, value in (("cpu", cpu_max), ("gpu", gpu_temp)):
         if value is None: continue
         threshold = _cpu_temperature_threshold(sensor)
