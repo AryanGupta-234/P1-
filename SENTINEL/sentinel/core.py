@@ -37,6 +37,11 @@ DEFAULTS = {
         "wpr_trace": False,
         "etw_capture": False,
     },
+    "approval_policy": {
+        # Medium-risk automation is limited to a fixed reversible allowlist.
+        # The separate Feature Control automation master switch must also be on.
+        "auto_approve_reversible_medium": True,
+    },
     "retention_days": 14,
     "advanced": {
         "etw_enabled": False, "lhm_enabled": False, "cpu_temp_warn_c": 88.0,
