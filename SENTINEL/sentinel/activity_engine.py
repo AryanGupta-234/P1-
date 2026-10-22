@@ -141,8 +141,11 @@ def semantic_terms(window_title: str, app_name: str = "") -> list[str]:
         raw = re.sub(r"[\\w.+-]+@[\\w.-]+\\.[A-Za-z]{2,}", " ", raw)
     raw = re.sub(r"(?i)\\b[A-Z]:\\\\[^\\s|]+", " ", raw)
     raw = re.sub(r"(?i)\\b[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}\\b", " ", raw)
+    app_token_source = str(app_name or "").replace("\\", "/").rsplit("/", 1)[-1]
+    if "." in app_token_source:
+        app_token_source = app_token_source.rsplit(".", 1)[0]
     candidates = []
-    for token in _TOKEN_RE.findall(raw + " " + str(app_name or "")):
+    for token in _TOKEN_RE.findall(raw + " " + app_token_source):
         word = token.casefold().strip("._-")
         if (len(word) < 3 or word in _STOP_WORDS or word.isdigit()
                 or any(ch.isdigit() for ch in word) and len(word) > 12):
@@ -427,7 +430,8 @@ def _maybe_auto_launch(current: dict[str, Any], now: float) -> None:
         return
     if current.get("is_game") or current.get("fullscreen"):
         return
-    if current.get("idle_seconds") is not None and current["idle_seconds"] > settings["idle_after_seconds"]:
+    idle_for = current.get("idle_for_seconds")
+    if idle_for is not None and float(idle_for) > settings["idle_after_seconds"]:
         return
     if float(current.get("active_seconds") or 0) < 60.0:
         return
@@ -539,6 +543,7 @@ def _sample_once(now: float | None = None, snapshot: dict[str, Any] | None = Non
     current["last_sample"] = ts
     current["foreground_seconds"] += elapsed
     idle = item.get("idle_seconds")
+    current["idle_for_seconds"] = float(idle) if idle is not None else None
     is_active = idle is None or float(idle) <= settings["idle_after_seconds"]
     if is_active:
         current["active_seconds"] += elapsed
