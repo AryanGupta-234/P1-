@@ -1314,4 +1314,17 @@ function alertInsight(i) {
     notifiedInsights.add(key); try { new Notification(review ? "SENTINEL process review" : "SENTINEL: " + (i.title || "Serious lag"), { body: (i.detail || "") + (review ? " — advisory only; inspect the Process tab before requesting a close." : "") }); } catch (e) { }
   }
 }
-boot();
+boot().catch(error => {
+  const message = error && error.message ? error.message : String(error);
+  console.error("SENTINEL startup failed", error);
+  try {
+    const stage = $("#bootStage");
+    if (stage) stage.textContent = "STARTUP DEGRADED";
+    endBoot();
+  } catch (endError) {
+    console.error("SENTINEL could not close its startup overlay", endError);
+    const overlay = document.getElementById("boot");
+    if (overlay) overlay.classList.add("done");
+  }
+  toast("Startup incomplete: " + message.slice(0, 180), "bad");
+});
