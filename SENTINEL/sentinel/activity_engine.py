@@ -207,11 +207,25 @@ def _window_snapshot() -> dict[str, Any] | None:
     from ctypes import wintypes
 
     user32 = ctypes.windll.user32
+    user32.GetForegroundWindow.argtypes = []
+    user32.GetForegroundWindow.restype = wintypes.HWND
+    user32.GetWindowThreadProcessId.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.DWORD)]
+    user32.GetWindowThreadProcessId.restype = wintypes.DWORD
+    user32.GetWindowTextLengthW.argtypes = [wintypes.HWND]
+    user32.GetWindowTextLengthW.restype = ctypes.c_int
+    user32.GetWindowTextW.argtypes = [wintypes.HWND, wintypes.LPWSTR, ctypes.c_int]
+    user32.GetWindowTextW.restype = ctypes.c_int
+    user32.GetClassNameW.argtypes = [wintypes.HWND, wintypes.LPWSTR, ctypes.c_int]
+    user32.GetClassNameW.restype = ctypes.c_int
+    user32.GetWindowRect.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.RECT)]
+    user32.GetWindowRect.restype = wintypes.BOOL
+    user32.GetSystemMetrics.argtypes = [ctypes.c_int]
+    user32.GetSystemMetrics.restype = ctypes.c_int
     hwnd = user32.GetForegroundWindow()
     if not hwnd:
         return None
     pid = wintypes.DWORD(0)
-    user32.GetWindowThreadProcessId(wintypes.HWND(hwnd), ctypes.byref(pid))
+    user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
     if not pid.value or int(pid.value) == os.getpid():
         return None
     try:
@@ -220,13 +234,16 @@ def _window_snapshot() -> dict[str, Any] | None:
             name = process.name() or "unknown"
             executable = process.exe() or ""
             created = float(process.create_time())
-        window_length = user32.GetWindowTextLengthW(wintypes.HWND(hwnd))
-        buffer = ctypes.create_unicode_buffer(min(_MAX_WINDOW_TITLE_CHARS + 1, max(2, int(window_length) + 1)))
-        if window_length:
-            user32.GetWindowTextW(wintypes.HWND(hwnd), buffer, len(buffer))
-        title = buffer.value[:_MAX_WINDOW_TITLE_CHARS]
+        settings = _settings()
+        title = ""
+        if settings["semantic_context"]:
+            window_length = user32.GetWindowTextLengthW(hwnd)
+            buffer = ctypes.create_unicode_buffer(min(_MAX_WINDOW_TITLE_CHARS + 1, max(2, int(window_length) + 1)))
+            if window_length:
+                user32.GetWindowTextW(hwnd, buffer, len(buffer))
+            title = buffer.value[:_MAX_WINDOW_TITLE_CHARS]
         class_buffer = ctypes.create_unicode_buffer(160)
-        user32.GetClassNameW(wintypes.HWND(hwnd), class_buffer, len(class_buffer))
+        user32.GetClassNameW(hwnd, class_buffer, len(class_buffer))
         window_class = class_buffer.value[:160]
 
         idle_seconds = None
@@ -234,8 +251,12 @@ def _window_snapshot() -> dict[str, Any] | None:
             _fields_ = [("cbSize", wintypes.UINT), ("dwTime", wintypes.DWORD)]
         input_info = LASTINPUTINFO()
         input_info.cbSize = ctypes.sizeof(LASTINPUTINFO)
+        user32.GetLastInputInfo.argtypes = [ctypes.POINTER(LASTINPUTINFO)]
+        user32.GetLastInputInfo.restype = wintypes.BOOL
         if user32.GetLastInputInfo(ctypes.byref(input_info)):
             kernel32 = ctypes.windll.kernel32
+            kernel32.GetTickCount.argtypes = []
+            kernel32.GetTickCount.restype = wintypes.DWORD
             tick_now = int(kernel32.GetTickCount()) & 0xFFFFFFFF
             idle_seconds = ((tick_now - int(input_info.dwTime)) & 0xFFFFFFFF) / 1000.0
 
@@ -268,7 +289,6 @@ def _window_snapshot() -> dict[str, Any] | None:
         if own_session is not None and target_session is not None and target_session != own_session:
             return None
 
-        settings = _settings()
         terms = semantic_terms(title, app_name) if settings["semantic_context"] else semantic_terms("", app_name)
         return {
             "pid": process_id, "process_created": created, "process_name": process_name,
@@ -373,9 +393,10 @@ def _suggestions(current_app_key: str, now: float | None = None) -> list[dict[st
         "SELECT t.to_app_key, SUM(t.observations) AS observations, MAX(t.last_seen), "
         "a.app_name,a.executable FROM activity_transitions t "
         "JOIN activity_apps a ON a.app_key=t.to_app_key "
-        "WHERE t.from_app_key=? AND t.weekday_local=? AND ABS(t.hour_local-?)<=2 "
+        "WHERE t.from_app_key=? AND t.weekday_local=? "
+        "AND MIN(ABS(t.hour_local-?),24-ABS(t.hour_local-?))<=2 "
         "GROUP BY t.to_app_key,a.app_name,a.executable ORDER BY observations DESC LIMIT 8",
-        (current_app_key, weekday, hour),
+        (current_app_key, weekday, hour, hour),
     )
     suggestions = []
     for app_key, observations, last_seen, app_name, executable in rows:
