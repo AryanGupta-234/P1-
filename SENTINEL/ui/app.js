@@ -590,6 +590,7 @@ async function loadAdvanced(force = false) {
     if (loadError) { loadError.hidden = true; loadError.textContent = ""; }
     renderAdvLiveMetrics(d.live_metrics || {});
     const game = d.game || null, gpu = d.gpu || {}, hs = d.hardware_sensors || {}, cfg = (d.settings || d.advanced_settings || {});
+    const provider = d.hardware_provider || {};
     const etw = d.etw_engine || {};
     $("#adv-game").textContent = game?.name || "STANDBY";
     $("#adv-session").textContent = d.sessions?.[0]?.status === "active" ? `Session #${d.sessions[0].id} · ${dur(Date.now()/1000 - d.sessions[0].started_at)}` : "No active session tracked";
@@ -610,35 +611,81 @@ async function loadAdvanced(force = false) {
     $("#adv-baseline-count").textContent = baseEntries.reduce((n, [,x])=>n+(x.samples||0),0).toLocaleString();
     $("#adv-baseline-heading").textContent = `${d.game_key || "No active game"} · local hour ${d.baseline_hour ?? "--"}`;
     $("#adv-undo-count").textContent = (d.action_journal || []).filter(x=>x.undo_available && x.changed && !x.reverted_at).length;
-    const cpuItems = Array.isArray(hs.cpu_temperatures) ? hs.cpu_temperatures : []; const cpuVals = cpuItems.map(x=>Number(x.value)).filter(Number.isFinite);
+    const cpuItems = Array.isArray(hs.cpu_temperatures) ? hs.cpu_temperatures : [];
+    const firstReading = rows => Array.isArray(rows) ? rows.find(x => x && x.value != null && Number.isFinite(Number(x.value))) || null : null;
+    const sensorDisplay = (sensor, fallback, unit) => sensor
+      ? `${avNum(sensor.value, 1)} ${sensor.unit || unit || ""}`.trim()
+      : fallback == null ? "unavailable" : `${fallback} ${unit || ""}`.trim();
+    const cpuVals = cpuItems.map(x => Number(x.value)).filter(Number.isFinite);
     const cpuTemp = cpuVals.length ? Math.max(...cpuVals) : null;
     const sensorProvider = hs.provider || "External hardware monitor";
     const acpiZone = hs.cpu_source === "Windows ACPI WMI";
     if ($("#adv-cpu-title")) $("#adv-cpu-title").textContent = acpiZone ? "Platform thermal zone" : "CPU package";
     if ($("#adv-cpu-label")) $("#adv-cpu-label").textContent = acpiZone ? "ZONE °C" : "CPU °C";
     const cpuSrc = hs.available
-      ? `${hs.cpu_source || sensorProvider} · ${cpuItems.length} temperature reading(s)${hs.cpu_reason ? " · " + hs.cpu_reason : cpuItems.length ? "" : " · CPU sensor not exposed"}`
+      ? `${hs.source || hs.cpu_source || sensorProvider} · ${cpuItems.length} temperature reading(s)${hs.cpu_reason ? " · " + hs.cpu_reason : cpuItems.length ? "" : " · CPU sensor not exposed"}`
       : (hs.reason || "Optional sensor provider unavailable");
     advGauge("adv-cpu-dial", cpuTemp, Number(cfg.cpu_temp_warn_c || 88), "adv-cpu-temp", "adv-cpu-source", cpuSrc);
-    const gpuTemp = gpu.temp != null && Number.isFinite(Number(gpu.temp)) ? Number(gpu.temp) : null;
-    advGauge("adv-gpu-dial", gpuTemp, Number(cfg.gpu_temp_warn_c || 82), "adv-gpu-temp", "adv-gpu-source", gpu.name ? `${gpu.name} · NVIDIA nvidia-smi` : "NVIDIA telemetry unavailable");
+    const lhmGpuTemperature = firstReading(hs.gpu_temperatures);
+    const gpuTemp = gpu.temp != null && Number.isFinite(Number(gpu.temp)) ? Number(gpu.temp)
+      : lhmGpuTemperature ? Number(lhmGpuTemperature.value) : null;
+    const gpuTempSource = lhmGpuTemperature ? `${sensorProvider} · ${lhmGpuTemperature.name}`
+      : gpu.name ? `${gpu.name} · NVIDIA nvidia-smi` : "GPU temperature unavailable";
+    advGauge("adv-gpu-dial", gpuTemp, Number(cfg.gpu_temp_warn_c || 82), "adv-gpu-temp", "adv-gpu-source", gpuTempSource);
     $("#adv-cpu-threshold-note").textContent = `Warning threshold ${fmt(cfg.cpu_temp_warn_c ?? 88, 0)} °C`;
     $("#adv-gpu-throttle").textContent = (gpu.throttle || []).length ? `Throttle flags: ${gpu.throttle.join(", ")}` : "No active NVIDIA throttle flag reported";
-    const lhmFans = (Array.isArray(hs.fan_rpm) ? hs.fan_rpm : []).filter(x=>Number.isFinite(Number(x.value)) && Number(x.value)>0);
-    const fanValue = lhmFans[0]?.value ?? gpu.fan_speed_pct;
-    const fanSource = lhmFans.length
-      ? `${lhmFans[0].name || "Fan"} · ${sensorProvider} RPM`
-      : (gpu.fan_speed_pct != null
-        ? `nvidia-smi fan.speed percentage (not RPM)${hs.fan_reason ? " · " + hs.fan_reason : ""}`
-        : (hs.fan_reason || "Fan telemetry unavailable / unsupported"));
-    $("#adv-fan-value").textContent = lhmFans.length ? `${avNum(fanValue,0)} RPM` : fanValue != null ? `${avNum(fanValue,0)}%` : "--";
+    const lhmFans = (Array.isArray(hs.fan_rpm) ? hs.fan_rpm : [])
+      .filter(x => x && x.value != null && Number.isFinite(Number(x.value)) && Number(x.value) >= 0);
+    const fanSensor = lhmFans[0] || null;
+    const fanValue = fanSensor ? Number(fanSensor.value) : gpu.fan_speed_pct;
+    const fanSource = fanSensor
+      ? `${fanSensor.name || "Fan"} · ${sensorProvider} RPM`
+      : (gpu.fan_speed_pct != null ? `nvidia-smi fan.speed percentage (not RPM)${hs.fan_reason ? " · " + hs.fan_reason : ""}`
+        : (hs.fan_reason || "Fan RPM telemetry unavailable / unsupported"));
+    $("#adv-fan-value").textContent = fanSensor ? `${avNum(fanValue, 0)} RPM` : fanValue != null ? `${avNum(fanValue, 0)}%` : "--";
     $("#adv-fan-source").textContent = fanSource;
-    const rotor = $("#adv-fan"); const fanHz = lhmFans.length ? Math.max(.12, Math.min(3, 60/Math.max(1, Number(fanValue)))) : fanValue != null ? Math.max(.45, 4 - Number(fanValue)*.035) : 1.5;
-    rotor.style.animationDuration = `${fanHz}s`; rotor.classList.toggle("running", fanValue != null);
+    const rotor = $("#adv-fan");
+    const fanHz = fanSensor ? Math.max(.12, Math.min(3, 60 / Math.max(1, fanValue))) : fanValue != null ? Math.max(.45, 4 - Number(fanValue) * .035) : 1.5;
+    rotor.style.animationDuration = `${fanHz}s`;
+    rotor.classList.toggle("running", fanValue != null && Number(fanValue) > 0);
     const cores = Array.isArray(hs.per_core_temperatures) ? hs.per_core_temperatures : [];
     $("#adv-core-meta").textContent = cores.length ? `${cores.length} per-core temperature sensor(s)` : hs.available ? "Per-core sensors not exposed by this provider" : "Hardware temperature provider unavailable";
-    $("#adv-core-map").innerHTML = cores.length ? cores.map((x,i)=>{const n=Number(x.value), pct=Math.max(0,Math.min(100,n/105*100)); return `<div class="core-cell"><b>${esc(x.name || `Core ${i}`)}</b><small>${avNum(n,1)} °C</small><div class="heat-bar"><i style="width:${pct}%"></i></div></div>`;}).join("") : `<div class="empty">${esc(hs.cpu_reason || "Per-core heat sensors are unavailable. Start an external LHM instance and enable the optional reader.")}</div>`;
-    $("#adv-gpu-stats").innerHTML = `<div class="row"><b>GPU clock</b><span>${esc(gpu.clk ?? "--")} MHz</span></div><div class="row"><b>Power draw</b><span>${esc(gpu.pwr ?? "--")} W</span></div><div class="row"><b>Power limit</b><span>${esc(gpu.pwrlim ?? "--")} W</span></div><div class="row"><b>GPU utilization</b><span>${esc(gpu.util ?? "--")}%</span></div><div class="row"><b>VRAM</b><span>${esc(gpu.vram ?? "--")} / ${esc(gpu.vramtot ?? "--")} MiB</span></div><div class="row"><b>Fan telemetry</b><span>${esc(gpu.fan_speed_pct == null ? "unavailable" : gpu.fan_speed_pct + "%")}</span></div>`;
+    $("#adv-core-map").innerHTML = cores.length ? cores.map((x,i)=>{const n=Number(x.value), pct=Math.max(0,Math.min(100,n/105*100)); return `<div class="core-cell"><b>${esc(x.name || `Core ${i}`)}</b><small>${avNum(n,1)} °C</small><div class="heat-bar"><i style="width:${pct}%"></i></div></div>`;}).join("") : `<div class="empty">${esc(hs.cpu_reason || "Per-core heat sensors are unavailable. Start the managed sensor provider to check hardware support.")}</div>`;
+    const cpuClock = firstReading(hs.cpu_clocks), gpuClock = firstReading(hs.gpu_clocks);
+    const cpuPower = firstReading(hs.cpu_power), gpuPower = firstReading(hs.gpu_power);
+    const cpuVoltage = firstReading(hs.cpu_voltage), gpuVoltage = firstReading(hs.gpu_voltage);
+    const cpuLoad = firstReading(hs.cpu_load), gpuLoad = firstReading(hs.gpu_load);
+    const stats = [
+      ["CPU clock", sensorDisplay(cpuClock, null, "MHz")],
+      ["CPU package power", sensorDisplay(cpuPower, null, "W")],
+      ["CPU voltage", sensorDisplay(cpuVoltage, null, "V")],
+      ["CPU load sensor", sensorDisplay(cpuLoad, null, "%")],
+      ["GPU clock", sensorDisplay(gpuClock, gpu.clk, "MHz")],
+      ["GPU power", sensorDisplay(gpuPower, gpu.pwr, "W")],
+      ["GPU power limit", gpu.pwrlim == null ? "unavailable" : `${gpu.pwrlim} W`],
+      ["GPU voltage", sensorDisplay(gpuVoltage, null, "V")],
+      ["GPU load", sensorDisplay(gpuLoad, gpu.util, "%")],
+      ["VRAM", gpu.vram == null ? "unavailable" : `${gpu.vram} / ${gpu.vramtot ?? "--"} MiB`],
+      ["Fan reading", fanSensor ? `${avNum(fanSensor.value, 0)} RPM` : gpu.fan_speed_pct == null ? "unavailable" : `${gpu.fan_speed_pct}% (GPU fan percentage)`],
+    ];
+    $("#adv-gpu-stats").innerHTML = stats.map(([label,value]) => `<div class="row"><b>${esc(label)}</b><span>${esc(value)}</span></div>`).join("");
+    const listedSensors = Array.isArray(hs.sensors) ? hs.sensors : [];
+    const sensorRows = listedSensors.length ? listedSensors : [
+      ...(hs.cpu_temperatures || []), ...(hs.gpu_temperatures || []), ...(hs.fan_rpm || []),
+      ...(hs.cpu_clocks || []), ...(hs.gpu_clocks || []), ...(hs.cpu_power || []),
+      ...(hs.gpu_power || []), ...(hs.cpu_voltage || []), ...(hs.gpu_voltage || []),
+    ];
+    $("#adv-sensor-count").textContent = `${sensorRows.length} numeric reading(s) · ${sensorProvider}`;
+    $("#adv-sensor-inventory").innerHTML = sensorRows.length
+      ? sensorRows.slice(0,100).map(sensor => `<div class="sensor-row"><div><b>${esc(sensor.name || "Unnamed sensor")}</b><small>${esc(sensor.parent || sensor.device_class || sensorProvider)} · ${esc(sensor.type || "Sensor")} · ${esc(sensor.device_class || "platform")}</small></div><strong>${sensor.value == null ? "--" : avNum(sensor.value, 2)} ${esc(sensor.unit || (sensor.type === "Temperature" ? "°C" : ""))}</strong></div>`).join("") + (sensorRows.length > 100 ? `<div class="empty">${sensorRows.length - 100} additional sensor rows omitted from this view.</div>` : "")
+      : `<div class="empty">${esc(hs.reason || "No numeric hardware sensors have been returned by the provider.")}</div>`;
+    const providerButton = $("#adv-provider-install");
+    if (providerButton) providerButton.textContent = provider.connected ? "SENSOR ENGINE CONNECTED" : provider.installed ? "RETRY SENSOR ENGINE" : "INSTALL SENSOR ENGINE";
+    const providerStatus = $("#adv-provider-status");
+    if (providerStatus) providerStatus.textContent = provider.connected
+      ? `CONNECTED · ${provider.sensor_count || hs.sensor_count || 0} numeric sensors · localhost:${provider.port || 8085}`
+      : provider.installed ? (provider.running ? "Provider is running; waiting for its local sensor endpoint." : "Provider installed but not running.")
+      : "Not installed · official package is checksum-verified before extraction.";
     advSpark("adv-clock-spark","gpuclk"); advSpark("adv-power-spark","gpupwr"); advPowerClockWaterfall();
     $("#adv-thermal-timeline").innerHTML = advRows((d.thermal_events || []).slice(0,16).map(x=>`<div class="event"><b>${esc(x.sensor)} · ${esc(x.event)}</b><small>${hms(x.ts)} · ${x.value==null?"value unavailable":avNum(x.value,1)+" °C"} ${esc(x.detail || "")}</small></div>`), "No thermal warning or GPU throttle transitions have been recorded.");
     const drivers = d.etw_engine?.driver_modules || [];
@@ -676,6 +723,25 @@ function advProfilePayload(){
 let advDryRun = null;
 function initAdvanced(){
   $("#adv-refresh").onclick=()=>loadAdvanced(true);
+  const providerButton = $("#adv-provider-install");
+  if (providerButton) providerButton.onclick = async () => {
+    const original = providerButton.textContent;
+    providerButton.disabled = true;
+    providerButton.textContent = "VERIFYING & STARTING…";
+    try {
+      const result = await api("/api/hardware/provider/start", {});
+      if (result.error) throw new Error(result.error);
+      toast(result.message || "Sensor provider start request completed", result.connected ? "ok" : "warn");
+      await loadAdvanced(true);
+    } catch (error) {
+      const message = error?.message || String(error);
+      toast("Sensor provider: " + message, "bad");
+      $("#adv-provider-status").textContent = message;
+    } finally {
+      providerButton.disabled = false;
+      providerButton.textContent = original;
+    }
+  };
   $("#adv-profile-save").onclick=async()=>{const r=await api("/api/advanced/game-profile/save",{game:$("#adv-profile-game").value.trim(),profile:advProfilePayload()});if(r.error)return toast(r.error,"bad");toast("Per-game profile saved to SQLite","ok");loadAdvanced(true);};
   $("#adv-profile-propose").onclick=async()=>{const r=await api("/api/advanced/game-profile/propose-current",{});if(r.error)return toast(r.error,"bad");toast(`Profile proposal #${r.id} queued for approval in CONTROL`,"warn");loadActions();};
   $("#adv-tuner-start").onclick=async()=>{const kind=$("#adv-tuner-kind").value,args=kind==="timer_resolution"?{milliseconds:1}:{};const r=await api("/api/advanced/tuner/start",{kind,args,metric:$("#adv-tuner-metric").value,direction:$("#adv-tuner-direction").value});if(r.error)return toast(r.error,"bad");toast(`Experiment #${r.action_id} queued. Approve it in CONTROL to start the measured trial.`,"warn");loadActions();loadAdvanced(true);};
@@ -732,27 +798,60 @@ function initAdvanced(){
 }
 
 /* ---------- additive AIE intelligence: evidence, memory, planning and read-only UIA ---------- */
-let IX = { state: [], memories: [], goals: [], runtime: null };
+let IX = { state: [], memories: [], goals: [], runtime: {} };
 let ixBusy = false;
+function ixList(value, ...keys) {
+  if (Array.isArray(value)) return value.filter(item => item && typeof item === "object" && !Array.isArray(item));
+  if (!value || typeof value !== "object") return [];
+  for (const key of keys) {
+    if (Array.isArray(value[key])) return value[key].filter(item => item && typeof item === "object" && !Array.isArray(item));
+  }
+  return [];
+}
+function ixObject(value) {
+  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+}
 async function loadIntelligence() {
-  if (ixBusy) return; ixBusy = true;
+  if (ixBusy) return;
+  ixBusy = true;
   try {
-    const [ctx, mem, activeGoals, pausedGoals, completedGoals, runtime] = await Promise.all([
+    const [ctxRaw, memRaw, activeRaw, pausedRaw, completedRaw, runtimeRaw] = await Promise.all([
       api("/api/intelligence/context"), api("/api/intelligence/memories?limit=100"),
       api("/api/intelligence/goals?status=active"), api("/api/intelligence/goals?status=paused"),
       api("/api/intelligence/goals?status=completed"), api("/api/intelligence/runtime")
     ]);
-    if (ctx.error) throw new Error(ctx.error);
-    IX.state = ctx.ranked_state || []; IX.memories = mem.error ? [] : mem; IX.goals = [...(activeGoals.error ? [] : activeGoals), ...(pausedGoals.error ? [] : pausedGoals), ...(completedGoals.error ? [] : completedGoals)]; IX.runtime = runtime;
-    const total = (ctx.coverage && Object.values(ctx.coverage).reduce((n, x) => n + (x.observed_entities || 0), 0)) || 0;
-    $("#ix-count").textContent = total.toLocaleString(); $("#ix-count-m").style.width = Math.min(100, total / 5) + "%";
-    $("#ix-memory-count").textContent = IX.memories.length.toLocaleString(); $("#ix-memory-m").style.width = Math.min(100, IX.memories.length * 2) + "%";
-    const activeGoalCount = IX.goals.filter(g => g.status === "active").length;
-    $("#ix-goal-count").textContent = activeGoalCount.toLocaleString(); $("#ix-goal-m").style.width = Math.min(100, activeGoalCount * 10) + "%";
-    $("#ix-state-meta").textContent = `${IX.state.length} ranked records · ${ctx.new_evidence_records || 0} new evidence events`;
-    renderIXState(); renderIXMemories(); await renderIXGoals(); renderIXRuntime();
-  } catch (e) { toast("Intelligence refresh: " + e.message, "warn"); }
-  finally { ixBusy = false; }
+    const ctx = ixObject(ctxRaw);
+    if (ctx.error) throw new Error(String(ctx.error));
+    IX.state = ixList(ctx.ranked_state, "ranked_state", "items", "rows");
+    IX.memories = ixList(memRaw, "memories", "items", "results", "rows");
+    IX.goals = [
+      ...ixList(activeRaw, "goals", "items", "rows"),
+      ...ixList(pausedRaw, "goals", "items", "rows"),
+      ...ixList(completedRaw, "goals", "items", "rows")
+    ];
+    IX.runtime = ixObject(runtimeRaw.error ? {} : runtimeRaw);
+    const coverage = ixObject(ctx.coverage);
+    const total = Object.values(coverage).reduce((sum, item) => {
+      const count = Number(ixObject(item).observed_entities || 0);
+      return sum + (Number.isFinite(count) ? count : 0);
+    }, 0);
+    $("#ix-count").textContent = total.toLocaleString();
+    $("#ix-count-m").style.width = Math.min(100, total / 5) + "%";
+    $("#ix-memory-count").textContent = IX.memories.length.toLocaleString();
+    $("#ix-memory-m").style.width = Math.min(100, IX.memories.length * 2) + "%";
+    const activeGoalCount = IX.goals.filter(goal => goal.status === "active").length;
+    $("#ix-goal-count").textContent = activeGoalCount.toLocaleString();
+    $("#ix-goal-m").style.width = Math.min(100, activeGoalCount * 10) + "%";
+    $("#ix-state-meta").textContent = `${IX.state.length} ranked records · ${Number(ctx.new_evidence_records || 0)} new evidence events`;
+    renderIXState();
+    renderIXMemories();
+    await renderIXGoals();
+    renderIXRuntime();
+  } catch (error) {
+    toast("Intelligence refresh: " + (error?.message || String(error)), "warn");
+  } finally {
+    ixBusy = false;
+  }
 }
 function renderIXState() {
   const rows = Array.isArray(IX.state) ? IX.state.slice(0, 24) : [];
@@ -773,7 +872,7 @@ function renderIXState() {
     </div>`;
   }).join("") || '<div class="empty">No evidence-backed environment rows yet. Refresh after collectors have completed an inventory scan.</div>';
 
-  $('[data-state-evidence]').forEach(button => {
+  $$('[data-state-evidence]').forEach(button => {
     button.onclick = async () => {
       const card = button.closest(".ix-state-row");
       const box = card?.querySelector(".ix-evidence");
@@ -818,22 +917,42 @@ function renderIXMemories() {
 }
 async function renderIXGoals() {
   const goalList = [];
-  for (const g of IX.goals) {
-    const drafts = await api("/api/intelligence/goal/plan-drafts?goal_id=" + encodeURIComponent(g.id) + "&status=pending_review");
-    goalList.push({ ...g, drafts: drafts.error ? [] : drafts });
+  for (const raw of ixList(IX.goals, "goals")) {
+    const progress = ixObject(raw.progress);
+    const goal = {
+      ...raw,
+      progress: { completed: Number(progress.completed || 0) || 0, total: Number(progress.total || 0) || 0 },
+      steps: ixList(raw.steps, "steps").map(step => ({
+        ...step, dependencies: Array.isArray(step.dependencies) ? step.dependencies : [],
+      })),
+    };
+    const response = await api("/api/intelligence/goal/plan-drafts?goal_id=" + encodeURIComponent(goal.id) + "&status=pending_review");
+    const drafts = ixList(response, "drafts", "items", "rows").map(draft => {
+      const plan = ixObject(draft.plan);
+      return {
+        ...draft,
+        plan: {
+          ...plan,
+          steps: ixList(plan.steps, "steps").map(step => ({
+            ...step, depends_on: Array.isArray(step.depends_on) ? step.depends_on : [],
+          })),
+        },
+      };
+    });
+    goalList.push({ ...goal, drafts });
   }
   $("#ix-goals").innerHTML = goalList.map(g => `<div class="ix-goal">
-    <div class="ix-goal-head"><div><b>${esc(g.title)}</b><small>${g.progress.completed}/${g.progress.total} steps completed · ${Math.round(g.progress.total ? g.progress.completed / g.progress.total * 100 : 0)}% · ${esc(g.status)}</small></div>
+    <div class="ix-goal-head"><div><b>${esc(g.title || "Untitled goal")}</b><small>${g.progress.completed}/${g.progress.total} steps completed · ${Math.round(g.progress.total ? g.progress.completed / g.progress.total * 100 : 0)}% · ${esc(g.status || "unknown")}</small></div>
       <div class="ix-actions"><button class="btn sm" data-plan="${esc(g.id)}" ${g.status !== "active" ? "disabled" : ""}>SUGGEST PLAN</button><button class="btn sm" data-add-step="${esc(g.id)}" ${g.status !== "active" ? "disabled" : ""}>ADD STEP</button>${g.status === "active" || g.status === "paused" ? `<button class="btn sm" data-goal-status="${esc(g.id)}" data-next-status="${g.status === "paused" ? "active" : "paused"}">${g.status === "paused" ? "RESUME" : "PAUSE"}</button>` : ""}<button class="btn sm" data-goal-history="${esc(g.id)}">HISTORY</button></div></div>
     <div class="ix-progress"><i style="width:${g.progress.total ? g.progress.completed / g.progress.total * 100 : 0}%"></i></div>
     <div class="ix-goal-history"></div>
-    <div class="list">${g.steps.map(st => `<div class="row"><div><b>${esc(st.title)}</b><small>${esc(st.status)}${st.dependencies.length ? " · depends on " + st.dependencies.length + " step(s)" : ""}</small></div><button class="btn sm" data-step-done="${esc(g.id)}" data-step-id="${esc(st.id)}" ${g.status !== "active" || st.status === "completed" || !st.ready ? "disabled" : ""}>${st.status === "completed" ? "DONE" : st.ready ? "COMPLETE" : "WAITING"}</button></div>`).join("") || '<div class="empty">No steps yet. Add a step or request a local plan suggestion.</div>'}</div>
-    ${g.drafts.map(d => `<div class="ix-draft"><div class="ix-draft-head"><b>PLAN DRAFT · ${d.plan.steps.length} STEPS</b><span class="tag">REVIEW REQUIRED</span></div>${d.plan.steps.map((st,i) => `<div class="ix-plan-step"><b>${i+1}. ${esc(st.title)}</b><small>${esc(st.description)}${st.depends_on.length ? " · depends on " + st.depends_on.map(x=>x+1).join(", ") : ""}</small></div>`).join("")}<div class="ix-actions"><button class="btn or sm" data-accept-draft="${esc(d.id)}">ACCEPT STEPS</button><button class="btn sm" data-reject-draft="${esc(d.id)}">REJECT</button></div></div>`).join("")}
+    <div class="list">${g.steps.map(st => `<div class="row"><div><b>${esc(st.title || "Untitled step")}</b><small>${esc(st.status || "pending")}${st.dependencies.length ? " · depends on " + st.dependencies.length + " step(s)" : ""}</small></div><button class="btn sm" data-step-done="${esc(g.id)}" data-step-id="${esc(st.id)}" ${g.status !== "active" || st.status === "completed" || !st.ready ? "disabled" : ""}>${st.status === "completed" ? "DONE" : st.ready ? "COMPLETE" : "WAITING"}</button></div>`).join("") || '<div class="empty">No steps yet. Add a step or request a local plan suggestion.</div>'}</div>
+    ${g.drafts.map(d => `<div class="ix-draft"><div class="ix-draft-head"><b>PLAN DRAFT · ${d.plan.steps.length} STEPS</b><span class="tag">REVIEW REQUIRED</span></div>${d.plan.steps.map((st,i) => `<div class="ix-plan-step"><b>${i+1}. ${esc(st.title || "Untitled step")}</b><small>${esc(st.description || "")}${st.depends_on.length ? " · depends on " + st.depends_on.map(x=>Number(x)+1).join(", ") : ""}</small></div>`).join("")}<div class="ix-actions"><button class="btn or sm" data-accept-draft="${esc(d.id)}">ACCEPT STEPS</button><button class="btn sm" data-reject-draft="${esc(d.id)}">REJECT</button></div></div>`).join("")}
     </div>`).join("") || '<div class="empty">No goals yet. Create a goal to begin prospective planning.</div>';
   $$('[data-plan]').forEach(b => b.onclick = async () => { b.disabled = true; b.textContent = "THINKING…"; const r = await api("/api/intelligence/goal/suggest-plan", { goal_id: b.dataset.plan }); if (r.error) toast(r.error, "warn"); else toast("Plan draft created — review before accepting", "ok"); loadIntelligence(); });
   $$('[data-add-step]').forEach(b => b.onclick = async () => { const title = prompt("Step title"); if (!title || !title.trim()) return; const r = await api("/api/intelligence/goal/step/add", { goal_id: b.dataset.addStep, title }); if (r.error) toast(r.error, "bad"); else loadIntelligence(); });
   $$('[data-goal-status]').forEach(b => b.onclick = async () => { const r = await api("/api/intelligence/goal/status", { goal_id: b.dataset.goalStatus, status: b.dataset.nextStatus }); if (r.error) toast(r.error, "bad"); else loadIntelligence(); });
-  $$('[data-goal-history]').forEach(b => b.onclick = async () => { const d = await api("/api/intelligence/goal/history?id=" + encodeURIComponent(b.dataset.goalHistory)); if (d.error) return toast(d.error, "warn"); const box = b.closest(".ix-goal")?.querySelector(".ix-goal-history"); if (!box) return; box.innerHTML = d.length ? d.map(r => `<div class="ix-revision"><small>${esc(r.event)} · ${esc(new Date(r.occurred_at).toLocaleString())}</small><span>${esc(JSON.stringify(r.current))}</span></div>`).join("") : '<div class="empty">No goal history.</div>'; });
+  $$('[data-goal-history]').forEach(b => b.onclick = async () => { const d = await api("/api/intelligence/goal/history?id=" + encodeURIComponent(b.dataset.goalHistory)); if (d.error) return toast(d.error, "warn"); const rows = ixList(d, "history", "items", "rows"); const box = b.closest(".ix-goal")?.querySelector(".ix-goal-history"); if (!box) return; box.innerHTML = rows.length ? rows.map(r => `<div class="ix-revision"><small>${esc(r.event || "event")} · ${esc(new Date(r.occurred_at).toLocaleString())}</small><span>${esc(JSON.stringify(r.current ?? {}))}</span></div>`).join("") : '<div class="empty">No goal history.</div>'; });
   $$('[data-step-done]').forEach(b => b.onclick = async () => { const r = await api("/api/intelligence/goal/step/status", { goal_id: b.dataset.stepDone, step_id: b.dataset.stepId, status: "completed" }); if (r.error) toast(r.error, "warn"); else loadIntelligence(); });
   $$('[data-accept-draft]').forEach(b => b.onclick = async () => { if (!confirm("Accept this model-generated plan as goal steps? No system actions will be executed.")) return; const r = await api("/api/intelligence/goal/plan-draft/resolve", { draft_id: b.dataset.acceptDraft, decision: "accepted" }); if (r.error) toast(r.error, "bad"); else { toast("Reviewed plan accepted as goal steps only", "ok"); loadIntelligence(); } });
   $$('[data-reject-draft]').forEach(b => b.onclick = async () => { const r = await api("/api/intelligence/goal/plan-draft/resolve", { draft_id: b.dataset.rejectDraft, decision: "rejected" }); if (r.error) toast(r.error, "bad"); else loadIntelligence(); });
@@ -852,8 +971,8 @@ function renderIXRuntime() {
 }
 function initIntelligence() {
   $("#ix-refresh-state").onclick = loadIntelligence;
-  $("#ix-memory-search").onclick = async () => { const q = $("#ix-memory-q").value.trim(); const include = $("#ix-include-sensitive")?.checked ? "&include_sensitive=1" : ""; const d = await api("/api/intelligence/memories?q=" + encodeURIComponent(q) + "&limit=100" + include); if (d.error) return toast(d.error, "warn"); IX.memories = d; renderIXMemories(); };
-  $("#ix-memory-semantic").onclick = async () => { const q = $("#ix-memory-q").value.trim(); if (!q) return toast("Enter a search query first", "warn"); const d = await api("/api/intelligence/memory/semantic?q=" + encodeURIComponent(q) + "&limit=30"); if (d.error) return toast(d.error, "warn"); IX.memories = d; renderIXMemories(); toast("Local semantic retrieval complete", "ok"); };
+  $("#ix-memory-search").onclick = async () => { const q = $("#ix-memory-q").value.trim(); const include = $("#ix-include-sensitive")?.checked ? "&include_sensitive=1" : ""; const d = await api("/api/intelligence/memories?q=" + encodeURIComponent(q) + "&limit=100" + include); if (d.error) return toast(d.error, "warn"); IX.memories = ixList(d, "memories", "items", "results", "rows"); renderIXMemories(); };
+  $("#ix-memory-semantic").onclick = async () => { const q = $("#ix-memory-q").value.trim(); if (!q) return toast("Enter a search query first", "warn"); const d = await api("/api/intelligence/memory/semantic?q=" + encodeURIComponent(q) + "&limit=30"); if (d.error) return toast(d.error, "warn"); IX.memories = ixList(d, "memories", "items", "results", "rows"); renderIXMemories(); toast("Local semantic retrieval complete", "ok"); };
   $("#ix-memory-add").onclick = async () => { const content = $("#ix-memory-content").value.trim(); if (!content) return toast("Enter memory content", "warn"); const r = await api("/api/intelligence/memory/add", { content, kind: $("#ix-memory-kind").value, sensitivity: $("#ix-memory-sensitivity").value, verification: "unverified", confidence: .5 }); if (r.error) return toast(r.error, "bad"); $("#ix-memory-content").value = ""; toast("Memory saved locally", "ok"); loadIntelligence(); };
   $("#ix-memory-index").onclick = async e => { e.currentTarget.disabled = true; const r = await api("/api/intelligence/memory/index", { limit: 100 }); e.currentTarget.disabled = false; if (r.error) return toast(r.error, "warn"); toast(`Indexed ${r.indexed} non-sensitive memories · ${r.model}`, "ok"); };
   $("#ix-goal-add").onclick = async () => { const title = $("#ix-goal-title").value.trim(); if (!title) return toast("Enter a goal title", "warn"); const r = await api("/api/intelligence/goal/create", { title, description: $("#ix-goal-desc").value }); if (r.error) return toast(r.error, "bad"); $("#ix-goal-title").value = ""; $("#ix-goal-desc").value = ""; toast("Goal created", "ok"); loadIntelligence(); };
