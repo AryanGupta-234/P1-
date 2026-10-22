@@ -13,7 +13,7 @@ const hms = ts => new Date(ts * 1000).toLocaleTimeString([], { hour12: false });
 const dur = s => { s = Math.floor(s); const d = Math.floor(s / 86400), h = Math.floor(s % 86400 / 3600), m = Math.floor(s % 3600 / 60); return (d ? d + "d " : "") + (h || d ? h + "h " : "") + m + "m " + (s % 60) + "s"; };
 
 /* ---------- P1 shell: titles, toasts, splash, starfield ---------- */
-const TITLES = { cmd: "COMMAND", eng: "ENGINE DECK", agent: "AGENT", sys: "SYSTEM", act: "ACTIVITY", proc: "PROCESSES", net: "NETWORK", ker: "KERNEL", adv: "TUNER / THERMAL", evi: "EVIDENCE", intelx: "INTELLIGENCE", int: "INTEL FEED", ai: "AI CORE", ctl: "CONTROL", fc: "FEATURES", tsk: "TASKS" };
+const TITLES = { cmd: "COMMAND", eng: "ENGINE DECK", agent: "AGENT", sys: "SYSTEM", act: "ACTIVITY", activityx: "ACTIVITY INTELLIGENCE", proc: "PROCESSES", net: "NETWORK", ker: "KERNEL", adv: "TUNER / THERMAL", evi: "EVIDENCE", intelx: "INTELLIGENCE", int: "INTEL FEED", ai: "AI CORE", ctl: "CONTROL", fc: "FEATURES", tsk: "TASKS" };
 const VKEYS = Object.keys(TITLES);
 function toast(msg, kind = "") { const b = document.createElement("div"); b.className = "toast " + kind; b.textContent = msg; $("#toasts").append(b); setTimeout(() => b.remove(), 5200); }
 let bootDone = false;
@@ -435,6 +435,7 @@ function show(v) {
   if (!S) {
     if (v === "eng") loadEngines();
     else if (v === "agent") loadAgent(true);
+    else if (v === "activityx") loadActivityIntelligence(true);
     else if (v === "intelx") loadIntelligence();
     else if (v === "ker") loadKernelArchive();
     else if (v === "adv") loadAdvanced(true);
@@ -447,7 +448,7 @@ function show(v) {
     else if (v === "ctl") loadActions();
     return;
   }
-  ({ cmd: updTiles, eng: loadEngines, agent: () => loadAgent(true), act: () => { updHeart(); renderFeed(); }, proc: () => loadProcesses(true), net: updNet, ker: () => { updKer(); loadKernelArchive(); }, adv: () => loadAdvanced(true), int: loadIntel, intelx: loadIntelligence, ai: updAI, ctl: () => { buildCtl(); loadActions(); ctlInitialized = true; }, sys: () => loadSys(true), evi: loadEvi, tsk: () => { updTasks(); loadHist(); }, fc: loadFC })[v]();
+  ({ cmd: updTiles, eng: loadEngines, agent: () => loadAgent(true), act: () => { updHeart(); renderFeed(); }, proc: () => loadProcesses(true), net: updNet, ker: () => { updKer(); loadKernelArchive(); }, adv: () => loadAdvanced(true), int: loadIntel, activityx: () => loadActivityIntelligence(true), intelx: loadIntelligence, ai: updAI, ctl: () => { buildCtl(); loadActions(); ctlInitialized = true; }, sys: () => loadSys(true), evi: loadEvi, tsk: () => { updTasks(); loadHist(); }, fc: loadFC })[v]();
 }
 async function boot() {
   starfield(); $("#bootSkip").onclick = endBoot; let fast = false; try { fast = sessionStorage.getItem("sb") === "1"; } catch (e) { }
@@ -485,10 +486,10 @@ async function boot() {
   const send = () => { const m = $("#ai-in").value.trim(); if (m) { api("/api/chat", { msg: m, mode: $("#ai-mode").value }); $("#ai-in").value = ""; } };
   $("#ai-go").onclick = send; $("#ai-in").onkeydown = e => e.key === "Enter" && send();
   setInterval(() => $("#h-clock").textContent = new Date().toLocaleTimeString([], { hour12: false }), 1000);
-  setInterval(() => { if (view === "int") loadIntel(); if (view === "ctl") loadActions(); if (view === "agent") loadAgent(); }, 15000); loadActions();
+  setInterval(() => { if (view === "int") loadIntel(); if (view === "activityx") loadActivityIntelligence(); if (view === "ctl") loadActions(); if (view === "agent") loadAgent(); }, 10000); loadActions();
   $("#p-q").oninput = () => { clearTimeout(procQueryTimer); procQueryTimer = setTimeout(() => loadProcesses(true), 260); }; $("#p-refresh").onclick = () => loadProcesses(true); $("#n-q").oninput = () => S && updNet();
   $("#a-exp").onclick = () => { const t = LOGS.map(r => `${new Date(r.ts * 1000).toISOString()}\t${r.level}\t${r.src}\t${r.msg}`).join("\n"); const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([t], { type: "text/plain" })); a.download = "sentinel-activity-" + Date.now() + ".log"; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000); toast("Exported " + LOGS.length + " events", "ok"); };
-  initPalette(); initNotify(); initFC(); initIntelligence(); initAdvanced(); initAgent(); initEngines(); bindJ("#metrics"); loadStatus(); setInterval(loadStatus, 15000);
+  initPalette(); initNotify(); initFC(); initIntelligence(); initActivityIntelligence(); initAdvanced(); initAgent(); initEngines(); bindJ("#metrics"); loadStatus(); setInterval(loadStatus, 15000);
   setInterval(() => { if (view === "eng") loadEngines(); }, 8000);
   $("#e-go").onclick = loadEvi; $("#e-csv").onclick = csvExport; $("#e-q").onkeydown = e => e.key === "Enter" && loadEvi(); $("#e-lv").onchange = $("#e-src").onchange = loadEvi;
   $("#sys-refresh").onclick = async () => { const b = $("#sys-refresh"); b.disabled = true; b.textContent = "SCANNING…"; const r = await api("/api/inventory/refresh", {}); b.disabled = false; b.textContent = "REFRESH INVENTORY"; if (r.error) toast(r.error, "bad"); else { toast("System inventory refreshed", "ok"); loadSys(true); } };
@@ -595,18 +596,34 @@ async function loadAdvanced(force = false) {
     $("#adv-game").textContent = game?.name || "STANDBY";
     $("#adv-session").textContent = d.sessions?.[0]?.status === "active" ? `Session #${d.sessions[0].id} · ${dur(Date.now()/1000 - d.sessions[0].started_at)}` : "No active session tracked";
     $("#adv-etw-state").textContent = (etw.state || (etw.available ? "idle" : "unavailable")).toUpperCase();
+    const etwAutoState = etw.auto_state || (etw.enabled ? "armed" : "disabled");
     $("#adv-etw-meta").textContent = etw.available === false
-      ? "xperf unavailable"
-      : etw.enabled ? (etw.last_event_count ? `${etw.last_event_count} decoded events` : "waiting for trace") : "operator disabled";
-    $("#adv-etw-status").textContent = etw.recording ? "RECORDING" : etw.enabled ? "ARMED" : etw.available === false ? "UNAVAILABLE" : "DISABLED";
-    $("#adv-etw-status").className = "tag " + (etw.recording ? "warn" : etw.available === false ? "bad" : etw.enabled ? "ok" : "");
-    $("#adv-etw-source").textContent = etw.source || "Windows Performance Toolkit";
-    $("#adv-etw-note").textContent = etw.error
-      || (etw.available === false
-        ? "Kernel ETW capture is unavailable because xperf.exe was not detected. Install the Windows Performance Toolkit component of the Windows ADK, then restart SENTINEL. PDH counters remain separate from ETW."
-        : etw.enabled
-          ? "Bounded 12-second kernel ETW windows can be sampled while a game is active. This is not a continuous decoded trace. Existing kernel logger sessions are never taken over."
-          : "Automatic ETW sampling is disabled. The CAPTURE button requests one bounded manual trace when xperf is available.");
+      ? "WPR unavailable"
+      : etw.xperf_optional_available ? `${etw.last_event_count || 0} decoded events · Xperf enhancement available`
+      : `${etw.last_event_count || 0} decoded events · Xperf optional`;
+    $("#adv-etw-status").textContent = etw.recording ? "RECORDING" :
+      etwAutoState === "recording" ? "AUTO RECORDING" :
+      etwAutoState === "queued" ? "AUTO QUEUED" :
+      etwAutoState === "armed" ? "AUTO ARMED" :
+      etwAutoState === "manual_only" ? "MANUAL ONLY" :
+      etwAutoState === "blocked" ? "BLOCKED" :
+      etwAutoState === "unavailable" ? "UNAVAILABLE" :
+      etwAutoState === "error" ? "ERROR" : "DISABLED";
+    $("#adv-etw-status").className = "tag " + (
+      etw.recording || etwAutoState === "recording" || etwAutoState === "queued" ? "warn" :
+      etwAutoState === "armed" ? "ok" :
+      etwAutoState === "blocked" || etwAutoState === "error" || etwAutoState === "unavailable" ? "bad" : ""
+    );
+    $("#adv-etw-source").textContent = etw.source || "Windows Performance Recorder · GeneralProfile.Light";
+    $("#adv-etw-note").textContent = etw.error || etw.auto_reason || (
+      etw.available === false
+        ? "Automatic and manual capture need Windows Performance Recorder (wpr.exe). Xperf is optional and only adds supplemental DPC/ISR driver-module decoding. PDH counters are separate from ETW."
+        : etw.enabled && etw.auto_sampling_enabled
+          ? `Automatic sampling is opted in. A 12-second WPR window runs at most once every ${etw.auto_interval_s || 300} seconds during a stable active game or foreground work session. Existing WPR/kernel logger sessions are never taken over.`
+          : etw.enabled
+            ? "The ETW engine is enabled, but automatic sampling is in manual-only mode. Turn on the dedicated automatic-sampling option to arm bounded WPR windows."
+            : "The ETW engine is off. Enable the engine and the separate automatic-sampling option to start bounded diagnostics; the manual capture button remains available."
+    );
     const baseEntries = Object.entries(d.baseline || {});
     $("#adv-baseline-count").textContent = baseEntries.reduce((n, [,x])=>n+(x.samples||0),0).toLocaleString();
     $("#adv-baseline-heading").textContent = `${d.game_key || "No active game"} · local hour ${d.baseline_hour ?? "--"}`;
@@ -704,6 +721,7 @@ async function loadAdvanced(force = false) {
     if(document.activeElement?.id!=="adv-cpu-threshold")$("#adv-cpu-threshold").value=cfg.cpu_temp_warn_c ?? 88;
     if(document.activeElement?.id!=="adv-gpu-threshold")$("#adv-gpu-threshold").value=cfg.gpu_temp_warn_c ?? 82;
     if(document.activeElement?.id!=="adv-lhm-port")$("#adv-lhm-port").value=cfg.lhm_http_port ?? 8085;
+    if(document.activeElement?.id!=="adv-etw-interval")$("#adv-etw-interval").value=cfg.etw_auto_interval_s ?? 300;
     if(game && !$("#adv-profile-game").value)$("#adv-profile-game").value=game.name;
   } catch(e) {
     const message = `Performance intelligence data could not be loaded: ${e.message || String(e)}`;
@@ -773,7 +791,7 @@ function initAdvanced(){
     }
   };
   $("#adv-settings-save").onclick=async()=>{
-    const settings={etw_enabled:$("#adv-etw-enabled").checked,lhm_enabled:$("#adv-lhm-enabled").checked,lhm_http_port:Number($("#adv-lhm-port").value),cpu_temp_warn_c:Number($("#adv-cpu-threshold").value),gpu_temp_warn_c:Number($("#adv-gpu-threshold").value)};
+    const settings={etw_enabled:$("#adv-etw-enabled").checked,lhm_enabled:$("#adv-lhm-enabled").checked,lhm_http_port:Number($("#adv-lhm-port").value),cpu_temp_warn_c:Number($("#adv-cpu-threshold").value),gpu_temp_warn_c:Number($("#adv-gpu-threshold").value),etw_auto_interval_s:Number($("#adv-etw-interval").value)};
     const r=await api("/api/advanced/settings",settings);if(r.error)return toast(r.error,"bad");
     const a=await api("/api/config",{autopilot:{etw_capture:$("#adv-etw-auto").checked}});if(a.error)return toast(a.error,"bad");
     toast("Advanced sensor policy saved persistently","ok");loadAdvanced(true);
@@ -795,6 +813,136 @@ function initAdvanced(){
     toast(`Action #${r.id} queued. Check CONTROL for its risk tier and approval requirements.`,"warn");
     loadActions();loadAdvanced(true);
   };
+}
+
+/* ---------- foreground activity intelligence ---------- */
+let ACTIVITY = null, activityBusy = false, activityLastLoad = 0;
+const activityDuration = seconds => {
+  const n = Math.max(0, Math.floor(Number(seconds) || 0));
+  const h = Math.floor(n / 3600), m = Math.floor(n % 3600 / 60), s = n % 60;
+  return h ? `${h}h ${m}m` : m ? `${m}m ${s}s` : `${s}s`;
+};
+function renderActivityIntelligence(data) {
+  const d = data && typeof data === "object" ? data : {};
+  const current = d.current && typeof d.current === "object" ? d.current : {};
+  const daily = d.daily && typeof d.daily === "object" ? d.daily : {};
+  const apps = Array.isArray(d.apps) ? d.apps : [];
+  const hourly = Array.isArray(d.hourly) ? d.hourly : [];
+  const tasks = Array.isArray(d.tasks) ? d.tasks : [];
+  const recent = Array.isArray(d.recent_sessions) ? d.recent_sessions : [];
+  const suggestions = Array.isArray(d.suggestions) ? d.suggestions : [];
+  const settings = d.settings && typeof d.settings === "object" ? d.settings : {};
+  const state = String(d.state || (d.available ? "starting" : "unavailable")).toUpperCase();
+  $("#ax-state").textContent = state;
+  $("#ax-state").className = "pill " + (state === "ACTIVE" ? "ok" : state === "IDLE" ? "off" : state === "UNAVAILABLE" ? "bad" : "");
+  $("#ax-sampled").textContent = d.sampled_at ? `sampled ${hms(d.sampled_at)}` : "awaiting foreground sample";
+  $("#ax-active-today").textContent = activityDuration(daily.active_seconds);
+  $("#ax-foreground-today").textContent = activityDuration(daily.foreground_seconds);
+  $("#ax-app-count").textContent = apps.length.toLocaleString();
+  $("#ax-task-count").textContent = tasks.length.toLocaleString();
+  $("#ax-active-meter").style.width = Math.min(100, Number(daily.active_seconds || 0) / 28800 * 100) + "%";
+  $("#ax-foreground-meter").style.width = Math.min(100, Number(daily.foreground_seconds || 0) / 43200 * 100) + "%";
+  $("#ax-app-meter").style.width = Math.min(100, apps.length * 3) + "%";
+  $("#ax-task-meter").style.width = Math.min(100, tasks.length * 6) + "%";
+
+  $("#ax-current-app").textContent = current.app_name || "No foreground application";
+  const wc = current.window_class ? ` · ${current.window_class}` : "";
+  $("#ax-current-meta").textContent = current.app_name
+    ? `PID ${current.pid ?? "unavailable"}${wc} · ${current.is_game ? "tracked game" : current.is_fullscreen ? "fullscreen foreground" : "foreground app"}`
+    : (d.reason || "Switch to an application to begin a foreground session");
+  $("#ax-focus-initial").textContent = String(current.app_name || "S").trim().slice(0,1).toUpperCase();
+  $("#ax-focus-mode").textContent = current.is_active ? "USER ACTIVE" : current.app_name ? "FOREGROUND / IDLE" : "WAITING FOR USER ACTIVITY";
+  $("#ax-current-foreground").textContent = activityDuration(current.foreground_seconds);
+  $("#ax-current-active").textContent = activityDuration(current.active_seconds);
+  $("#ax-current-idle").textContent = activityDuration(current.idle_seconds);
+  const terms = Array.isArray(current.semantic_terms) ? current.semantic_terms : [];
+  $("#ax-current-terms").innerHTML = terms.length
+    ? terms.slice(0,18).map((term,i)=>`<span class="activity-token ${i<3?"primary":""}">${esc(term)}</span>`).join("")
+    : '<span class="activity-token muted">No semantic terms observed</span>';
+  $("#ax-current-task").textContent = current.task_label || "Task context forms as semantic terms repeat across sessions";
+
+  const maxHour = Math.max(1, ...hourly.map(x => Number(x.active_seconds || 0)));
+  $("#ax-hour-chart").innerHTML = hourly.length ? hourly.map(item => {
+    const value = Math.max(0, Number(item.active_seconds || 0));
+    const height = value > 0 ? Math.max(3, value / maxHour * 100) : 1.5;
+    const hour = Number(item.hour || 0);
+    return `<div class="activity-hour" title="${String(hour).padStart(2,"0")}:00 · ${activityDuration(value)} · ${Number(item.sessions||0)} session(s)"><i style="height:${height.toFixed(1)}%"></i><small>${hour%4===0?String(hour).padStart(2,"0"):""}</small></div>`;
+  }).join("") : '<div class="empty">No hourly history yet.</div>';
+
+  const maxApp = Math.max(1, ...apps.map(x => Number(x.active_seconds_7d || 0)));
+  $("#ax-apps").innerHTML = apps.length ? apps.slice(0,14).map((item,index) => {
+    const active = Number(item.active_seconds_7d || 0), foreground = Number(item.foreground_seconds_7d || 0);
+    const percent = Math.min(100, active / maxApp * 100);
+    return `<div class="activity-app-row"><div class="activity-rank">${String(index+1).padStart(2,"0")}</div><div class="activity-app-main"><div class="activity-app-head"><b>${esc(item.app_name||"Observed app")}</b><span>${activityDuration(active)}</span></div><div class="activity-app-track"><i style="width:${percent.toFixed(1)}%"></i></div><small>${Number(item.launches||0)} launches · ${activityDuration(foreground)} foreground · ${item.launchable?"observed EXE can be opened":"launch path unavailable"}</small></div></div>`;
+  }).join("") : '<div class="empty">Application usage will appear after foreground sessions are observed.</div>';
+
+  $("#ax-tasks").innerHTML = tasks.length ? tasks.map(task => {
+    const taskTerms = Array.isArray(task.terms) ? task.terms : [];
+    return `<div class="activity-task"><div class="activity-task-head"><b>${esc(task.label||"Observed task")}</b><span>${activityDuration(task.active_seconds)}</span></div><small>${Number(task.observations||0)} session observation(s) · ${Array.isArray(task.applications)?task.applications.length:0} application(s) · last ${task.last_seen?hms(task.last_seen):"unknown"}</small><div class="activity-token-list">${taskTerms.slice(0,8).map(term=>`<span class="activity-token">${esc(term)}</span>`).join("")}</div></div>`;
+  }).join("") : '<div class="empty">Task clusters emerge from repeated co-occurring terms, not predefined app categories.</div>';
+
+  $("#ax-suggestions").innerHTML = suggestions.length ? suggestions.map(item => {
+    const confidence = Math.round(Math.max(0,Math.min(1,Number(item.confidence||0)))*100);
+    const canLaunch = item.launchable && !item.already_running;
+    return `<div class="activity-suggestion"><div class="activity-suggestion-top"><div><b>${esc(item.app_name||"Observed application")}</b><small>${esc(item.reason||"Learned transition")}</small></div><span class="activity-confidence">${confidence}%</span></div><div class="activity-app-track"><i style="width:${confidence}%"></i></div><div class="activity-suggestion-foot"><span class="activity-token ${item.auto_threshold?"primary":""}">${item.auto_threshold?"REPEATED PATTERN":"LEARNING"}</span><small>${Number(item.observations||0)} observations · ${item.already_running?"already running":canLaunch?"observed install":"not launchable"}</small>${canLaunch?`<button class="btn sm" data-activity-launch="${esc(item.app_key)}">OPEN APP</button>`:""}</div></div>`;
+  }).join("") : '<div class="empty">The engine needs repeated transition observations before it can predict a useful next app.</div>';
+
+  $("#ax-recent").innerHTML = recent.length ? recent.slice(0,30).map(session => {
+    const sessionTerms = Array.isArray(session.semantic_terms) ? session.semantic_terms : [];
+    const end = session.ended_at ? new Date(session.ended_at*1000).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"}) : "current";
+    return `<div class="activity-recent-row"><div class="activity-recent-time"><b>${new Date(session.started_at*1000).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"})}</b><small>${end}</small></div><div class="activity-recent-main"><b>${esc(session.app_name||"Application")}</b><small>${activityDuration(session.active_seconds)} active · ${activityDuration(session.idle_seconds)} idle · ${session.is_game?"GAME":session.is_fullscreen?"FULLSCREEN":"WINDOWED"}${session.interrupted?" · INTERRUPTED":""}</small><div class="activity-token-list">${sessionTerms.slice(0,5).map(term=>`<span class="activity-token">${esc(term)}</span>`).join("")}</div></div></div>`;
+  }).join("") : '<div class="empty">Recent sessions appear as focus moves between applications.';
+
+  const toggles = [["ax-enabled","enabled"],["ax-semantic","semantic_context"],["ax-suggestions-enabled","suggestions_enabled"],["ax-auto-launch","auto_launch_learned_apps"]];
+  for (const [id,key] of toggles) { const el=$("#"+id); if(el && document.activeElement!==el)el.checked=!!settings[key]; }
+  const numeric = [["ax-interval","sample_interval_s"],["ax-idle","idle_after_seconds"],["ax-min-observations","min_launch_observations"],["ax-launch-cooldown","auto_launch_cooldown_s"]];
+  for (const [id,key] of numeric) { const el=$("#"+id); if(el && document.activeElement!==el)el.value=Number(settings[key]||0); }
+  $("[data-activity-launch]").forEach(button => button.onclick = async () => {
+    button.disabled = true; button.textContent = "OPENING…";
+    try {
+      const result = await api("/api/activity/launch", {app_key:button.dataset.activityLaunch});
+      if (result.error) throw new Error(result.error);
+      toast("Opened " + (result.app_name || "observed application"), "ok");
+      await loadActivityIntelligence(true);
+    } catch(error) { toast("Application launch: " + (error.message || String(error)), "warn"); }
+    finally { button.disabled = false; button.textContent = "OPEN APP"; }
+  });
+}
+async function loadActivityIntelligence(force=false) {
+  if (activityBusy || (view !== "activityx" && !force)) return;
+  if (!force && Date.now() - activityLastLoad < 2500) return;
+  activityBusy = true; activityLastLoad = Date.now();
+  try {
+    const data = await api("/api/activity");
+    if (data.error) throw new Error(data.error);
+    ACTIVITY = data; renderActivityIntelligence(data);
+  } catch(error) { toast("Activity intelligence: " + (error.message || String(error)), "warn"); }
+  finally { activityBusy = false; }
+}
+function initActivityIntelligence() {
+  $("#ax-refresh").onclick = () => loadActivityIntelligence(true);
+  $("#ax-save-settings").onclick = async () => {
+    const button = $("#ax-save-settings");
+    const payload = {
+      enabled: $("#ax-enabled").checked,
+      semantic_context: $("#ax-semantic").checked,
+      suggestions_enabled: $("#ax-suggestions-enabled").checked,
+      auto_launch_learned_apps: $("#ax-auto-launch").checked,
+      sample_interval_s: Number($("#ax-interval").value),
+      idle_after_seconds: Number($("#ax-idle").value),
+      min_launch_observations: Number($("#ax-min-observations").value),
+      auto_launch_cooldown_s: Number($("#ax-launch-cooldown").value),
+    };
+    button.disabled = true; button.textContent = "SAVING…";
+    try {
+      const result = await api("/api/activity/settings", payload);
+      if (result.error) throw new Error(result.error);
+      toast("Activity learning policy saved locally", "ok");
+      await loadActivityIntelligence(true);
+    } catch(error) { toast("Activity policy: " + (error.message || String(error)), "bad"); }
+    finally { button.disabled = false; button.textContent = "SAVE ACTIVITY POLICY"; }
+  };
+  loadActivityIntelligence(true);
 }
 
 /* ---------- additive AIE intelligence: evidence, memory, planning and read-only UIA ---------- */
