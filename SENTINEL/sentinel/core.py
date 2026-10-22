@@ -178,6 +178,12 @@ def load_cfg():
     else:
         for key, default in DEFAULTS["autopilot"].items():
             if not isinstance(cfg["autopilot"].get(key), bool): cfg["autopilot"][key] = default
+    if not isinstance(cfg.get("approval_policy"), dict):
+        cfg["approval_policy"] = copy.deepcopy(DEFAULTS["approval_policy"])
+    else:
+        for key, default in DEFAULTS["approval_policy"].items():
+            if not isinstance(cfg["approval_policy"].get(key), bool):
+                cfg["approval_policy"][key] = default
     if not isinstance(cfg.get("advanced"), dict): cfg["advanced"] = copy.deepcopy(DEFAULTS["advanced"])
     else:
         for key, default in DEFAULTS["advanced"].items():
