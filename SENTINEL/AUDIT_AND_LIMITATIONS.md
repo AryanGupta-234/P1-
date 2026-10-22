@@ -181,3 +181,15 @@ Regression coverage was added in tests/test_advanced_windows_integrations.py for
 - Fixed the Intelligence evidence selector to use the collection query helper, and normalized API collection payloads before rendering state, memories, goals and draft plans.
 - Replaced the multi-column splash card and diagnostic copy with a compact centered startup ignition animation and one progress indicator.
 - Hardware coverage still requires target-machine verification. Fan RPM, voltage, power and CPU clocks depend on firmware/embedded-controller support; optional PawnIO installation remains an operator decision.
+
+
+## v1.0.7 activity intelligence and ETW audit
+
+- Added an independent foreground activity engine with a bounded sampler, process identity, active/idle time, fullscreen/game context, local weekday/hour, dynamic semantic task clustering and observed app transitions.
+- Window titles are used transiently for local token extraction only; URL/email strings and credential-oriented title contexts are redacted before tokenization. Raw window titles, browser page content, history, screenshots, keystrokes and form values are not persisted or collected.
+- Added a dedicated Activity Intelligence dashboard with current focus, active/foreground/idle time, 24-hour activity rhythm, rolling 7-day app usage, task clusters, recent sessions and next-app suggestions.
+- Added explicit observed-application opening and a separate learned auto-launch opt-in. Automatic launches are disabled by default and require repeated evidence, confidence >=0.80, stable active context, an existing observed executable under permitted app-install roots, no game/fullscreen context and launch cooldowns.
+- Fixed usage semantics: app focus transitions are counted separately from hourly storage intervals; hourly segments do not increment the focus-session count.
+- Corrected automatic ETW sampling to use inbox WPR as the required recorder. Xperf is optional for supplemental DPC/ISR module attribution. Automatic capture is separately opted in, bounded to 12 seconds and configurable at 120–900 second intervals.
+- ETW automatic sampling uses trace preflight, VALORANT hard interlock, WPR ownership checks and a single-capture lock; no other tool's recording is stopped or cancelled.
+- Remaining host verification: confirm Windows foreground API behavior on the target desktop, identify which laptop sensors and WPR providers are available, and observe real app transitions before enabling learned auto-launch.
