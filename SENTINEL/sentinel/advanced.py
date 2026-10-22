@@ -1609,16 +1609,20 @@ def _lhm_sample() -> dict:
 def _hardware_loop() -> None:
     while not _STOP.is_set():
         try:
-            if IS_WIN and CFG.get("advanced", {}).get("lhm_enabled") is True:
+            if IS_WIN:
+                # _lhm_sample uses LHM when explicitly enabled and otherwise probes
+                # the read-only Windows ACPI thermal-zone provider as a fallback.
                 result = _lhm_sample()
                 STATE["hardware_sensors"] = result
-                heartbeat("optional hardware sensors (LHM)", 5, f"{result.get('sensor_count', 0)} sensor(s)" if result.get("available") else result.get("reason", "unavailable"),
+                heartbeat("hardware thermal sensors (LHM / ACPI)", 5,
+                          f"{result.get('sensor_count', 0)} sensor(s) · {result.get('provider', 'unknown provider')}"
+                          if result.get("available") else result.get("reason", "unavailable"),
                           "" if result.get("available") else result.get("reason", "unavailable"))
-            elif not CFG.get("advanced", {}).get("lhm_enabled"):
-                STATE["hardware_sensors"] = {"available": False, "reason": "Optional LHM reader disabled"}
+            else:
+                STATE["hardware_sensors"] = {"available": False, "reason": "Windows thermal providers are unavailable on this platform"}
             _thermal_watch(time.time())
         except Exception as exc:
-            heartbeat("optional hardware sensors (LHM)", 5, err=f"{type(exc).__name__}: {str(exc)[:100]}")
+            heartbeat("hardware thermal sensors (LHM / ACPI)", 5, err=f"{type(exc).__name__}: {str(exc)[:100]}")
         _STOP.wait(5)
 
 
