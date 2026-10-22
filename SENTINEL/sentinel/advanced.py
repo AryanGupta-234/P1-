@@ -1904,16 +1904,18 @@ def _capture_wpr_window_locked(duration: int = 12) -> dict:
         _STOP.wait(duration)
         stop = _run([wpr, "-stop", etl_path], 120)
     except Exception as exc:
-        # Cancel only the trace this exact code path started. Never cancel an external WPR session.
-        cleanup_note = ""
-        try:
-            cleanup = _run([wpr, "-cancel"], 30)
-            if cleanup.returncode != 0:
-                cleanup_note = ((cleanup.stderr or "") + " " + (cleanup.stdout or ""))[:180]
-        except Exception as cleanup_exc:
-            cleanup_note = f"{type(cleanup_exc).__name__}: {str(cleanup_exc)[:120]}"
-        state.update({"recording": None, "state": "unknown", "stopped_at": time.time(),
-                      "error": f"{type(exc).__name__}: {str(exc)[:160]}" + (f"; own-trace cleanup: {cleanup_note}" if cleanup_note else "")})
+        # WPR exposes a machine-wide session, not a durable per-process ownership
+        # token. If stop fails, ownership can no longer be proven; do not issue a
+        # global -cancel that might stop a recording started by another tool.
+        state.update({
+            "recording": None,
+            "state": "unknown",
+            "stopped_at": time.time(),
+            "error": (
+                f"{type(exc).__name__}: {str(exc)[:160]}; WPR ownership became unknown, "
+                "so SENTINEL left the session untouched for operator review"
+            ),
+        })
         raise
     finally:
         _ETW_OWNED = False
@@ -2278,14 +2280,14 @@ def shutdown() -> None:
     global _STARTED, _ETW_OWNED, _LAST_GAME_ID
     _STOP.set()
     if _ETW_OWNED:
-        # The capture worker owns the WPR session it started and is woken by _STOP.
-        # Never stop an unknown/external logger. If our own finalizer fails, cancel
-        # only the session guarded by the ownership flag.
+        # Wait for the capture owner. If its finalizer cannot prove session
+        # ownership, never issue a global WPR stop/cancel during agent shutdown.
         if not _ETW_DONE.wait(130):
-            wpr = locate_wpr()
-            if _ETW_OWNED and wpr:
-                try: _run([wpr, "-cancel"], 30)
-                except Exception: pass
+            STATE.setdefault("kernel", {}).setdefault("etw_engine", {}).update({
+                "recording": None,
+                "state": "unknown",
+                "error": "WPR finalizer did not complete; no global stop/cancel was issued because session ownership is unknown",
+            })
             _ETW_OWNED = False
             _ETW_DONE.set()
     active_session_id = STATE.get("advanced", {}).get("active_session_id")

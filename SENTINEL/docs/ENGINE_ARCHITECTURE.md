@@ -146,11 +146,11 @@ WPR is the primary recorder when Windows provides wpr.exe. A capture is bounded 
 2. checks WPR status and refuses unknown ownership;
 3. rechecks Safeguard immediately before starting;
 4. starts only when no external WPR session is active;
-5. stops only the recording this capture path started;
+5. stops the WPR session through the normal bounded owner path;
 6. archives the ETL and attempts tracerpt decoding;
 7. uses Xperf only as an optional additional DPC/ISR decoder.
 
-A missing Xperf installation does not require an ADK download to record with WPR. Existing WPR sessions are never stopped, cancelled, or replaced by SENTINEL.
+If WPR stop/finalization fails, its current session ownership can no longer be proven. SENTINEL records the unknown state and deliberately does **not** issue a global stop or cancel during exception cleanup or shutdown. This may leave a trace session for the operator to inspect, but avoids disrupting another recorder. A missing Xperf installation does not require an ADK download to record with WPR. Existing or unknown WPR sessions are never stopped, cancelled, or replaced by SENTINEL.
 
 ## Action lifecycle
 
