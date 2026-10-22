@@ -132,8 +132,13 @@ def semantic_terms(window_title: str, app_name: str = "") -> list[str]:
     raw = str(window_title or "")[:_MAX_WINDOW_TITLE_CHARS]
     # Do not tokenize obvious credentials/URLs/email addresses. This is a
     # conservative local filter, not a claim that all sensitive titles are detected.
-    if _SENSITIVE_TITLE_MARKERS.search(raw):
-        raw = _SENSITIVE_TITLE_MARKERS.sub(" ", raw)
+    credential_marker = re.search(r"\\b(?:password|passcode|one.time.code|otp|recovery.code|security.answer)\\b", raw, re.IGNORECASE)
+    if credential_marker:
+        # Do not derive semantic terms from a credential-oriented window title.
+        raw = ""
+    else:
+        raw = re.sub(r"(?:https?://|www\\.)[^\\s]+", " ", raw, flags=re.IGNORECASE)
+        raw = re.sub(r"[\\w.+-]+@[\\w.-]+\\.[A-Za-z]{2,}", " ", raw)
     raw = re.sub(r"(?i)\\b[A-Z]:\\\\[^\\s|]+", " ", raw)
     raw = re.sub(r"(?i)\\b[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}\\b", " ", raw)
     candidates = []
@@ -320,7 +325,7 @@ def _safe_launch_path(path: str) -> bool:
     if not IS_WIN or not path:
         return False
     try:
-        candidate = os.path.normcase(os.path.abspath(path))
+        candidate = os.path.normcase(os.path.realpath(os.path.abspath(path)))
         if not os.path.isabs(candidate) or not os.path.isfile(candidate):
             return False
         if candidate.startswith("\\\\") or candidate.startswith("\\\\?\\"):
@@ -335,7 +340,7 @@ def _safe_launch_path(path: str) -> bool:
         for root in roots:
             if not root:
                 continue
-            root_path = os.path.normcase(os.path.abspath(root))
+            root_path = os.path.normcase(os.path.realpath(os.path.abspath(root)))
             try:
                 if os.path.commonpath([candidate, root_path]) == root_path:
                     allowed = True
@@ -423,6 +428,8 @@ def _maybe_auto_launch(current: dict[str, Any], now: float) -> None:
     if current.get("is_game") or current.get("fullscreen"):
         return
     if current.get("idle_seconds") is not None and current["idle_seconds"] > settings["idle_after_seconds"]:
+        return
+    if float(current.get("active_seconds") or 0) < 60.0:
         return
     if now - _LAST_AUTO_LAUNCH < 1800:
         return
@@ -526,7 +533,6 @@ def _sample_once(now: float | None = None, snapshot: dict[str, Any] | None = Non
             _record_transition(previous, item, ts)
         current = _begin_segment(item, ts)
         _CURRENT = current
-        _maybe_auto_launch(current, ts)
 
     current = _CURRENT
     elapsed = max(0.0, min(5.0, ts - float(current["last_sample"])))
@@ -569,6 +575,8 @@ def _sample_once(now: float | None = None, snapshot: dict[str, Any] | None = Non
         },
         "sampled_at": ts, "sample_interval_s": settings["sample_interval_s"],
     }
+    if is_active:
+        _maybe_auto_launch(current, ts)
 
 
 def _worker() -> None:
@@ -578,7 +586,8 @@ def _worker() -> None:
         started = time.monotonic()
         try:
             settings = _settings()
-            _sample_once()
+            with _LOCK:
+                _sample_once()
             core.heartbeat("foreground activity intelligence", settings["sample_interval_s"],
                            "active screen time and dynamic semantic task clusters" if settings["enabled"] else "disabled by operator")
             if int(time.time()) % 900 < settings["sample_interval_s"]:
