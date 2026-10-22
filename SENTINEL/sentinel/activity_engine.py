@@ -138,13 +138,13 @@ def semantic_terms(window_title: str, app_name: str = "") -> list[str]:
     raw = str(window_title or "")[:_MAX_WINDOW_TITLE_CHARS]
     # Do not tokenize obvious credentials/URLs/email addresses. This is a
     # conservative local filter, not a claim that all sensitive titles are detected.
-    credential_marker = re.search(r"\\b(?:password|passcode|one.time.code|otp|recovery.code|security.answer)\\b", raw, re.IGNORECASE)
+    credential_marker = re.search(r"\b(?:password|passcode|one.time.code|otp|recovery.code|security.answer)\b", raw, re.IGNORECASE)
     if credential_marker:
         # Do not derive semantic terms from a credential-oriented window title.
         raw = ""
     else:
-        raw = re.sub(r"(?:https?://|www\\.)[^\\s]+", " ", raw, flags=re.IGNORECASE)
-        raw = re.sub(r"[\\w.+-]+@[\\w.-]+\\.[A-Za-z]{2,}", " ", raw)
+        raw = re.sub(r"(?:https?://|www\.)[^\s]+", " ", raw, flags=re.IGNORECASE)
+        raw = re.sub(r"[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}", " ", raw)
     raw = re.sub(r"(?i)\\b[A-Z]:\\\\[^\\s|]+", " ", raw)
     raw = re.sub(r"(?i)\\b[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}\\b", " ", raw)
     app_token_source = str(app_name or "").replace("\\", "/").rsplit("/", 1)[-1]
@@ -203,8 +203,8 @@ def _task_cluster(terms: list[str], app_key: str, app_name: str,
         )
         return task_id
 
-    merged_terms = list(dict.fromkeys([*best_terms, *terms]))[:32]
-    merged_apps = list(dict.fromkeys([*best_apps, app_key]))[:40]
+    merged_terms = sorted(set(best_terms).union(terms))[:32]
+    merged_apps = sorted(set(best_apps).union({app_key}))[:40]
     core.db(
         "UPDATE activity_tasks SET label=?,terms_json=?,app_keys_json=?,observations=observations+1,"
         "foreground_seconds=foreground_seconds+?,active_seconds=active_seconds+?,last_seen=? WHERE id=?",
