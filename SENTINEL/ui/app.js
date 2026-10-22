@@ -873,7 +873,7 @@ function renderActivityIntelligence(data) {
   $("#ax-apps").innerHTML = apps.length ? apps.slice(0,14).map((item,index) => {
     const active = Number(item.active_seconds_7d || 0), foreground = Number(item.foreground_seconds_7d || 0);
     const percent = Math.min(100, active / maxApp * 100);
-    return `<div class="activity-app-row"><div class="activity-rank">${String(index+1).padStart(2,"0")}</div><div class="activity-app-main"><div class="activity-app-head"><b>${esc(item.app_name||"Observed app")}</b><span>${activityDuration(active)}</span></div><div class="activity-app-track"><i style="width:${percent.toFixed(1)}%"></i></div><small>${Number(item.launches||0)} launches · ${activityDuration(foreground)} foreground · ${item.launchable?"observed EXE can be opened":"launch path unavailable"}</small></div></div>`;
+    return `<div class="activity-app-row"><div class="activity-rank">${String(index+1).padStart(2,"0")}</div><div class="activity-app-main"><div class="activity-app-head"><b>${esc(item.app_name||"Observed app")}</b><span>${activityDuration(active)}</span></div><div class="activity-app-track"><i style="width:${percent.toFixed(1)}%"></i></div><small>${Number(item.focus_sessions||0)} focus session(s) · ${activityDuration(foreground)} foreground · ${item.launchable?"observed EXE can be opened":"launch path unavailable"}</small></div></div>`;
   }).join("") : '<div class="empty">Application usage will appear after foreground sessions are observed.</div>';
 
   $("#ax-tasks").innerHTML = tasks.length ? tasks.map(task => {
@@ -937,6 +937,7 @@ function initActivityIntelligence() {
     try {
       const result = await api("/api/activity/settings", payload);
       if (result.error) throw new Error(result.error);
+      $("#ax-policy-status").textContent = "Saved · activity samples and transition learning are local to this Windows profile.";
       toast("Activity learning policy saved locally", "ok");
       await loadActivityIntelligence(true);
     } catch(error) { toast("Activity policy: " + (error.message || String(error)), "bad"); }
