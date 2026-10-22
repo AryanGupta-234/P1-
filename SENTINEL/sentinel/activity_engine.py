@@ -145,8 +145,8 @@ def semantic_terms(window_title: str, app_name: str = "") -> list[str]:
     else:
         raw = re.sub(r"(?:https?://|www\.)[^\s]+", " ", raw, flags=re.IGNORECASE)
         raw = re.sub(r"[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}", " ", raw)
-    raw = re.sub(r"(?i)\\b[A-Z]:\\\\[^\\s|]+", " ", raw)
-    raw = re.sub(r"(?i)\\b[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}\\b", " ", raw)
+    raw = re.sub(r"(?i)\b[A-Z]:\\[^\s|]+", " ", raw)
+    raw = re.sub(r"(?i)\b[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}\b", " ", raw)
     app_token_source = str(app_name or "").replace("\\", "/").rsplit("/", 1)[-1]
     if "." in app_token_source:
         app_token_source = app_token_source.rsplit(".", 1)[0]
