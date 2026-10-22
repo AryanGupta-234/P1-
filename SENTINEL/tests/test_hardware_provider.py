@@ -29,13 +29,13 @@ def test_provider_extracts_only_a_complete_safe_archive(tmp_path: Path):
     archive_path = tmp_path / "provider.zip"
     stage = tmp_path / "stage"
     with zipfile.ZipFile(archive_path, "w") as archive:
-        archive.writestr("LibreHardwareMonitor.exe", b"executable")
+        archive.writestr("LibreHardwareMonitor.Windows.Forms.exe", b"executable")
         archive.writestr("LibreHardwareMonitorLib.dll", b"library")
         archive.writestr("Aga.Controls.dll", b"controls")
         archive.writestr("OxyPlot.dll", b"plot")
         archive.writestr("OxyPlot.WindowsForms.dll", b"forms")
     executable = hardware_provider._extract_archive(archive_path, stage)
-    assert executable.name == "LibreHardwareMonitor.exe"
+    assert executable.name == "LibreHardwareMonitor.Windows.Forms.exe"
     assert executable.read_bytes() == b"executable"
     assert hardware_provider.ARCHIVE_SHA256 == "086d9f1b5a99e643edc2cfaaac16051685b551e4c5ac0b32a57c58c0e529c001"
 
