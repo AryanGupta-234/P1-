@@ -2119,43 +2119,109 @@ def _capture_thread() -> None:
         heartbeat("advanced ETW kernel observer", 0, err=STATE["kernel"]["etw_engine"]["error"])
 
 
+_ETW_AUTO_LOCK = threading.Lock()
+_ETW_AUTO_RUNNING = False
+
+
+def _automatic_etw_worker() -> None:
+    """Run one directly opted-in diagnostic capture under WPR's ownership safeguards.
+
+    ETW is a read-only diagnostic operation. Its dedicated operator opt-in is
+    independent of the global system-action autopilot master; WPR preflight,
+    VALORANT interlock and external-session ownership checks remain mandatory.
+    """
+    global _ETW_AUTO_RUNNING
+    state = STATE.setdefault("kernel", {}).setdefault("etw_engine", {})
+    try:
+        state.update(auto_state="recording", auto_started_at=time.time(), auto_reason="bounded WPR diagnostic sample active")
+        result = capture_kernel_window(12)
+        if result.get("ok"):
+            state.update(
+                auto_state="idle", auto_last_at=time.time(), auto_last_result="captured",
+                auto_reason=f"captured 12 seconds; {result.get('decoded', {}).get('event_count', 0)} decoded events",
+            )
+        else:
+            state.update(auto_state="blocked", auto_last_result="not captured",
+                         auto_reason=str(result.get("error") or "WPR capture was refused")[:260])
+    except Exception as exc:
+        state.update(auto_state="error", auto_last_result="failed",
+                     auto_reason=f"{type(exc).__name__}: {str(exc)[:200]}")
+        heartbeat("advanced ETW kernel observer", 0, err=state["auto_reason"])
+    finally:
+        with _ETW_AUTO_LOCK:
+            _ETW_AUTO_RUNNING = False
+
+
 def _etw_schedule(ts: float) -> None:
-    global _LAST_ETW
+    global _LAST_ETW, _ETW_AUTO_RUNNING
     config = CFG.get("advanced", {}) if isinstance(CFG.get("advanced"), dict) else {}
     enabled = config.get("etw_enabled") is True
+    automatic_opt_in = bool(CFG.get("autopilot", {}).get("etw_capture") is True)
+    interval = max(120, min(900, int(config.get("etw_auto_interval_s", 300) or 300)))
     game = STATE.get("game")
+    activity = STATE.get("activity_intelligence", {})
+    activity_current = activity.get("current") if isinstance(activity, dict) else {}
+    activity_current = activity_current if isinstance(activity_current, dict) else {}
     state = STATE.setdefault("kernel", {}).setdefault("etw_engine", {})
-    state.setdefault("available", bool(locate_wpr()) if IS_WIN else False)
-    state.setdefault("recorder", "Windows Performance Recorder (inbox)")
-    state.setdefault("state", "idle" if IS_WIN else "unavailable")
-    state["enabled"] = enabled
-    if not enabled:
-        heartbeat("advanced ETW kernel observer", 0, "disabled by operator")
-        return
-    if not CFG.get("autopilot", {}).get("etw_capture"):
-        heartbeat("advanced ETW kernel observer", 0, "enabled; waiting for explicit automatic-capture opt-in")
-        return
+    wpr_available = bool(locate_wpr()) if IS_WIN else False
+    xperf_available = bool(locate_xperf()) if IS_WIN else False
+    state.update(
+        available=wpr_available, wpr_available=wpr_available, xperf_optional_available=xperf_available,
+        recorder="Windows Performance Recorder (inbox)",
+        enabled=enabled, auto_sampling_enabled=bool(enabled and automatic_opt_in),
+        auto_interval_s=interval,
+    )
     if not IS_WIN:
-        state.update(state="unavailable", error="Windows only"); return
+        state.update(state="unavailable", auto_state="unavailable", auto_reason="Windows only")
+        heartbeat("advanced ETW kernel observer", 0, "Windows only")
+        return
+    if not wpr_available:
+        state.update(state="unavailable", auto_state="unavailable",
+                     auto_reason="Windows Performance Recorder (wpr.exe) is unavailable. Xperf is optional.")
+        heartbeat("advanced ETW kernel observer", 0, state["auto_reason"])
+        return
+    if not enabled:
+        state.update(state="disabled", auto_state="disabled", auto_reason="ETW engine disabled in Performance settings")
+        heartbeat("advanced ETW kernel observer", 0, state["auto_reason"])
+        return
+    if not automatic_opt_in:
+        state.update(state="idle", auto_state="manual_only",
+                     auto_reason="Automatic sampling opt-in is off; the bounded manual capture button remains available.")
+        heartbeat("advanced ETW kernel observer", 0, state["auto_reason"])
+        return
     if safeguard.snapshot()["valorant_active"]:
-        heartbeat("advanced ETW kernel observer", 0, "VALORANT detected; kernel tracing hard-disabled")
+        state.update(state="blocked", auto_state="blocked", auto_reason="VALORANT detected; kernel tracing hard-disabled")
+        heartbeat("advanced ETW kernel observer", 0, state["auto_reason"])
         return
     guard = safeguard.check_action("etw_capture")
     if not guard["allowed"]:
-        heartbeat("advanced ETW kernel observer", 0, guard["reason"])
+        state.update(state="blocked", auto_state="blocked", auto_reason=str(guard["reason"])[:260])
+        heartbeat("advanced ETW kernel observer", 0, state["auto_reason"])
         return
-    if not game:
-        heartbeat("advanced ETW kernel observer", 0, "armed; waiting for configured non-protected game process")
+    game_active = bool(game)
+    activity_active = (
+        bool(activity_current.get("is_active"))
+        and not bool(activity_current.get("is_game"))
+        and float(activity_current.get("active_seconds") or 0) >= 120.0
+    )
+    if not game_active and not activity_active:
+        state.update(state="armed", auto_state="armed",
+                     auto_reason="Waiting for a stable active game or foreground work session (2 minutes).")
+        heartbeat("advanced ETW kernel observer", 0, state["auto_reason"])
         return
-    if ts - _LAST_ETW < 120: return
+    if ts - _LAST_ETW < interval:
+        state.update(state="armed", auto_state="armed",
+                     auto_reason=f"Sampling interval active · {max(0, int(interval - (ts - _LAST_ETW)))}s until next window.")
+        return
+    with _ETW_AUTO_LOCK:
+        if _ETW_AUTO_RUNNING:
+            return
+        _ETW_AUTO_RUNNING = True
     _LAST_ETW = ts
-    # Diagnostics are represented in the action queue/journal like every other
-    # operation. Autopilot runs this safe capture only after explicit opt-in.
-    from . import actions
-    aid = actions.propose("etw_capture", {"duration": 12}, origin="etw-engine",
-                          reason="Opted-in bounded ETW sample during an active game")
-    if not aid:
-        heartbeat("advanced ETW kernel observer", 120, "capture proposal refused by policy")
+    context_name = (game or {}).get("name") if isinstance(game, dict) else activity_current.get("app_name", "foreground work")
+    state.update(auto_state="queued", auto_reason=f"Opted-in 12-second sample queued for {str(context_name)[:100]}")
+    threading.Thread(target=_automatic_etw_worker, name="sentinel-auto-etw-capture", daemon=True).start()
+    heartbeat("advanced ETW kernel observer", interval, f"automatic bounded sample started for {str(context_name)[:100]}")
 
 
 def _check_network_evidence() -> dict:
@@ -2344,7 +2410,7 @@ def status() -> dict:
 def settings_update(payload: dict) -> dict:
     if not isinstance(payload, dict): raise ValueError("settings must be an object")
     current = CFG.get("advanced") if isinstance(CFG.get("advanced"), dict) else {}
-    allowed = {"etw_enabled", "lhm_enabled", "lhm_http_port", "cpu_temp_warn_c", "gpu_temp_warn_c", "auto_report_sessions"}
+    allowed = {"etw_enabled", "lhm_enabled", "lhm_http_port", "etw_auto_interval_s", "cpu_temp_warn_c", "gpu_temp_warn_c", "auto_report_sessions"}
     for key, value in payload.items():
         if key not in allowed: raise ValueError(f"unknown advanced setting: {key}")
         if key in ("etw_enabled", "lhm_enabled", "auto_report_sessions") and not isinstance(value, bool): raise ValueError(f"{key} must be boolean")
@@ -2354,6 +2420,9 @@ def settings_update(payload: dict) -> dict:
         if key == "lhm_http_port":
             if isinstance(value, bool) or not isinstance(value, int) or not 1 <= value <= 65535:
                 raise ValueError("lhm_http_port must be an integer between 1 and 65535")
+        if key == "etw_auto_interval_s":
+            if isinstance(value, bool) or not isinstance(value, int) or not 120 <= value <= 900:
+                raise ValueError("etw_auto_interval_s must be an integer between 120 and 900 seconds")
         current[key] = value
     CFG["advanced"] = current
     core.save_cfg(CFG)
