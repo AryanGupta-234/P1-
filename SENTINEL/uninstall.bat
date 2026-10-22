@@ -58,7 +58,7 @@ echo ============================================================
 echo  SENTINEL - Uninstall
 echo ============================================================
 if defined VERSION echo Installed release: %VERSION%
-echo Removing scheduled task and shortcuts...
+echo Removing scheduled task, Desktop shortcut and all Start Menu shortcuts...
 if defined PYTHON goto :run_versioned_python
 set "PY="
 where py >nul 2>&1
