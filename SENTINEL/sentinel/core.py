@@ -45,7 +45,7 @@ DEFAULTS = {
     "retention_days": 14,
     "advanced": {
         "etw_enabled": False, "lhm_enabled": False, "cpu_temp_warn_c": 88.0,
-        "gpu_temp_warn_c": 82.0, "auto_report_sessions": True,
+        "gpu_temp_warn_c": 82.0, "lhm_http_port": 8085, "auto_report_sessions": True,
     },
 }
 
@@ -190,6 +190,12 @@ def load_cfg():
             value = cfg["advanced"].get(key, default)
             if isinstance(default, bool):
                 cfg["advanced"][key] = value if isinstance(value, bool) else default
+            elif key == "lhm_http_port":
+                try:
+                    number = int(value)
+                    cfg["advanced"][key] = max(1, min(65535, number))
+                except (TypeError, ValueError, OverflowError):
+                    cfg["advanced"][key] = default
             else:
                 try:
                     number = float(value)
