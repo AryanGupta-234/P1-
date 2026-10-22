@@ -90,7 +90,7 @@ def test_semantic_task_clusters_form_from_observed_term_overlap(monkeypatch):
         "SELECT label,terms_json,app_keys_json,observations,active_seconds FROM activity_tasks WHERE id=?",
         (first,),
     ).fetchone()
-    assert row[0] == "python · automation · scheduler"
+    assert row[0] == "automation · python · scheduler"
     assert set(json.loads(row[1])) == {"python", "automation", "scheduler"}
     assert set(json.loads(row[2])) == {"app-a", "app-b"}
     assert row[3] == 2
