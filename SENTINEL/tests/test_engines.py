@@ -97,3 +97,27 @@ def test_wpr_status_parser_recognizes_documented_active_and_inactive_messages():
     inactive = SimpleNamespace(returncode=0, stdout="There are no trace profiles running.", stderr="")
     assert advanced._wpr_recording_state(active) is True
     assert advanced._wpr_recording_state(inactive) is False
+
+
+def test_cloud_ai_is_paused_during_games_when_game_pause_policy_is_enabled(monkeypatch):
+    now = time.time()
+    monkeypatch.setitem(core.STATE, "procs", [])
+    monkeypatch.setitem(core.STATE, "proc_scan_at", now)
+    monkeypatch.setitem(core.STATE, "game", {"name": "another-game.exe", "pid": 9001})
+    allowed, reason = ai_engine.inference_allowed(
+        "cloud-test", cloud=True, pause_when_gaming=True, slot="fast"
+    )
+    assert not allowed
+    assert "all model inference paused" in reason
+
+
+def test_script_host_plus_nonstandard_user_image_creates_review_signal():
+    result = security_engine.assess_process({
+        "name": "utility.exe",
+        "exe": r"C:\\Users\\Example\\Documents\\utility.exe",
+        "path_state": "present",
+        "parent_name": "powershell.exe",
+        "session_id": 1,
+    })
+    assert result["level"] == "review"
+    assert result["score"] >= 35

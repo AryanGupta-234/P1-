@@ -51,7 +51,7 @@ def assess_process(row: dict[str, Any]) -> dict[str, Any]:
             score += 28
             reasons.append("image launched from a user-writable or temporary location")
         elif not any(root in lower_path for root in TRUSTED_ROOTS):
-            score += 8
+            score += 14
             reasons.append("image is outside standard Windows/Program Files locations")
         if os.path.basename(path) != name:
             score += 18

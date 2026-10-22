@@ -19,8 +19,8 @@ def inference_allowed(model: str, *, cloud: bool = False, pause_when_gaming: boo
         return False, "game/process state is unknown; inference is paused until the process observer is healthy"
     if guard["valorant_active"]:
         return False, "all inference paused during VALORANT to preserve CPU/GPU/network headroom"
-    if not cloud and pause_when_gaming and runtime["game_active"]:
-        return False, "local inference paused during the active game session"
+    if pause_when_gaming and runtime["game_active"]:
+        return False, "all model inference paused during the active game session to preserve CPU/GPU/network headroom"
     if slot == "deep" and (not runtime["deep_ai_allowed"] or not memory["deep_inference_allowed"]):
         return False, "DEEP inference deferred by live CPU/RAM budget"
     if slot == "fast" and not runtime["fast_ai_allowed"]:
