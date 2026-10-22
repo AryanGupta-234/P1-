@@ -4,7 +4,7 @@ import json, os, subprocess, threading, time
 import psutil
 from pathlib import Path
 from . import core, safeguard
-from .core import CFG, IS_WIN, STATE, db, log, publish, TRACE_DIR
+from .core import CFG, IS_WIN, STATE, db, insert_id, log, publish, TRACE_DIR
 
 NO_WIN = 0x08000000 if IS_WIN else 0
 HIGH_PERF = "8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c"
@@ -264,9 +264,10 @@ def propose(kind, args=None, origin="brain", reason=""):
     auto_safe = (tier == "safe" and bool(CFG["autopilot"].get(kind))
                  and core.get_profile()["automation"])
     auto = auto_safe or decision["auto_approved"]
-    db("INSERT INTO actions(ts,kind,args,state,origin,result) VALUES(?,?,?,?,?,?)",
-       (time.time(), kind, json.dumps(args), "pending", origin, reason))
-    aid = db("SELECT MAX(id) FROM actions")[0][0]
+    aid = insert_id(
+        "INSERT INTO actions(ts,kind,args,state,origin,result) VALUES(?,?,?,?,?,?)",
+        (time.time(), kind, json.dumps(args), "pending", origin, reason),
+    )
     row = {"id": aid, "kind": kind, "desc": KINDS[kind], "origin": origin, "reason": reason,
            "state": "pending", "risk_score": decision["risk_score"],
            "priority": decision["priority"], "confidence": decision["confidence"],
