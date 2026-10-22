@@ -24,7 +24,7 @@ MEDIUM_RISK_BASE = {
     "game_profile_apply": 35,
     "power_plan": 35,
     "timer_resolution": 30,
-    "wifi_max_performance": 40,
+    "wifi_max_performance": 35,
     "pause_updater_service": 45,
 }
 
