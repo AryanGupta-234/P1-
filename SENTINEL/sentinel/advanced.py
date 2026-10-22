@@ -1413,53 +1413,95 @@ def _lhm_rest_sensors(port: int) -> tuple[list[dict], str]:
 
 
 def _lhm_sensor_result(sensor_rows: list[dict], provider: str, source: str, namespace: str) -> dict:
-    normalized = []
-    for sensor in sensor_rows[:600]:
-        if not isinstance(sensor, dict):
+    """Normalize all numeric sensor classes while retaining source and hardware identity."""
+    normalized: list[dict] = []
+    type_counts: dict[str, int] = {}
+    hardware_names: set[str] = set()
+    units = {
+        "temperature": "°C", "fan": "RPM", "clock": "MHz",
+        "power": "W", "voltage": "V", "load": "%",
+        "flow": "L/min", "control": "%", "level": "%",
+        "small data": "bytes", "data": "bytes", "factor": "ratio",
+    }
+    for raw in sensor_rows[:600]:
+        if not isinstance(raw, dict):
             continue
-        value = _lhm_number(sensor.get("Value"))
+        value = _lhm_number(raw.get("Value"))
         if value is None:
-            value = _lhm_number(sensor.get("RawValue"))
+            value = _lhm_number(raw.get("RawValue"))
         if value is None:
             continue
-        normalized.append({
-            "name": str(sensor.get("Name") or sensor.get("Text") or "")[:120],
-            "parent": str(sensor.get("Parent") or "")[:180],
-            "type": str(sensor.get("SensorType") or sensor.get("Type") or "")[:40],
-            "value": value,
-            "identifier": str(sensor.get("Identifier") or sensor.get("SensorId") or "")[:220],
-        })
+        name = str(raw.get("Name") or raw.get("Text") or "")[:120]
+        parent = str(raw.get("Parent") or "")[:180]
+        sensor_type = str(raw.get("SensorType") or raw.get("Type") or "Unknown")[:40]
+        identifier = str(raw.get("Identifier") or raw.get("SensorId") or "")[:220]
+        kind = sensor_type.casefold()
+        context = (parent + " " + name + " " + identifier).casefold().replace("\\", "/")
+        # Prefer explicit GPU identity before CPU parent labels, especially for iGPU sensors.
+        is_gpu = any(token in context for token in (
+            "nvidia", "geforce", "radeon", "graphics", "gpu", "video", "igpu",
+        ))
+        is_cpu = any(token in context for token in (
+            "intelcpu", "amdcpu", "intel core", "amd ryzen", "cpu", "processor",
+        ))
+        device_class = "GPU" if is_gpu else "CPU" if is_cpu else "OTHER"
+        item = {
+            "name": name, "parent": parent, "type": sensor_type,
+            "value": value, "unit": units.get(kind, ""),
+            "identifier": identifier, "device_class": device_class,
+        }
+        normalized.append(item)
+        type_counts[sensor_type] = type_counts.get(sensor_type, 0) + 1
+        if parent:
+            hardware_names.add(parent)
+
     if not normalized:
         return {"available": False, "reason": "Hardware monitor returned no numeric sensors", "provider": provider}
 
-    cpu_temperatures = []
-    per_core_temperatures = []
-    fan_rpm = []
-    hardware_names = set()
+    cpu_temperatures, gpu_temperatures, other_temperatures = [], [], []
+    per_core_temperatures, fan_rpm = [], []
+    cpu_clocks, gpu_clocks, cpu_power, gpu_power = [], [], [], []
+    cpu_voltage, gpu_voltage, cpu_load, gpu_load = [], [], [], []
+    buckets = {
+        ("CPU", "clock"): cpu_clocks, ("GPU", "clock"): gpu_clocks,
+        ("CPU", "power"): cpu_power, ("GPU", "power"): gpu_power,
+        ("CPU", "voltage"): cpu_voltage, ("GPU", "voltage"): gpu_voltage,
+        ("CPU", "load"): cpu_load, ("GPU", "load"): gpu_load,
+    }
     for sensor in normalized:
-        name = sensor["name"].casefold()
-        parent = sensor["parent"].casefold()
-        identifier = sensor["identifier"].casefold().replace("\\", "/")
         kind = sensor["type"].casefold()
         value = sensor["value"]
-        if sensor["parent"]:
-            hardware_names.add(sensor["parent"])
-        cpu_hardware = any(token in (parent + " " + identifier) for token in (
-            "intelcpu", "amdcpu", "intel core", "amd ryzen", "cpu", "processor"
-        ))
-        explicitly_gpu = any(token in (parent + " " + name + " " + identifier) for token in (
-            "nvidia", "geforce", "radeon", "graphics", "gpu", "video"
-        ))
-        cpu_named = any(token in name for token in ("cpu package", "cpu core", "processor package"))
-        if kind == "temperature" and -10.0 <= value <= 130.0 and (cpu_hardware or cpu_named) and not explicitly_gpu:
-            cpu_temperatures.append(sensor)
-            if re.search(r"\bcore\s*(?:#|\d|\[)", name) or "cpu core" in name:
-                per_core_temperatures.append(sensor)
-        if kind == "fan" and 0.0 < value <= 30000.0:
+        device = sensor["device_class"]
+        name = sensor["name"].casefold()
+        if kind == "temperature" and -10.0 <= value <= 130.0:
+            if device == "CPU":
+                cpu_temperatures.append(sensor)
+                if re.search(r"\bcore\s*(?:#|\d|\[)", name) or "cpu core" in name:
+                    per_core_temperatures.append(sensor)
+            elif device == "GPU":
+                gpu_temperatures.append(sensor)
+            else:
+                other_temperatures.append(sensor)
+        elif kind == "fan" and 0.0 <= value <= 30000.0:
+            # Zero RPM is an observed stopped-fan state, not a missing sensor.
             fan_rpm.append(sensor)
+        elif kind == "clock" and 0.0 <= value <= 20000.0:
+            target = buckets.get((device, kind))
+            if target is not None:
+                target.append(sensor)
+        elif kind == "power" and -1.0 <= value <= 2000.0:
+            target = buckets.get((device, kind))
+            if target is not None:
+                target.append(sensor)
+        elif kind == "voltage" and 0.0 <= value <= 100.0:
+            target = buckets.get((device, kind))
+            if target is not None:
+                target.append(sensor)
+        elif kind == "load" and 0.0 <= value <= 100.0:
+            target = buckets.get((device, kind))
+            if target is not None:
+                target.append(sensor)
 
-    # Prefer an explicit ASUS/embedded-controller or CPU fan reading over a
-    # GPU fan when several devices expose fan sensors.
     fan_rpm.sort(key=lambda item: (
         0 if any(x in (item["name"] + " " + item["parent"]).casefold()
                  for x in ("asus", "embedded controller", "cpu")) else
@@ -1467,20 +1509,22 @@ def _lhm_sensor_result(sensor_rows: list[dict], provider: str, source: str, name
                  for x in ("nvidia", "geforce", "gpu")) else 2
     ))
     return {
-        "available": True,
-        "source": source,
-        "provider": provider,
-        "namespace": namespace,
-        "checked_at": time.time(),
+        "available": True, "source": source, "provider": provider,
+        "cpu_source": provider, "namespace": namespace, "checked_at": time.time(),
+        "sensors": normalized[:600], "sensor_count": len(normalized),
+        "type_counts": type_counts, "hardware": sorted(hardware_names)[:40],
         "cpu_temperatures": cpu_temperatures[:48],
+        "gpu_temperatures": gpu_temperatures[:48],
+        "other_temperatures": other_temperatures[:48],
         "per_core_temperatures": per_core_temperatures[:64],
         "fan_rpm": fan_rpm[:32],
-        "sensor_count": len(normalized),
-        "hardware": sorted(hardware_names)[:40],
-        "cpu_sensor_count": len(cpu_temperatures),
-        "fan_sensor_count": len(fan_rpm),
+        "cpu_clocks": cpu_clocks[:48], "gpu_clocks": gpu_clocks[:48],
+        "cpu_power": cpu_power[:32], "gpu_power": gpu_power[:32],
+        "cpu_voltage": cpu_voltage[:32], "gpu_voltage": gpu_voltage[:32],
+        "cpu_load": cpu_load[:32], "gpu_load": gpu_load[:32],
+        "cpu_sensor_count": len(cpu_temperatures), "fan_sensor_count": len(fan_rpm),
         "cpu_reason": "" if cpu_temperatures else "Provider is responding, but no CPU temperature sensors were exposed for this hardware",
-        "fan_reason": "" if fan_rpm else "Provider is responding, but no fan RPM sensors were exposed; ASUS embedded-controller fan telemetry may not be supported",
+        "fan_reason": "" if fan_rpm else "Provider is responding, but no fan RPM sensors were exposed; embedded-controller access may be unavailable",
     }
 
 
@@ -1610,19 +1654,26 @@ def _hardware_loop() -> None:
     while not _STOP.is_set():
         try:
             if IS_WIN:
-                # _lhm_sample uses LHM when explicitly enabled and otherwise probes
-                # the read-only Windows ACPI thermal-zone provider as a fallback.
+                if CFG.get("advanced", {}).get("lhm_enabled") is True:
+                    try:
+                        from . import hardware_provider
+                        STATE["hardware_provider"] = hardware_provider.start_if_installed()
+                    except Exception as provider_exc:
+                        STATE["hardware_provider"] = {
+                            "installed": False, "running": False, "connected": False,
+                            "message": f"Managed sensor provider could not start: {type(provider_exc).__name__}: {str(provider_exc)[:140]}",
+                        }
                 result = _lhm_sample()
                 STATE["hardware_sensors"] = result
-                heartbeat("hardware thermal sensors (LHM / ACPI)", 5,
-                          f"{result.get('sensor_count', 0)} sensor(s) · {result.get('provider', 'unknown provider')}"
+                heartbeat("hardware telemetry (LHM / ACPI)", 5,
+                          f"{result.get('sensor_count', 0)} numeric sensor(s) · {result.get('provider', 'unknown provider')}"
                           if result.get("available") else result.get("reason", "unavailable"),
                           "" if result.get("available") else result.get("reason", "unavailable"))
             else:
-                STATE["hardware_sensors"] = {"available": False, "reason": "Windows thermal providers are unavailable on this platform"}
+                STATE["hardware_sensors"] = {"available": False, "reason": "Windows hardware sensor providers are unavailable on this platform"}
             _thermal_watch(time.time())
         except Exception as exc:
-            heartbeat("hardware thermal sensors (LHM / ACPI)", 5, err=f"{type(exc).__name__}: {str(exc)[:100]}")
+            heartbeat("hardware telemetry (LHM / ACPI)", 5, err=f"{type(exc).__name__}: {str(exc)[:100]}")
         _STOP.wait(5)
 
 
