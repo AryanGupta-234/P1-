@@ -95,7 +95,7 @@ def _bounded_int(value: Any, default: int, low: int, high: int) -> int:
 def _ensure_schema() -> None:
     core.db("""CREATE TABLE IF NOT EXISTS activity_apps(
         app_key TEXT PRIMARY KEY, app_name TEXT NOT NULL, executable TEXT NOT NULL DEFAULT '',
-        first_seen REAL NOT NULL, last_seen REAL NOT NULL, launches INTEGER NOT NULL DEFAULT 0,
+        first_seen REAL NOT NULL, last_seen REAL NOT NULL, focus_sessions INTEGER NOT NULL DEFAULT 0,
         foreground_seconds REAL NOT NULL DEFAULT 0, active_seconds REAL NOT NULL DEFAULT 0,
         last_window_class TEXT NOT NULL DEFAULT '', latest_terms_json TEXT NOT NULL DEFAULT '[]')""")
     core.db("""CREATE TABLE IF NOT EXISTS activity_sessions(
@@ -493,10 +493,10 @@ def _begin_segment(item: dict[str, Any], ts: float) -> dict[str, Any]:
          local.weekday(), local.hour, int(item["fullscreen"]), int(item["is_game"])),
     )
     core.db(
-        "INSERT INTO activity_apps(app_key,app_name,executable,first_seen,last_seen,launches,last_window_class,latest_terms_json) "
+        "INSERT INTO activity_apps(app_key,app_name,executable,first_seen,last_seen,focus_sessions,last_window_class,latest_terms_json) "
         "VALUES(?,?,?,?,?,1,?,?) ON CONFLICT(app_key) DO UPDATE SET "
         "app_name=excluded.app_name,executable=CASE WHEN excluded.executable<>'' THEN excluded.executable ELSE activity_apps.executable END,"
-        "last_seen=excluded.last_seen,launches=activity_apps.launches+1,last_window_class=excluded.last_window_class,latest_terms_json=excluded.latest_terms_json",
+        "last_seen=excluded.last_seen,focus_sessions=activity_apps.focus_sessions+1,last_window_class=excluded.last_window_class,latest_terms_json=excluded.latest_terms_json",
         (item["app_key"], item["app_name"], item["executable"], ts, ts,
          item["window_class"], json.dumps(list(terms.keys()))),
     )
@@ -615,6 +615,11 @@ def update_settings(payload: dict[str, Any]) -> dict[str, Any]:
         raise ValueError("activity settings must be an object")
     current = _settings()
     allowed = set(DEFAULT_SETTINGS)
+    numeric_limits = {
+        "sample_interval_s": (1, 5), "idle_after_seconds": (30, 900),
+        "retention_days": (7, 365), "min_launch_observations": (4, 30),
+        "auto_launch_cooldown_s": (1800, 86400),
+    }
     for key, value in payload.items():
         if key not in allowed:
             raise ValueError(f"unknown activity setting: {key}")
@@ -622,15 +627,18 @@ def update_settings(payload: dict[str, Any]) -> dict[str, Any]:
             if not isinstance(value, bool):
                 raise ValueError(f"{key} must be boolean")
         else:
-            if isinstance(value, bool) or not isinstance(value, int):
-                raise ValueError(f"{key} must be an integer")
+            bounds = numeric_limits[key]
+            if isinstance(value, bool) or not isinstance(value, int) or not bounds[0] <= value <= bounds[1]:
+                raise ValueError(f"{key} must be an integer between {bounds[0]} and {bounds[1]}")
         current[key] = value
-    CFG = core.CFG
-    CFG["activity"] = current
-    core.save_cfg(CFG)
+    config = core.CFG
+    config["activity"] = current
+    core.save_cfg(config)
     if not current["enabled"]:
         with _LOCK:
             _close_current(time.time())
+    elif IS_WIN and not _STARTED:
+        start()
     return {"saved": True, "settings": _settings(), "state": core.STATE.get("activity_intelligence", {})}
 
 
@@ -648,7 +656,7 @@ def snapshot() -> dict[str, Any]:
     day_cut = now - 86400
     week_cut = now - 7 * 86400
     app_rows = core.db(
-        "SELECT a.app_key,a.app_name,a.executable,a.launches,"
+        "SELECT a.app_key,a.app_name,a.executable,a.focus_sessions,"
         "COALESCE(SUM(CASE WHEN s.started_at>=? THEN s.foreground_seconds ELSE 0 END),0),"
         "COALESCE(SUM(CASE WHEN s.started_at>=? THEN s.active_seconds ELSE 0 END),0),"
         "MAX(s.started_at) FROM activity_apps a LEFT JOIN activity_sessions s ON s.app_key=a.app_key "
@@ -657,7 +665,7 @@ def snapshot() -> dict[str, Any]:
     )
     apps = [{
         "app_key": r[0], "app_name": r[1], "executable": r[2],
-        "launches": int(r[3] or 0), "foreground_seconds_7d": round(float(r[4] or 0), 1),
+        "focus_sessions": int(r[3] or 0), "foreground_seconds_7d": round(float(r[4] or 0), 1),
         "active_seconds_7d": round(float(r[5] or 0), 1), "last_seen": float(r[6] or 0),
         "launchable": _safe_launch_path(str(r[2] or "")),
     } for r in app_rows]
