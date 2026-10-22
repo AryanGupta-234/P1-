@@ -26,3 +26,7 @@ SENTINEL also probes Windows ACPI thermal zones where supported. ACPI zone
 readings are explicitly labeled as platform readings, not calibrated CPU
 package/core temperatures. No driver, LHM instance or sensor utility is
 installed by SENTINEL.
+
+## Third-party hardware sensor provider
+
+The optional managed LibreHardwareMonitor provider is downloaded only from the official GitHub v0.9.6 release and checked against its pinned SHA-256 digest before archive extraction. Extraction rejects traversal paths, symlinks, oversized archives and missing required files. Its HTTP listener is configured on IPv4 loopback only (`127.0.0.1:8085`); SENTINEL uses read-only GET requests and never calls fan-control endpoints. Installing the provider is an explicit operator action. Any optional PawnIO driver prompt is owned by LibreHardwareMonitor and requires the operator's decision; SENTINEL does not accept it or install drivers automatically.
