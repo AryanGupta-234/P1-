@@ -29,3 +29,4 @@ def test_managed_sensor_provider_ui_and_boot_contract_are_present():
     assert 'api("/api/hardware/provider/start"' in app
     for element_id in ("bootProgress", "bootPct", "bootStage", "bootLog", "bootSkip"):
         assert f'id="{element_id}"' in html
+    assert "boot().catch(error =>" in app
