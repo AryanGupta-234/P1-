@@ -485,7 +485,7 @@ def _record_transition(previous: dict[str, Any], current: dict[str, Any], ts: fl
     )
 
 
-def _begin_segment(item: dict[str, Any], ts: float) -> dict[str, Any]:
+def _begin_segment(item: dict[str, Any], ts: float, *, increment_focus: bool = True) -> dict[str, Any]:
     local = datetime.fromtimestamp(ts).astimezone()
     terms = Counter(item.get("terms") or [])
     row_id = core.insert_id(
@@ -498,11 +498,11 @@ def _begin_segment(item: dict[str, Any], ts: float) -> dict[str, Any]:
     )
     core.db(
         "INSERT INTO activity_apps(app_key,app_name,executable,first_seen,last_seen,focus_sessions,last_window_class,latest_terms_json) "
-        "VALUES(?,?,?,?,?,1,?,?) ON CONFLICT(app_key) DO UPDATE SET "
+        "VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(app_key) DO UPDATE SET "
         "app_name=excluded.app_name,executable=CASE WHEN excluded.executable<>'' THEN excluded.executable ELSE activity_apps.executable END,"
-        "last_seen=excluded.last_seen,focus_sessions=activity_apps.focus_sessions+1,last_window_class=excluded.last_window_class,latest_terms_json=excluded.latest_terms_json",
+        "last_seen=excluded.last_seen,focus_sessions=activity_apps.focus_sessions+excluded.focus_sessions,last_window_class=excluded.last_window_class,latest_terms_json=excluded.latest_terms_json",
         (item["app_key"], item["app_name"], item["executable"], ts, ts,
-         item["window_class"], json.dumps(list(terms.keys()))),
+         int(bool(increment_focus)), item["window_class"], json.dumps(list(terms.keys()))),
     )
     return {
         **item, "session_row_id": row_id, "started_at": ts, "last_sample": ts,
@@ -535,7 +535,7 @@ def _sample_once(now: float | None = None, snapshot: dict[str, Any] | None = Non
         _close_current(ts)
         if previous and not same_app:
             _record_transition(previous, item, ts)
-        current = _begin_segment(item, ts)
+        current = _begin_segment(item, ts, increment_focus=(previous is None or not same_app))
         _CURRENT = current
 
     current = _CURRENT
