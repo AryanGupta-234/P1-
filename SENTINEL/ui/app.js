@@ -202,7 +202,7 @@ const NICE = { wpr_trace: "Capture WPR diagnostic trace", etw_capture: "Capture 
 async function loadActions() {
   const a = await api("/api/actions"), p = a.filter(x => x.state === "pending");
   $("#b-act").hidden = !p.length; $("#b-act").textContent = p.length;
-  $("#pend").innerHTML = p.map(x => `<div class="act"><div class="d"><b>${esc(x.desc)}</b><span>${esc(x.risk || "unknown risk")} · risk ${esc(x.risk_score ?? "--")}/100 · ${esc(x.priority || "normal")} priority · confidence ${Math.round(Number(x.confidence || 0) * 100)}% · ${esc(x.origin)}</span><small>${esc(x.approval_decision || "manual_approval")} · ${esc(x.result || "")}</small></div><button class="btn sm" data-r="${x.id}">APPROVE</button><button class="btn sm or" data-d="${x.id}">DISMISS</button></div>`).join("") || '<div class="empty">nothing waiting for approval</div>';
+  $("#pend").innerHTML = p.map(x => `<div class="act"><div class="d"><b>${esc(x.desc)}</b><span>${esc(x.risk || "unknown risk")} · risk ${esc(x.risk_score ?? "--")}/100 · ${esc(x.priority || "normal")} priority · confidence ${Math.round(Number(x.confidence || 0) * 100)}% · ${esc(x.origin)}</span><small>${esc(x.approval_decision || "manual_approval")} · ${esc(x.result || "")}</small></div>${x.approval_decision === "blocked" ? '<span class="tag bad">BLOCKED</span>' : x.approval_decision === "auto_approved" ? '<span class="tag ok">AUTO APPROVED</span>' : `<button class="btn sm" data-r="${x.id}">APPROVE</button>`}<button class="btn sm or" data-d="${x.id}">DISMISS</button></div>`).join("") || '<div class="empty">nothing waiting for approval</div>';
   $$("[data-r]").forEach(b => b.onclick = async () => {
     const item = p.find(x => x.id === +b.dataset.r);
     let confirmed = false;
