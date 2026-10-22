@@ -15,7 +15,7 @@ AUTO_MEDIUM_ALLOWLIST = frozenset({
 PRIORITY_BASE = {
     "etw_capture": 25, "wpr_trace": 25,
     "game_profile_apply": 55, "power_plan": 45,
-    "timer_resolution": 35, "wifi_max_performance": 40,
+    "timer_resolution": 35, "wifi_max_performance": 35,
     "pause_updater_service": 30,
     "flush_dns": 20, "trim_bg": 35, "bg_priority": 40,
     "terminate_process": 30,
@@ -54,12 +54,12 @@ def evaluate(
         risk = MEDIUM_RISK_BASE.get(kind, 60)
         if reversible:
             risk -= 15
-    risk = min(100, max(0, risk + min(30, len(warnings) * 8)))
+    risk = min(100, max(0, risk + min(20, len(warnings) * 4)))
     if not supported or not guard_ok:
         risk = 100
 
     confidence = 0.97 if supported and guard_ok else 0.0
-    confidence = max(0.0, confidence - min(0.35, len(warnings) * 0.08))
+    confidence = max(0.0, confidence - min(0.10, len(warnings) * 0.02))
     priority = PRIORITY_BASE.get(kind, 20)
     if any(word in " ".join(str(x) for x in warnings).casefold()
            for word in ("urgent", "critical", "degraded")):
