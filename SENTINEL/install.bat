@@ -198,7 +198,8 @@ echo ============================================================
 echo Status       : SUCCESS - task, shortcuts and elevated agent verified
 echo Installed at: "%VERSION_DIR%"
 echo Desktop      : SENTINEL shortcut
-echo Start Menu   : All users - Programs ^> SENTINEL
+echo Start Menu   : SENTINEL (user + all users; searchable directly from Start)
+echo Start Menu   : Programs ^> SENTINEL (organized shortcut group)
 echo Agent        : Running with highest available privileges
 echo Data         : "%ProgramData%\Sentinel" (preserved)
 echo Previous versions were not overwritten or removed.
