@@ -149,3 +149,35 @@ def test_transition_time_window_wraps_across_midnight(monkeypatch):
     activity_engine._suggestions("app-key", now)
     assert "MIN(ABS(t.hour_local-?),24-ABS(t.hour_local-?))<=2" in observed["sql"]
     assert observed["args"][2] == observed["args"][3]
+
+
+def test_hourly_segments_do_not_count_as_new_app_focus_sessions(monkeypatch):
+    connection = isolated_activity_db(monkeypatch)
+    monkeypatch.setattr(activity_engine, "_CURRENT", None)
+    monkeypatch.setattr(activity_engine.core, "STATE", {})
+    monkeypatch.setattr(activity_engine, "_settings", lambda: dict(activity_engine.DEFAULT_SETTINGS))
+    sample = {
+        "app_key": "observed-application",
+        "app_name": "ObservedApp",
+        "executable": "",
+        "pid": 200,
+        "process_created": 100.0,
+        "window_class": "WindowClass",
+        "terms": ["planning", "notes"],
+        "idle_seconds": 0.0,
+        "fullscreen": False,
+        "is_game": False,
+    }
+    start = datetime.now().astimezone().replace(minute=59, second=0, microsecond=0).timestamp()
+    activity_engine._sample_once(start, sample)
+    activity_engine._sample_once(start + 3600, sample)
+    focus_sessions = connection.execute(
+        "SELECT focus_sessions FROM activity_apps WHERE app_key=?",
+        ("observed-application",),
+    ).fetchone()[0]
+    segment_count = connection.execute(
+        "SELECT COUNT(*) FROM activity_sessions WHERE app_key=?",
+        ("observed-application",),
+    ).fetchone()[0]
+    assert segment_count == 2
+    assert focus_sessions == 1
