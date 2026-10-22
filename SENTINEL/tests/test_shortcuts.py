@@ -38,4 +38,4 @@ def test_installer_reports_top_level_start_menu_entry():
 
 
 def test_release_version_was_bumped_for_immutable_installer_layout():
-    assert (ROOT / "VERSION").read_text(encoding="utf-8").strip() == "1.0.6"
+    assert (ROOT / "VERSION").read_text(encoding="utf-8").strip() == "1.0.7"
