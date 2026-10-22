@@ -361,12 +361,23 @@ def list_actions(limit=40):
         meta = journal[0] if journal else ("dangerous", 0, 0, None, "")
         from . import approval_engine, advanced
         tier = advanced.risk_tier(r[2])
+        if r[3] == "pending":
+            try:
+                preview = advanced.action_preview(r[2], args)
+                current_guard = safeguard.check_action(r[2], args)
+            except Exception as exc:
+                preview = {"supported": False, "warnings": [f"live proposal review failed: {type(exc).__name__}"]}
+                current_guard = {"allowed": False, "reason": "live proposal review failed"}
+        else:
+            preview = {"supported": True, "warnings": []}
+            current_guard = {"allowed": True}
         approval = approval_engine.evaluate(
-            r[2], tier=tier, preview={"supported": True, "warnings": []},
-            safeguard={"allowed": True},
+            r[2], tier=tier, preview=preview,
+            safeguard=current_guard,
             auto_medium_enabled=bool(CFG.get("approval_policy", {}).get("auto_approve_reversible_medium", False)),
             automation_enabled=bool(core.get_profile()["automation"]),
-            reversible=r[2] in approval_engine.AUTO_MEDIUM_ALLOWLIST,
+            reversible=(r[2] in approval_engine.AUTO_MEDIUM_ALLOWLIST and preview.get("undo_available") is True)
+                       or (r[2] in approval_engine.AUTO_MEDIUM_ALLOWLIST and r[3] != "pending" and bool(meta[1])),
         )
         if tier == "safe" and CFG.get("autopilot", {}).get(r[2]) and core.get_profile()["automation"]:
             approval.update(decision="auto_approved", auto_approved=True,
