@@ -252,14 +252,27 @@ def propose(kind, args=None, origin="brain", reason=""):
         return None
     # Only explicitly opted-in SAFE diagnostic actions may run automatically.
     # Medium risk always needs a fresh approval; dangerous actions never run.
-    auto = (preview.get("risk") == "safe" and bool(CFG["autopilot"].get(kind))
-            and core.get_profile()["automation"])
+    from . import approval_engine
+    tier = advanced.risk_tier(kind)
+    journal_ready = tier == "safe" or tier == "medium"
+    decision = approval_engine.evaluate(
+        kind, tier=tier, preview=preview, safeguard=guard,
+        auto_medium_enabled=bool(CFG.get("approval_policy", {}).get("auto_approve_reversible_medium", False)),
+        automation_enabled=bool(core.get_profile()["automation"]),
+        reversible=journal_ready and tier == "medium",
+    )
+    auto_safe = (tier == "safe" and bool(CFG["autopilot"].get(kind))
+                 and core.get_profile()["automation"])
+    auto = auto_safe or decision["auto_approved"]
     db("INSERT INTO actions(ts,kind,args,state,origin,result) VALUES(?,?,?,?,?,?)",
        (time.time(), kind, json.dumps(args), "pending", origin, reason))
     aid = db("SELECT MAX(id) FROM actions")[0][0]
-    row = {"id": aid, "kind": kind, "desc": KINDS[kind], "origin": origin, "reason": reason, "state": "pending"}
+    row = {"id": aid, "kind": kind, "desc": KINDS[kind], "origin": origin, "reason": reason,
+           "state": "pending", "risk_score": decision["risk_score"],
+           "priority": decision["priority"], "confidence": decision["confidence"],
+           "approval_decision": "auto_approved" if auto else decision["decision"]}
     publish("action", row)
-    log("actions", f"{origin} proposes: {KINDS[kind]}" + (f" - {reason}" if reason else ""), "info")
+    log("actions", f"{origin} proposes: {KINDS[kind]} · risk {decision['risk_score']}/100 · {decision['priority']} priority · {decision['decision']}" + (f" - {reason}" if reason else ""), "info")
     if auto:
         threading.Thread(target=execute, args=(aid,), daemon=True).start()
     return aid
@@ -280,11 +293,29 @@ def execute(aid, *, user_confirmed=False):
             log("safeguard", f"{kind} execution blocked: {guard['reason'][:180]}", "warn")
             return reason
         if tier == "dangerous":
-            return "blocked by risk policy: dangerous actions are never automated and this action has no approved reversible implementation"
+            reason = "blocked by risk policy: dangerous actions are never automated and this action has no approved reversible implementation"
+            db("UPDATE actions SET state='blocked',result=? WHERE id=?", (reason[:400], aid))
+            return reason
+        auto_decision = {"auto_approved": False}
         if tier == "medium" and not user_confirmed:
-            return "explicit user approval required; action remains pending"
+            from . import approval_engine
+            preview = advanced.action_preview(kind, args)
+            auto_decision = approval_engine.evaluate(
+                kind, tier=tier, preview=preview, safeguard=guard,
+                auto_medium_enabled=bool(CFG.get("approval_policy", {}).get("auto_approve_reversible_medium", False)),
+                automation_enabled=bool(core.get_profile()["automation"]),
+                reversible=True,
+            )
+            if not auto_decision["auto_approved"]:
+                return "explicit user approval required; " + auto_decision["reason"]
+            log("approval", f"automatically approved {kind}: risk {auto_decision['risk_score']}/100, confidence {auto_decision['confidence']:.2f}", "ok")
         try:
-            advanced.prepare_action(int(aid), kind, args)
+            prepared = advanced.prepare_action(int(aid), kind, args)
+            if tier == "medium" and not user_confirmed and not prepared.get("undo_available"):
+                db("DELETE FROM action_journal WHERE action_id=?", (int(aid),))
+                reason = "automatic approval refused: a verified undo snapshot was not available"
+                db("UPDATE actions SET state='blocked',result=? WHERE id=?", (reason[:400], aid))
+                return reason
         except Exception as exc:
             db("UPDATE actions SET state='blocked',result=? WHERE id=?", (f"{type(exc).__name__}: {str(exc)[:250]}", aid))
             log("actions", f"{kind} blocked before execution: {type(exc).__name__}: {str(exc)[:180]}", "warn")
@@ -328,8 +359,20 @@ def list_actions(limit=40):
         except Exception: args = {}
         journal = db("SELECT risk,undo_available,changed,reverted_at,revert_result FROM action_journal WHERE action_id=?", (r[0],))
         meta = journal[0] if journal else ("dangerous", 0, 0, None, "")
+        from . import approval_engine, advanced
+        tier = advanced.risk_tier(r[2])
+        approval = approval_engine.evaluate(
+            r[2], tier=tier, preview={"supported": True, "warnings": []},
+            safeguard={"allowed": True},
+            auto_medium_enabled=bool(CFG.get("approval_policy", {}).get("auto_approve_reversible_medium", False)),
+            automation_enabled=bool(core.get_profile()["automation"]),
+            reversible=bool(meta[1]),
+        )
         decoded.append({"id": r[0], "ts": r[1], "kind": r[2], "desc": KINDS.get(r[2], r[2]),
             "state": r[3], "origin": r[4], "result": r[5], "args": args,
-            "risk": meta[0], "undo_available": bool(meta[1]), "changed": bool(meta[2]),
+            "risk": meta[0], "risk_score": approval["risk_score"], "priority_score": approval["priority_score"],
+            "priority": approval["priority"], "confidence": approval["confidence"],
+            "approval_decision": approval["decision"],
+            "undo_available": bool(meta[1]), "changed": bool(meta[2]),
             "reverted_at": meta[3], "revert_result": meta[4]})
     return decoded
