@@ -613,6 +613,9 @@ async function loadAdvanced(force = false) {
     const cpuItems = Array.isArray(hs.cpu_temperatures) ? hs.cpu_temperatures : []; const cpuVals = cpuItems.map(x=>Number(x.value)).filter(Number.isFinite);
     const cpuTemp = cpuVals.length ? Math.max(...cpuVals) : null;
     const sensorProvider = hs.provider || "External hardware monitor";
+    const acpiZone = hs.cpu_source === "Windows ACPI WMI";
+    if ($("#adv-cpu-title")) $("#adv-cpu-title").textContent = acpiZone ? "Platform thermal zone" : "CPU package";
+    if ($("#adv-cpu-label")) $("#adv-cpu-label").textContent = acpiZone ? "ZONE °C" : "CPU °C";
     const cpuSrc = hs.available
       ? `${hs.cpu_source || sensorProvider} · ${cpuItems.length} temperature reading(s)${hs.cpu_reason ? " · " + hs.cpu_reason : cpuItems.length ? "" : " · CPU sensor not exposed"}`
       : (hs.reason || "Optional sensor provider unavailable");
