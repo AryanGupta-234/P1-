@@ -838,11 +838,12 @@ function renderActivityIntelligence(data) {
   $("#ax-sampled").textContent = d.sampled_at ? `sampled ${hms(d.sampled_at)}` : "awaiting foreground sample";
   $("#ax-active-today").textContent = activityDuration(daily.active_seconds);
   $("#ax-foreground-today").textContent = activityDuration(daily.foreground_seconds);
-  $("#ax-app-count").textContent = apps.length.toLocaleString();
+  const observedAppCount = Math.max(apps.length, Number(d.total_apps_observed || 0));
+  $("#ax-app-count").textContent = observedAppCount.toLocaleString();
   $("#ax-task-count").textContent = tasks.length.toLocaleString();
   $("#ax-active-meter").style.width = Math.min(100, Number(daily.active_seconds || 0) / 28800 * 100) + "%";
   $("#ax-foreground-meter").style.width = Math.min(100, Number(daily.foreground_seconds || 0) / 43200 * 100) + "%";
-  $("#ax-app-meter").style.width = Math.min(100, apps.length * 3) + "%";
+  $("#ax-app-meter").style.width = Math.min(100, observedAppCount * 3) + "%";
   $("#ax-task-meter").style.width = Math.min(100, tasks.length * 6) + "%";
 
   $("#ax-current-app").textContent = current.app_name || "No foreground application";
@@ -891,7 +892,7 @@ function renderActivityIntelligence(data) {
     const sessionTerms = Array.isArray(session.semantic_terms) ? session.semantic_terms : [];
     const end = session.ended_at ? new Date(session.ended_at*1000).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"}) : "current";
     return `<div class="activity-recent-row"><div class="activity-recent-time"><b>${new Date(session.started_at*1000).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"})}</b><small>${end}</small></div><div class="activity-recent-main"><b>${esc(session.app_name||"Application")}</b><small>${activityDuration(session.active_seconds)} active · ${activityDuration(session.idle_seconds)} idle · ${session.is_game?"GAME":session.is_fullscreen?"FULLSCREEN":"WINDOWED"}${session.interrupted?" · INTERRUPTED":""}</small><div class="activity-token-list">${sessionTerms.slice(0,5).map(term=>`<span class="activity-token">${esc(term)}</span>`).join("")}</div></div></div>`;
-  }).join("") : '<div class="empty">Recent sessions appear as focus moves between applications.';
+  }).join("") : '<div class="empty">Recent sessions appear as focus moves between applications.</div>';
 
   const toggles = [["ax-enabled","enabled"],["ax-semantic","semantic_context"],["ax-suggestions-enabled","suggestions_enabled"],["ax-auto-launch","auto_launch_learned_apps"]];
   for (const [id,key] of toggles) { const el=$("#"+id); if(el && document.activeElement!==el)el.checked=!!settings[key]; }
