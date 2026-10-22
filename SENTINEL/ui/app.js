@@ -898,7 +898,7 @@ function renderActivityIntelligence(data) {
   for (const [id,key] of toggles) { const el=$("#"+id); if(el && document.activeElement!==el)el.checked=!!settings[key]; }
   const numeric = [["ax-interval","sample_interval_s"],["ax-idle","idle_after_seconds"],["ax-min-observations","min_launch_observations"],["ax-launch-cooldown","auto_launch_cooldown_s"]];
   for (const [id,key] of numeric) { const el=$("#"+id); if(el && document.activeElement!==el)el.value=Number(settings[key]||0); }
-  $("[data-activity-launch]").forEach(button => button.onclick = async () => {
+  $$("[data-activity-launch]").forEach(button => button.onclick = async () => {
     button.disabled = true; button.textContent = "OPENING…";
     try {
       const result = await api("/api/activity/launch", {app_key:button.dataset.activityLaunch});
