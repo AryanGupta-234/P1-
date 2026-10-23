@@ -1,4 +1,10 @@
-## Startup data hydration and visual command cockpit (v1.2.10)
+## Graphical telemetry workspaces and compact technical disclosures (v1.2.11)
+
+Network, Kernel and System now open with visual telemetry surfaces: latency/jitter and throughput meters, DPC/interrupt/paging/disk meters, and a Windows host banner with memory headroom, Secure Boot state and installed-app count. These are fed from the existing local snapshot and inventory response; they do not introduce extra collectors or new background threads.
+
+Technical explanations that are useful for audit but not needed for everyday interaction are collapsed into guided disclosures. Core status, measured values, trends, action buttons and safety controls remain visible. The signal meters distinguish missing samples from observed zeroes. Workspace animations use transform/opacity rather than continuous blur effects, with reduced-motion preferences respected.
+
+## Startup data hydration and visual command cockpit (v1.2.11)
 
 SENTINEL's splash screen is now a real workspace data-loading phase, not an animation-only prelude. It authenticates the local node, restores the initial snapshot, then awaits telemetry history, events, insights, safeguard/runtime policies, source status and AI transcript. It subsequently hydrates the operational workspaces (command, network, agent, system inventory, process field and thermal/ETW) and the remaining workspaces (kernel archive, activity intelligence, memory/goals, intelligence feed, AI, evidence, action control, configuration, task history and activity stream) before revealing the dashboard.
 
