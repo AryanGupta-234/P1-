@@ -1519,3 +1519,91 @@ nav button:hover{transform:translateX(2px)}
   .command-node-radar:before,.command-node-radar:after{animation:none!important}
   .cmd-gauge-card,.command-launchers button{transition:none!important}
 }
+
+/* ── Startup telemetry + guided detail surfaces ─────────────────────────── */
+.boot{overflow:auto;overscroll-behavior:contain;padding:12px}
+.boot-console{max-height:calc(100dvh - 24px);overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin}
+.boot-live-readouts{
+  width:100%;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;
+}
+.boot-live-readouts>div{
+  position:relative;min-width:0;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 9px;
+  align-items:center;padding:8px 9px;border:1px solid rgba(140,232,212,.12);border-radius:8px;
+  background:linear-gradient(130deg,rgba(13,37,40,.7),rgba(5,16,21,.58));
+}
+.boot-live-readouts small{font:7px var(--mo);letter-spacing:.13em;color:#729793}
+.boot-live-readouts b{font:700 11px var(--mo);color:#dff8ed;font-variant-numeric:tabular-nums}
+.boot-live-readouts i{grid-column:1/-1;height:3px;border-radius:99px;background:rgba(150,201,189,.1);overflow:hidden;position:relative}
+.boot-live-readouts i:after{content:"";position:absolute;inset:0 auto 0 0;width:0;border-radius:inherit;background:linear-gradient(90deg,#55c9b4,#a2f3df,#ffad78);box-shadow:0 0 12px rgba(117,231,208,.6);transition:width .38s ease}
+.boot-live-readouts [data-boot-bar]::after{width:var(--boot-value,0%)}
+.boot-modules{grid-template-columns:repeat(4,minmax(0,1fr));gap:5px;margin-top:13px}
+.boot-module{padding:6px 7px;gap:6px;border-radius:8px}
+.boot-module strong{font-size:6px}
+.boot-module-copy b{font-size:7px;letter-spacing:.035em}
+.boot-log-wrap{margin-top:9px}
+.boot-log{height:24px}
+@media(max-height:820px) and (min-width:761px){
+  .boot-console{padding:18px 22px}
+  .boot-body{padding:13px;gap:18px}
+  .boot-visual{min-height:310px;padding:13px}
+  .boot-reactor{width:min(190px,17vw)}
+  .boot-lanes{margin-top:13px;gap:5px}
+  .boot-lanes>div{padding:6px}
+  .boot-progress-meta{margin-top:13px}
+  .boot-modules{margin-top:11px}
+  .boot-log-wrap{margin-top:6px}
+}
+@media(max-width:520px){
+  .boot-live-readouts{grid-column:1/-1;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px}
+  .boot-live-readouts>div{padding:6px 4px;gap:4px}
+  .boot-live-readouts small{font-size:6px}
+  .boot-live-readouts b{font-size:8px}
+  .boot-modules{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media(prefers-reduced-motion:reduce){
+  .boot-live-readouts i:after{transition:none}
+}
+
+/* Text-light disclosure controls on the command cockpit. */
+.command-more-metrics,.command-detail{min-width:0}
+.command-more-metrics>summary,.command-detail>summary{
+  list-style:none;display:flex;align-items:center;justify-content:space-between;gap:10px;
+  min-width:0;cursor:pointer;padding:10px 14px;border:1px solid rgba(132,204,192,.11);
+  border-radius:9px;background:linear-gradient(100deg,rgba(14,35,38,.76),rgba(7,18,22,.68));
+  color:#93b5ad;font:700 8px var(--mo);letter-spacing:.13em;
+  transition:background .2s,border-color .2s,color .2s;
+}
+.command-more-metrics>summary::-webkit-details-marker,.command-detail>summary::-webkit-details-marker{display:none}
+.command-more-metrics>summary:after,.command-detail>summary i{content:"＋";color:#80d7c0;font-style:normal;font-size:12px;transition:transform .2s}
+.command-more-metrics[open]>summary:after,.command-detail[open]>summary i{transform:rotate(45deg)}
+.command-more-metrics>summary:hover,.command-detail>summary:hover{border-color:rgba(132,226,202,.3);color:#d5f6e9;background:rgba(14,40,42,.85)}
+.command-more-metrics>summary small{margin-left:auto;color:#6d8984;font:7px var(--mo);letter-spacing:.04em}
+.command-more-metrics>.metrics{margin-top:9px}
+.command-detail>.pb,.command-detail>.feed{margin-top:8px;max-height:230px;overflow:auto}
+.command-detail>.feed{padding:7px 12px}
+.g-cmd>.panel{min-width:0}
+.g-cmd .command-detail{padding:0 12px}
+.g-cmd .command-detail>summary{padding:8px 9px;font-size:7px}
+.g-cmd .command-detail>summary i{margin-left:auto}
+@media(max-width:620px){
+  .command-more-metrics>summary{flex-wrap:wrap}
+  .command-more-metrics>summary small{margin-left:0}
+}
+
+/* Consistent high-end motion language across every workspace. */
+.view.on>.panel,.view.on>.grid>.panel,.view.on>.cols2>.panel,.view.on>.agent-grid>.panel,
+.view.on>.adv-grid>.panel,.view.on>.engine-grid>.panel{
+  animation:workspacePanelEnter .38s cubic-bezier(.2,.75,.2,1) both;
+}
+.view.on>.grid>.panel:nth-child(2),.view.on>.cols2>.panel:nth-child(2),
+.view.on>.agent-grid>.panel:nth-child(2),.view.on>.adv-grid>.panel:nth-child(2){animation-delay:.035s}
+.view.on>.grid>.panel:nth-child(3),.view.on>.cols2>.panel:nth-child(3),
+.view.on>.agent-grid>.panel:nth-child(3),.view.on>.adv-grid>.panel:nth-child(3){animation-delay:.07s}
+@keyframes workspacePanelEnter{from{opacity:0;transform:translateY(8px);filter:blur(2px)}to{opacity:1;transform:translateY(0);filter:blur(0)}}
+.view .ph{transition:color .2s,border-color .2s}
+.view .panel:focus-within{border-color:rgba(122,226,199,.35);box-shadow:0 0 0 1px rgba(122,226,199,.06),0 18px 50px rgba(0,0,0,.22)}
+.view .btn:focus-visible,.view button:focus-visible{outline:2px solid rgba(140,232,212,.8);outline-offset:3px}
+@media(prefers-reduced-motion:reduce){
+  .view.on>.panel,.view.on>.grid>.panel,.view.on>.cols2>.panel,.view.on>.agent-grid>.panel,
+  .view.on>.adv-grid>.panel,.view.on>.engine-grid>.panel{animation:none!important}
+}
