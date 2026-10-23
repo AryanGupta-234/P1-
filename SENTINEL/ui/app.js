@@ -1036,6 +1036,7 @@ async function boot() {
   }
   bootModuleState("stream", streamConnected ? "READY" : "DEGRADED",
     streamConnected ? "Local event channel opened" : "Live link will reconnect in the background");
+  if (!streamConnected) degraded++;
   bp(72, "HYDRATING WORKSPACES", "Loading intelligence, evidence, action and history datasets");
   await runPool(secondaryJobs);
 
