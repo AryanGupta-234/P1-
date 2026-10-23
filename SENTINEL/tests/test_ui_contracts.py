@@ -59,7 +59,7 @@ def test_managed_sensor_provider_ui_and_boot_contract_are_present():
         "apiRetry(\"/api/insights\", 1)",
     ):
         assert boot_start < app.index(startup_request, boot_start) < first_paint
-    assert "setTimeout(resolve, 1800)" in app
+    assert "setTimeout(() => resolve({ settled: false }), 1800)" in app
     assert "await runPool(jobs)" not in app
     assert "await runPool(secondaryJobs)" not in app
     assert "function starfield()" not in app
