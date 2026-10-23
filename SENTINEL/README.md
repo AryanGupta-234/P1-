@@ -1,3 +1,13 @@
+## Startup, workspace preloading and interface polish (v1.0.8)
+
+The desktop HUD now performs a staged startup: it restores the first local snapshot, history and policy state, opens the live stream, then prepares the command, agent, process, system, network, kernel, thermal, activity, intelligence, evidence, control and configuration workspaces behind the splash screen. A visible initialization checklist and journal report which modules are ready or degraded. A 20-second workspace warm cache avoids repeating those first page API calls when navigating immediately after startup; stale pages are refreshed normally. The splash has no skip control and does not use a session-based shortcut around initialization.
+
+The shared interface layer now applies consistent responsive grid sizing, safe text wrapping for long process paths and telemetry labels, flexible panel headings, table cell wrapping, glass layers and restrained ambient motion. The startup reactor, live module-state indicators, spectrum visual, panel sheen and view transitions provide the animated graphical elements; operating-system reduced-motion preferences remain respected.
+
+### LibreHardwareMonitor endpoint readiness
+
+A launched LibreHardwareMonitor process is not considered sensor-ready until its loopback `/data.json` endpoint returns a valid hardware tree. SENTINEL reports whether the provider is installed, running, connected, or running without its Remote Web Server. When the process is alive but the endpoint is off, open its tray icon/window and select **Options → Remote Web Server → Run**. The endpoint listens on the configured localhost port (8085 by default). The agent resumes an explicitly enabled managed provider at its next startup, but it does not click the server menu, accept PawnIO prompts or install optional kernel drivers for the operator.
+
 # SENTINEL
 
 **Windows gaming-performance guardian and diagnostics HUD.**
