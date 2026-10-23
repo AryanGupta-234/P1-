@@ -194,27 +194,27 @@
   <article class="panel engine-card">
    <div class="ph">01 / SAFEGUARD <em>POLICY AUTHORITY</em></div><div class="pb">
     <div class="engine-state" id="engine-safe-state">CHECKING</div><div class="engine-facts" id="engine-safe-facts"></div>
-    <small class="engine-note">Backend-enforced deny rules. VALORANT detection forces telemetry-only operation; WPR, ETW, process tuning and system mutations are rejected.</small>
+    <details class="engine-note-disclosure"><summary>POLICY / DETAILS</summary><small class="engine-note">Backend-enforced deny rules. VALORANT detection forces telemetry-only operation; WPR, ETW, process tuning and system mutations are rejected.</small></details>
    </div>
   </article>
   <article class="panel engine-card">
    <div class="ph">02 / ADAPTIVE RUNTIME <em>LOAD SHEDDING</em></div><div class="pb">
     <div class="engine-state" id="engine-runtime-state">CHECKING</div><div class="engine-facts" id="engine-runtime-facts"></div>
     <div class="engine-actions"><button class="btn sm" id="engine-rebalance">RE-EVALUATE POLICY</button></div>
-    <small class="engine-note">Reduces SENTINEL's own polling, inventory and local inference workload. Does not alter Windows power, CPU affinity, or process priorities.</small>
+    <details class="engine-note-disclosure"><summary>POLICY / DETAILS</summary><small class="engine-note">Reduces SENTINEL's own polling, inventory and local inference workload. Does not alter Windows power, CPU affinity, or process priorities.</small></details>
    </div>
   </article>
   <article class="panel engine-card">
    <div class="ph">03 / AI ORCHESTRATOR <em>MODEL ADMISSION</em></div><div class="pb">
     <div class="engine-state" id="engine-ai-state">CHECKING</div><div class="engine-facts" id="engine-ai-facts"></div>
-    <small class="engine-note">FAST/DEEP admission is deterministic and resource-aware. Model output is advisory; the action engine and safeguards remain authoritative.</small>
+    <details class="engine-note-disclosure"><summary>POLICY / DETAILS</summary><small class="engine-note">FAST/DEEP admission is deterministic and resource-aware. Model output is advisory; the action engine and safeguards remain authoritative.</small></details>
    </div>
   </article>
   <article class="panel engine-card">
    <div class="ph">04 / UNIFIED MEMORY <em>CONTEXT GOVERNOR</em></div><div class="pb">
     <div class="engine-state" id="engine-memory-state">CHECKING</div><div class="engine-facts" id="engine-memory-facts"></div>
     <div class="engine-actions"><button class="btn sm or" id="engine-memory-trim">CLEAR WORKING CACHE</button></div>
-    <small class="engine-note">Coordinates bounded prompt context and short-lived retrieval cache. Durable SQLite memories are never deleted by cache cleanup.</small>
+    <details class="engine-note-disclosure"><summary>POLICY / DETAILS</summary><small class="engine-note">Coordinates bounded prompt context and short-lived retrieval cache. Durable SQLite memories are never deleted by cache cleanup.</small></details>
    </div>
   </article>
   <article class="panel engine-card engine-span">
@@ -222,13 +222,13 @@
    <div class="pb">
     <div class="engine-security-summary" id="engine-process-summary">Waiting for process lifecycle observations.</div>
     <div class="engine-process-list" id="engine-process-list"></div>
-    <small class="engine-note">Explainable metadata heuristics only. A flagged process is a review candidate—not a malware verdict. SENTINEL does not silently terminate or quarantine processes.</small>
+    <details class="engine-note-disclosure"><summary>POLICY / DETAILS</summary><small class="engine-note">Explainable metadata heuristics only. A flagged process is a review candidate—not a malware verdict. SENTINEL does not silently terminate or quarantine processes.</small></details>
    </div>
   </article>
   <article class="panel engine-card engine-span">
    <div class="ph">06 / DEEP CAPTURE <em>WINDOWS PERFORMANCE RECORDER</em></div>
    <div class="pb engine-capture">
-    <div><div class="engine-state" id="engine-wpr-state">WPR STATUS UNKNOWN</div><small class="engine-note">Uses inbox <b>wpr.exe</b> with bounded GeneralProfile.Light capture. Xperf is optional and not required to record.</small></div>
+    <div><div class="engine-state" id="engine-wpr-state">WPR STATUS UNKNOWN</div><details class="engine-note-disclosure"><summary>POLICY / DETAILS</summary><small class="engine-note">Uses inbox <b>wpr.exe</b> with bounded GeneralProfile.Light capture. Xperf is optional and not required to record.</small></details></div>
     <button class="btn or" id="engine-wpr">PROPOSE 12s WPR CAPTURE</button>
    </div>
   </article>
@@ -583,7 +583,7 @@
   </div>
   <div class="cols2">
     <div class="panel"><div class="ph">Environment evidence <em id="ix-state-meta">observed facts only</em></div>
-      <div class="pb"><div class="msg"><small>State semantics</small>Missing entries are treated as unknown, never as proof that a process or resource was removed. Each state row carries bounded evidence IDs and an explainable recency score.</div>
+      <div class="pb"><details class="guided-detail"><summary>HOW EVIDENCE IS SCORED</summary><div class="msg"><small>State semantics</small>Missing entries are treated as unknown, never as proof that a process or resource was removed. Each state row carries bounded evidence IDs and an explainable recency score.</div></details>
         <div class="list" id="ix-state"></div><button class="btn sm" id="ix-refresh-state" style="margin-top:10px">REFRESH EVIDENCE MODEL</button></div></div>
     <div class="panel"><div class="ph">Hardware-aware local routing <em id="ix-ollama-state">checking</em></div>
       <div class="pb"><div class="kv" id="ix-runtime"></div><div class="msg" style="margin-top:12px"><small>Model routing policy</small>Routine work prefers an installed 3B model. Complex work may use 7B only when at least 7.5 GiB RAM is currently available. Embeddings use an already-installed Nomic model. No model is downloaded and this layer never uses cloud inference.</div>
