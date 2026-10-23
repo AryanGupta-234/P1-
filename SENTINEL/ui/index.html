@@ -148,13 +148,13 @@
     </div>
   </div>
 
-  <div class="metrics" id="metrics">
+  <details class="command-more-metrics"><summary>MORE TELEMETRY <small>Evidence · collectors · posture</small></summary><div class="metrics" id="metrics">
     <div class="metric" data-j="ker"><small>CPU LOAD</small><b id="m-cpu">--</b><span id="m-cpu-s">host processor</span><div class="meter"><i id="m-cpu-m"></i></div></div>
     <div class="metric" data-j="ker"><small>MEMORY FREE</small><b id="m-ram">--</b><span id="m-ram-s">RAM headroom</span><div class="meter"><i id="m-ram-m"></i></div></div>
     <div class="metric" data-j="evi"><small>EVIDENCE RECORDS</small><b id="m-evt">--</b><span>local SQLite vault</span><div class="meter"><i id="m-evt-m"></i></div></div>
     <div class="metric" data-j="tsk"><small>SENSOR MATRIX</small><b id="m-sen">--</b><span id="m-sen-s">collectors healthy</span><div class="meter"><i id="m-sen-m"></i></div></div>
     <div class="metric" data-j="sys"><small>POSTURE SIGNALS</small><b id="m-pos">--</b><span id="m-pos-s">open findings</span><div class="meter"><i id="m-pos-m"></i></div></div>
-  </div>
+  </div></details>
   <div class="grid g-cmd">
     <div class="panel" style="grid-row:span 2"><div class="ph">Core status<em id="c-game">no game</em></div>
       <div class="core">
@@ -174,9 +174,9 @@
       <div class="pb"><div class="ph" style="padding:6px 0;border:0">CPU cores<em id="c-cores"></em></div><div class="cores" id="cores"></div></div>
     </div>
     <div class="panel"><div class="ph">Live vitals<em>1 s resolution</em></div><div class="pb"><div class="tiles" id="tiles"></div></div></div>
-    <div class="panel"><div class="ph">Threat &amp; lag insights<em id="i-n"></em></div><div class="pb"><div class="list" id="ins"></div></div></div>
-    <div class="panel"><div class="ph">What I'm doing right now<em>live</em></div><div class="feed sm" id="ticker"></div></div>
-    <div class="panel"><div class="ph">Lag culprits<em>since start</em></div><div class="pb"><div class="list" id="culp"></div></div></div>
+    <div class="panel"><div class="ph">Threat &amp; lag insights<em id="i-n"></em></div><details class="command-detail"><summary>VIEW INSIGHTS <i>↗</i></summary><div class="pb"><div class="list" id="ins"></div></div></details></div>
+    <div class="panel"><div class="ph">What I'm doing right now<em>live</em></div><details class="command-detail"><summary>OPEN LIVE ACTIVITY <i>↗</i></summary><div class="feed sm" id="ticker"></div></details></div>
+    <div class="panel"><div class="ph">Lag culprits<em>since start</em></div><details class="command-detail"><summary>INSPECT RESOURCE CAUSES <i>↗</i></summary><div class="pb"><div class="list" id="culp"></div></div></details></div>
   </div>
 </section>
 
