@@ -187,6 +187,13 @@
   <div><small class="engine-kicker">SENTINEL / AUTONOMOUS CONTROL PLANE</small><h2>ENGINE DECK</h2><p>Independent policy engines · adaptive workload control · observable decisions</p></div>
   <div class="engine-head-actions"><span class="pill ok" id="engine-health">SYNCING</span><button class="btn sm" id="engine-refresh">REFRESH</button></div>
  </div>
+ <div class="engine-pulse-rail" aria-label="Engine status overview">
+  <div class="engine-pulse-card" data-engine-pulse="safeguard"><i></i><small>SAFEGUARD</small><b id="engine-pulse-safeguard">CHECKING</b></div>
+  <div class="engine-pulse-card" data-engine-pulse="runtime"><i></i><small>ADAPTIVE RUNTIME</small><b id="engine-pulse-runtime">CHECKING</b></div>
+  <div class="engine-pulse-card" data-engine-pulse="ai"><i></i><small>AI ORCHESTRATOR</small><b id="engine-pulse-ai">CHECKING</b></div>
+  <div class="engine-pulse-card" data-engine-pulse="memory"><i></i><small>UNIFIED MEMORY</small><b id="engine-pulse-memory">CHECKING</b></div>
+  <div class="engine-pulse-card" data-engine-pulse="wpr"><i></i><small>WPR CAPTURE</small><b id="engine-pulse-wpr">CHECKING</b></div>
+ </div>
  <div class="engine-guard-banner" id="engine-guard-banner">
   <div class="engine-guard-icon">◇</div><div><b id="engine-guard-title">SAFETY POLICY INITIALIZING</b><small id="engine-guard-detail">Reading process identities and active protection services.</small></div>
   <span class="tag" id="engine-guard-mode">UNKNOWN</span>
@@ -249,6 +256,11 @@
     <div class="metric"><small>WINDOWS HANDLES</small><b id="ag-handles">--</b><span id="ag-handles-sub">Agent process handles</span><div class="meter"><i id="ag-handles-meter"></i></div></div>
     <div class="metric"><small>AGENT UPTIME</small><b id="ag-uptime">--</b><span id="ag-uptime-sub">Current process run</span><div class="meter"><i id="ag-uptime-meter"></i></div></div>
   </div>
+  <div class="agent-health-visual">
+    <div class="agent-health-visual-head"><div><span>COLLECTOR FABRIC</span><b>LIVE ENGINE HEALTH</b></div><em id="ag-map-summary">WAITING FOR HEARTBEATS</em></div>
+    <div class="agent-health-map" id="ag-source-map"><div class="empty">Collector map initializes from the local heartbeat matrix.</div></div>
+    <div class="agent-health-legend"><span><i class="healthy"></i> HEALTHY</span><span><i class="degraded"></i> DEGRADED / STALE</span><span><i class="unavailable"></i> UNAVAILABLE</span></div>
+  </div>
   <div class="agent-grid">
     <div class="panel">
       <div class="ph">Resource impact <em>agent process vs whole host</em></div>
@@ -275,7 +287,7 @@
     <div class="panel agent-span">
       <div class="ph">Agent functions &amp; collector health <em><span id="ag-health-summary">waiting for heartbeats</span></em></div>
       <div class="pb agent-health-counts" id="ag-health-counts"></div>
-      <div class="pb" style="overflow:auto"><table id="ag-workers"></table></div>
+      <div class="pb"><details class="guided-detail"><summary>DETAILED WORKER / HEARTBEAT TELEMETRY</summary><div style="overflow:auto"><table id="ag-workers"></table></div></details></div>
     </div>
     <div class="panel">
       <div class="ph">Live background threads <em id="ag-thread-count">runtime process inventory</em></div>
@@ -617,19 +629,19 @@
       <div class="pb"><details class="guided-detail"><summary>HOW EVIDENCE IS SCORED</summary><div class="msg"><small>State semantics</small>Missing entries are treated as unknown, never as proof that a process or resource was removed. Each state row carries bounded evidence IDs and an explainable recency score.</div></details>
         <div class="list" id="ix-state"></div><button class="btn sm" id="ix-refresh-state" style="margin-top:10px">REFRESH EVIDENCE MODEL</button></div></div>
     <div class="panel"><div class="ph">Hardware-aware local routing <em id="ix-ollama-state">checking</em></div>
-      <div class="pb"><div class="kv" id="ix-runtime"></div><div class="msg" style="margin-top:12px"><small>Model routing policy</small>Routine work prefers an installed 3B model. Complex work may use 7B only when at least 7.5 GiB RAM is currently available. Embeddings use an already-installed Nomic model. No model is downloaded and this layer never uses cloud inference.</div>
+      <div class="pb"><div class="kv" id="ix-runtime"></div><details class="guided-detail" style="margin-top:12px"><summary>MODEL ROUTING POLICY</summary><div class="msg"><small>Model routing policy</small>Routine work prefers an installed 3B model. Complex work may use 7B only when at least 7.5 GiB RAM is currently available. Embeddings use an already-installed Nomic model. No model is downloaded and this layer never uses cloud inference.</div></details>
         <div class="row" style="margin-top:10px"><div><b>Windows UI Automation</b><small>Bounded structural inspection; no text, values, screenshots or clicks.</small></div><button class="btn sm" id="ix-uia">INSPECT</button></div><div id="ix-uia-result" class="list" style="margin-top:8px"></div></div></div>
     <div class="panel"><div class="ph">Persistent memory <em>local · provenance-aware · explicit</em></div>
       <div class="pb">
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px"><input id="ix-memory-q" placeholder="Search stored memories..." style="flex:1;min-width:180px"><button class="btn sm" id="ix-memory-search">SEARCH</button><button class="btn sm" id="ix-memory-semantic">SEMANTIC</button></div><label class="ix-sensitive-toggle"><input type="checkbox" id="ix-include-sensitive"><span>Include sensitive records in this explicit search</span></label>
-        <div class="msg"><small>Memory contract</small>Sensitive memories are excluded from retrieval and embedding indexing by default. Saving, correction and deletion remain explicit; corrections preserve the prior revision.</div>
+        <details class="guided-detail"><summary>MEMORY / PRIVACY CONTRACT</summary><div class="msg"><small>Memory contract</small>Sensitive memories are excluded from retrieval and embedding indexing by default. Saving, correction and deletion remain explicit; corrections preserve the prior revision.</div></details>
         <textarea id="ix-memory-content" rows="3" placeholder="Add a memory or an explicit note..." style="width:100%;margin:10px 0"></textarea>
         <div style="display:flex;gap:8px;flex-wrap:wrap"><select id="ix-memory-kind"><option value="episodic">EPISODIC</option><option value="working">WORKING</option><option value="semantic">SEMANTIC</option><option value="procedural">PROCEDURAL</option><option value="prospective">PROSPECTIVE</option></select><select id="ix-memory-sensitivity"><option value="internal">INTERNAL</option><option value="public">PUBLIC</option><option value="sensitive">SENSITIVE</option></select><button class="btn or" id="ix-memory-add">SAVE MEMORY</button><button class="btn sm" id="ix-memory-index">INDEX NON-SENSITIVE</button></div>
         <div class="list" id="ix-memories" style="margin-top:12px"></div>
       </div></div>
     <div class="panel"><div class="ph">Goals &amp; reviewed plans <em>planning is not execution</em></div>
       <div class="pb"><div style="display:grid;gap:8px"><input id="ix-goal-title" placeholder="New goal title"><textarea id="ix-goal-desc" rows="2" placeholder="Describe the outcome you want..."></textarea><button class="btn or" id="ix-goal-add">CREATE GOAL</button></div>
-        <div class="msg" style="margin-top:12px"><small>Plan lifecycle</small>Local model suggestions are stored as integrity-checked drafts. Accepting a draft creates ordered goal steps only; it does not run commands or perform system actions.</div>
+        <details class="guided-detail" style="margin-top:12px"><summary>PLAN / EXECUTION BOUNDARY</summary><div class="msg"><small>Plan lifecycle</small>Local model suggestions are stored as integrity-checked drafts. Accepting a draft creates ordered goal steps only; it does not run commands or perform system actions.</div></details>
         <div class="list" id="ix-goals" style="margin-top:12px"></div></div></div>
   </div>
 </section>
