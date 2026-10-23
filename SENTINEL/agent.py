@@ -682,7 +682,7 @@ def main():
         print(f"Port {CFG['port']} is already in use by another local process; SENTINEL was not started.")
         return 1
 
-    from sentinel import collectors, brain, ai, intel, server, advanced, activity_engine
+    from sentinel import collectors, brain, ai, intel, server, advanced, activity_engine, hardware_provider
     from sentinel import runtime_engine, memory_engine, security_engine
     try:
         core.STATE["traces"] = [
@@ -714,6 +714,26 @@ def main():
     log("core", f"SENTINEL starting (pid {os.getpid()}, {'Windows' if IS_WIN else 'demo'}, run {run_id})", "ok")
     advanced.start()
     atexit.register(advanced.shutdown)
+    # Resume the explicitly enabled, checksum-pinned hardware provider after
+    # logon/restart. This never installs PawnIO or accepts driver prompts.
+    advanced_settings = core.CFG.get("advanced") if isinstance(core.CFG.get("advanced"), dict) else {}
+    if IS_WIN and advanced_settings.get("lhm_enabled") is True:
+        try:
+            provider_state = hardware_provider.start_if_installed()
+            connected = bool(provider_state.get("connected"))
+            core.log(
+                "hardware-provider",
+                "LibreHardwareMonitor sensor endpoint is ready" if connected else str(
+                    provider_state.get("next_step") or provider_state.get("reason") or
+                    "LibreHardwareMonitor requires attention before sensor polling can resume"
+                ),
+                "ok" if connected else "warn",
+                endpoint_state=provider_state.get("endpoint_state", "unknown"),
+                port=provider_state.get("port"),
+                sensor_count=provider_state.get("sensor_count", 0),
+            )
+        except Exception as exc:
+            core.log("hardware-provider", f"provider recovery failed: {type(exc).__name__}: {str(exc)[:160]}", "warn")
     activity_engine.start()
     atexit.register(activity_engine.shutdown)
     runtime_engine.start()
