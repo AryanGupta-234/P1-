@@ -3,7 +3,44 @@ const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAl
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const qs = new URLSearchParams(location.search);
 let TOKEN = qs.get("t") || ""; try { if (TOKEN) localStorage.setItem("st", TOKEN); else TOKEN = localStorage.getItem("st") || ""; } catch (e) { }
-const api = (p, body) => fetch(p, { method: body ? "POST" : "GET", headers: { "X-Sentinel-Token": TOKEN, "Content-Type": "application/json" }, body: body ? JSON.stringify(body) : undefined }).then(r => r.json());
+const API_CONCURRENCY = 4;
+const API_TIMEOUT_MS = 16000;
+let apiActive = 0;
+const apiWaiters = [];
+async function acquireApiSlot() {
+  if (apiActive >= API_CONCURRENCY) await new Promise(resolve => apiWaiters.push(resolve));
+  apiActive++;
+}
+function releaseApiSlot() {
+  apiActive = Math.max(0, apiActive - 1);
+  const next = apiWaiters.shift();
+  if (next) next();
+}
+async function api(p, body) {
+  await acquireApiSlot();
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
+  try {
+    const response = await fetch(p, {
+      method: body ? "POST" : "GET",
+      headers: { "X-Sentinel-Token": TOKEN, "Content-Type": "application/json" },
+      body: body ? JSON.stringify(body) : undefined,
+      cache: "no-store",
+      signal: controller.signal
+    });
+    let payload;
+    try { payload = await response.json(); }
+    catch { throw new Error("Local agent returned invalid JSON (HTTP " + response.status + ")"); }
+    if (!response.ok && !payload?.error) payload.error = "Local agent returned HTTP " + response.status;
+    return payload;
+  } catch (error) {
+    if (error?.name === "AbortError") throw new Error("Local request timed out: " + p);
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+    releaseApiSlot();
+  }
+}
 async function apiRetry(path, attempts = 2) {
   let lastError;
   for (let attempt = 0; attempt <= attempts; attempt++) {
@@ -29,8 +66,23 @@ const dur = s => { s = Math.floor(s); const d = Math.floor(s / 86400), h = Math.
 /* ---------- P1 shell: titles, toasts, splash, starfield ---------- */
 const TITLES = { cmd: "COMMAND", eng: "ENGINE DECK", agent: "AGENT", sys: "SYSTEM", act: "ACTIVITY", activityx: "ACTIVITY INTELLIGENCE", proc: "PROCESSES", net: "NETWORK", ker: "KERNEL", adv: "TUNER / THERMAL", evi: "EVIDENCE", intelx: "INTELLIGENCE", int: "INTEL FEED", ai: "AI CORE", ctl: "CONTROL", fc: "FEATURES", tsk: "TASKS" };
 const VKEYS = Object.keys(TITLES);
-function toast(msg, kind = "") { const b = document.createElement("div"); b.className = "toast " + kind; b.textContent = msg; $("#toasts").append(b); setTimeout(() => b.remove(), 5200); }
 let bootDone = false;
+let bootInProgress = true;
+const deferredToasts = [];
+function toast(msg, kind = "") {
+  if (bootInProgress) {
+    if (kind === "bad" || kind === "warn") {
+      deferredToasts.push({ msg: String(msg), kind });
+      while (deferredToasts.length > 8) deferredToasts.shift();
+    }
+    return;
+  }
+  const b = document.createElement("div");
+  b.className = "toast " + kind;
+  b.textContent = msg;
+  $("#toasts").append(b);
+  setTimeout(() => b.remove(), 5200);
+}
 const PAGE_WARMED = Object.create(null);
 const PAGE_WARM_TTL_MS = 20000;
 function pageIsWarm(key) {
@@ -91,8 +143,11 @@ function bootModuleState(key, state, detail = "") {
 function endBoot() {
   if (bootDone) return;
   bootDone = true;
+  bootInProgress = false;
   $("#boot").classList.add("done");
   $("#app").classList.add("ready");
+  const notices = deferredToasts.splice(0);
+  for (const notice of notices.slice(-4)) toast(notice.msg, notice.kind);
 }
 function starfield() {
   const c = $("#starfield"), x = c.getContext("2d"); if (matchMedia("(prefers-reduced-motion:reduce)").matches) return;
