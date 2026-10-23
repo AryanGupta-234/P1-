@@ -8,13 +8,18 @@ const API_TIMEOUT_MS = 16000;
 let apiActive = 0;
 const apiWaiters = [];
 async function acquireApiSlot() {
-  if (apiActive >= API_CONCURRENCY) await new Promise(resolve => apiWaiters.push(resolve));
-  apiActive++;
+  if (apiActive < API_CONCURRENCY) {
+    apiActive++;
+    return;
+  }
+  // A queued caller receives the released permit directly. Do not decrement
+  // and increment around the hand-off: that creates a brief over-admission race.
+  await new Promise(resolve => apiWaiters.push(resolve));
 }
 function releaseApiSlot() {
-  apiActive = Math.max(0, apiActive - 1);
   const next = apiWaiters.shift();
   if (next) next();
+  else apiActive = Math.max(0, apiActive - 1);
 }
 async function api(p, body) {
   await acquireApiSlot();
