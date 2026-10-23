@@ -113,7 +113,7 @@ function bp(percent, stage, detail, kind = "") {
   if (stageNode && stage) stageNode.textContent = stage;
   const detailNode = $("#bootDetail");
   if (detailNode && detail) detailNode.textContent = detail;
-  const active = value >= 100 ? "ready" : value < 34 ? "wake" : "sync";
+  const active = kind === "warn" ? "sync" : value >= 100 ? "ready" : value < 34 ? "wake" : "sync";
   const order = { wake: 0, sync: 1, ready: 2 };
   $$("[data-boot-step]").forEach(step => {
     const key = step.dataset.bootStep;
@@ -912,15 +912,18 @@ async function boot() {
     };
   }
 
-  setInterval(() => $("#h-clock").textContent = new Date().toLocaleTimeString([], { hour12: false }), 1000);
-  setInterval(() => {
-    if (view === "int") loadIntel();
-    if (view === "activityx") loadActivityIntelligence();
-    if (view === "ctl") loadActions();
-    if (view === "agent") loadAgent();
-  }, 10000);
-  setInterval(loadStatus, 15000);
-  setInterval(() => { if (view === "eng") loadEngines(); }, 8000);
+  if (TOKEN) {
+    setInterval(() => $("#h-clock").textContent = new Date().toLocaleTimeString([], { hour12: false }), 1000);
+    setInterval(() => {
+      if (view === "int") loadIntel();
+      if (view === "activityx") loadActivityIntelligence();
+      if (view === "ctl") loadActions();
+      if (view === "agent") loadAgent();
+    }, 10000);
+    setInterval(loadStatus, 15000);
+    setInterval(() => { if (view === "eng") loadEngines(); }, 8000);
+
+  }
 
   if (!TOKEN) {
     showBootRetry("SESSION REQUIRED", "Open SENTINEL from its installed desktop shortcut");
