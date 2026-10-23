@@ -1,3 +1,7 @@
+## UI revision 1.2.12
+
+Agent heartbeats are rendered as a visual collector map; the full worker table remains available under a disclosure for auditing. The Engine Deck pulse rail surfaces the state of existing safety, runtime, AI, memory and WPR engines. These cards are descriptive and do not grant execution authority. All action decisions remain subject to backend policy and explicit confirmation requirements.
+
 ## UI revision 1.2.11
 
 Network, Kernel and System views now expose measured telemetry through visual meters and a host summary. Long-form operational explanations are opt-in disclosures so the everyday interface emphasizes values and controls. The meters normalize their display only; their bars are not calibrated safety thresholds. Actual collector data and sample timestamps remain the source of truth.
