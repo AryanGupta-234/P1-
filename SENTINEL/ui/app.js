@@ -154,6 +154,15 @@ function endBoot() {
   const notices = deferredToasts.splice(0);
   for (const notice of notices.slice(-4)) toast(notice.msg, notice.kind);
 }
+function showBootRetry(stage, message) {
+  bp(100, stage, String(message || "The local agent did not return a complete startup snapshot").slice(0, 180), "warn");
+  $("#boot").classList.add("boot-error");
+  const retry = $("#bootRetry");
+  if (retry) {
+    retry.hidden = false;
+    retry.onclick = () => location.reload();
+  }
+}
 function updateBootTelemetry() {
   const live = S && typeof S.live === "object" ? S.live : {};
   const definitions = [
@@ -821,8 +830,7 @@ async function boot() {
     if (initial?.error) throw new Error(initial.error);
   } catch (error) {
     markDataFailure("core", error.message || "Local agent is unavailable");
-    bp(100, "LOCAL AGENT UNAVAILABLE", error.message || "Open the SENTINEL agent and retry", "warn");
-    $("#boot").classList.add("boot-error");
+    showBootRetry("LOCAL AGENT UNAVAILABLE", error.message || "Open the SENTINEL agent and retry");
     return;
   }
 
@@ -2124,13 +2132,10 @@ boot().catch(error => {
   const message = error && error.message ? error.message : String(error);
   console.error("SENTINEL startup failed", error);
   try {
-    const stage = $("#bootStage");
-    if (stage) stage.textContent = "STARTUP DEGRADED";
-    endBoot();
-  } catch (endError) {
-    console.error("SENTINEL could not close its startup overlay", endError);
+    showBootRetry("STARTUP DATA SYNC FAILED", message);
+  } catch (retryError) {
+    console.error("SENTINEL could not initialize startup retry", retryError);
     const overlay = document.getElementById("boot");
-    if (overlay) overlay.classList.add("done");
+    if (overlay) overlay.classList.add("boot-error");
   }
-  toast("Startup incomplete: " + message.slice(0, 180), "bad");
 });
