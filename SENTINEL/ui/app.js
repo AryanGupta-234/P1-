@@ -151,18 +151,19 @@ function endBoot() {
 }
 function updateBootTelemetry() {
   const live = S && typeof S.live === "object" ? S.live : {};
-  const values = [
-    ["cpu", "bootCpuValue", "bootCpuValue", "%", 100],
-    ["ram", "bootRamValue", "bootRamValue", "%", 100],
-    ["gpu", "bootGpuValue", "bootGpuValue", "%", 100],
-    ["dpc", "bootDpcValue", "bootDpcValue", "%", 100]
+  const definitions = [
+    ["cpu", "bootCpuValue", "%", 100, 0],
+    ["mem", "bootRamValue", "%", 100, 0],
+    ["gpu", "bootGpuValue", "%", 100, 0],
+    ["dpc", "bootDpcValue", "%", 8, 2]
   ];
-  for (const [key, valueId, , suffix, max] of values) {
-    const value = Number(live[key]);
-    const valid = live[key] != null && Number.isFinite(value);
-    const node = document.getElementById(valueId);
-    const bar = document.querySelector('[data-boot-bar="' + (key === "ram" ? "ram" : key) + '"]');
-    if (node) node.textContent = valid ? value.toFixed(key === "dpc" ? 2 : 0) + suffix : "--";
+  for (const [key, id, suffix, max, precision] of definitions) {
+    const raw = live[key];
+    const value = Number(raw);
+    const valid = raw != null && Number.isFinite(value);
+    const node = document.getElementById(id);
+    const bar = document.querySelector('[data-boot-bar="' + (key === "mem" ? "ram" : key) + '"]');
+    if (node) node.textContent = valid ? value.toFixed(precision) + suffix : "--";
     if (bar) bar.style.width = valid ? Math.max(0, Math.min(100, value / max * 100)) + "%" : "0%";
   }
   const processCount = document.getElementById("bootProcessCount");
@@ -200,6 +201,59 @@ function big(c, series, opts = {}) {
   x.strokeStyle = "rgba(184,230,91,.08)"; x.fillStyle = "#5a6a60"; x.font = "10px 'Share Tech Mono',monospace";
   for (let i = 0; i <= 4; i++) { const y = 4 + i * (h - 8) / 4; x.beginPath(); x.moveTo(0, y); x.lineTo(w, y); x.stroke(); x.fillText(fmt(hi - (hi - lo) * i / 4, hi < 10 ? 1 : 0), 4, y - 2); }
   series.forEach((s, i) => { line(x, H[s.k] || [], w, h, s.c, lo, hi, i === 0); x.fillStyle = s.c; x.fillText(s.l, w - 90, 14 + i * 12); });
+}
+
+function renderCommandVisuals() {
+  if (!S) return false;
+  const live = S.live || {};
+  const specs = [
+    ["cpu", "cmd-cpu-value", "cmd-cpu-note", 100, "%", 0, "Host processor load"],
+    ["mem", "cmd-mem-value", "cmd-mem-note", 100, "%", 0, "Physical memory pressure"],
+    ["gpu", "cmd-gpu-value", "cmd-gpu-note", 100, "%", 0, "Graphics processor load"],
+    ["dpc", "cmd-dpc-value", "cmd-dpc-note", 8, "%", 2, "Deferred procedure calls"]
+  ];
+  for (const [key, valueId, noteId, scale, suffix, precision, description] of specs) {
+    const raw = live[key];
+    const value = Number(raw);
+    const valid = raw != null && Number.isFinite(value);
+    const percent = valid ? Math.max(0, Math.min(100, value / scale * 100)) : 0;
+    const ring = document.querySelector('[data-cmd-gauge="' + key + '"]');
+    if (ring) {
+      ring.style.setProperty("--gauge-fill", percent + "%");
+      ring.classList.toggle("unavailable", !valid);
+      ring.classList.toggle("elevated", valid && percent >= 80);
+    }
+    const output = document.getElementById(valueId);
+    if (output) output.textContent = valid ? value.toFixed(precision) + suffix : "--";
+    const note = document.getElementById(noteId);
+    if (note) note.textContent = valid ? description : "No current sample";
+  }
+  const score = Number(live.lag_index);
+  const scoreNode = document.getElementById("cmd-node-score");
+  if (scoreNode) scoreNode.textContent = Number.isFinite(score) ? Math.round(score) : "--";
+  const nodeState = document.getElementById("cmd-node-state");
+  if (nodeState) {
+    nodeState.textContent = S.game ? "GAME SESSION" : "SYSTEM MONITORING";
+    nodeState.dataset.state = S.game ? "game" : "ready";
+  }
+  const nodeSub = document.getElementById("cmd-node-sub");
+  if (nodeSub) nodeSub.textContent = S.game?.name ? String(S.game.name).replace(/\.exe$/i, "") : "Local telemetry stream active";
+  const gameState = document.getElementById("cmd-game-state");
+  if (gameState) gameState.textContent = S.game ? "GAME ACTIVE" : "DESKTOP";
+  const processes = document.getElementById("cmd-node-processes");
+  if (processes) processes.textContent = Number(S.proc_total || (S.procs || []).length || 0).toLocaleString();
+  const cores = document.getElementById("cmd-node-cores");
+  if (cores) cores.textContent = (S.cores || []).length || "--";
+  const uptime = document.getElementById("cmd-node-uptime");
+  if (uptime) uptime.textContent = dur(Number(S.uptime || 0));
+  const canvas = document.getElementById("cmd-performance-chart");
+  if (canvas) big(canvas, [
+    { k: "cpu", c: "#69d6bd", l: "CPU" },
+    { k: "mem", c: "#b8e65b", l: "MEMORY" },
+    { k: "gpu", c: "#62c7e8", l: "GPU" },
+    { k: "dpc", c: "#ffad75", l: "DPC" }
+  ], { lo: 0, hi: 100 });
+  return true;
 }
 
 /* ---------- tiles ---------- */
@@ -604,7 +658,7 @@ function onTick(d) {
     }
   }
   $("#h-up").textContent = dur(d.uptime); updHero();
-  if (view === "cmd") { updTiles(); updMetrics(); }
+  if (view === "cmd") { updTiles(); updMetrics(); renderCommandVisuals(); }
   if (view === "tsk") updTasks();
   if (view === "act") updHeart();
   if (view === "proc") maybeRefreshProcesses();
@@ -821,6 +875,7 @@ async function boot() {
   $("#p-q").oninput = () => { clearTimeout(procQueryTimer); procQueryTimer = setTimeout(() => loadProcesses(true), 260); };
   $("#p-refresh").onclick = () => loadProcesses(true);
   $("#n-q").oninput = () => S && updNet();
+  $("[data-command-route]").forEach(button => button.onclick = () => show(button.dataset.commandRoute));
   $("#a-exp").onclick = () => {
     const content = LOGS.map(row => `${new Date(row.ts * 1000).toISOString()}\t${row.level}\t${row.src}\t${row.msg}`).join("\n");
     const link = document.createElement("a");
@@ -967,14 +1022,14 @@ async function boot() {
   // Primary operational datasets first; all remaining pages hydrate before first paint.
   bp(22, "HYDRATING OPERATIONAL DATA", "Four bounded request workers · no duplicate agent collectors");
   await runPool(jobs);
-  await streamReady;
+  const streamConnected = await streamReady;
   if (!streamSettled) {
     streamSettled = true;
     clearTimeout(streamTimer);
     resolveStream(false);
   }
-  bootModuleState("stream", streamSettled ? "READY" : "DEGRADED",
-    streamSettled ? "Local event channel opened" : "Live link will reconnect in the background");
+  bootModuleState("stream", streamConnected ? "READY" : "DEGRADED",
+    streamConnected ? "Local event channel opened" : "Live link will reconnect in the background");
   bp(72, "HYDRATING WORKSPACES", "Loading intelligence, evidence, action and history datasets");
   await runPool(secondaryJobs);
 
