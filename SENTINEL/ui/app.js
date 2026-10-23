@@ -781,10 +781,13 @@ async function boot() {
     return;
   }
 
+  const degradedModules = new Set();
   const markDataFailure = (key, detail) => {
+    degradedModules.add(key);
     bootModuleState(key, "DEGRADED", String(detail || "Data source unavailable").slice(0, 120));
   };
   const markDataReady = (key, detail) => {
+    degradedModules.delete(key);
     bootModuleState(key, "READY", detail || "Data synchronized");
     markPageWarm(key);
   };
@@ -832,6 +835,7 @@ async function boot() {
       return false;
     }
     apply(result.value);
+    degradedModules.delete(key);
     bootModuleState(key, "READY", label + " synchronized");
     return true;
   };
@@ -994,12 +998,12 @@ async function boot() {
   const allJobs = [...jobs, ...secondaryJobs];
   let completed = 0;
   const total = allJobs.length;
-  let degraded = foundationDegraded;
   const runJob = async ([key, label, work]) => {
     bootModuleState(key, "LOADING", "Loading " + label.toLowerCase());
     try {
       const result = await work();
       if (result === false) throw new Error("Data request completed without a usable dataset");
+      degradedModules.delete(key);
       markPageWarm(key);
       completed++;
       const detail = key === "proc"
@@ -1013,7 +1017,6 @@ async function boot() {
       return true;
     } catch (error) {
       completed++;
-      degraded++;
       markDataFailure(key, error?.message || "Dataset unavailable");
       bp(24 + completed / total * 72, "SOURCE DEGRADED · " + label, error?.message || "Dataset unavailable", "warn");
       return false;
@@ -1041,7 +1044,8 @@ async function boot() {
   }
   bootModuleState("stream", streamConnected ? "READY" : "DEGRADED",
     streamConnected ? "Local event channel opened" : "Live link will reconnect in the background");
-  if (!streamConnected) degraded++;
+  if (!streamConnected) markDataFailure("stream", "The event channel did not open before the splash timeout");
+  else degradedModules.delete("stream");
   bp(72, "HYDRATING WORKSPACES", "Loading intelligence, evidence, action and history datasets");
   await runPool(secondaryJobs);
 
@@ -1052,6 +1056,7 @@ async function boot() {
     updMetrics();
     renderCommandVisuals();
   }
+  const degraded = degradedModules.size;
   if (degraded) bp(98, "READY WITH DEGRADED SOURCES", degraded + " module(s) could not return complete data", "warn");
   else bp(99, "ALL DATASETS SYNCHRONIZED", "Every workspace was queried and its result rendered", "ok");
 
