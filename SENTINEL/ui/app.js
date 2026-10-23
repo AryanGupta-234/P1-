@@ -685,7 +685,7 @@ function show(v) {
   // Recently opened workspaces render from their short-lived local cache;
   // inactive screens fetch only when requested.
   if (pageIsWarm(v)) {
-    if (v === "cmd") { updHero(); updTiles(); updMetrics(); }
+    if (v === "cmd") { updHero(); updTiles(); updMetrics(); renderCommandVisuals(); }
     else if (v === "act") { updHeart(); renderFeed(); }
     else if (v === "net" && S) updNet();
     else if (v === "ai" && S) updAI();
@@ -711,7 +711,7 @@ function show(v) {
     return;
   }
   ({
-    cmd: () => { updTiles(); updMetrics(); },
+    cmd: () => { updTiles(); updMetrics(); renderCommandVisuals(); },
     eng: loadEngines,
     agent: () => loadAgent(true),
     act: () => { updHeart(); renderFeed(); },
@@ -1147,7 +1147,7 @@ function renderAdvLiveMetrics(metrics) {
     : '<div class="empty">Waiting for CPU, memory, kernel, disk and network collectors. Game baselines and hardware temperatures are separate optional data sources.</div>';
 }
 async function loadAdvanced(force = false) {
-  if (advBusy || (!force && Date.now() - advLastLoad < 5000)) return;
+  if (advBusy || (!force && Date.now() - advLastLoad < 5000)) return !!ADV;
   advBusy = true; advLastLoad = Date.now();
   try {
     const d = await apiRetry("/api/advanced", 2); ADV = d;
