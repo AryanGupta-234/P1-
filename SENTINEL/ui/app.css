@@ -2262,3 +2262,5 @@ nav button .badge{right:8px;top:5px}
   nav button.on svg,.command-launchers>button,.cmd-launch-icon,.metric,.tile,.panel,.view{animation:none!important;transition:none!important}
   .boot,.boot-console,.boot-progress{transition:none!important;animation:none!important}
 }
+
+@media(prefers-reduced-motion:reduce){.boot-part{opacity:1!important;transform:none!important}}
