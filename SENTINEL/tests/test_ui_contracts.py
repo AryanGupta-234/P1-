@@ -96,7 +96,7 @@ def test_managed_sensor_provider_ui_and_boot_contract_are_present():
     assert ".engine-pulse-rail" in css and ".engine-pulse-card" in css
     assert "DETAILED WORKER / HEARTBEAT TELEMETRY" in html
     assert ".boot-console" in css and ".boot-suit-figure" in css
-    assert ".boot-live-readouts" not in cssAppend
+    assert ".boot-suit-figure" in css and ".boot-flow-step" in css
     assert "overflow-wrap:anywhere" in css
     assert "workspacePanelEnter" in css and "commandHeroScan" in css
     assert "boot().catch(error =>" in app
