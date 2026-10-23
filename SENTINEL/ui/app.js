@@ -930,6 +930,14 @@ async function boot() {
     return;
   }
 
+  bp(38, "SYNCHRONIZING", "Connecting your local workspace");
+  let bootProgressValue = 38;
+  let foundationCompleted = 0;
+  const advanceBoot = (value, message) => {
+    bootProgressValue = Math.max(bootProgressValue, value);
+    bp(bootProgressValue, "SYNCHRONIZING", message);
+  };
+
   const snapshotPromise = apiRetry("/api/boot", 1).then(initial => {
     if (initial?.error) throw new Error(initial.error);
     // A newer live-stream tick wins over an older first snapshot.
@@ -937,47 +945,29 @@ async function boot() {
     for (const [key, value] of Object.entries(S.live || {})) {
       if (Number.isFinite(Number(value)) && !(H[key] || []).length) H[key] = [Number(value)];
     }
-    renderIns();
+    advanceBoot(52, "Local workspace connected");
     if (view === "cmd") {
       updHero();
       updTiles();
       updMetrics();
       renderCommandVisuals();
-      markPageWarm("cmd");
     }
     restoreSavedView();
-    bp(100, "READY", "Your workspace is synchronized");
     return true;
   }).catch(error => {
     console.warn("SENTINEL first snapshot unavailable", error);
     return false;
   });
 
-  bp(38, "SYNCHRONIZING", "Connecting your local workspace");
-  const splashResult = await Promise.race([
-    Promise.all([
-      snapshotPromise,
-      new Promise(resolve => setTimeout(() => resolve(true), 520))
-    ]).then(([ok]) => ({ settled: true, ok })),
-    new Promise(resolve => setTimeout(() => resolve({ settled: false }), 850))
-  ]);
-
-  if (splashResult.settled && !splashResult.ok) {
-    showBootRetry("LINK NOT READY", "The local workspace did not respond. Reconnect and try again.");
-    return;
-  }
-  if (!splashResult.settled) {
-    bp(70, "SYNCHRONIZING", "Opening your workspace while the rest finishes quietly");
-  } else {
-    bp(100, "READY", "Your workspace is ready");
-  }
-  endBoot();
-
-  // Only the command desk is hydrated initially. All other sections are lazy.
-  const commandHydration = Promise.allSettled([
-    apiRetry("/api/history?secs=300", 1),
-    apiRetry("/api/events?limit=120", 1),
-    apiRetry("/api/insights", 1)
+  // Real command-desk datasets synchronize behind the splash, in parallel.
+  const trackStartupRequest = request => request.finally(() => {
+    foundationCompleted++;
+    advanceBoot(52 + foundationCompleted * 10, "Synchronizing workspace data");
+  });
+  const foundationPromise = Promise.allSettled([
+    trackStartupRequest(apiRetry("/api/history?secs=300", 1)),
+    trackStartupRequest(apiRetry("/api/events?limit=120", 1)),
+    trackStartupRequest(apiRetry("/api/insights", 1))
   ]).then(results => {
     const [history, events, insights] = results;
     if (history.status === "fulfilled" && history.value && !history.value.error && typeof history.value === "object") {
@@ -988,26 +978,56 @@ async function boot() {
     if (events.status === "fulfilled" && Array.isArray(events.value)) events.value.forEach(addLog);
     if (insights.status === "fulfilled" && Array.isArray(insights.value)) INS = insights.value;
     renderIns();
+    return results.filter(result => result.status === "rejected").length;
+  });
+
+  const coreSyncPromise = Promise.all([snapshotPromise, foundationPromise]).then(([snapshotReady, failedDatasets]) => {
+    const connected = snapshotReady || !!S;
     if (S && view === "cmd") {
       updHero();
       updTiles();
       updMetrics();
       renderCommandVisuals();
+      markPageWarm("cmd");
     }
-    markPageWarm("cmd");
+    restoreSavedView();
+    advanceBoot(94, "Workspace data aligned");
+    return { connected, failedDatasets };
   });
-  void commandHydration;
-  void snapshotPromise.then(ok => {
-    if (!ok && bootDone) {
+
+  const splashResult = await Promise.race([
+    Promise.all([
+      coreSyncPromise,
+      new Promise(resolve => setTimeout(() => resolve(true), 460))
+    ]).then(([result]) => ({ settled: true, result })),
+    new Promise(resolve => setTimeout(() => resolve({ settled: false }), 1800))
+  ]);
+
+  if (splashResult.settled && !splashResult.result.connected) {
+    showBootRetry("LINK NOT READY", "The local workspace did not respond. Reconnect and try again.");
+    return;
+  }
+  if (!splashResult.settled) {
+    bp(84, "SYNCHRONIZING", "Opening your workspace as the final sync completes");
+  } else {
+    bp(100, "READY", splashResult.result.failedDatasets
+      ? "Workspace ready · remaining panels will refresh when opened"
+      : "Workspace synchronized");
+  }
+  endBoot();
+
+  void coreSyncPromise.then(result => {
+    if (!result.connected && bootDone) {
       const state = document.getElementById("cmd-node-state");
       const note = document.getElementById("cmd-node-sub");
       if (state) state.textContent = "RECONNECT";
       if (note) note.textContent = "The workspace link is unavailable";
       toast("Couldn't connect to the local workspace. Restart SENTINEL to retry.", "bad");
-    } else if (ok) {
+    } else if (result.connected) {
       void loadStatus();
     }
   });
+
 }
 /* ---------- reversible performance intelligence / thermal workspace ---------- */
 let ADV = null, advLastLoad = 0, advBusy = false, advRetryTimer = null;
