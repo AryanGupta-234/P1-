@@ -14,6 +14,7 @@ def test_weighted_task_similarity_gives_rare_terms_more_influence():
     )
     assert 0.0 < common_term < rare_term <= 1.0
 
+
 def test_task_candidate_ranking_prefers_recent_semantically_close_cluster():
     candidates = [
         {"id": 1, "terms": ["python", "automation"], "observations": 4, "last_seen": 100.0},
