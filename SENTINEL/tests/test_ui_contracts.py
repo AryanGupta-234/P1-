@@ -28,23 +28,33 @@ def test_managed_sensor_provider_ui_and_boot_contract_are_present():
     assert 'id="adv-provider-install"' in html
     assert 'id="adv-sensor-inventory"' in html
     assert 'api("/api/hardware/provider/start"' in app
-    for element_id in ("bootProgress", "bootPct", "bootStage", "bootDetail", "bootLog", "bootModules"):
+    for element_id in (
+        "bootProgress", "bootPct", "bootStage", "bootDetail", "bootLog",
+        "bootModules", "bootCpuValue", "bootRamValue", "bootGpuValue", "bootDpcValue",
+    ):
         assert f'id="{element_id}"' in html
     assert "bootSkip" not in html + app + css
     assert "SKIP INTRO" not in html + app + css
-    assert 'new Set(["command", "net"])' in app
-    assert "const minSplashMs = 120" in app
-    assert 'new Set(["command", "net"])' in app
-    assert "const minSplashMs = 120" in app
-    assert 'data-adv-tab="overview"' in html
-    assert "PAGE_WARMED" in app and "PAGE_WARM_TTL_MS" in app
+    assert "API_CONCURRENCY = 4" in app
+    assert "API_TIMEOUT_MS = 16000" in app
+    assert "await runPool(jobs)" in app
+    assert "await runPool(secondaryJobs)" in app
+    assert "void runBatch" not in app
+    assert "const minimumDisplayMs = 900" in app
+    assert "Promise.allSettled([" in app
+    assert 'apiRetry("/api/snapshot", 2)' in app
     assert "data-boot-module" in app
+    assert 'id="cmd-performance-chart"' in html
+    assert 'data-command-route="adv"' in html
+    assert 'data-command-route="activityx"' in html
+    assert "$$([\"data-command-route\"])" in app
+    assert 'class="command-more-metrics"' in html
+    assert "function renderCommandVisuals()" in app
     assert ".boot-console" in css and ".boot-module.loading" in css
+    assert ".boot-live-readouts" in css
     assert "overflow-wrap:anywhere" in css
     assert "panelGlassSheen" in css and "ambientGridDrift" in css
     assert "boot().catch(error =>" in app
-    assert "Remote Web Server > Run" not in app
-    assert "SENSOR FEED" in app
     assert "provider.next_step" in app
 
 def test_activity_workspace_and_learned_launch_are_connected():
