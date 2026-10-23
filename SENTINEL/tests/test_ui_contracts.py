@@ -25,49 +25,29 @@ def test_managed_sensor_provider_ui_and_boot_contract_are_present():
     html = (ROOT / "ui" / "index.html").read_text(encoding="utf-8")
     app = (ROOT / "ui" / "app.js").read_text(encoding="utf-8")
     css = (ROOT / "ui" / "app.css").read_text(encoding="utf-8")
-    server = (ROOT / "sentinel" / "server.py").read_text(encoding="utf-8")
     assert 'id="adv-provider-install"' in html
     assert 'id="adv-sensor-inventory"' in html
     assert 'api("/api/hardware/provider/start"' in app
-
-    for element_id in ("bootProgress", "bootPct", "bootStage", "bootDetail", "bootGauge", "bootRetry"):
-        assert f'id="{element_id}"' in html
-    for removed_id in (
-        "bootLog", "bootModules", "bootCpuValue", "bootRamValue",
-        "bootGpuValue", "bootDpcValue", "bootProcessCount",
+    for element_id in (
+        "bootProgress", "bootPct", "bootStage", "bootDetail", "bootLog",
+        "bootModules", "bootCpuValue", "bootRamValue", "bootGpuValue", "bootDpcValue",
     ):
-        assert f'id="{removed_id}"' not in html
-    assert "WINDOWS PROCESS FIELD" not in html
-    assert "data-boot-step=" in html
-    assert "class=\"boot-suit-figure\"" in html
+        assert f'id="{element_id}"' in html
+    assert 'id="bootRetry"' in html
     assert "function showBootRetry(" in app
     assert 'retry.onclick = () => location.reload()' in app
     assert "endBoot();" not in app[app.index('boot().catch(error =>'):]
     assert "bootSkip" not in html + app + css
     assert "SKIP INTRO" not in html + app + css
-    assert "API_CONCURRENCY = 3" in app
+    assert "API_CONCURRENCY = 4" in app
     assert "API_TIMEOUT_MS = 16000" in app
-    assert 'apiRetry("/api/boot", 1)' in app
-    assert 'apiRetry("/api/history?secs=300", 1)' in app
-    assert 'apiRetry("/api/events?limit=120", 1)' in app
-    boot_start = app.index("async function boot()")
-    first_paint = app.index("endBoot();", boot_start)
-    for startup_request in (
-        "apiRetry(\"/api/boot\", 1)",
-        "apiRetry(\"/api/history?secs=300\", 1)",
-        "apiRetry(\"/api/events?limit=120\", 1)",
-        "apiRetry(\"/api/insights\", 1)",
-    ):
-        assert boot_start < app.index(startup_request, boot_start) < first_paint
-    assert "setTimeout(() => resolve({ settled: false }), 1800)" in app
-    assert "await runPool(jobs)" not in app
-    assert "await runPool(secondaryJobs)" not in app
-    assert "function starfield()" not in app
-    assert "updateBootTelemetry" not in app
-    assert "function boot_snapshot()" in server
-    assert 'if p == "/api/boot":' in server
-    assert "def agent_runtime(" not in server[server.index("def boot_snapshot()"):server.index("class H(")]
+    assert "await runPool(jobs)" in app
+    assert "await runPool(secondaryJobs)" in app
+    assert "void runBatch" not in app
+    assert "const minimumDisplayMs = 900" in app
     assert "Promise.allSettled([" in app
+    assert 'apiRetry("/api/snapshot", 2)' in app
+    assert "data-boot-module" in app
     assert 'id="cmd-performance-chart"' in html
     assert '$$("[data-command-route]")' in app
     assert 'id="proc-live-total"' in html
@@ -105,8 +85,8 @@ def test_managed_sensor_provider_ui_and_boot_contract_are_present():
     assert ".agent-health-map" in css and ".agent-source-card" in css
     assert ".engine-pulse-rail" in css and ".engine-pulse-card" in css
     assert "DETAILED WORKER / HEARTBEAT TELEMETRY" in html
-    assert ".boot-console" in css and ".boot-suit-figure" in css
-    assert ".boot-suit-figure" in css and ".boot-flow-step" in css
+    assert ".boot-console" in css and ".boot-module.loading" in css
+    assert ".boot-live-readouts" in css
     assert "overflow-wrap:anywhere" in css
     assert "workspacePanelEnter" in css and "commandHeroScan" in css
     assert "boot().catch(error =>" in app

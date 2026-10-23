@@ -205,53 +205,20 @@ def request_shutdown():
 
 def snapshot():
     return {
-        "now": time.time(), "uptime": time.time() - START, "live": LIVE, "cores": STATE.get("cores") or [],
+        "now": time.time(), "uptime": time.time() - START, "live": LIVE, "cores": STATE.get("cores", []),
         "procs": STATE.get("procs", [])[:80], "proc_total": STATE.get("proc_total", 0),
-        "proc_recommendations": STATE.get("proc_recommendations") or [], "net": STATE.get("net", []),
-        "gpu": STATE.get("gpu") or {}, "game": STATE.get("game"), "system": STATE.get("system") or {},
-        "services": STATE.get("services") or {}, "culprits": STATE.get("culprits") or [],
-        "kernel": STATE.get("kernel") or {},
+        "proc_recommendations": STATE.get("proc_recommendations", []), "net": STATE.get("net", []),
+        "gpu": STATE.get("gpu", {}), "game": STATE.get("game"), "system": STATE.get("system", {}),
+        "services": STATE.get("services", {}), "culprits": STATE.get("culprits", []),
+        "kernel": STATE.get("kernel", {}),
         "autoruns": STATE.get("autoruns"), "ai": {k: v for k, v in STATE["ai"].items() if k != "transcript"},
-        "heart": HEART or {}, "traces": STATE.get("traces") or [], "autopilot": CFG["autopilot"],
+        "heart": HEART, "traces": STATE.get("traces", []), "autopilot": CFG["autopilot"],
         "approval_policy": CFG.get("approval_policy", {"auto_approve_reversible_medium": False}),
         "automation_master": core.get_profile()["automation"],
         "agent": agent_runtime(include_threads=False, include_io=False, include_run=False),
         "sensor_matrix": sensor_matrix(),
         "cfg": {"pause": CFG["pause_ai_when_gaming"], "ollama_url": CFG["ollama_url"], "cloud": {k: CFG["cloud"][k] for k in ("enabled", "url", "model")}, "has_key": bool(CFG["cloud"]["key"])},
     }
-
-
-def boot_snapshot():
-    """Return the small, pre-collected state needed for the first screen.
-
-    Workspace-specific details load lazily after the shell is visible. Keep
-    runtime probes, inventory refreshes and process-row serialization off this
-    latency-sensitive path.
-    """
-    now = time.time()
-    ai = STATE.get("ai") or {}
-    return {
-        "now": now,
-        "uptime": now - START,
-        "live": LIVE,
-        "cores": STATE.get("cores") or [],
-        "proc_total": STATE.get("proc_total", 0),
-        "proc_recommendations": STATE.get("proc_recommendations") or [],
-        "net": (STATE.get("net") or [])[:120],
-        "gpu": STATE.get("gpu") or {},
-        "game": STATE.get("game"),
-        "system": STATE.get("system") or {},
-        "services": STATE.get("services") or {},
-        "culprits": STATE.get("culprits") or [],
-        "kernel": STATE.get("kernel") or {},
-        "autoruns": STATE.get("autoruns"),
-        "ai": {key: value for key, value in ai.items() if key != "transcript"},
-        "heart": HEART or {},
-        "traces": STATE.get("traces") or [],
-        "autopilot": CFG["autopilot"],
-        "approval_policy": CFG.get("approval_policy", {"auto_approve_reversible_medium": False}),
-    }
-
 
 
 class H(BaseHTTPRequestHandler):
@@ -291,8 +258,6 @@ class H(BaseHTTPRequestHandler):
         if not self._authed(qs):
             return self._json({"error": "unauthorized"}, 401)
         p = u.path
-        if p == "/api/boot":
-            return self._json(boot_snapshot())
         if p == "/api/snapshot":
             return self._json(snapshot())
         if p == "/api/processes":

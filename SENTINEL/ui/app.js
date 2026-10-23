@@ -3,7 +3,7 @@ const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAl
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const qs = new URLSearchParams(location.search);
 let TOKEN = qs.get("t") || ""; try { if (TOKEN) localStorage.setItem("st", TOKEN); else TOKEN = localStorage.getItem("st") || ""; } catch (e) { }
-const API_CONCURRENCY = 3;
+const API_CONCURRENCY = 4;
 const API_TIMEOUT_MS = 16000;
 let apiActive = 0;
 const apiWaiters = [];
@@ -96,35 +96,54 @@ function pageIsWarm(key) {
 function markPageWarm(key) {
   PAGE_WARMED[key] = Date.now();
 }
-function bp(percent, stage, detail, kind = "") {
-  const value = Math.max(0, Math.min(100, Number(percent) || 0));
-  const progress = $("#bootProgress");
-  if (progress) {
-    progress.style.width = value + "%";
-    progress.setAttribute("aria-valuenow", String(Math.round(value)));
-  }
-  const gauge = $("#bootGauge");
-  if (gauge) gauge.style.strokeDashoffset = String(289.0 * (1 - value / 100));
-  const pct = $("#bootPct");
-  if (pct) pct.textContent = String(Math.round(value)).padStart(2, "0") + "%";
+function bp(p, stage, msg, cls = "") {
+  const progress = $("#bootProgress"), pct = $("#bootPct"), stageNode = $("#bootStage");
+  if (progress) { const value = Math.max(0, Math.min(100, p)); progress.style.width = value + "%"; progress.setAttribute("aria-valuenow", String(Math.round(value))); const gauge = $("#bootGauge"); if (gauge) gauge.style.strokeDashoffset = String(295.3 * (1 - value / 100)); }
+  if (pct) pct.textContent = String(Math.round(p)).padStart(2, "0") + "%";
   const nodeState = $("#bootNodeState");
   if (nodeState && stage) nodeState.textContent = stage;
-  const stageNode = $("#bootStage");
-  if (stageNode && stage) stageNode.textContent = stage;
-  const detailNode = $("#bootDetail");
-  if (detailNode && detail) detailNode.textContent = detail;
-  const active = kind === "warn" ? "sync" : value >= 100 ? "ready" : value < 34 ? "wake" : "sync";
-  const order = { wake: 0, sync: 1, ready: 2 };
-  $$("[data-boot-step]").forEach(step => {
-    const key = step.dataset.bootStep;
-    step.classList.toggle("active", key === active);
-    step.classList.toggle("complete", order[key] < order[active]);
-  });
-  const overlay = $("#boot");
-  if (overlay) {
-    overlay.dataset.phase = active;
-    overlay.classList.toggle("boot-error", kind === "warn");
+  const lanes = $$(".boot-lanes > div");
+  const activeLane = p < 16 ? 0 : p < 32 ? 1 : p < 48 ? 2 : p < 64 ? 3 : p < 82 ? 4 : 5;
+  lanes.forEach((lane, index) => lane.classList.toggle("active", index === activeLane));
+  if (stage && stageNode) stageNode.textContent = stage;
+  const detail = $("#bootDetail");
+  if (msg && detail) detail.textContent = msg;
+  if (msg) {
+    const log = $("#bootLog");
+    if (log) {
+      const item = document.createElement("div");
+      item.className = "boot-log-line " + cls;
+      item.textContent = msg;
+      log.append(item);
+      while (log.children.length > 10) log.firstElementChild.remove();
+      log.scrollTop = log.scrollHeight;
+    }
   }
+}
+function bootModule(key, label, state = "WAITING", detail = "Queued for initialization") {
+  const host = $("#bootModules");
+  if (!host) return;
+  const item = document.createElement("div");
+  item.className = "boot-module";
+  item.dataset.bootModule = key;
+  item.innerHTML = '<span class="boot-module-dot"></span><span class="boot-module-copy"><b></b><small></small></span><strong></strong>';
+  item.querySelector("b").textContent = label;
+  item.querySelector("small").textContent = detail;
+  item.querySelector("strong").textContent = state;
+  host.append(item);
+}
+function bootModuleState(key, state, detail = "") {
+  const item = document.querySelector('[data-boot-module="' + key + '"]');
+  if (!item) return;
+  item.classList.remove("loading", "ready", "warn");
+  const normalized = String(state || "").toLowerCase();
+  if (normalized === "loading") item.classList.add("loading");
+  else if (normalized === "ready") item.classList.add("ready");
+  else if (["degraded", "blocked", "warn", "error"].includes(normalized)) item.classList.add("warn");
+  const status = item.querySelector("strong");
+  const note = item.querySelector("small");
+  if (status) status.textContent = String(state || "").toUpperCase();
+  if (note && detail) note.textContent = detail;
 }
 function endBoot() {
   if (bootDone) return;
@@ -144,6 +163,44 @@ function showBootRetry(stage, message) {
     retry.onclick = () => location.reload();
   }
 }
+function updateBootTelemetry() {
+  const live = S && typeof S.live === "object" ? S.live : {};
+  const definitions = [
+    ["cpu", "bootCpuValue", "%", 100, 0],
+    ["mem", "bootRamValue", "%", 100, 0],
+    ["gpu", "bootGpuValue", "%", 100, 0],
+    ["dpc", "bootDpcValue", "%", 8, 2]
+  ];
+  for (const [key, id, suffix, max, precision] of definitions) {
+    const raw = live[key];
+    const value = Number(raw);
+    const valid = raw != null && Number.isFinite(value);
+    const node = document.getElementById(id);
+    const bar = document.querySelector('[data-boot-bar="' + (key === "mem" ? "ram" : key) + '"]');
+    if (node) node.textContent = valid ? value.toFixed(precision) + suffix : "--";
+    if (bar) bar.style.width = valid ? Math.max(0, Math.min(100, value / max * 100)) + "%" : "0%";
+  }
+  const processCount = document.getElementById("bootProcessCount");
+  if (processCount && Number(S?.proc_total || 0) > 0) processCount.textContent = Number(S.proc_total).toLocaleString() + " PROCESSES";
+}
+
+function starfield() {
+  const c = $("#starfield"), x = c.getContext("2d"); if (matchMedia("(prefers-reduced-motion:reduce)").matches) return;
+  let w, h, st = [], frame = 0, lastPaint = 0;
+  const resize = () => { w = c.width = innerWidth; h = c.height = innerHeight; st = Array.from({ length: Math.min(48, Math.ceil(w * h / 28000)) }, () => ({ x: Math.random() * w, y: Math.random() * h, r: Math.random() * 1.1 + .3, v: Math.random() * .1 + .02 })); };
+  const draw = timestamp => {
+    frame = 0;
+    if (document.visibilityState !== "visible") return;
+    if (timestamp - lastPaint >= 42) {
+      lastPaint = timestamp; x.clearRect(0, 0, w, h); x.fillStyle = "#cfe8a0";
+      for (const star of st) { star.y -= star.v; if (star.y < 0) { star.y = h; star.x = Math.random() * w; } x.globalAlpha = .25 + star.r / 2; x.beginPath(); x.arc(star.x, star.y, star.r, 0, 6.3); x.fill(); }
+    }
+    frame = requestAnimationFrame(draw);
+  };
+  const resume = () => { if (document.visibilityState === "visible" && !frame) frame = requestAnimationFrame(draw); };
+  resize(); addEventListener("resize", resize, { passive: true }); document.addEventListener("visibilitychange", resume); resume();
+}
+
 /* ---------- charts ---------- */
 function prep(c) { const r = devicePixelRatio || 1, w = c.clientWidth, h = c.clientHeight; if (c.width !== w * r || c.height !== h * r) { c.width = w * r; c.height = h * r; } const x = c.getContext("2d"); x.setTransform(r, 0, 0, r, 0, 0); x.clearRect(0, 0, w, h); return [x, w, h]; }
 function line(x, d, w, h, col, lo, hi, fill) {
@@ -805,7 +862,9 @@ function show(v) {
   })[v]?.();
 }
 async function boot() {
-  bp(8, "AWAKENING", "Preparing your workspace");
+  const bootStartedAt = performance.now();
+  starfield();
+  bp(3, "POWERING SENTINEL", "Preparing the local command environment");
   buildTiles();
   buildChips();
   $$("#nav button").forEach(button => {
@@ -816,13 +875,118 @@ async function boot() {
     button.onclick = () => show(button.dataset.v);
   });
 
-  let savedView = "cmd";
-  try { savedView = localStorage.getItem("sv") || "cmd"; } catch (error) { }
-  const restoreSavedView = () => {
-    if (TITLES[savedView] && savedView !== "cmd" && view === "cmd") show(savedView);
+  const modules = [
+    ["core", "SESSION", "Authenticated local node snapshot"],
+    ["command", "COMMAND DECK", "Live performance and visual telemetry"],
+    ["agent", "AGENT RUNTIME", "Process footprint and collector health"],
+    ["sys", "SYSTEM MAP", "Platform, storage and security inventory"],
+    ["proc", "PROCESS FIELD", "Windows process list and identities"],
+    ["net", "NETWORK", "Connections and latency charts"],
+    ["adv", "THERMAL / ETW", "Thermal sensors and kernel diagnostics"],
+    ["eng", "ENGINE DECK", "Safeguards, runtime and memory policy"],
+    ["health", "SOURCE HEALTH", "Runtime and collector source status"],
+    ["stream", "LIVE LINK", "Event stream and heartbeat"],
+    ["ker", "KERNEL ARCHIVE", "Historical counter samples"],
+    ["activityx", "USAGE INTELLIGENCE", "Foreground activity and learned routines"],
+    ["intelx", "INTELLIGENCE MEMORY", "Memories, goals and ranked context"],
+    ["int", "INTELLIGENCE FEED", "Local intelligence results"],
+    ["ai", "AI COUNCIL", "Model availability and conversation history"],
+    ["evi", "EVIDENCE VAULT", "Searchable event records"],
+    ["ctl", "ACTION CONTROL", "Pending approvals and action history"],
+    ["fc", "FEATURE CONFIG", "Saved preferences and audit history"],
+    ["tsk", "TASK CENTER", "Jobs and action run history"],
+    ["act", "ACTIVITY STREAM", "Events and collector heartbeats"]
+  ];
+  $("#bootModules").replaceChildren();
+  modules.forEach(([key, label, detail]) => bootModule(key, label, "WAITING", detail));
+  bp(9, "AUTHENTICATING", TOKEN ? "Local session token accepted" : "No local session token found", TOKEN ? "ok" : "warn");
+  if (!TOKEN) {
+    bootModuleState("core", "BLOCKED", "Open SENTINEL using the installed desktop shortcut");
+    bp(100, "AUTHENTICATION REQUIRED", "Open SENTINEL from its installed desktop shortcut", "warn");
+    $("#boot").classList.add("boot-error");
+    return;
+  }
+
+  const degradedModules = new Set();
+  const markDataFailure = (key, detail) => {
+    degradedModules.add(key);
+    bootModuleState(key, "DEGRADED", String(detail || "Data source unavailable").slice(0, 120));
+  };
+  const markDataReady = (key, detail) => {
+    degradedModules.delete(key);
+    bootModuleState(key, "READY", detail || "Data synchronized");
+    markPageWarm(key);
   };
 
-  // Bind controls immediately; rendering and navigation do not wait for data.
+  bootModuleState("core", "LOADING", "Reading the authenticated Windows node snapshot");
+  bp(14, "SYNCHRONIZING LOCAL NODE", "Restoring live measurements and host state");
+  let initial;
+  try {
+    initial = await apiRetry("/api/snapshot", 2);
+    if (initial?.error) throw new Error(initial.error);
+  } catch (error) {
+    markDataFailure("core", error.message || "Local agent is unavailable");
+    showBootRetry("LOCAL AGENT UNAVAILABLE", error.message || "Open the SENTINEL agent and retry");
+    return;
+  }
+
+  S = initial;
+  if (S?.live && typeof S.live === "object") {
+    for (const [key, value] of Object.entries(S.live)) {
+      if (Number.isFinite(Number(value)) && !(H[key] || []).length) H[key] = [Number(value)];
+    }
+  }
+  INS = [];
+  renderIns();
+  updateBootTelemetry();
+  markDataReady("core", "Snapshot loaded · " + Number(S.proc_total || 0).toLocaleString() + " cached process records");
+  bp(20, "LOADING FOUNDATION DATA", "History, events, policy, runtime status and AI transcript");
+
+  const foundation = await Promise.allSettled([
+    apiRetry("/api/history?secs=300", 1),
+    apiRetry("/api/events?limit=300", 1),
+    apiRetry("/api/insights", 1),
+    apiRetry("/api/engines", 1),
+    apiRetry("/api/status", 1),
+    apiRetry("/api/ai", 1)
+  ]);
+  let foundationDegraded = 0;
+  const readFoundation = (index, key, validate, apply, label) => {
+    const result = foundation[index];
+    if (result.status !== "fulfilled" || result.value?.error || !validate(result.value)) {
+      const reason = result.status === "rejected" ? result.reason?.message : result.value?.error || "Unexpected data format";
+      foundationDegraded++;
+      markDataFailure(key, reason || (label + " unavailable"));
+      return false;
+    }
+    apply(result.value);
+    degradedModules.delete(key);
+    bootModuleState(key, "READY", label + " synchronized");
+    return true;
+  };
+  const historyReady = readFoundation(0, "command", value => value && typeof value === "object" && !Array.isArray(value),
+    history => {
+      for (const [key, samples] of Object.entries(history)) {
+        if (Array.isArray(samples)) H[key] = samples.map(point => Number(point[1])).filter(Number.isFinite).slice(-MAXH);
+      }
+    }, "Telemetry history");
+  const eventsReady = readFoundation(1, "act", Array.isArray,
+    events => events.forEach(addLog), "Recent event stream");
+  const insightsReady = readFoundation(2, "command", Array.isArray,
+    insights => { INS = insights; renderIns(); }, "Performance insights");
+  const enginesReady = readFoundation(3, "eng", value => value && typeof value === "object",
+    engines => renderEngines(engines), "Safeguards and engine policies");
+  const statusReady = readFoundation(4, "health", value => value && typeof value === "object",
+    status => { ST = status; }, "Runtime and source status");
+  const aiReady = readFoundation(5, "ai", value => value && typeof value === "object",
+    transcript => (transcript.transcript || []).forEach(addTr), "AI transcript");
+  if (S?.live) {
+    for (const [key, value] of Object.entries(S.live)) {
+      if (Number.isFinite(Number(value)) && !(H[key] || []).length) H[key] = [Number(value)];
+    }
+  }
+
+  // Initialize interactions once. Workspace jobs below own the first data read.
   $("#a-q").oninput = renderFeed;
   $("#a-pause").onclick = event => {
     paused = !paused;
@@ -882,152 +1046,161 @@ async function boot() {
     const number = Number(event.key);
     if (number >= 1 && number <= VKEYS.length) show(VKEYS[number - 1]);
   });
+  setInterval(() => $("#h-clock").textContent = new Date().toLocaleTimeString([], { hour12: false }), 1000);
+  setInterval(() => {
+    if (view === "int") loadIntel();
+    if (view === "activityx") loadActivityIntelligence();
+    if (view === "ctl") loadActions();
+    if (view === "agent") loadAgent();
+  }, 10000);
+  setInterval(loadStatus, 15000);
+  setInterval(() => { if (view === "eng") loadEngines(); }, 8000);
 
-  // Open the event channel in parallel with the compact first snapshot.
-  let stream = null;
-  if (TOKEN) {
-    stream = new EventSource("/api/stream?t=" + encodeURIComponent(TOKEN));
-    stream.addEventListener("open", () => {
+  bootModuleState("stream", "LOADING", "Opening the local event stream");
+  const stream = new EventSource("/api/stream?t=" + encodeURIComponent(TOKEN));
+  let streamSettled = false;
+  let resolveStream;
+  const streamReady = new Promise(resolve => { resolveStream = resolve; });
+  const streamTimer = setTimeout(() => {
+    if (streamSettled) return;
+    streamSettled = true;
+    resolveStream(false);
+  }, 1800);
+  stream.addEventListener("open", () => {
+    if (streamSettled) {
+      degradedModules.delete("stream");
+      bootModuleState("stream", "READY", "Local event channel reconnected");
       $("#p-online").className = "pill ok";
       $("#p-online").textContent = "AGENT ONLINE";
-    });
-    stream.addEventListener("error", () => {
-      $("#p-online").className = "pill bad";
-      $("#p-online").textContent = "LINK RETRYING";
-    });
-    stream.onmessage = message => {
-      try {
-        const packet = JSON.parse(message.data);
-        if (packet.t === "tick") {
-          $("#p-online").className = "pill ok";
-          $("#p-online").textContent = "AGENT ONLINE";
-          onTick(packet.d);
-        } else if (packet.t === "log") addLog(packet.d);
-        else if (packet.t === "insight") { INS.unshift(packet.d); renderIns(); alertInsight(packet.d); }
-        else if (packet.t === "action") { actionsLoaded = false; loadActions(); }
-        else if (packet.t === "ai") addTr(packet.d);
-        else if (packet.t === "ai_status") $("#ai-status").textContent = packet.d.text;
-        else if (packet.t === "intel" && view === "int") loadIntel();
-      } catch (error) { console.error("Invalid SENTINEL stream event", error); }
-    };
-  }
-
-  if (TOKEN) {
-    setInterval(() => $("#h-clock").textContent = new Date().toLocaleTimeString([], { hour12: false }), 1000);
-    setInterval(() => {
-      if (view === "int") loadIntel();
-      if (view === "activityx") loadActivityIntelligence();
-      if (view === "ctl") loadActions();
-      if (view === "agent") loadAgent();
-    }, 10000);
-    setInterval(loadStatus, 15000);
-    setInterval(() => { if (view === "eng") loadEngines(); }, 8000);
-
-  }
-
-  if (!TOKEN) {
-    showBootRetry("SESSION REQUIRED", "Open SENTINEL from its installed desktop shortcut");
-    return;
-  }
-
-  bp(38, "SYNCHRONIZING", "Connecting your local workspace");
-  let bootProgressValue = 38;
-  let foundationCompleted = 0;
-  const advanceBoot = (value, message) => {
-    bootProgressValue = Math.max(bootProgressValue, value);
-    bp(bootProgressValue, "SYNCHRONIZING", message);
+      return;
+    }
+    streamSettled = true;
+    clearTimeout(streamTimer);
+    resolveStream(true);
+  });
+  stream.addEventListener("error", () => {
+    $("#p-online").className = "pill bad";
+    $("#p-online").textContent = "LINK RETRYING";
+  });
+  stream.onmessage = message => {
+    try {
+      const packet = JSON.parse(message.data);
+      if (packet.t === "tick") {
+        $("#p-online").className = "pill ok";
+        $("#p-online").textContent = "AGENT ONLINE";
+        onTick(packet.d);
+        updateBootTelemetry();
+      } else if (packet.t === "log") addLog(packet.d);
+      else if (packet.t === "insight") { INS.unshift(packet.d); renderIns(); alertInsight(packet.d); }
+      else if (packet.t === "action") { actionsLoaded = false; loadActions(); }
+      else if (packet.t === "ai") addTr(packet.d);
+      else if (packet.t === "ai_status") $("#ai-status").textContent = packet.d.text;
+      else if (packet.t === "intel" && view === "int") loadIntel();
+    } catch (error) { console.error("Invalid SENTINEL stream event", error); }
   };
 
-  const snapshotPromise = apiRetry("/api/boot", 1).then(initial => {
-    if (initial?.error) throw new Error(initial.error);
-    // A newer live-stream tick wins over an older first snapshot.
-    if (!S || Number(initial.now || 0) >= Number(S.now || 0)) S = initial;
-    for (const [key, value] of Object.entries(S.live || {})) {
-      if (Number.isFinite(Number(value)) && !(H[key] || []).length) H[key] = [Number(value)];
+  const jobs = [
+    ["command", "COMMAND DECK", async () => {
+      updHero(); updTiles(); updMetrics(); renderCommandVisuals();
+      return historyReady && insightsReady;
+    }],
+    ["net", "NETWORK", async () => {
+      if (!Array.isArray(S?.net)) throw new Error("Initial connection snapshot is unavailable");
+      updNet(); return true;
+    }],
+    ["eng", "ENGINE DECK", async () => enginesReady || await loadEngines()],
+    ["agent", "AGENT RUNTIME", () => loadAgent(true)],
+    ["sys", "SYSTEM INVENTORY", () => loadSys(true)],
+    ["proc", "WINDOWS PROCESS FIELD", () => loadProcesses(true)],
+    ["adv", "THERMAL / ETW", () => loadAdvanced(true)]
+  ];
+  const secondaryJobs = [
+    ["ker", "KERNEL ARCHIVE", async () => { updKer(); return await loadKernelArchive(); }],
+    ["activityx", "USAGE INTELLIGENCE", () => loadActivityIntelligence(true)],
+    ["intelx", "INTELLIGENCE MEMORY", () => loadIntelligence()],
+    ["int", "INTELLIGENCE FEED", () => loadIntel()],
+    ["ai", "AI COUNCIL", async () => { updAI(); return aiReady; }],
+    ["evi", "EVIDENCE VAULT", () => loadEvi()],
+    ["ctl", "ACTION CONTROL", async () => { buildCtl(); ctlInitialized = true; return await loadActions(); }],
+    ["fc", "FEATURE CONFIGURATION", () => loadFC()],
+    ["tsk", "TASK CENTER", () => loadHist()],
+    ["act", "ACTIVITY STREAM", async () => { updHeart(); renderFeed(); return eventsReady; }]
+  ];
+  const allJobs = [...jobs, ...secondaryJobs];
+  let completed = 0;
+  const total = allJobs.length;
+  const runJob = async ([key, label, work]) => {
+    bootModuleState(key, "LOADING", "Loading " + label.toLowerCase());
+    try {
+      const result = await work();
+      if (result === false) throw new Error("Data request completed without a usable dataset");
+      degradedModules.delete(key);
+      markPageWarm(key);
+      completed++;
+      const detail = key === "proc"
+        ? `${PROC_META.matched}/${PROC_META.total} processes · ${PROC_META.inaccessible || 0} restricted`
+        : key === "adv"
+          ? (ADV?.hardware_sensors?.available ? `${ADV.hardware_sensors.sensor_count || 0} sensor readings` : "Thermal source checked · unavailable sensors are identified")
+          : "Data and controls synchronized";
+      if (key === "proc") $("#bootProcessCount").textContent = `${PROC_META.total.toLocaleString()} PROCESSES`;
+      bootModuleState(key, "READY", detail);
+      bp(24 + completed / total * 72, "LOADING " + label, label + " data synchronized", "ok");
+      return true;
+    } catch (error) {
+      completed++;
+      markDataFailure(key, error?.message || "Dataset unavailable");
+      bp(24 + completed / total * 72, "SOURCE DEGRADED · " + label, error?.message || "Dataset unavailable", "warn");
+      return false;
     }
-    advanceBoot(52, "Local workspace connected");
-    if (view === "cmd") {
-      updHero();
-      updTiles();
-      updMetrics();
-      renderCommandVisuals();
-    }
-    restoreSavedView();
-    return true;
-  }).catch(error => {
-    console.warn("SENTINEL first snapshot unavailable", error);
-    return false;
-  });
-
-  // Real command-desk datasets synchronize behind the splash, in parallel.
-  const trackStartupRequest = request => request.finally(() => {
-    foundationCompleted++;
-    advanceBoot(52 + foundationCompleted * 10, "Synchronizing workspace data");
-  });
-  const foundationPromise = Promise.allSettled([
-    trackStartupRequest(apiRetry("/api/history?secs=300", 1)),
-    trackStartupRequest(apiRetry("/api/events?limit=120", 1)),
-    trackStartupRequest(apiRetry("/api/insights", 1))
-  ]).then(results => {
-    const [history, events, insights] = results;
-    if (history.status === "fulfilled" && history.value && !history.value.error && typeof history.value === "object") {
-      for (const [key, samples] of Object.entries(history.value)) {
-        if (Array.isArray(samples)) H[key] = samples.map(point => Number(point[1])).filter(Number.isFinite).slice(-MAXH);
+  };
+  const runPool = async queue => {
+    let next = 0;
+    const worker = async () => {
+      while (next < queue.length) {
+        const job = queue[next++];
+        await runJob(job);
       }
-    }
-    if (events.status === "fulfilled" && Array.isArray(events.value)) events.value.forEach(addLog);
-    if (insights.status === "fulfilled" && Array.isArray(insights.value)) INS = insights.value;
-    renderIns();
-    return results.filter(result => result.status === "rejected").length;
-  });
+    };
+    await Promise.all(Array.from({ length: Math.min(API_CONCURRENCY, queue.length) }, worker));
+  };
 
-  const coreSyncPromise = Promise.all([snapshotPromise, foundationPromise]).then(([snapshotReady, failedDatasets]) => {
-    const connected = snapshotReady || !!S;
-    if (S && view === "cmd") {
-      updHero();
-      updTiles();
-      updMetrics();
-      renderCommandVisuals();
-      markPageWarm("cmd");
-    }
-    restoreSavedView();
-    advanceBoot(94, "Workspace data aligned");
-    return { connected, failedDatasets };
-  });
-
-  const splashResult = await Promise.race([
-    Promise.all([
-      coreSyncPromise,
-      new Promise(resolve => setTimeout(() => resolve(true), 760))
-    ]).then(([result]) => ({ settled: true, result })),
-    new Promise(resolve => setTimeout(() => resolve({ settled: false }), 1800))
-  ]);
-
-  if (splashResult.settled && !splashResult.result.connected) {
-    showBootRetry("LINK NOT READY", "The local workspace did not respond. Reconnect and try again.");
-    return;
+  // Primary operational datasets first; all remaining pages hydrate before first paint.
+  bp(22, "HYDRATING OPERATIONAL DATA", "Four bounded request workers · no duplicate agent collectors");
+  await runPool(jobs);
+  const streamConnected = await streamReady;
+  if (!streamSettled) {
+    streamSettled = true;
+    clearTimeout(streamTimer);
+    resolveStream(false);
   }
-  if (!splashResult.settled) {
-    bp(84, "SYNCHRONIZING", "Opening your workspace as the final sync completes");
-  } else {
-    bp(100, "READY", splashResult.result.failedDatasets
-      ? "Workspace ready · remaining panels will refresh when opened"
-      : "Workspace synchronized");
+  bootModuleState("stream", streamConnected ? "READY" : "DEGRADED",
+    streamConnected ? "Local event channel opened" : "Live link will reconnect in the background");
+  if (!streamConnected) markDataFailure("stream", "The event channel did not open before the splash timeout");
+  else degradedModules.delete("stream");
+  bp(72, "HYDRATING WORKSPACES", "Loading intelligence, evidence, action and history datasets");
+  await runPool(secondaryJobs);
+
+  // Bring the command canvas up with the loaded history and current snapshot.
+  if (S) {
+    updHero();
+    updTiles();
+    updMetrics();
+    renderCommandVisuals();
   }
+  const degraded = degradedModules.size;
+  if (degraded) bp(98, "READY WITH DEGRADED SOURCES", degraded + " module(s) could not return complete data", "warn");
+  else bp(99, "ALL DATASETS SYNCHRONIZED", "Every workspace was queried and its result rendered", "ok");
+
+  let savedView = "cmd";
+  try { savedView = localStorage.getItem("sv") || "cmd"; } catch (error) { }
+  if (TITLES[savedView] && savedView !== "cmd") show(savedView);
+  const minimumDisplayMs = 900;
+  const remaining = minimumDisplayMs - (performance.now() - bootStartedAt);
+  if (remaining > 0) await new Promise(resolve => setTimeout(resolve, remaining));
+  bp(100, degraded ? "SENTINEL ONLINE · CHECK SOURCES" : "SENTINEL ONLINE",
+    degraded ? "All workspaces were checked. Unavailable sources are marked for retry." : "All workspace data is ready for navigation.",
+    degraded ? "warn" : "ok");
   endBoot();
-
-  void coreSyncPromise.then(result => {
-    if (!result.connected && bootDone) {
-      const state = document.getElementById("cmd-node-state");
-      const note = document.getElementById("cmd-node-sub");
-      if (state) state.textContent = "RECONNECT";
-      if (note) note.textContent = "The workspace link is unavailable";
-      toast("Couldn't connect to the local workspace. Restart SENTINEL to retry.", "bad");
-    } else if (result.connected) {
-      void loadStatus();
-    }
-  });
-
 }
 /* ---------- reversible performance intelligence / thermal workspace ---------- */
 let ADV = null, advLastLoad = 0, advBusy = false, advRetryTimer = null;

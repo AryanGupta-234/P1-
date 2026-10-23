@@ -1,43 +1,37 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>SENTINEL &middot; 1.2.13</title>
+<title>SENTINEL &middot; 1.2.12</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cpath d='M32 4l24 14v28L32 60 8 46V18z' fill='none' stroke='%23b8e65b' stroke-width='4'/%3E%3Ccircle cx='32' cy='32' r='8' fill='%23ff6b38'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="app.css?v=1.2.13"></head>
-<body><div class="ambient"></div>
-<div class="boot" id="boot" role="status" aria-live="polite" aria-label="SENTINEL workspace startup">
+<link rel="stylesheet" href="app.css?v=1.2.12"></head>
+<body><div class="ambient"></div><canvas id="starfield"></canvas>
+<div class="boot" id="boot" role="status" aria-live="polite" aria-label="SENTINEL Windows node initialization">
   <div class="boot-grid" aria-hidden="true"></div><div class="boot-scanline" aria-hidden="true"></div>
   <div class="boot-console">
-    <div class="boot-topline"><span class="boot-brand"><i aria-hidden="true">✦</i> SENTINEL</span><span class="boot-node-state" id="bootNodeState">AWAKENING</span><span class="boot-live-mark"><i></i> LOCAL</span></div>
+    <div class="boot-topline"><span>SENTINEL <i>LOCAL RUNTIME</i></span><span id="bootNodeState">SYSTEMS INITIALIZING</span><span>NODE / 01</span></div>
     <div class="boot-body">
-      <div class="boot-visual" aria-hidden="true">
-        <div class="boot-suit-stage">
-          <i class="boot-orbit-ring ring-one"></i><i class="boot-orbit-ring ring-two"></i><i class="boot-orbit-ring ring-three"></i><i class="boot-scan-beam"></i>
-          <svg class="boot-suit-figure" viewBox="0 0 300 430" role="presentation">
-            <defs><linearGradient id="suitMetal" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#d7fff4" stop-opacity=".25"/><stop offset=".48" stop-color="#54bcb1" stop-opacity=".13"/><stop offset="1" stop-color="#173f48" stop-opacity=".48"/></linearGradient><linearGradient id="suitEdge" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#baffef"/><stop offset="1" stop-color="#398f91"/></linearGradient></defs>
-            <g class="boot-part boot-part-head"><path d="M119 37 Q150 17 181 37 L190 67 Q187 91 150 105 Q113 91 110 67Z" fill="url(#suitMetal)" stroke="url(#suitEdge)" stroke-width="2"/><path d="M122 61 Q150 48 178 61 L174 78 Q150 88 126 78Z" fill="#9af9e5" fill-opacity=".13" stroke="#9af9e5" stroke-opacity=".75"/><path d="M134 94 L150 105 166 94" fill="none" stroke="#9af9e5" stroke-opacity=".6"/></g>
-            <g class="boot-part boot-part-torso"><path d="M111 111 L137 101 150 116 163 101 189 111 213 139 198 185 188 217 112 217 102 185 87 139Z" fill="url(#suitMetal)" stroke="url(#suitEdge)" stroke-width="2"/><path d="M137 103 L150 126 163 103 177 135 168 185 150 205 132 185 123 135Z" fill="#72d9cb" fill-opacity=".12" stroke="#8ce8d4" stroke-opacity=".6"/><path d="M118 132 L91 144 M182 132 L209 144 M120 188 L180 188" fill="none" stroke="#8ce8d4" stroke-opacity=".5" stroke-width="2"/><circle cx="150" cy="135" r="15" fill="none" stroke="#baffef" stroke-width="2"/></g>
-            <g class="boot-part boot-part-arms"><path d="M88 137 L67 151 48 211 61 221 83 183 103 159Z" fill="url(#suitMetal)" stroke="#75d4c4" stroke-width="2"/><path d="M212 137 L233 151 252 211 239 221 217 183 197 159Z" fill="url(#suitMetal)" stroke="#75d4c4" stroke-width="2"/><path d="M48 211 L40 250 56 255 68 220 M252 211 L260 250 244 255 232 220" fill="none" stroke="#8ce8d4" stroke-width="5" stroke-linecap="round"/></g>
-            <g class="boot-part boot-part-waist"><path d="M112 213 L188 213 181 247 119 247Z" fill="url(#suitMetal)" stroke="#75d4c4" stroke-width="2"/><path d="M133 220 H167 L163 239 H137Z" fill="#8ce8d4" fill-opacity=".2" stroke="#8ce8d4" stroke-opacity=".65"/></g>
-            <g class="boot-part boot-part-legs"><path d="M119 245 L148 250 142 335 130 390 104 390 108 335Z" fill="url(#suitMetal)" stroke="#75d4c4" stroke-width="2"/><path d="M152 250 L181 245 192 335 196 390 170 390 158 335Z" fill="url(#suitMetal)" stroke="#75d4c4" stroke-width="2"/><path d="M108 335 L143 341 M157 341 L192 335 M104 390 L96 405 143 405 140 390 M160 390 L157 405 204 405 196 390" fill="none" stroke="#8ce8d4" stroke-width="3" stroke-linejoin="round"/></g>
-          </svg>
-          <div class="boot-core-ring"><svg viewBox="0 0 100 100"><circle class="boot-gauge-track" cx="50" cy="50" r="46"/><circle class="boot-gauge-progress" id="bootGauge" cx="50" cy="50" r="46"/></svg><i></i></div>
-          <span class="boot-suit-caption">AUTONOMOUS CORE</span>
+      <div class="boot-visual">
+        <div class="boot-reactor" aria-hidden="true"><svg class="boot-gauge" viewBox="0 0 100 100"><circle class="boot-gauge-track" cx="50" cy="50" r="47"/><circle class="boot-gauge-progress" id="bootGauge" cx="50" cy="50" r="47"/></svg><i class="reactor-orbit orbit-a"></i><i class="reactor-orbit orbit-b"></i><i class="reactor-orbit orbit-c"></i><i class="reactor-core"></i><span class="boot-crosshair"></span><b class="boot-reactor-word">S / 01</b></div>
+        <div class="boot-node-readout"><small>WINDOWS PROCESS FIELD</small><b id="bootProcessCount">SYNCING</b><span>LIVE SNAPSHOT</span></div>
+        <div class="boot-live-readouts" aria-label="Live system telemetry">
+          <div><small>CPU</small><b id="bootCpuValue">--</b><i data-boot-bar="cpu"></i></div>
+          <div><small>MEMORY</small><b id="bootRamValue">--</b><i data-boot-bar="ram"></i></div>
+          <div><small>GPU</small><b id="bootGpuValue">--</b><i data-boot-bar="gpu"></i></div>
+          <div><small>DPC</small><b id="bootDpcValue">--</b><i data-boot-bar="dpc"></i></div>
         </div>
-        <div class="boot-visual-footer"><i></i><span>ASSEMBLING YOUR WORKSPACE</span><i></i></div>
+        <div class="boot-visual-spectrum" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+        <div class="boot-signal-label"><i></i> COLLECTORS RUNNING IN BACKGROUND</div>
       </div>
       <div class="boot-content">
-        <div class="boot-eyebrow"><span>LOCAL INTELLIGENCE</span><span>VERSION 1.2.13</span></div>
-        <h1 class="boot-title">SENTINEL<span class="boot-title-cursor"></span></h1><p class="boot-sub">A smarter workspace is coming online.</p>
-        <div class="boot-flow" aria-label="Startup stages">
-          <div class="boot-flow-step active" data-boot-step="wake"><i><svg viewBox="0 0 24 24"><path d="M12 2v8m0 4v8M4.9 4.9l5.7 5.7m2.8 2.8 5.7 5.7M2 12h8m4 0h8M4.9 19.1l5.7-5.7m2.8-2.8 5.7-5.7"/></svg></i><span>WAKE</span></div>
-          <div class="boot-flow-step" data-boot-step="sync"><i><svg viewBox="0 0 24 24"><path d="M20 7v5h-5M4 17v-5h5"/><path d="M5.6 9A7 7 0 0 1 18 6l2 6M4 12l2 6a7 7 0 0 0 12.4-3"/></svg></i><span>SYNC</span></div>
-          <div class="boot-flow-step" data-boot-step="ready"><i><svg viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></svg></i><span>READY</span></div>
-        </div>
-        <div class="boot-progress-meta"><span id="bootDetail">Preparing your workspace</span><b id="bootPct">00%</b></div>
-        <div class="boot-track"><div class="boot-progress" id="bootProgress" role="progressbar" aria-label="Workspace startup" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"></div></div>
-        <div class="boot-stage"><span id="bootStage">AWAKENING</span><span class="boot-stage-spark">◌ &nbsp; ◌ &nbsp; ◌</span></div>
-        <div class="boot-statusline"><i></i><span>READY WHEN YOU ARE</span></div>
-        <button class="boot-retry" id="bootRetry" type="button" hidden>RECONNECT <span aria-hidden="true">↻</span></button>
+        <div class="boot-eyebrow"><span>BOOT SEQUENCE / 1.2.12</span><span>LOCAL INTELLIGENCE</span></div>
+        <div class="boot-title">SENTINEL<span class="boot-title-cursor"></span></div>
+        <div class="boot-sub">SENSE THE SYSTEM. SHAPE THE RESPONSE.</div>
+        <div class="boot-lanes" aria-hidden="true"><div><i></i><span>SESSION</span></div><div><i></i><span>PROCESS</span></div><div><i></i><span>SYSTEM</span></div><div><i></i><span>NETWORK</span></div><div><i></i><span>THERMAL</span></div><div><i></i><span>LIVE LINK</span></div></div>
+        <div class="boot-progress-meta"><span id="bootDetail">Synchronizing the Windows node</span><b id="bootPct">00%</b></div>
+        <div class="boot-track"><div class="boot-progress" id="bootProgress" role="progressbar" aria-label="Workspace initialization" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"></div></div>
+        <div class="boot-stage"><span id="bootStage">POWERING SYSTEM</span><span>20 DATA MODULES</span></div>
+        <div class="boot-modules" id="bootModules" aria-label="Workspace initialization states"></div>
+        <div class="boot-log-wrap"><div class="boot-log-head"><span>INITIALIZATION FEED</span><span>REAL TIME</span></div><div class="boot-log" id="bootLog" aria-live="polite" aria-relevant="additions"></div></div>
+        <button class="boot-retry" id="bootRetry" type="button" hidden>RETRY LOCAL DATA SYNC <i>↻</i></button>
       </div>
     </div>
   </div>
@@ -666,4 +660,4 @@
   </div>
 </section>
 </main></div>
-<script src="app.js?v=1.2.13"></script></body></html>
+<script src="app.js?v=1.2.12"></script></body></html>
