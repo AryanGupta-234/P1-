@@ -1,3 +1,7 @@
+## UI revision 1.2.11
+
+Network, Kernel and System views now expose measured telemetry through visual meters and a host summary. Long-form operational explanations are opt-in disclosures so the everyday interface emphasizes values and controls. The meters normalize their display only; their bars are not calibrated safety thresholds. Actual collector data and sample timestamps remain the source of truth.
+
 # SENTINEL deep reliability and security audit
 
 This note records the fixes made in the current repair build and separates code-level verification from checks that require the target Windows 10/11 host.
