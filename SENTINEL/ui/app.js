@@ -17,12 +17,62 @@ const TITLES = { cmd: "COMMAND", eng: "ENGINE DECK", agent: "AGENT", sys: "SYSTE
 const VKEYS = Object.keys(TITLES);
 function toast(msg, kind = "") { const b = document.createElement("div"); b.className = "toast " + kind; b.textContent = msg; $("#toasts").append(b); setTimeout(() => b.remove(), 5200); }
 let bootDone = false;
-function bp(p, stage, msg, cls = "") {
-  $("#bootProgress").style.width = p + "%"; $("#bootPct").textContent = String(p).padStart(2, "0") + "%";
-  if (stage) $("#bootStage").textContent = stage;
-  if (msg) { const l = $("#bootLog"), d = document.createElement("div"); d.className = cls; d.textContent = msg; l.append(d); l.scrollTop = l.scrollHeight; }
+const PAGE_WARMED = Object.create(null);
+const PAGE_WARM_TTL_MS = 20000;
+function pageIsWarm(key) {
+  return Date.now() - Number(PAGE_WARMED[key] || 0) < PAGE_WARM_TTL_MS;
 }
-function endBoot() { if (bootDone) return; bootDone = true; $("#boot").classList.add("done"); $("#app").classList.add("ready"); try { sessionStorage.setItem("sb", "1"); } catch (e) { } }
+function markPageWarm(key) {
+  PAGE_WARMED[key] = Date.now();
+}
+function bp(p, stage, msg, cls = "") {
+  const progress = $("#bootProgress"), pct = $("#bootPct"), stageNode = $("#bootStage");
+  if (progress) progress.style.width = Math.max(0, Math.min(100, p)) + "%";
+  if (pct) pct.textContent = String(Math.round(p)).padStart(2, "0") + "%";
+  if (stage && stageNode) stageNode.textContent = stage;
+  const detail = $("#bootDetail");
+  if (msg && detail) detail.textContent = msg;
+  if (msg) {
+    const log = $("#bootLog");
+    if (log) {
+      const item = document.createElement("div");
+      item.className = "boot-log-line " + cls;
+      item.textContent = msg;
+      log.append(item);
+      while (log.children.length > 10) log.firstElementChild.remove();
+      log.scrollTop = log.scrollHeight;
+    }
+  }
+}
+function bootModule(key, label, state = "WAITING", detail = "Queued for initialization") {
+  const host = $("#bootModules");
+  if (!host) return;
+  const item = document.createElement("div");
+  item.className = "boot-module";
+  item.dataset.bootModule = key;
+  item.innerHTML = '<span class="boot-module-dot"></span><span class="boot-module-copy"><b></b><small></small></span><strong></strong>';
+  item.querySelector("b").textContent = label;
+  item.querySelector("small").textContent = detail;
+  item.querySelector("strong").textContent = state;
+  host.append(item);
+}
+function bootModuleState(key, state, detail = "") {
+  const item = document.querySelector('[data-boot-module="' + key + '"]');
+  if (!item) return;
+  item.classList.remove("loading", "ready", "warn");
+  const normalized = String(state || "").toLowerCase();
+  item.classList.add(normalized === "loading" ? "loading" : normalized === "ready" ? "ready" : "warn");
+  const status = item.querySelector("strong");
+  const note = item.querySelector("small");
+  if (status) status.textContent = String(state || "").toUpperCase();
+  if (note && detail) note.textContent = detail;
+}
+function endBoot() {
+  if (bootDone) return;
+  bootDone = true;
+  $("#boot").classList.add("done");
+  $("#app").classList.add("ready");
+}
 function starfield() {
   const c = $("#starfield"), x = c.getContext("2d"); if (matchMedia("(prefers-reduced-motion:reduce)").matches) return;
   let w, h, st = []; const rs = () => { w = c.width = innerWidth; h = c.height = innerHeight; st = Array.from({ length: Math.min(110, w * h / 14000 | 0) }, () => ({ x: Math.random() * w, y: Math.random() * h, r: Math.random() * 1.2 + .3, v: Math.random() * .12 + .02 })); };
@@ -431,7 +481,24 @@ function onTick(d) {
   if (view === "ctl" && !ctlInitialized) { buildCtl(); loadActions(); ctlInitialized = true; }
 }
 function show(v) {
-  view = v; $("#vtitle").textContent = TITLES[v]; try { localStorage.setItem("sv", v); } catch (e) { } $$(".view").forEach(e => e.classList.toggle("on", e.id === "v-" + v)); $$("#nav button").forEach(b => b.classList.toggle("on", b.dataset.v === v));
+  if (!TITLES[v]) return;
+  view = v;
+  $("#vtitle").textContent = TITLES[v];
+  try { localStorage.setItem("sv", v); } catch (e) { }
+  $$(".view").forEach(element => element.classList.toggle("on", element.id === "v-" + v));
+  $$("#nav button").forEach(button => button.classList.toggle("on", button.dataset.v === v));
+
+  // Boot preloads each workspace. A fresh workspace is displayed immediately
+  // instead of issuing the same API calls again during the first navigation.
+  if (pageIsWarm(v)) {
+    if (v === "cmd") { updHero(); updTiles(); updMetrics(); }
+    else if (v === "act") { updHeart(); renderFeed(); }
+    else if (v === "net" && S) updNet();
+    else if (v === "ai" && S) updAI();
+    else if (v === "tsk" && S) updTasks();
+    return;
+  }
+
   if (!S) {
     if (v === "eng") loadEngines();
     else if (v === "agent") loadAgent(true);
@@ -440,67 +507,256 @@ function show(v) {
     else if (v === "ker") loadKernelArchive();
     else if (v === "adv") loadAdvanced(true);
     else if (v === "sys") loadSys(true);
+    else if (v === "proc") loadProcesses(true);
     else if (v === "evi") loadEvi();
     else if (v === "fc") loadFC();
     else if (v === "int") loadIntel();
     else if (v === "tsk") loadHist();
     else if (v === "act") renderFeed();
-    else if (v === "ctl") loadActions();
+    else if (v === "ctl") { buildCtl(); loadActions(); ctlInitialized = true; }
     return;
   }
-  ({ cmd: updTiles, eng: loadEngines, agent: () => loadAgent(true), act: () => { updHeart(); renderFeed(); }, proc: () => loadProcesses(true), net: updNet, ker: () => { updKer(); loadKernelArchive(); }, adv: () => loadAdvanced(true), int: loadIntel, activityx: () => loadActivityIntelligence(true), intelx: loadIntelligence, ai: updAI, ctl: () => { buildCtl(); loadActions(); ctlInitialized = true; }, sys: () => loadSys(true), evi: loadEvi, tsk: () => { updTasks(); loadHist(); }, fc: loadFC })[v]();
+  ({
+    cmd: () => { updTiles(); updMetrics(); },
+    eng: loadEngines,
+    agent: () => loadAgent(true),
+    act: () => { updHeart(); renderFeed(); },
+    proc: () => loadProcesses(true),
+    net: updNet,
+    ker: () => { updKer(); loadKernelArchive(); },
+    adv: () => loadAdvanced(true),
+    int: loadIntel,
+    activityx: () => loadActivityIntelligence(true),
+    intelx: loadIntelligence,
+    ai: updAI,
+    ctl: () => { buildCtl(); loadActions(); ctlInitialized = true; },
+    sys: () => loadSys(true),
+    evi: loadEvi,
+    tsk: () => { updTasks(); loadHist(); },
+    fc: loadFC
+  })[v]?.();
 }
 async function boot() {
-  starfield(); $("#bootSkip").onclick = endBoot; let fast = false; try { fast = sessionStorage.getItem("sb") === "1"; } catch (e) { }
-  bp(8, "LOADING INTERFACE", "Building tiles and filters"); buildTiles(); buildChips(); $$("#nav button").forEach(b => b.onclick = () => show(b.dataset.v));
-  bp(18, "AUTHENTICATING", TOKEN ? "Access token found" : "No access token", TOKEN ? "ok" : "bad"); if (!TOKEN) { endBoot(); document.body.innerHTML = '<div style="padding:40px;font:16px var(--mo);color:#ff6b38">No access token. Open SENTINEL from its desktop shortcut.</div>'; return; }
-  const setBootEngine = (id, text, cls) => {
-    const node = $("#boot-" + id);
-    if (!node) return;
-    node.classList.remove("ready", "warn");
-    if (cls) node.classList.add(cls);
-    const state = node.querySelector("b");
-    if (state) state.textContent = text;
-  };
-  for (const id of ["safe", "runtime", "ai", "memory"]) setBootEngine(id, "SYNCING");
-  bp(34, "READING TELEMETRY", "Fetching history, events, insights and engine policy"); const [hist, ev, ins, engines] = await Promise.all([api("/api/history?secs=300"), api("/api/events?limit=300"), api("/api/insights"), api("/api/engines")]);
-  if (!engines.error) {
-    setBootEngine("safe", engines.safeguard?.valorant_active ? "INTERLOCK" : engines.safeguard?.mode === "fail_closed_unknown" ? "FAIL-CLOSED" : "READY",
-      engines.safeguard?.valorant_active || engines.safeguard?.mode === "fail_closed_unknown" ? "warn" : "ready");
-    setBootEngine("runtime", String(engines.runtime?.mode || "READY").toUpperCase().replaceAll("_", " "), "ready");
-    setBootEngine("ai", engines.ai?.fast_triage_allowed ? "ADMITTED" : "GATED", engines.ai?.fast_triage_allowed ? "ready" : "warn");
-    setBootEngine("memory", String(engines.memory?.level || "READY").toUpperCase(), "ready");
-    if (engines.safeguard?.valorant_active) bp(42, "VALORANT INTERLOCK", "Strict read-only mode armed", "ok");
-  } else {
-    for (const id of ["safe", "runtime", "ai", "memory"]) setBootEngine(id, "API UNKNOWN", "warn");
+  starfield();
+  bp(4, "POWERING SENTINEL", "Preparing the local command environment");
+  buildTiles();
+  buildChips();
+  $$("#nav button").forEach(button => button.onclick = () => show(button.dataset.v));
+
+  const moduleDefinitions = [
+    ["core", "CORE TELEMETRY", "Host snapshot, counters and live stream"],
+    ["eng", "ENGINE DECK", "Safeguard, runtime, AI and memory policies"],
+    ["agent", "AGENT RUNTIME", "Worker health, resource use and lifecycle"],
+    ["sys", "SYSTEM INVENTORY", "Cached platform, security and volume inventory"],
+    ["proc", "PROCESS RADAR", "Process identities and review metadata"],
+    ["net", "NETWORK VIEW", "Connections and live traffic charts"],
+    ["ker", "KERNEL ARCHIVE", "Kernel counters and archived samples"],
+    ["adv", "THERMAL / ETW", "Hardware sensors, provider and trace readiness"],
+    ["activityx", "USAGE INTELLIGENCE", "Foreground sessions, tasks and learned routines"],
+    ["intelx", "INTELLIGENCE MEMORY", "Ranked context, memories and goals"],
+    ["int", "INTELLIGENCE FEED", "Recent local intelligence results"],
+    ["evi", "EVIDENCE VAULT", "Recent events, searchable records and filters"],
+    ["ctl", "ACTION CONTROL", "Pending approvals and automation policy"],
+    ["fc", "FEATURE CONFIGURATION", "Persisted preferences and audit history"],
+    ["tsk", "TASK CENTER", "Collector jobs and action history"],
+    ["act", "ACTIVITY STREAM", "Agent events and collector heartbeats"]
+  ];
+  $("#bootModules").replaceChildren();
+  moduleDefinitions.forEach(([key, label, detail]) => bootModule(key, label, "WAITING", detail));
+
+  bp(10, "AUTHENTICATING", TOKEN ? "Local session token accepted" : "No local session token found", TOKEN ? "ok" : "bad");
+  if (!TOKEN) {
+    bp(100, "AUTHENTICATION REQUIRED", "Open SENTINEL from its installed desktop shortcut", "warn");
+    $("#bootDetail").textContent = "Authentication required · use the installed desktop shortcut";
+    $("#boot").classList.add("boot-error");
+    return;
   }
-  if (hist.error) { endBoot(); document.body.innerHTML = '<div style="padding:40px;font:16px var(--mo);color:#f05252">Access denied - bad token. Open SENTINEL from its desktop shortcut.</div>'; return; }
-  for (const [k, a] of Object.entries(hist)) H[k] = a.map(p => p[1]).slice(-MAXH);
-  ev.forEach(addLog); INS = ins; renderIns();
-  bp(66, "WAKING AI COUNCIL", "Loading council transcript"); const tr = await api("/api/ai"); (tr.transcript || []).forEach(addTr);
-  bp(86, "OPENING LIVE STREAM", "Subscribing to agent stream"); const es = new EventSource("/api/stream?t=" + encodeURIComponent(TOKEN));
-  es.onmessage = m => { const j = JSON.parse(m.data); if (j.t === "tick") { $("#p-online").className = "pill ok"; $("#p-online").textContent = "AGENT ONLINE"; onTick(j.d); } else if (j.t === "log") addLog(j.d); else if (j.t === "insight") { INS.unshift(j.d); renderIns(); alertInsight(j.d); } else if (j.t === "action") loadActions(); else if (j.t === "ai") addTr(j.d); else if (j.t === "ai_status") $("#ai-status").textContent = j.d.text; else if (j.t === "intel" && view === "int") loadIntel(); };
-  es.onerror = () => { toast("Link to agent lost - retrying", "bad"); $("#p-online").className = "pill bad"; $("#p-online").textContent = "LINK LOST - RETRYING"; };
-  $("#a-q").oninput = renderFeed; $("#a-pause").onclick = e => { paused = !paused; e.target.textContent = paused ? "RESUME" : "PAUSE"; if (!paused) renderFeed(); };
-  $("#i-go").onclick = async () => { const q = $("#i-q").value.trim(); if (q) { await api("/api/intel/search", { q }); setTimeout(loadIntel, 4000); } };
-  const send = () => { const m = $("#ai-in").value.trim(); if (m) { api("/api/chat", { msg: m, mode: $("#ai-mode").value }); $("#ai-in").value = ""; } };
-  $("#ai-go").onclick = send; $("#ai-in").onkeydown = e => e.key === "Enter" && send();
+
+  // First read the minimum shell state. The first snapshot seeds every live
+  // view so page initialization does not wait for the first server-sent event.
+  bootModuleState("core", "LOADING", "Fetching initial local snapshot and telemetry history");
+  bp(18, "ESTABLISHING LOCAL SESSION", "Reading the agent snapshot, policy engines and persisted telemetry");
+  const foundation = await Promise.all([
+    api("/api/snapshot"),
+    api("/api/history?secs=300"),
+    api("/api/events?limit=300"),
+    api("/api/insights"),
+    api("/api/engines"),
+    api("/api/status"),
+    api("/api/ai")
+  ]);
+  const [initial, history, events, insights, engines, status, transcript] = foundation;
+  if (history?.error || initial?.error) {
+    const reason = history?.error || initial?.error || "The local agent rejected this session.";
+    bootModuleState("core", "BLOCKED", String(reason).slice(0, 100));
+    bp(100, "LOCAL SESSION REJECTED", String(reason).slice(0, 160), "warn");
+    $("#boot").classList.add("boot-error");
+    return;
+  }
+
+  S = initial;
+  ST = status && !status.error ? status : null;
+  for (const [key, samples] of Object.entries(history || {})) {
+    if (Array.isArray(samples)) H[key] = samples.map(point => Number(point[1])).filter(Number.isFinite).slice(-MAXH);
+  }
+  if (S?.live) {
+    for (const [key, value] of Object.entries(S.live)) {
+      if (Number.isFinite(Number(value)) && !(H[key] || []).length) H[key] = [Number(value)];
+    }
+  }
+  (Array.isArray(events) ? events : []).forEach(addLog);
+  INS = Array.isArray(insights) ? insights : [];
+  renderIns();
+  (transcript?.transcript || []).forEach(addTr);
+  if (engines && !engines.error) renderEngines(engines);
+  else bootModuleState("eng", "DEGRADED", "Engine status could not be read during startup");
+  bootModuleState("core", "READY", "Local token verified · initial snapshot and telemetry restored");
+  markPageWarm("eng");
+
+  // Initialize every interaction before the views are painted.
+  $("#a-q").oninput = renderFeed;
+  $("#a-pause").onclick = event => { paused = !paused; event.target.textContent = paused ? "RESUME" : "PAUSE"; if (!paused) renderFeed(); };
+  $("#i-go").onclick = async () => {
+    const query = $("#i-q").value.trim();
+    if (query) { await api("/api/intel/search", { q: query }); setTimeout(loadIntel, 4000); }
+  };
+  const send = () => {
+    const message = $("#ai-in").value.trim();
+    if (message) { api("/api/chat", { msg: message, mode: $("#ai-mode").value }); $("#ai-in").value = ""; }
+  };
+  $("#ai-go").onclick = send;
+  $("#ai-in").onkeydown = event => event.key === "Enter" && send();
+
   setInterval(() => $("#h-clock").textContent = new Date().toLocaleTimeString([], { hour12: false }), 1000);
-  setInterval(() => { if (view === "int") loadIntel(); if (view === "activityx") loadActivityIntelligence(); if (view === "ctl") loadActions(); if (view === "agent") loadAgent(); }, 10000); loadActions();
-  $("#p-q").oninput = () => { clearTimeout(procQueryTimer); procQueryTimer = setTimeout(() => loadProcesses(true), 260); }; $("#p-refresh").onclick = () => loadProcesses(true); $("#n-q").oninput = () => S && updNet();
-  $("#a-exp").onclick = () => { const t = LOGS.map(r => `${new Date(r.ts * 1000).toISOString()}\t${r.level}\t${r.src}\t${r.msg}`).join("\n"); const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([t], { type: "text/plain" })); a.download = "sentinel-activity-" + Date.now() + ".log"; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000); toast("Exported " + LOGS.length + " events", "ok"); };
-  initPalette(); initNotify(); initFC(); initIntelligence(); initActivityIntelligence(); initAdvanced(); initAgent(); initEngines(); bindJ("#metrics"); loadStatus(); setInterval(loadStatus, 15000);
+  setInterval(() => {
+    if (view === "int") loadIntel();
+    if (view === "activityx") loadActivityIntelligence();
+    if (view === "ctl") loadActions();
+    if (view === "agent") loadAgent();
+  }, 10000);
+  $("#p-q").oninput = () => { clearTimeout(procQueryTimer); procQueryTimer = setTimeout(() => loadProcesses(true), 260); };
+  $("#p-refresh").onclick = () => loadProcesses(true);
+  $("#n-q").oninput = () => S && updNet();
+  $("#a-exp").onclick = () => {
+    const content = LOGS.map(row => `${new Date(row.ts * 1000).toISOString()}\t${row.level}\t${row.src}\t${row.msg}`).join("\n");
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(new Blob([content], { type: "text/plain" }));
+    link.download = "sentinel-activity-" + Date.now() + ".log";
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(link.href), 2000);
+    toast("Exported " + LOGS.length + " events", "ok");
+  };
+
+  initPalette(); initNotify(); initFC(); initIntelligence(); initActivityIntelligence();
+  initAdvanced(); initAgent(); initEngines(); bindJ("#metrics");
+  loadStatus(); setInterval(loadStatus, 15000);
   setInterval(() => { if (view === "eng") loadEngines(); }, 8000);
-  $("#e-go").onclick = loadEvi; $("#e-csv").onclick = csvExport; $("#e-q").onkeydown = e => e.key === "Enter" && loadEvi(); $("#e-lv").onchange = $("#e-src").onchange = loadEvi;
-  $("#sys-refresh").onclick = async () => { const b = $("#sys-refresh"); b.disabled = true; b.textContent = "SCANNING…"; const r = await api("/api/inventory/refresh", {}); b.disabled = false; b.textContent = "REFRESH INVENTORY"; if (r.error) toast(r.error, "bad"); else { toast("System inventory refreshed", "ok"); loadSys(true); } };
-  $("#kernel-capture").onclick = async () => { const r = await api("/api/action/propose", { kind: "wpr_trace", reason: "User requested a bounded 15-second Windows Performance Recorder ETW trace" }); if (r.error) return toast(r.error, "bad"); toast("ETW trace queued. Approve it in CONTROL; an existing WPR recording will not be interrupted.", "warn"); loadActions(); };
+  $("#e-go").onclick = loadEvi;
+  $("#e-csv").onclick = csvExport;
+  $("#e-q").onkeydown = event => event.key === "Enter" && loadEvi();
+  $("#e-lv").onchange = $("#e-src").onchange = loadEvi;
+  $("#sys-refresh").onclick = async () => {
+    const button = $("#sys-refresh"); button.disabled = true; button.textContent = "SCANNING…";
+    const result = await api("/api/inventory/refresh", {});
+    button.disabled = false; button.textContent = "REFRESH INVENTORY";
+    if (result.error) toast(result.error, "bad");
+    else { toast("System inventory refreshed", "ok"); loadSys(true); }
+  };
+  $("#kernel-capture").onclick = async () => {
+    const result = await api("/api/action/propose", { kind: "wpr_trace", reason: "User requested a bounded 15-second Windows Performance Recorder ETW trace" });
+    if (result.error) return toast(result.error, "bad");
+    toast("ETW trace queued. Approve it in CONTROL; an existing WPR recording will not be interrupted.", "warn");
+    loadActions();
+  };
   $("#kernel-archive-load").onclick = loadKernelArchive;
   $("#kernel-archive-key").onchange = loadKernelArchive;
-  addEventListener("keydown", e => { const t = e.target.tagName; if (t === "INPUT" || t === "SELECT" || t === "TEXTAREA" || e.ctrlKey || e.metaKey || e.altKey) return; const n = +e.key; if (n >= 1 && n <= VKEYS.length) show(VKEYS[n - 1]); });
-  let sv = "cmd"; try { sv = localStorage.getItem("sv") || "cmd"; } catch (e) { } if (TITLES[sv] && sv !== "cmd") show(sv);
-  bp(100, "ONLINE", "Command deck ready", "ok"); setTimeout(endBoot, fast ? 150 : 1500);
-}
+  addEventListener("keydown", event => {
+    const tag = event.target?.tagName;
+    if (tag === "INPUT" || tag === "SELECT" || tag === "TEXTAREA" || event.ctrlKey || event.metaKey || event.altKey) return;
+    const number = Number(event.key);
+    if (number >= 1 && number <= VKEYS.length) show(VKEYS[number - 1]);
+  });
 
+  // Connect the stream before the parallel page warm-up. The snapshot above is
+  // already usable, so this handshake is bounded and cannot hold the splash.
+  let streamOpen = false;
+  const stream = new EventSource("/api/stream?t=" + encodeURIComponent(TOKEN));
+  const firstTick = new Promise(resolve => {
+    const fallback = setTimeout(() => resolve(false), 1800);
+    stream.addEventListener("open", () => { streamOpen = true; });
+    stream.addEventListener("error", () => {
+      $("#p-online").className = "pill bad";
+      $("#p-online").textContent = "LINK RETRYING";
+    });
+    stream.onmessage = message => {
+      try {
+        const packet = JSON.parse(message.data);
+        if (packet.t === "tick") {
+          $("#p-online").className = "pill ok";
+          $("#p-online").textContent = "AGENT ONLINE";
+          onTick(packet.d);
+          resolve(true);
+          clearTimeout(fallback);
+        } else if (packet.t === "log") addLog(packet.d);
+        else if (packet.t === "insight") { INS.unshift(packet.d); renderIns(); alertInsight(packet.d); }
+        else if (packet.t === "action") loadActions();
+        else if (packet.t === "ai") addTr(packet.d);
+        else if (packet.t === "ai_status") $("#ai-status").textContent = packet.d.text;
+        else if (packet.t === "intel" && view === "int") loadIntel();
+      } catch (error) {
+        console.error("Invalid SENTINEL stream event", error);
+      }
+    };
+  });
+
+  bp(27, "CONFIGURING WORKSPACES", "Initializing page controls and restoring the last workspace");
+  const jobs = [
+    ["cmd", "COMMAND DECK", async () => { updHero(); updTiles(); updMetrics(); }],
+    ["agent", "AGENT RUNTIME", () => loadAgent(true)],
+    ["sys", "SYSTEM INVENTORY", () => loadSys(true)],
+    ["proc", "PROCESS RADAR", () => loadProcesses(true)],
+    ["net", "NETWORK VIEW", async () => { updNet(); }],
+    ["ker", "KERNEL ARCHIVE", async () => { updKer(); await loadKernelArchive(); }],
+    ["adv", "THERMAL / ETW", () => loadAdvanced(true)],
+    ["activityx", "USAGE INTELLIGENCE", () => loadActivityIntelligence(true)],
+    ["intelx", "INTELLIGENCE MEMORY", () => loadIntelligence()],
+    ["int", "INTELLIGENCE FEED", () => loadIntel()],
+    ["ai", "AI COUNCIL", async () => { updAI(); }],
+    ["evi", "EVIDENCE VAULT", () => loadEvi()],
+    ["ctl", "ACTION CONTROL", async () => { buildCtl(); await loadActions(); ctlInitialized = true; }],
+    ["fc", "FEATURE CONFIGURATION", () => loadFC()],
+    ["tsk", "TASK CENTER", () => loadHist()],
+    ["act", "ACTIVITY STREAM", async () => { updHeart(); renderFeed(); }]
+  ];
+  let completed = 0;
+  const runJob = async ([key, label, work]) => {
+    bootModuleState(key, "LOADING", "Preparing " + label.toLowerCase());
+    try {
+      await work();
+      markPageWarm(key);
+      bootModuleState(key, "READY", "Data and controls are prepared");
+      bp(30 + (++completed / jobs.length) * 66, "PREPARING " + label, label + " is ready", "ok");
+      return { key, ok: true };
+    } catch (error) {
+      bootModuleState(key, "DEGRADED", (error?.message || String(error)).slice(0, 110));
+      bp(30 + (++completed / jobs.length) * 66, "DEGRADED · " + label, (error?.message || String(error)).slice(0, 150), "warn");
+      return { key, ok: false };
+    }
+  };
+  const results = await Promise.all(jobs.map(runJob));
+  await firstTick;
+  const degraded = results.filter(result => !result.ok).length;
+  if (degraded) bp(98, "READY WITH DEGRADED MODULES", degraded + " workspace(s) need a refresh or source recovery", "warn");
+  else bp(99, "ALL WORKSPACES PREPARED", "Dashboard cache, charts and controls are ready", "ok");
+
+  $("#kernel-capture").disabled = false;
+  let savedView = "cmd";
+  try { savedView = localStorage.getItem("sv") || "cmd"; } catch (e) { }
+  if (TITLES[savedView] && savedView !== "cmd") show(savedView);
+  await new Promise(resolve => setTimeout(resolve, 420));
+  bp(100, degraded ? "ONLINE · DEGRADED MODULES" : "ONLINE", degraded ? "The dashboard is ready; unavailable sources remain clearly marked." : "All prepared workspaces are ready for navigation.", degraded ? "warn" : "ok");
+  endBoot();
+}
 /* ---------- reversible performance intelligence / thermal workspace ---------- */
 let ADV = null, advLastLoad = 0, advBusy = false;
 const avNum = (v, d = 1, suffix = "") => v == null || !Number.isFinite(Number(v)) ? "--" : Number(v).toFixed(d) + suffix;
@@ -944,7 +1200,6 @@ function initActivityIntelligence() {
     } catch(error) { toast("Activity policy: " + (error.message || String(error)), "bad"); }
     finally { button.disabled = false; button.textContent = "SAVE ACTIVITY POLICY"; }
   };
-  loadActivityIntelligence(true);
 }
 
 /* ---------- additive AIE intelligence: evidence, memory, planning and read-only UIA ---------- */
