@@ -39,6 +39,8 @@ def test_managed_sensor_provider_ui_and_boot_contract_are_present():
     assert "overflow-wrap:anywhere" in css
     assert "panelGlassSheen" in css and "ambientGridDrift" in css
     assert "boot().catch(error =>" in app
+    assert 'provider.endpoint_state === "remote_server_not_started"' in app
+    assert "provider.next_step" in app
 
 def test_activity_workspace_and_learned_launch_are_connected():
     html = (ROOT / "ui" / "index.html").read_text(encoding="utf-8")
