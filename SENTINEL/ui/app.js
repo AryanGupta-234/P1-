@@ -649,7 +649,7 @@ async function boot() {
 
   initPalette(); initNotify(); initFC(); initIntelligence(); initActivityIntelligence();
   initAdvanced(); initAgent(); initEngines(); bindJ("#metrics");
-  loadStatus(); setInterval(loadStatus, 15000);
+  setInterval(loadStatus, 15000);
   setInterval(() => { if (view === "eng") loadEngines(); }, 8000);
   $("#e-go").onclick = loadEvi;
   $("#e-csv").onclick = csvExport;
@@ -679,11 +679,9 @@ async function boot() {
 
   // Connect the stream before the parallel page warm-up. The snapshot above is
   // already usable, so this handshake is bounded and cannot hold the splash.
-  let streamOpen = false;
   const stream = new EventSource("/api/stream?t=" + encodeURIComponent(TOKEN));
   const firstTick = new Promise(resolve => {
     const fallback = setTimeout(() => resolve(false), 1800);
-    stream.addEventListener("open", () => { streamOpen = true; });
     stream.addEventListener("error", () => {
       $("#p-online").className = "pill bad";
       $("#p-online").textContent = "LINK RETRYING";
@@ -957,8 +955,12 @@ async function loadAdvanced(force = false) {
     const providerStatus = $("#adv-provider-status");
     if (providerStatus) providerStatus.textContent = provider.connected
       ? `CONNECTED · ${provider.sensor_count || hs.sensor_count || 0} numeric sensors · localhost:${provider.port || 8085}`
-      : provider.installed ? (provider.running ? "Provider is running; waiting for its local sensor endpoint." : "Provider installed but not running.")
-      : "Not installed · official package is checksum-verified before extraction.";
+      : provider.endpoint_state === "remote_server_not_started"
+        ? "PROCESS RUNNING · HTTP SENSOR SERVER OFF · " + (provider.next_step || "Open LibreHardwareMonitor and enable Options > Remote Web Server > Run.")
+        : provider.installed ? (provider.running
+          ? (provider.next_step || "Provider is running; waiting for its local sensor endpoint.")
+          : (provider.next_step || "Provider installed but not running."))
+        : (provider.next_step || "Not installed · official package is checksum-verified before extraction.");
     advSpark("adv-clock-spark","gpuclk"); advSpark("adv-power-spark","gpupwr"); advPowerClockWaterfall();
     $("#adv-thermal-timeline").innerHTML = advRows((d.thermal_events || []).slice(0,16).map(x=>`<div class="event"><b>${esc(x.sensor)} · ${esc(x.event)}</b><small>${hms(x.ts)} · ${x.value==null?"value unavailable":avNum(x.value,1)+" °C"} ${esc(x.detail || "")}</small></div>`), "No thermal warning or GPU throttle transitions have been recorded.");
     const drivers = d.etw_engine?.driver_modules || [];
