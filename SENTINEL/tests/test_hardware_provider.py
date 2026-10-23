@@ -68,3 +68,30 @@ def test_provider_config_rejects_an_invalid_persisted_port(monkeypatch):
     assert hardware_provider.configured_port() == 8085
     assert hardware_provider._probe(70000)["connected"] is False
 
+
+
+
+def test_status_distinguishes_running_monitor_from_disabled_http_server(tmp_path: Path, monkeypatch):
+    executable = tmp_path / "LibreHardwareMonitor.Windows.Forms.exe"
+    executable.write_bytes(b"provider")
+    monkeypatch.setattr(hardware_provider, "configured_port", lambda: 8085)
+    monkeypatch.setattr(hardware_provider, "_find_executable", lambda: executable)
+    monkeypatch.setattr(hardware_provider, "_process_running", lambda path: True)
+    monkeypatch.setattr(
+        hardware_provider,
+        "_probe",
+        lambda port=None: {
+            "connected": False,
+            "sensor_count": 0,
+            "reason": "ConnectionRefusedError: local sensor endpoint is not active",
+        },
+    )
+
+    result = hardware_provider.status()
+
+    assert result["installed"] is True
+    assert result["running"] is True
+    assert result["connected"] is False
+    assert result["endpoint_state"] == "remote_server_not_started"
+    assert "Options > Remote Web Server > Run" in result["next_step"]
+    assert result["port"] == 8085
