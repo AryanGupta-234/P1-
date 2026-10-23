@@ -1,4 +1,4 @@
-## Startup data hydration and visual command cockpit (v1.2.9)
+## Startup data hydration and visual command cockpit (v1.2.10)
 
 SENTINEL's splash screen is now a real workspace data-loading phase, not an animation-only prelude. It authenticates the local node, restores the initial snapshot, then awaits telemetry history, events, insights, safeguard/runtime policies, source status and AI transcript. It subsequently hydrates the operational workspaces (command, network, agent, system inventory, process field and thermal/ETW) and the remaining workspaces (kernel archive, activity intelligence, memory/goals, intelligence feed, AI, evidence, action control, configuration, task history and activity stream) before revealing the dashboard.
 
