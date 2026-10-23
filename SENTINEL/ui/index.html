@@ -316,13 +316,37 @@
 </section>
 
 <!-- NETWORK -->
-<section class="view" id="v-net"><div class="cols2">
+<section class="view" id="v-net">
+  <div class="signal-page-head">
+    <div><span>NETWORK / LIVE TELEMETRY</span><b>CONNECTION FABRIC</b><small>Latency, jitter, throughput and active remote connections</small></div>
+    <span class="pill ok" id="net-live-state">LIVE STREAM</span>
+  </div>
+  <div class="signal-strip" id="net-signal-strip" aria-label="Network telemetry">
+    <div class="signal-tile"><small>LATENCY</small><b id="net-ping-value">--</b><i id="net-ping-bar"></i></div>
+    <div class="signal-tile"><small>JITTER</small><b id="net-jitter-value">--</b><i id="net-jitter-bar"></i></div>
+    <div class="signal-tile"><small>DOWNLOAD</small><b id="net-down-value">--</b><i id="net-down-bar"></i></div>
+    <div class="signal-tile"><small>UPLOAD</small><b id="net-up-value">--</b><i id="net-up-bar"></i></div>
+    <div class="signal-tile"><small>CONNECTIONS</small><b id="net-conn-value">--</b><i id="net-conn-bar"></i></div>
+  </div>
+  <div class="cols2">
   <div class="panel big"><div class="ph">Latency &amp; jitter<em>1.1.1.1 probe</em></div><div class="pb"><canvas id="nc-ping"></canvas></div><div class="pb"><canvas id="nc-thr"></canvas></div></div>
   <div class="panel"><div class="ph">Outbound connections<em id="n-n"></em></div><div style="padding:10px 16px 0"><input id="n-q" placeholder="filter by process, host or port..." style="width:100%"></div><div class="pb" style="overflow:auto;max-height:calc(100vh - 170px)"><table id="ntab"></table></div></div>
 </div></section>
 
 <!-- KERNEL -->
-<section class="view" id="v-ker"><div class="cols2">
+<section class="view" id="v-ker">
+  <div class="signal-page-head">
+    <div><span>KERNEL / WINDOWS PERFORMANCE COUNTERS</span><b>LATENCY &amp; I/O FABRIC</b><small>DPC, interrupt, paging and disk signals from measured counters</small></div>
+    <span class="pill off" id="kernel-live-state">COLLECTING</span>
+  </div>
+  <div class="signal-strip kernel-strip" id="kernel-signal-strip" aria-label="Kernel performance counters">
+    <div class="signal-tile"><small>DPC TIME</small><b id="kernel-dpc-value">--</b><i id="kernel-dpc-bar"></i></div>
+    <div class="signal-tile"><small>INTERRUPT TIME</small><b id="kernel-irq-value">--</b><i id="kernel-irq-bar"></i></div>
+    <div class="signal-tile"><small>PAGES IN</small><b id="kernel-pagesin-value">--</b><i id="kernel-pagesin-bar"></i></div>
+    <div class="signal-tile"><small>PAGES OUT</small><b id="kernel-pagesout-value">--</b><i id="kernel-pagesout-bar"></i></div>
+    <div class="signal-tile"><small>DISK LATENCY</small><b id="kernel-dlat-value">--</b><i id="kernel-dlat-bar"></i></div>
+  </div>
+  <div class="cols2">
   <div class="panel big"><div class="ph">DPC / interrupt time<em>driver latency</em></div><div class="pb"><canvas id="kc-dpc"></canvas></div><div class="ph" style="margin-top:6px">Paging &amp; disk latency</div><div class="pb"><canvas id="kc-pg"></canvas></div></div>
   <div style="display:grid;gap:14px;align-content:start">
     <div class="panel"><div class="ph">GPU</div><div class="pb kv" id="gpu"></div></div>
@@ -458,6 +482,12 @@
 
 <!-- SYSTEM -->
 <section class="view" id="v-sys">
+  <div class="system-node-banner">
+    <div class="system-node-identity"><span>WINDOWS NODE / HOST IDENTITY</span><b id="sys-host-name">SYNCHRONIZING NODE</b><small id="sys-host-platform">Reading platform and firmware inventory</small></div>
+    <div class="system-node-fact"><small>MEMORY HEADROOM</small><b id="sys-headroom-value">--</b><i><span id="sys-headroom-bar"></span></i></div>
+    <div class="system-node-fact"><small>SECURE BOOT</small><b id="sys-secureboot-value">UNKNOWN</b><i class="system-state-chip" id="sys-secureboot-state">SOURCE CHECK</i></div>
+    <div class="system-node-fact"><small>INSTALLED APPS</small><b id="sys-app-count">--</b><i>Local inventory</i></div>
+  </div>
   <div class="row" style="margin-bottom:10px"><div><b>Host inventory &amp; security posture</b><small>Unknown data is shown as unknown, never treated as a healthy result.</small></div><button class="btn or" id="sys-refresh">REFRESH INVENTORY</button></div>
   <div class="metrics" id="sys-m"></div>
   <div class="cols2">
