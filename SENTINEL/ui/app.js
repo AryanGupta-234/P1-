@@ -149,6 +149,26 @@ function endBoot() {
   const notices = deferredToasts.splice(0);
   for (const notice of notices.slice(-4)) toast(notice.msg, notice.kind);
 }
+function updateBootTelemetry() {
+  const live = S && typeof S.live === "object" ? S.live : {};
+  const values = [
+    ["cpu", "bootCpuValue", "bootCpuValue", "%", 100],
+    ["ram", "bootRamValue", "bootRamValue", "%", 100],
+    ["gpu", "bootGpuValue", "bootGpuValue", "%", 100],
+    ["dpc", "bootDpcValue", "bootDpcValue", "%", 100]
+  ];
+  for (const [key, valueId, , suffix, max] of values) {
+    const value = Number(live[key]);
+    const valid = live[key] != null && Number.isFinite(value);
+    const node = document.getElementById(valueId);
+    const bar = document.querySelector('[data-boot-bar="' + (key === "ram" ? "ram" : key) + '"]');
+    if (node) node.textContent = valid ? value.toFixed(key === "dpc" ? 2 : 0) + suffix : "--";
+    if (bar) bar.style.width = valid ? Math.max(0, Math.min(100, value / max * 100)) + "%" : "0%";
+  }
+  const processCount = document.getElementById("bootProcessCount");
+  if (processCount && Number(S?.proc_total || 0) > 0) processCount.textContent = Number(S.proc_total).toLocaleString() + " PROCESSES";
+}
+
 function starfield() {
   const c = $("#starfield"), x = c.getContext("2d"); if (matchMedia("(prefers-reduced-motion:reduce)").matches) return;
   let w, h, st = [], frame = 0, lastPaint = 0;
@@ -659,80 +679,135 @@ function show(v) {
 async function boot() {
   const bootStartedAt = performance.now();
   starfield();
-  bp(4, "POWERING SENTINEL", "Preparing the local command environment");
+  bp(3, "POWERING SENTINEL", "Preparing the local command environment");
   buildTiles();
   buildChips();
   $$("#nav button").forEach(button => {
     const label = button.querySelector(".lb")?.textContent?.trim() || TITLES[button.dataset.v] || button.dataset.v;
-    button.setAttribute("aria-label", label); button.title = label;
+    button.setAttribute("aria-label", label);
+    button.title = label;
     if (button.dataset.v === view) button.setAttribute("aria-current", "page");
     button.onclick = () => show(button.dataset.v);
   });
 
-  const moduleDefinitions = [
-    ["core", "SESSION", "Local auth and system state"],
-    ["command", "COMMAND", "Live metrics and visual layers"],
-    ["agent", "RUNTIME", "Collector workers and heartbeat"],
-    ["sys", "SYSTEM MAP", "Windows platform inventory"],
-    ["proc", "PROCESS FIELD", "Live Windows process scan"],
-    ["net", "NETWORK", "Interfaces and connections"],
-    ["adv", "THERMAL / ETW", "Hardware and kernel telemetry"],
-    ["stream", "LIVE LINK", "Agent event channel"]
+  const modules = [
+    ["core", "SESSION", "Authenticated local node snapshot"],
+    ["command", "COMMAND DECK", "Live performance and visual telemetry"],
+    ["agent", "AGENT RUNTIME", "Process footprint and collector health"],
+    ["sys", "SYSTEM MAP", "Platform, storage and security inventory"],
+    ["proc", "PROCESS FIELD", "Windows process list and identities"],
+    ["net", "NETWORK", "Connections and latency charts"],
+    ["adv", "THERMAL / ETW", "Thermal sensors and kernel diagnostics"],
+    ["eng", "ENGINE DECK", "Safeguards, runtime and memory policy"],
+    ["stream", "LIVE LINK", "Event stream and heartbeat"],
+    ["ker", "KERNEL ARCHIVE", "Historical counter samples"],
+    ["activityx", "USAGE INTELLIGENCE", "Foreground activity and learned routines"],
+    ["intelx", "INTELLIGENCE MEMORY", "Memories, goals and ranked context"],
+    ["int", "INTELLIGENCE FEED", "Local intelligence results"],
+    ["ai", "AI COUNCIL", "Model availability and conversation history"],
+    ["evi", "EVIDENCE VAULT", "Searchable event records"],
+    ["ctl", "ACTION CONTROL", "Pending approvals and action history"],
+    ["fc", "FEATURE CONFIG", "Saved preferences and audit history"],
+    ["tsk", "TASK CENTER", "Jobs and action run history"],
+    ["act", "ACTIVITY STREAM", "Events and collector heartbeats"]
   ];
   $("#bootModules").replaceChildren();
-  moduleDefinitions.forEach(([key, label, detail]) => bootModule(key, label, "WAITING", detail));
-
-  bp(10, "AUTHENTICATING", TOKEN ? "Local session token accepted" : "No local session token found", TOKEN ? "ok" : "bad");
-    if (!TOKEN) {
+  modules.forEach(([key, label, detail]) => bootModule(key, label, "WAITING", detail));
+  bp(9, "AUTHENTICATING", TOKEN ? "Local session token accepted" : "No local session token found", TOKEN ? "ok" : "warn");
+  if (!TOKEN) {
+    bootModuleState("core", "BLOCKED", "Open SENTINEL using the installed desktop shortcut");
     bp(100, "AUTHENTICATION REQUIRED", "Open SENTINEL from its installed desktop shortcut", "warn");
-    $("#bootDetail").textContent = "Authentication required · use the installed desktop shortcut";
     $("#boot").classList.add("boot-error");
     return;
   }
 
-  // The live process snapshot gates first paint; history and secondary panels
-  // hydrate behind it so slow endpoints cannot hold the splash open.
-  bootModuleState("core", "LOADING", "Authenticating and synchronizing local telemetry");
-  bootModuleState("eng", "LOADING", "Reading safeguards and policy state");
-  bp(18, "SYNCHRONIZING LOCAL NODE", "Agent remains online while the dashboard reads process and system state");
-  const initial = await api("/api/snapshot");
-  if (initial?.error) {
-    const reason = initial.error || "The local agent rejected this session.";
-    bootModuleState("core", "BLOCKED", String(reason).slice(0, 100));
-    bp(100, "LOCAL SESSION REJECTED", String(reason).slice(0, 160), "warn");
+  const markDataFailure = (key, detail) => {
+    bootModuleState(key, "DEGRADED", String(detail || "Data source unavailable").slice(0, 120));
+  };
+  const markDataReady = (key, detail) => {
+    bootModuleState(key, "READY", detail || "Data synchronized");
+    markPageWarm(key);
+  };
+
+  bootModuleState("core", "LOADING", "Reading the authenticated Windows node snapshot");
+  bp(14, "SYNCHRONIZING LOCAL NODE", "Restoring live measurements and host state");
+  let initial;
+  try {
+    initial = await apiRetry("/api/snapshot", 2);
+    if (initial?.error) throw new Error(initial.error);
+  } catch (error) {
+    markDataFailure("core", error.message || "Local agent is unavailable");
+    bp(100, "LOCAL AGENT UNAVAILABLE", error.message || "Open the SENTINEL agent and retry", "warn");
     $("#boot").classList.add("boot-error");
     return;
   }
 
   S = initial;
+  if (S?.live && typeof S.live === "object") {
+    for (const [key, value] of Object.entries(S.live)) {
+      if (Number.isFinite(Number(value)) && !(H[key] || []).length) H[key] = [Number(value)];
+    }
+  }
+  INS = [];
+  renderIns();
+  updateBootTelemetry();
+  markDataReady("core", "Snapshot loaded · " + Number(S.proc_total || 0).toLocaleString() + " cached process records");
+  markDataReady("command", "Initial live values and host state restored");
+  markDataReady("net", "Connection snapshot restored");
+  bp(20, "LOADING FOUNDATION DATA", "History, events, policy, runtime status and AI transcript");
+
+  const foundation = await Promise.allSettled([
+    apiRetry("/api/history?secs=300", 1),
+    apiRetry("/api/events?limit=300", 1),
+    apiRetry("/api/insights", 1),
+    apiRetry("/api/engines", 1),
+    apiRetry("/api/status", 1),
+    apiRetry("/api/ai", 1)
+  ]);
+  const readFoundation = (index, key, validate, apply, label) => {
+    const result = foundation[index];
+    if (result.status !== "fulfilled" || result.value?.error || !validate(result.value)) {
+      const reason = result.status === "rejected" ? result.reason?.message : result.value?.error || "Unexpected data format";
+      markDataFailure(key, reason || (label + " unavailable"));
+      return false;
+    }
+    apply(result.value);
+    markDataReady(key, label + " synchronized");
+    return true;
+  };
+  const historyReady = readFoundation(0, "command", value => value && typeof value === "object" && !Array.isArray(value),
+    history => {
+      for (const [key, samples] of Object.entries(history)) {
+        if (Array.isArray(samples)) H[key] = samples.map(point => Number(point[1])).filter(Number.isFinite).slice(-MAXH);
+      }
+    }, "Telemetry history");
+  const eventsReady = readFoundation(1, "act", Array.isArray,
+    events => events.forEach(addLog), "Recent event stream");
+  const insightsReady = readFoundation(2, "command", Array.isArray,
+    insights => { INS = insights; renderIns(); }, "Performance insights");
+  const enginesReady = readFoundation(3, "eng", value => value && typeof value === "object",
+    engines => renderEngines(engines), "Safeguards and engine policies");
+  const statusReady = readFoundation(4, "sys", value => value && typeof value === "object",
+    status => { ST = status; }, "Runtime and source status");
+  const aiReady = readFoundation(5, "ai", value => value && typeof value === "object",
+    transcript => (transcript.transcript || []).forEach(addTr), "AI transcript");
   if (S?.live) {
     for (const [key, value] of Object.entries(S.live)) {
       if (Number.isFinite(Number(value)) && !(H[key] || []).length) H[key] = [Number(value)];
     }
   }
-  INS = []; renderIns();
-  bootModuleState("core", "READY", "Live process and system snapshot ready");
-  void Promise.allSettled([
-    api("/api/history?secs=300"), api("/api/events?limit=300"),
-    api("/api/engines"), api("/api/status")
-  ]).then(([historyResult, eventResult, engineResult, statusResult]) => {
-    const history = historyResult.status === "fulfilled" ? historyResult.value : null;
-    const events = eventResult.status === "fulfilled" ? eventResult.value : [];
-    const engines = engineResult.status === "fulfilled" ? engineResult.value : null;
-    const status = statusResult.status === "fulfilled" ? statusResult.value : null;
-    for (const [key, samples] of Object.entries(history || {})) {
-      if (Array.isArray(samples)) H[key] = samples.map(point => Number(point[1])).filter(Number.isFinite).slice(-MAXH);
-    }
-    (Array.isArray(events) ? events : []).forEach(addLog);
-    if (engines && !engines.error) { renderEngines(engines); bootModuleState("eng", "READY", "Safeguards and policy state online"); markPageWarm("eng"); }
-    else bootModuleState("eng", "DEGRADED", "Engine state is still loading");
-    ST = status && !status.error ? status : null;
-    if (view === "cmd") { updMetrics(); updTiles(); }
-  });
+  if (enginesReady) markPageWarm("eng");
+  if (historyReady && eventsReady && insightsReady) markPageWarm("act");
+  if (aiReady) markPageWarm("ai");
+  if (statusReady) markPageWarm("sys");
 
-  // Initialize every interaction before the views are painted.
+  // Initialize interactions once. Workspace jobs below own the first data read.
   $("#a-q").oninput = renderFeed;
-  $("#a-pause").onclick = event => { paused = !paused; event.target.textContent = paused ? "RESUME" : "PAUSE"; if (!paused) renderFeed(); };
+  $("#a-pause").onclick = event => {
+    paused = !paused;
+    event.target.textContent = paused ? "RESUME" : "PAUSE";
+    if (!paused) renderFeed();
+  };
   $("#i-go").onclick = async () => {
     const query = $("#i-q").value.trim();
     if (query) { await api("/api/intel/search", { q: query }); setTimeout(loadIntel, 4000); }
@@ -743,14 +818,6 @@ async function boot() {
   };
   $("#ai-go").onclick = send;
   $("#ai-in").onkeydown = event => event.key === "Enter" && send();
-
-  setInterval(() => $("#h-clock").textContent = new Date().toLocaleTimeString([], { hour12: false }), 1000);
-  setInterval(() => {
-    if (view === "int") loadIntel();
-    if (view === "activityx") loadActivityIntelligence();
-    if (view === "ctl") loadActions();
-    if (view === "agent") loadAgent();
-  }, 10000);
   $("#p-q").oninput = () => { clearTimeout(procQueryTimer); procQueryTimer = setTimeout(() => loadProcesses(true), 260); };
   $("#p-refresh").onclick = () => loadProcesses(true);
   $("#n-q").oninput = () => S && updNet();
@@ -763,19 +830,19 @@ async function boot() {
     setTimeout(() => URL.revokeObjectURL(link.href), 2000);
     toast("Exported " + LOGS.length + " events", "ok");
   };
-
   initPalette(); initNotify(); initFC(); initIntelligence(); initActivityIntelligence();
   initAdvanced(); initAgent(); initEngines(); bindJ("#metrics");
-  setInterval(loadStatus, 15000);
-  setInterval(() => { if (view === "eng") loadEngines(); }, 8000);
   $("#e-go").onclick = loadEvi;
   $("#e-csv").onclick = csvExport;
   $("#e-q").onkeydown = event => event.key === "Enter" && loadEvi();
   $("#e-lv").onchange = $("#e-src").onchange = loadEvi;
   $("#sys-refresh").onclick = async () => {
-    const button = $("#sys-refresh"); button.disabled = true; button.textContent = "SCANNING…";
+    const button = $("#sys-refresh");
+    button.disabled = true;
+    button.textContent = "SCANNING…";
     const result = await api("/api/inventory/refresh", {});
-    button.disabled = false; button.textContent = "REFRESH INVENTORY";
+    button.disabled = false;
+    button.textContent = "REFRESH INVENTORY";
     if (result.error) toast(result.error, "bad");
     else { toast("System inventory refreshed", "ok"); loadSys(true); }
   };
@@ -793,10 +860,32 @@ async function boot() {
     const number = Number(event.key);
     if (number >= 1 && number <= VKEYS.length) show(VKEYS[number - 1]);
   });
+  setInterval(() => $("#h-clock").textContent = new Date().toLocaleTimeString([], { hour12: false }), 1000);
+  setInterval(() => {
+    if (view === "int") loadIntel();
+    if (view === "activityx") loadActivityIntelligence();
+    if (view === "ctl") loadActions();
+    if (view === "agent") loadAgent();
+  }, 10000);
+  setInterval(loadStatus, 15000);
+  setInterval(() => { if (view === "eng") loadEngines(); }, 8000);
 
-  // Keep the local live feed attached while workspace requests are in flight.
   bootModuleState("stream", "LOADING", "Opening the local event stream");
   const stream = new EventSource("/api/stream?t=" + encodeURIComponent(TOKEN));
+  let streamSettled = false;
+  let resolveStream;
+  const streamReady = new Promise(resolve => { resolveStream = resolve; });
+  const streamTimer = setTimeout(() => {
+    if (streamSettled) return;
+    streamSettled = true;
+    resolveStream(false);
+  }, 1800);
+  stream.addEventListener("open", () => {
+    if (streamSettled) return;
+    streamSettled = true;
+    clearTimeout(streamTimer);
+    resolveStream(true);
+  });
   stream.addEventListener("error", () => {
     $("#p-online").className = "pill bad";
     $("#p-online").textContent = "LINK RETRYING";
@@ -805,79 +894,110 @@ async function boot() {
     try {
       const packet = JSON.parse(message.data);
       if (packet.t === "tick") {
-        $("#p-online").className = "pill ok"; $("#p-online").textContent = "AGENT ONLINE";
-        onTick(packet.d); bootModuleState("stream", "READY", "Live agent heartbeat received");
+        $("#p-online").className = "pill ok";
+        $("#p-online").textContent = "AGENT ONLINE";
+        onTick(packet.d);
+        updateBootTelemetry();
       } else if (packet.t === "log") addLog(packet.d);
       else if (packet.t === "insight") { INS.unshift(packet.d); renderIns(); alertInsight(packet.d); }
-      else if (packet.t === "action") loadActions();
+      else if (packet.t === "action") { actionsLoaded = false; loadActions(); }
       else if (packet.t === "ai") addTr(packet.d);
       else if (packet.t === "ai_status") $("#ai-status").textContent = packet.d.text;
       else if (packet.t === "intel" && view === "int") loadIntel();
     } catch (error) { console.error("Invalid SENTINEL stream event", error); }
   };
 
-  bp(26, "STARTING WORKSPACE THREADS", "Reading the process inventory, thermal sensors and intelligence stores");
-  updHero(); updTiles(); updMetrics();
-  $("#kernel-capture").disabled = false;
   const jobs = [
-    ["command", "COMMAND DECK", async () => { updHero(); updTiles(); updMetrics(); }],
     ["agent", "AGENT RUNTIME", () => loadAgent(true)],
     ["sys", "SYSTEM INVENTORY", () => loadSys(true)],
-    ["proc", "WINDOWS PROCESS RADAR", () => loadProcesses(true)],
-    ["net", "NETWORK VIEW", async () => { updNet(); }],
-    ["ker", "KERNEL ARCHIVE", async () => { updKer(); await loadKernelArchive(); }],
-    ["adv", "THERMAL / ETW", () => loadAdvanced(true)],
+    ["proc", "WINDOWS PROCESS FIELD", () => loadProcesses(true)],
+    ["adv", "THERMAL / ETW", () => loadAdvanced(true)]
+  ];
+  const secondaryJobs = [
+    ["ker", "KERNEL ARCHIVE", async () => { updKer(); return await loadKernelArchive(); }],
     ["activityx", "USAGE INTELLIGENCE", () => loadActivityIntelligence(true)],
     ["intelx", "INTELLIGENCE MEMORY", () => loadIntelligence()],
     ["int", "INTELLIGENCE FEED", () => loadIntel()],
-    ["ai", "AI COUNCIL", async () => { updAI(); }],
+    ["ai", "AI COUNCIL", async () => { updAI(); return true; }],
     ["evi", "EVIDENCE VAULT", () => loadEvi()],
-    ["ctl", "ACTION CONTROL", async () => { buildCtl(); await loadActions(); ctlInitialized = true; }],
+    ["ctl", "ACTION CONTROL", async () => { buildCtl(); ctlInitialized = true; return await loadActions(); }],
     ["fc", "FEATURE CONFIGURATION", () => loadFC()],
     ["tsk", "TASK CENTER", () => loadHist()],
-    ["act", "ACTIVITY STREAM", async () => { updHeart(); renderFeed(); }]
+    ["act", "ACTIVITY STREAM", async () => { updHeart(); renderFeed(); return true; }]
   ];
-  const criticalKeys = new Set(["command", "net"]);
-  const criticalJobs = jobs.filter(([key]) => criticalKeys.has(key));
-  const warmJobs = jobs.filter(([key]) => !criticalKeys.has(key));
+  const allJobs = [...jobs, ...secondaryJobs];
   let completed = 0;
+  const total = allJobs.length;
+  let degraded = 0;
   const runJob = async ([key, label, work]) => {
-    bootModuleState(key, "LOADING", "Synchronizing " + label.toLowerCase());
+    bootModuleState(key, "LOADING", "Loading " + label.toLowerCase());
     try {
-      await work();
-      if (key === "proc" && !PROC_META.sampled_at) throw new Error("Windows process collector has not published a snapshot yet");
+      const result = await work();
+      if (result === false) throw new Error("Data request completed without a usable dataset");
       markPageWarm(key);
+      completed++;
       const detail = key === "proc"
-        ? `${PROC_META.matched}/${PROC_META.total} active process records · ${PROC_META.inaccessible || 0} restricted`
-        : "Live data and controls synchronized";
+        ? `${PROC_META.matched}/${PROC_META.total} processes · ${PROC_META.inaccessible || 0} restricted`
+        : key === "adv"
+          ? (ADV?.hardware_sensors?.available ? `${ADV.hardware_sensors.sensor_count || 0} sensor readings` : "Thermal source checked · unavailable sensors are identified")
+          : "Data and controls synchronized";
       if (key === "proc") $("#bootProcessCount").textContent = `${PROC_META.total.toLocaleString()} PROCESSES`;
       bootModuleState(key, "READY", detail);
-      if (!bootDone) bp(26 + (++completed / criticalJobs.length) * 68, "INITIALIZING " + label, label + " is online", "ok");
-      return { key, ok: true };
+      bp(24 + completed / total * 72, "LOADING " + label, label + " data synchronized", "ok");
+      return true;
     } catch (error) {
-      bootModuleState(key, "DEGRADED", (error?.message || String(error)).slice(0, 110));
-      bp(26 + (++completed / jobs.length) * 68, "DEGRADED · " + label, (error?.message || String(error)).slice(0, 150), "warn");
-      return { key, ok: false };
+      completed++;
+      degraded++;
+      markDataFailure(key, error?.message || "Dataset unavailable");
+      bp(24 + completed / total * 72, "SOURCE DEGRADED · " + label, error?.message || "Dataset unavailable", "warn");
+      return false;
     }
   };
-  const runBatch = async (queue) => {
+  const runPool = async queue => {
     let next = 0;
-    const worker = async () => { while (next < queue.length) await runJob(queue[next++]); };
-    await Promise.all(Array.from({ length: Math.min(6, queue.length) }, worker));
+    const worker = async () => {
+      while (next < queue.length) {
+        const job = queue[next++];
+        await runJob(job);
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(API_CONCURRENCY, queue.length) }, worker));
   };
-  void runBatch(criticalJobs);
-  const degraded = 0;
-  if (!PROC_META.total) $("#bootProcessCount").textContent = "PROCESS DATA LIMITED";
-  if (degraded) bp(98, "ONLINE · DEGRADED MODULES", degraded + " workspace(s) need attention", "warn");
-  else bp(99, "ALL WORKSPACES ONLINE", "Windows process and telemetry views are ready", "ok");
+
+  // Primary operational datasets first; all remaining pages hydrate before first paint.
+  bp(22, "HYDRATING OPERATIONAL DATA", "Four bounded request workers · no duplicate agent collectors");
+  await runPool(jobs);
+  await streamReady;
+  if (!streamSettled) {
+    streamSettled = true;
+    clearTimeout(streamTimer);
+    resolveStream(false);
+  }
+  bootModuleState("stream", streamSettled ? "READY" : "DEGRADED",
+    streamSettled ? "Local event channel opened" : "Live link will reconnect in the background");
+  bp(72, "HYDRATING WORKSPACES", "Loading intelligence, evidence, action and history datasets");
+  await runPool(secondaryJobs);
+
+  // Bring the command canvas up with the loaded history and current snapshot.
+  if (S) {
+    updHero();
+    updTiles();
+    updMetrics();
+    renderCommandVisuals();
+  }
+  if (degraded) bp(98, "READY WITH DEGRADED SOURCES", degraded + " module(s) could not return complete data", "warn");
+  else bp(99, "ALL DATASETS SYNCHRONIZED", "Every workspace was queried and its result rendered", "ok");
+
   let savedView = "cmd";
-  try { savedView = localStorage.getItem("sv") || "cmd"; } catch (e) { }
+  try { savedView = localStorage.getItem("sv") || "cmd"; } catch (error) { }
   if (TITLES[savedView] && savedView !== "cmd") show(savedView);
-  const minSplashMs = 120, remaining = minSplashMs - (performance.now() - bootStartedAt);
+  const minimumDisplayMs = 900;
+  const remaining = minimumDisplayMs - (performance.now() - bootStartedAt);
   if (remaining > 0) await new Promise(resolve => setTimeout(resolve, remaining));
-  bp(100, "SENTINEL ONLINE", "Live collectors continue syncing in the background", "ok");
+  bp(100, degraded ? "SENTINEL ONLINE · CHECK SOURCES" : "SENTINEL ONLINE",
+    degraded ? "All workspaces were checked. Unavailable sources are marked for retry." : "All workspace data is ready for navigation.",
+    degraded ? "warn" : "ok");
   endBoot();
-  void runBatch([...criticalJobs.filter(([key]) => !["command", "net"].includes(key)), ...warmJobs]);
 }
 /* ---------- reversible performance intelligence / thermal workspace ---------- */
 let ADV = null, advLastLoad = 0, advBusy = false, advRetryTimer = null;
