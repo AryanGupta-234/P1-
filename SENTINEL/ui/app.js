@@ -217,6 +217,57 @@ function big(c, series, opts = {}) {
   series.forEach((s, i) => { line(x, H[s.k] || [], w, h, s.c, lo, hi, i === 0); x.fillStyle = s.c; x.fillText(s.l, w - 90, 14 + i * 12); });
 }
 
+function updateSignalTile(prefix, raw, unit, scale, precision = 1) {
+  const value = Number(raw);
+  const valid = raw != null && Number.isFinite(value);
+  const output = document.getElementById(prefix + "-value");
+  const bar = document.getElementById(prefix + "-bar");
+  const tile = bar?.closest(".signal-tile");
+  if (output) output.textContent = valid ? value.toFixed(precision) + unit : "--";
+  if (bar) bar.style.width = valid ? Math.max(0, Math.min(100, value / Math.max(1, scale) * 100)) + "%" : "0%";
+  if (tile) {
+    tile.classList.toggle("unavailable", !valid);
+    tile.classList.toggle("elevated", valid && value / Math.max(1, scale) >= 0.8);
+  }
+  return valid;
+}
+function renderNetworkSignals() {
+  if (!S) return false;
+  const live = S.live || {};
+  updateSignalTile("net-ping", live.ping, " ms", 120, 1);
+  updateSignalTile("net-jitter", live.jitter, " ms", 40, 1);
+  const throughput = [Number(live.netdown), Number(live.netup)].filter(Number.isFinite);
+  const transferScale = Math.max(1, ...throughput);
+  updateSignalTile("net-down", live.netdown, " Mb/s", transferScale, 1);
+  updateSignalTile("net-up", live.netup, " Mb/s", transferScale, 1);
+  updateSignalTile("net-conn", Array.isArray(S.net) ? S.net.length : null, "", 100, 0);
+  const state = document.getElementById("net-live-state");
+  if (state) {
+    state.textContent = Array.isArray(S.net) ? "LIVE · " + S.net.length + " CONNECTIONS" : "WAITING FOR CONNECTIONS";
+    state.className = "pill " + (Array.isArray(S.net) ? "ok" : "off");
+  }
+  return true;
+}
+function renderKernelSignals() {
+  if (!S) return false;
+  const live = S.live || {};
+  const defs = [
+    ["kernel-dpc", live.dpc, "%", 8, 2],
+    ["kernel-irq", live.irq, "%", 8, 2],
+    ["kernel-pagesin", live.pagesin, "/s", 1200, 0],
+    ["kernel-pagesout", live.pagesout, "/s", 1200, 0],
+    ["kernel-dlat", live.dlat, " ms", 40, 1]
+  ];
+  for (const [prefix, value, unit, scale, precision] of defs) updateSignalTile(prefix, value, unit, scale, precision);
+  const pdh = S.kernel?.pdh || {};
+  const state = document.getElementById("kernel-live-state");
+  if (state) {
+    const ready = pdh.available === true && pdh.state === "streaming";
+    state.textContent = ready ? "COUNTERS STREAMING" : String(pdh.state || "COLLECTING").replaceAll("_", " ").toUpperCase();
+    state.className = "pill " + (ready ? "ok" : "off");
+  }
+  return true;
+}
 function renderCommandVisuals() {
   if (!S) return false;
   const live = S.live || {};
@@ -384,7 +435,7 @@ function updProc() {
 async function loadProcesses(force = false) {
   if (procFetchBusy || (view !== "proc" && !force)) return PROC_META.sampled_at > 0;
   const q = $("#p-q")?.value || "";
-  if (!force && Date.now() - procLastFetch < 4500) { updProc(); return; }
+  if (!force && Date.now() - procLastFetch < 4500) { updProc(); return PROC_META.sampled_at > 0; }
   procFetchBusy = true;
   try {
     const endpoint = "/api/processes?limit=2000&q=" + encodeURIComponent(q);
@@ -408,6 +459,7 @@ async function loadProcesses(force = false) {
 function maybeRefreshProcesses() { if (view === "proc" && Date.now() - procLastFetch > 5000) loadProcesses(true); }
 
 function updNet() {
+  renderNetworkSignals();
   $("#ntab").innerHTML = "<tr><th>Process</th><th>Remote</th><th>Port</th></tr>" + S.net.filter(c => { const q = ($("#n-q").value || "").toLowerCase(); return !q || (c.proc + " " + c.ip + " " + c.port).toLowerCase().includes(q); }).map(c => `<tr><td>${esc(c.proc)}</td><td>${esc(c.ip)}</td><td>${c.port}</td></tr>`).join(""); $("#n-n").textContent = S.net.length + " established";
   big($("#nc-ping"), [{ k: "ping", c: "#7cd59c", l: "PING ms" }, { k: "jitter", c: "#ff6b38", l: "JITTER ms" }]);
   big($("#nc-thr"), [{ k: "netdown", c: "#b8e65b", l: "DOWN Mb/s" }, { k: "netup", c: "#ff6b38", l: "UP Mb/s" }]);
@@ -432,6 +484,7 @@ async function loadKernelArchive() {
   }
 }
 function updKer() {
+  renderKernelSignals();
   big($("#kc-dpc"), [{ k: "dpc", c: "#a99bff", l: "PDH DPC %" }, { k: "irq", c: "#ff6b38", l: "PDH IRQ %" }]);
   big($("#kc-pg"), [{ k: "pagesin", c: "#b8e65b", l: "PAGES IN/s" }, { k: "pagesout", c: "#ff6b38", l: "PAGES OUT/s" }, { k: "pagefaults", c: "#a99bff", l: "PAGE FAULTS/s" }]);
   const k = S.kernel || {}, pdh = k.pdh || {}, etw = k.etw || {};
@@ -1588,7 +1641,7 @@ function initActivityIntelligence() {
 
 /* ---------- additive AIE intelligence: evidence, memory, planning and read-only UIA ---------- */
 let IX = { state: [], memories: [], goals: [], runtime: {} };
-let ixBusy = false;
+let ixBusy = false, ixLoaded = false;
 function ixList(value, ...keys) {
   if (Array.isArray(value)) return value.filter(item => item && typeof item === "object" && !Array.isArray(item));
   if (!value || typeof value !== "object") return [];
@@ -1601,7 +1654,7 @@ function ixObject(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : {};
 }
 async function loadIntelligence() {
-  if (ixBusy) return;
+  if (ixBusy) return ixLoaded;
   ixBusy = true;
   try {
     const [ctxRaw, memRaw, activeRaw, pausedRaw, completedRaw, runtimeRaw] = await Promise.all([
@@ -1638,6 +1691,7 @@ async function loadIntelligence() {
     renderIXRuntime();
     const loadError = $("#ix-load-error");
     if (loadError) { loadError.hidden = true; loadError.classList.remove("stale"); }
+    ixLoaded = true;
     return true;
   } catch (error) {
     const loadError = $("#ix-load-error");
@@ -1817,6 +1871,27 @@ async function loadSys(force = false) {
     if (d.error) throw new Error(d.error);
     SYS_SNAPSHOT = d;
     const c = d.counts || {}, p = d.platform || {}, sec = d.security || {}, health = d.health || {};
+    const hostName = document.getElementById("sys-host-name");
+    const hostPlatform = document.getElementById("sys-host-platform");
+    const headroomValue = document.getElementById("sys-headroom-value");
+    const headroomBar = document.getElementById("sys-headroom-bar");
+    const secureBootValue = document.getElementById("sys-secureboot-value");
+    const secureBootState = document.getElementById("sys-secureboot-state");
+    const appsValue = document.getElementById("sys-app-count");
+    if (hostName) hostName.textContent = p.host || "UNKNOWN WINDOWS NODE";
+    if (hostPlatform) hostPlatform.textContent = [p.os, p.build ? "BUILD " + p.build : "", p.cpu].filter(Boolean).join(" · ") || "Platform details unavailable";
+    const ramTotal = Number(p.ram_gb), ramAvailable = Number(p.ram_available_gb);
+    const ramKnown = Number.isFinite(ramTotal) && ramTotal > 0 && Number.isFinite(ramAvailable);
+    if (headroomValue) headroomValue.textContent = ramKnown ? ramAvailable.toFixed(1) + " / " + ramTotal.toFixed(1) + " GB" : "UNKNOWN";
+    if (headroomBar) headroomBar.style.width = ramKnown ? Math.max(0, Math.min(100, ramAvailable / ramTotal * 100)) + "%" : "0%";
+    if (secureBootValue) secureBootValue.textContent = sec.secure_boot == null ? "UNKNOWN" : sec.secure_boot ? "ENABLED" : "DISABLED";
+    if (secureBootState) {
+      secureBootState.textContent = sec.secure_boot == null ? "SOURCE UNKNOWN" : sec.secure_boot ? "PROTECTED" : "REVIEW";
+      secureBootState.classList.toggle("ok", sec.secure_boot === true);
+      secureBootState.classList.toggle("warn", sec.secure_boot === false);
+      secureBootState.classList.toggle("unknown", sec.secure_boot == null);
+    }
+    if (appsValue) appsValue.textContent = Number(c.apps || 0).toLocaleString();
     $("#sys-m").innerHTML = [["PROCESSES", "processes"], ["INSTALLED APPS", "apps"], ["SYSTEM DRIVERS", "drivers"], ["SERVICES", "services"], ["STARTUP ENTRIES", "startup"]].map(([l, k]) => mcard(l, c[k] ?? "--", d.ts ? "latest snapshot" : "not scanned", Math.min(100, (c[k] || 0) / 3))).join("");
     $("#sys-ts").textContent = d.ts ? "scanned " + hms(d.ts) : "no successful snapshot";
     $("#sys-plat").innerHTML = Object.entries({ Host: p.host, OS: p.os, Build: p.build, CPU: p.cpu, Cores: p.cpus, RAM: p.ram_gb == null ? null : p.ram_gb + " GB", "Available RAM": p.ram_available_gb == null ? null : p.ram_available_gb + " GB", BIOS: p.bios, "BIOS date": (p.bios_date || "").slice(0, 10) }).map(([k,v]) => `<i>${esc(k)}</i><span>${esc(v ?? "UNKNOWN / NOT SAMPLED")}</span>`).join("") || '<div class="empty">platform details are not yet available</div>';
