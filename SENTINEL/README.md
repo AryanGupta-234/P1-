@@ -1,10 +1,14 @@
-## Graphical telemetry workspaces and compact technical disclosures (v1.2.11)
+## Agent health topology and Engine pulse rail (v1.2.12)
+
+The Agent workspace now renders collector heartbeats as a compact status map with state, age and run count before the detailed worker table. The detailed timings and per-function notes remain available in an expanded view. The Engine Deck adds a five-part pulse rail for safeguard, adaptive runtime, AI admission, memory pressure and WPR availability; each state comes from the existing backend engine response. Intelligence routing, memory and plan-lifecycle explanations are also collapsed into optional disclosures. These are presentation-only changes and do not add collectors, authorize actions or change the underlying admission and rollback policies.
+
+## Graphical telemetry workspaces and compact technical disclosures (v1.2.12)
 
 Network, Kernel and System now open with visual telemetry surfaces: latency/jitter and throughput meters, DPC/interrupt/paging/disk meters, and a Windows host banner with memory headroom, Secure Boot state and installed-app count. These are fed from the existing local snapshot and inventory response; they do not introduce extra collectors or new background threads.
 
 Technical explanations that are useful for audit but not needed for everyday interaction are collapsed into guided disclosures. Core status, measured values, trends, action buttons and safety controls remain visible. The signal meters distinguish missing samples from observed zeroes. Workspace animations use transform/opacity rather than continuous blur effects, with reduced-motion preferences respected.
 
-## Startup data hydration and visual command cockpit (v1.2.11)
+## Startup data hydration and visual command cockpit (v1.2.12)
 
 SENTINEL's splash screen is now a real workspace data-loading phase, not an animation-only prelude. It authenticates the local node, restores the initial snapshot, then awaits telemetry history, events, insights, safeguard/runtime policies, source status and AI transcript. It subsequently hydrates the operational workspaces (command, network, agent, system inventory, process field and thermal/ETW) and the remaining workspaces (kernel archive, activity intelligence, memory/goals, intelligence feed, AI, evidence, action control, configuration, task history and activity stream) before revealing the dashboard.
 
