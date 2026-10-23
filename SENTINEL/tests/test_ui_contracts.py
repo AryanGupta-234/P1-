@@ -46,6 +46,14 @@ def test_managed_sensor_provider_ui_and_boot_contract_are_present():
     assert "data-boot-module" in app
     assert 'id="cmd-performance-chart"' in html
     assert '$$("[data-command-route]")' in app
+    assert 'id="proc-live-total"' in html
+    assert 'id="proc-live-visible"' in html
+    assert 'id="proc-live-services"' in html
+    assert 'id="proc-live-review"' in html
+    assert 'id="proc-load-bars"' in html
+    assert "proc-load-bars" in app
+    assert ".proc-command-strip" in css and ".proc-load-item" in css
+    assert ".guided-detail" in css
     assert 'class="command-more-metrics"' in html
     assert "function renderCommandVisuals()" in app
     assert ".boot-console" in css and ".boot-module.loading" in css
