@@ -1,23 +1,34 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>SENTINEL · 1.0.7</title>
+<title>SENTINEL · 1.0.8</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cpath d='M32 4l24 14v28L32 60 8 46V18z' fill='none' stroke='%23b8e65b' stroke-width='4'/%3E%3Ccircle cx='32' cy='32' r='8' fill='%23ff6b38'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="app.css"></head>
 <body><div class="ambient"></div><canvas id="starfield"></canvas>
-<div class="boot" id="boot">
+<div class="boot" id="boot" role="status" aria-live="polite" aria-label="SENTINEL startup">
   <div class="boot-grid" aria-hidden="true"></div>
   <div class="boot-scanline" aria-hidden="true"></div>
-  <div class="boot-identity">
-    <div class="boot-reactor" aria-hidden="true">
-      <i class="reactor-orbit orbit-a"></i><i class="reactor-orbit orbit-b"></i><i class="reactor-orbit orbit-c"></i>
-      <i class="reactor-core"></i>
+  <div class="boot-console">
+    <div class="boot-visual">
+      <div class="boot-reactor" aria-hidden="true">
+        <i class="reactor-orbit orbit-a"></i><i class="reactor-orbit orbit-b"></i><i class="reactor-orbit orbit-c"></i>
+        <i class="reactor-core"></i>
+      </div>
+      <div class="boot-visual-label">LOCAL WINDOWS NODE</div>
+      <div class="boot-visual-state"><i></i> SECURE INITIALIZATION</div>
+      <div class="boot-visual-spectrum" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
     </div>
-    <div class="boot-title">SENTINEL</div>
-    <div class="boot-sub">SECURE SYSTEM STARTUP</div>
-    <div class="boot-track"><div class="boot-progress" id="bootProgress"></div></div>
-    <div class="boot-stage"><span id="bootStage">POWERING SYSTEM</span><b id="bootPct">00%</b></div>
-    <div id="bootLog" hidden></div>
-    <button class="boot-skip" id="bootSkip">SKIP INTRO</button>
+    <div class="boot-content">
+      <div class="boot-title">SENTINEL</div>
+      <div class="boot-sub">PERFORMANCE GUARDIAN / STARTUP SEQUENCE</div>
+      <div class="boot-progress-meta"><span id="bootDetail">Preparing local runtime services…</span><b id="bootPct">00%</b></div>
+      <div class="boot-track"><div class="boot-progress" id="bootProgress"></div></div>
+      <div class="boot-stage"><span id="bootStage">POWERING SYSTEM</span><span>LOCAL / WINDOWS 11</span></div>
+      <div class="boot-modules" id="bootModules" aria-label="Workspace initialization states"></div>
+      <div class="boot-log-wrap">
+        <div class="boot-log-head"><span>INITIALIZATION JOURNAL</span><span>LIVE DIAGNOSTICS</span></div>
+        <div class="boot-log" id="bootLog" aria-live="polite" aria-relevant="additions"></div>
+      </div>
+    </div>
   </div>
 </div>
 <div id="toasts" aria-live="polite"></div>
