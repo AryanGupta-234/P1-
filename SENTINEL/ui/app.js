@@ -348,6 +348,27 @@ function updProc() {
   const fresh = PROC_META.updated_at ? new Date(PROC_META.updated_at * 1000).toLocaleTimeString() : "not yet sampled";
   $("#p-n").textContent = `${PROC_META.matched}/${PROC_META.total} process records · ${PROC_META.inaccessible || 0} metadata-inaccessible · refreshed ${fresh}`;
   const reviewRows = recs.filter(r => PROC_ROWS.some(p => procIdentity(p) === procIdentity(r)));
+  const visibleCount = PROC_ROWS.filter(row => Number(row.session_id) > 0 && Number(row.onscreen_windows || 0) > 0).length;
+  const serviceCount = PROC_ROWS.filter(row => Number(row.session_id) === 0).length;
+  const setProcessValue = (id, value) => { const element = document.getElementById(id); if (element) element.textContent = Number(value || 0).toLocaleString(); };
+  setProcessValue("proc-live-total", PROC_META.total);
+  setProcessValue("proc-live-visible", visibleCount);
+  setProcessValue("proc-live-services", serviceCount);
+  setProcessValue("proc-live-review", reviewRows.length);
+  const liveState = document.getElementById("proc-live-state");
+  if (liveState) {
+    liveState.textContent = PROC_META.sampled_at ? "LIVE SNAPSHOT" : "WAITING";
+    liveState.className = "pill " + (PROC_META.sampled_at ? "ok" : "off");
+  }
+  const bars = document.getElementById("proc-load-bars");
+  if (bars) {
+    const top = PROC_ROWS.slice().sort((a,b) => Number(b.cpu || 0) - Number(a.cpu || 0)).slice(0, 12);
+    const peak = Math.max(1, ...top.map(row => Number(row.cpu || 0)));
+    bars.innerHTML = top.map((row, index) => {
+      const value = Math.max(2, Math.min(100, Number(row.cpu || 0) / peak * 100));
+      return `<div class="proc-load-item" title="${esc(row.name)} · ${fmt(row.cpu,1)}% CPU"><span>${String(index+1).padStart(2,"0")}</span><i style="--proc-level:${value}%"></i><b>${esc(String(row.name || "process").replace(/\.exe$/i,""))}</b><small>${fmt(row.cpu,1)}%</small></div>`;
+    }).join("") || '<span class="empty">No process samples are available yet.</span>';
+  }
   const box = $("#proc-recs");
   if (box) box.innerHTML = reviewRows.map(r => `<div class="row"><div><b>${esc(r.name)} · PID ${r.pid}</b><small>${esc(r.reason)} · CPU ${fmt(r.cpu,1)}% · RAM ${r.mem} MB · ${r.observations} consecutive samples</small><small class="proc-path">${esc(r.exe)}</small></div><span class="tag warn">REVIEW ONLY</span></div>`).join("") || '<div class="empty">No sustained background resource-use candidate currently meets the conservative review threshold.</div>';
 }
