@@ -84,37 +84,101 @@
 
 <main>
 <!-- COMMAND -->
-<section class="view on" id="v-cmd"><div class="metrics" id="metrics">
-  <div class="metric" data-j="ker"><small>CPU LOAD</small><b id="m-cpu">--</b><span id="m-cpu-s">host processor</span><div class="meter"><i id="m-cpu-m"></i></div></div>
-  <div class="metric" data-j="ker"><small>MEMORY FREE</small><b id="m-ram">--</b><span id="m-ram-s">RAM headroom</span><div class="meter"><i id="m-ram-m"></i></div></div>
-  <div class="metric" data-j="evi"><small>EVIDENCE RECORDS</small><b id="m-evt">--</b><span>local SQLite vault</span><div class="meter"><i id="m-evt-m"></i></div></div>
-  <div class="metric" data-j="tsk"><small>SENSOR MATRIX</small><b id="m-sen">--</b><span id="m-sen-s">collectors healthy</span><div class="meter"><i id="m-sen-m"></i></div></div>
-  <div class="metric" data-j="sys"><small>POSTURE SIGNALS</small><b id="m-pos">--</b><span id="m-pos-s">open findings</span><div class="meter"><i id="m-pos-m"></i></div></div>
-</div>
-<div class="grid g-cmd">
-  <div class="panel" style="grid-row:span 2"><div class="ph">Core status<em id="c-game">no game</em></div>
-    <div class="core">
-      <svg viewBox="0 0 300 300">
-        <defs><filter id="glow"><feGaussianBlur stdDeviation="4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>
-        <g class="ring-a"><circle cx="150" cy="150" r="142" fill="none" stroke="#b8e65b" stroke-opacity=".35" stroke-dasharray="2 9"/><circle cx="150" cy="150" r="134" fill="none" stroke="#b8e65b" stroke-opacity=".18" stroke-width="6" stroke-dasharray="40 24"/></g>
-        <g class="ring-b"><circle cx="150" cy="150" r="118" fill="none" stroke="#ff6b38" stroke-opacity=".45" stroke-dasharray="14 10 3 10"/></g>
-        <circle cx="150" cy="150" r="104" fill="none" stroke="#12202e" stroke-width="14"/>
-        <circle id="arc" class="arc" cx="150" cy="150" r="104" fill="none" stroke="#b8e65b" stroke-width="14" stroke-linecap="butt" filter="url(#glow)" transform="rotate(-90 150 150)" stroke-dasharray="653.5" stroke-dashoffset="653.5"/>
-        <circle cx="150" cy="150" r="86" fill="#080d14" stroke="#b8e65b" stroke-opacity=".25"/>
-        <text id="c-num" class="num" x="150" y="168" text-anchor="middle">--</text>
-        <text class="lbl" x="150" y="108" text-anchor="middle">LAG INDEX</text>
-        <text id="c-st" class="st" x="150" y="200" text-anchor="middle" fill="#b8e65b">SCANNING</text>
-      </svg>
-      <div class="corebar"><span class="pill" id="c-plan">PLAN --</span><span class="pill" id="c-vbs">VBS --</span><span class="pill" id="c-vg">VANGUARD --</span></div>
+<section class="view on" id="v-cmd">
+  <div class="command-workbench">
+    <div class="command-hero">
+      <div class="command-hero-copy">
+        <span class="command-kicker"><i></i> LIVE SYSTEM FABRIC</span>
+        <h2>YOUR SYSTEM. IN FOCUS.</h2>
+        <p>Live performance, thermal state and system activity — in one view.</p>
+      </div>
+      <div class="command-hero-status">
+        <span class="command-status-label">NODE STATUS</span>
+        <b id="cmd-node-state">SYNCHRONIZING</b>
+        <small id="cmd-node-sub">Waiting for live agent telemetry</small>
+      </div>
+      <div class="command-hero-orbit" aria-hidden="true">
+        <i class="cmd-hero-orbit orbit-a"></i><i class="cmd-hero-orbit orbit-b"></i><i class="cmd-hero-orbit orbit-c"></i><i class="cmd-hero-core"></i>
+      </div>
     </div>
-    <div class="pb"><div class="ph" style="padding:6px 0;border:0">CPU cores<em id="c-cores"></em></div><div class="cores" id="cores"></div></div>
-  </div>
-  <div class="panel"><div class="ph">Live vitals<em>1 s resolution</em></div><div class="pb"><div class="tiles" id="tiles"></div></div></div>
-  <div class="panel"><div class="ph">Threat &amp; lag insights<em id="i-n"></em></div><div class="pb"><div class="list" id="ins"></div></div></div>
-  <div class="panel"><div class="ph">What I'm doing right now<em>live</em></div><div class="feed sm" id="ticker"></div></div>
-  <div class="panel"><div class="ph">Lag culprits<em>since start</em></div><div class="pb"><div class="list" id="culp"></div></div></div>
-</div></section>
 
+    <div class="command-gauges">
+      <div class="cmd-gauge-card">
+        <div class="cmd-gauge cpu" data-cmd-gauge="cpu"><div><b id="cmd-cpu-value">--</b><small>CPU LOAD</small></div></div>
+        <span class="cmd-gauge-foot"><i></i><span id="cmd-cpu-note">Host processor</span></span>
+      </div>
+      <div class="cmd-gauge-card">
+        <div class="cmd-gauge memory" data-cmd-gauge="mem"><div><b id="cmd-mem-value">--</b><small>MEMORY</small></div></div>
+        <span class="cmd-gauge-foot"><i></i><span id="cmd-mem-note">Physical memory used</span></span>
+      </div>
+      <div class="cmd-gauge-card">
+        <div class="cmd-gauge gpu" data-cmd-gauge="gpu"><div><b id="cmd-gpu-value">--</b><small>GPU LOAD</small></div></div>
+        <span class="cmd-gauge-foot"><i></i><span id="cmd-gpu-note">Graphics processor</span></span>
+      </div>
+      <div class="cmd-gauge-card">
+        <div class="cmd-gauge kernel" data-cmd-gauge="dpc"><div><b id="cmd-dpc-value">--</b><small>DPC TIME</small></div></div>
+        <span class="cmd-gauge-foot"><i></i><span id="cmd-dpc-note">Kernel deferred calls</span></span>
+      </div>
+    </div>
+
+    <div class="command-insight-grid">
+      <article class="command-chart panel">
+        <div class="command-panel-head"><div><span>PERFORMANCE SIGNAL</span><b>Live workload</b></div><em id="cmd-chart-range">RECENT SAMPLES</em></div>
+        <canvas id="cmd-performance-chart" role="img" aria-label="Live CPU, memory, GPU and DPC performance history"></canvas>
+        <div class="command-chart-legend"><span><i class="cpu"></i> CPU</span><span><i class="memory"></i> MEMORY</span><span><i class="gpu"></i> GPU</span><span><i class="kernel"></i> DPC</span></div>
+      </article>
+      <article class="command-node panel">
+        <div class="command-panel-head"><div><span>SYSTEM CONDITION</span><b>Node overview</b></div><em id="cmd-game-state">STANDBY</em></div>
+        <div class="command-node-visual"><div class="command-node-radar"><i></i><i></i><i></i><b id="cmd-node-score">--</b><small>LAG INDEX</small></div></div>
+        <div class="command-node-facts">
+          <div><small>RUNNING APPS</small><b id="cmd-node-processes">--</b></div>
+          <div><small>LOGICAL CORES</small><b id="cmd-node-cores">--</b></div>
+          <div><small>UPTIME</small><b id="cmd-node-uptime">--</b></div>
+        </div>
+      </article>
+    </div>
+
+    <div class="command-launchers" aria-label="Quick navigation">
+      <button data-command-route="adv"><span class="cmd-launch-icon thermal"><svg viewBox="0 0 24 24"><path d="M14 14.7V5a2 2 0 0 0-4 0v9.7a4 4 0 1 0 4 0Z"/><path d="M12 11v7"/></svg></span><b>THERMAL</b><small>Temperatures &amp; sensors</small><i>↗</i></button>
+      <button data-command-route="proc"><span class="cmd-launch-icon process"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M9 9h6v6H9zM9 1v3M15 1v3M9 20v3M15 20v3"/></svg></span><b>PROCESSES</b><small>App and resource field</small><i>↗</i></button>
+      <button data-command-route="net"><span class="cmd-launch-icon network"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/></svg></span><b>NETWORK</b><small>Traffic and latency</small><i>↗</i></button>
+      <button data-command-route="activityx"><span class="cmd-launch-icon activity"><svg viewBox="0 0 24 24"><path d="M3 12h4l2-7 4 14 2-7h6"/></svg></span><b>ACTIVITY</b><small>Usage and routines</small><i>↗</i></button>
+      <button data-command-route="eng"><span class="cmd-launch-icon engine"><svg viewBox="0 0 24 24"><path d="M12 2 14.5 5.5 19 6l-.5 4.5L22 13l-3.5 3-.5 4.5-4.5.5L10 24l-2.5-3.5L3 20l.5-4.5L0 13l3.5-3L4 5.5 8.5 5Z"/><circle cx="11.5" cy="13" r="3"/></svg></span><b>ENGINES</b><small>Autonomy and safeguards</small><i>↗</i></button>
+      <button data-command-route="sys"><span class="cmd-launch-icon system"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg></span><b>SYSTEM</b><small>Security and inventory</small><i>↗</i></button>
+    </div>
+  </div>
+
+  <div class="metrics" id="metrics">
+    <div class="metric" data-j="ker"><small>CPU LOAD</small><b id="m-cpu">--</b><span id="m-cpu-s">host processor</span><div class="meter"><i id="m-cpu-m"></i></div></div>
+    <div class="metric" data-j="ker"><small>MEMORY FREE</small><b id="m-ram">--</b><span id="m-ram-s">RAM headroom</span><div class="meter"><i id="m-ram-m"></i></div></div>
+    <div class="metric" data-j="evi"><small>EVIDENCE RECORDS</small><b id="m-evt">--</b><span>local SQLite vault</span><div class="meter"><i id="m-evt-m"></i></div></div>
+    <div class="metric" data-j="tsk"><small>SENSOR MATRIX</small><b id="m-sen">--</b><span id="m-sen-s">collectors healthy</span><div class="meter"><i id="m-sen-m"></i></div></div>
+    <div class="metric" data-j="sys"><small>POSTURE SIGNALS</small><b id="m-pos">--</b><span id="m-pos-s">open findings</span><div class="meter"><i id="m-pos-m"></i></div></div>
+  </div>
+  <div class="grid g-cmd">
+    <div class="panel" style="grid-row:span 2"><div class="ph">Core status<em id="c-game">no game</em></div>
+      <div class="core">
+        <svg viewBox="0 0 300 300">
+          <defs><filter id="glow"><feGaussianBlur stdDeviation="4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>
+          <g class="ring-a"><circle cx="150" cy="150" r="142" fill="none" stroke="#b8e65b" stroke-opacity=".35" stroke-dasharray="2 9"/><circle cx="150" cy="150" r="134" fill="none" stroke="#b8e65b" stroke-opacity=".18" stroke-width="6" stroke-dasharray="40 24"/></g>
+          <g class="ring-b"><circle cx="150" cy="150" r="118" fill="none" stroke="#ff6b38" stroke-opacity=".45" stroke-dasharray="14 10 3 10"/></g>
+          <circle cx="150" cy="150" r="104" fill="none" stroke="#12202e" stroke-width="14"/>
+          <circle id="arc" class="arc" cx="150" cy="150" r="104" fill="none" stroke="#b8e65b" stroke-width="14" stroke-linecap="butt" filter="url(#glow)" transform="rotate(-90 150 150)" stroke-dasharray="653.5" stroke-dashoffset="653.5"/>
+          <circle cx="150" cy="150" r="86" fill="#080d14" stroke="#b8e65b" stroke-opacity=".25"/>
+          <text id="c-num" class="num" x="150" y="168" text-anchor="middle">--</text>
+          <text class="lbl" x="150" y="108" text-anchor="middle">LAG INDEX</text>
+          <text id="c-st" class="st" x="150" y="200" text-anchor="middle" fill="#b8e65b">SCANNING</text>
+        </svg>
+        <div class="corebar"><span class="pill" id="c-plan">PLAN --</span><span class="pill" id="c-vbs">VBS --</span><span class="pill" id="c-vg">VANGUARD --</span></div>
+      </div>
+      <div class="pb"><div class="ph" style="padding:6px 0;border:0">CPU cores<em id="c-cores"></em></div><div class="cores" id="cores"></div></div>
+    </div>
+    <div class="panel"><div class="ph">Live vitals<em>1 s resolution</em></div><div class="pb"><div class="tiles" id="tiles"></div></div></div>
+    <div class="panel"><div class="ph">Threat &amp; lag insights<em id="i-n"></em></div><div class="pb"><div class="list" id="ins"></div></div></div>
+    <div class="panel"><div class="ph">What I'm doing right now<em>live</em></div><div class="feed sm" id="ticker"></div></div>
+    <div class="panel"><div class="ph">Lag culprits<em>since start</em></div><div class="pb"><div class="list" id="culp"></div></div></div>
+  </div>
+</section>
 
 <!-- ENGINE DECK -->
 <section class="view" id="v-eng">
