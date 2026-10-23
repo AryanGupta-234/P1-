@@ -33,6 +33,10 @@ def test_managed_sensor_provider_ui_and_boot_contract_are_present():
         "bootModules", "bootCpuValue", "bootRamValue", "bootGpuValue", "bootDpcValue",
     ):
         assert f'id="{element_id}"' in html
+    assert 'id="bootRetry"' in html
+    assert "function showBootRetry(" in app
+    assert 'retry.onclick = () => location.reload()' in app
+    assert "endBoot();" not in app[app.indexOf('boot().catch(error =>'):]
     assert "bootSkip" not in html + app + css
     assert "SKIP INTRO" not in html + app + css
     assert "API_CONCURRENCY = 4" in app
