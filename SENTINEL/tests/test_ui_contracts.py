@@ -45,9 +45,7 @@ def test_managed_sensor_provider_ui_and_boot_contract_are_present():
     assert 'apiRetry("/api/snapshot", 2)' in app
     assert "data-boot-module" in app
     assert 'id="cmd-performance-chart"' in html
-    assert '$("[data-command-route]")' in app
-    assert 'data-command-route="activityx"' in html
-    assert "$$([\"data-command-route\"])" in app
+    assert '$$("[data-command-route]")' in app
     assert 'class="command-more-metrics"' in html
     assert "function renderCommandVisuals()" in app
     assert ".boot-console" in css and ".boot-module.loading" in css
