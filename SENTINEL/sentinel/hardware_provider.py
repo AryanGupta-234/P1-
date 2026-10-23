@@ -303,16 +303,35 @@ def status() -> dict[str, Any]:
     executable = _find_executable()
     running = _process_running(executable) if executable else False
     probe = _probe(port)
+    connected = bool(probe["connected"])
+    endpoint_state = (
+        "connected" if connected else
+        "remote_server_not_started" if running else
+        "provider_stopped" if executable is not None else
+        "not_installed"
+    )
+    next_step = (
+        "Sensor endpoint is responding."
+        if connected else
+        "Open the LibreHardwareMonitor tray icon/window, choose Options > Remote Web Server > Run, "
+        "then verify the configured localhost port. The HTTP server is a separate switch from launching the monitor."
+        if running else
+        "Start the managed LibreHardwareMonitor provider from the Thermal workspace."
+        if executable is not None else
+        "Install the managed LibreHardwareMonitor provider from the Thermal workspace."
+    )
     return {
         "installed": executable is not None,
         "running": running,
-        "connected": bool(probe["connected"]),
+        "connected": connected,
+        "endpoint_state": endpoint_state,
         "sensor_count": int(probe["sensor_count"]),
         "version": VERSION if executable else None,
         "port": port,
         "endpoint": f"http://127.0.0.1:{port}/data.json",
         "executable": str(executable) if executable else None,
         "reason": probe["reason"],
+        "next_step": next_step,
         "driver_policy": "LibreHardwareMonitor may show its optional PawnIO driver prompt; SENTINEL never accepts or installs that driver automatically.",
     }
 
@@ -374,7 +393,7 @@ def install_and_start() -> dict[str, Any]:
     message = (
         f"LibreHardwareMonitor {VERSION} is installed and its local sensor server is responding with {probe['sensor_count']} numeric sensor(s)."
         if connected else
-        "LibreHardwareMonitor was installed and launched, but its local sensor endpoint is not responding yet. Check its tray prompt/window; any optional PawnIO driver prompt requires your explicit decision."
+        "LibreHardwareMonitor was installed and launched, but its HTTP sensor server is not active. In its tray icon/window choose Options > Remote Web Server > Run; the server is a separate switch from launching the monitor. The optional PawnIO driver prompt remains your decision."
     )
     return {
         "ok": True, "installed": True, "running": provider_status["running"] or connected,
