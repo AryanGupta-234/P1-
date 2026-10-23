@@ -24,13 +24,21 @@ def test_intelligence_evidence_binding_uses_collection_selector():
 def test_managed_sensor_provider_ui_and_boot_contract_are_present():
     html = (ROOT / "ui" / "index.html").read_text(encoding="utf-8")
     app = (ROOT / "ui" / "app.js").read_text(encoding="utf-8")
+    css = (ROOT / "ui" / "app.css").read_text(encoding="utf-8")
     assert 'id="adv-provider-install"' in html
     assert 'id="adv-sensor-inventory"' in html
     assert 'api("/api/hardware/provider/start"' in app
-    for element_id in ("bootProgress", "bootPct", "bootStage", "bootLog", "bootSkip"):
+    for element_id in ("bootProgress", "bootPct", "bootStage", "bootDetail", "bootLog", "bootModules"):
         assert f'id="{element_id}"' in html
+    assert "bootSkip" not in html + app + css
+    assert "SKIP INTRO" not in html + app + css
+    assert "Promise.all(jobs.map(runJob))" in app
+    assert "PAGE_WARMED" in app and "PAGE_WARM_TTL_MS" in app
+    assert "data-boot-module" in app
+    assert ".boot-console" in css and ".boot-module.loading" in css
+    assert "overflow-wrap:anywhere" in css
+    assert "panelGlassSheen" in css and "ambientGridDrift" in css
     assert "boot().catch(error =>" in app
-
 
 def test_activity_workspace_and_learned_launch_are_connected():
     html = (ROOT / "ui" / "index.html").read_text(encoding="utf-8")
