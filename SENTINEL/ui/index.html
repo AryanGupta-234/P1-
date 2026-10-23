@@ -298,8 +298,18 @@
 
 <!-- PROCESSES -->
 <section class="view" id="v-proc">
+  <div class="proc-command-strip">
+    <div class="proc-command-head"><div><span>LIVE WINDOWS PROCESS FIELD</span><b>Application activity</b></div><span class="pill off" id="proc-live-state">WAITING</span></div>
+    <div class="proc-command-cards">
+      <div><small>ALL PROCESSES</small><b id="proc-live-total">--</b><i>observed instances</i></div>
+      <div><small>VISIBLE APPS</small><b id="proc-live-visible">--</b><i>interactive session windows</i></div>
+      <div><small>SYSTEM SERVICES</small><b id="proc-live-services">--</b><i>session zero processes</i></div>
+      <div><small>REVIEW CANDIDATES</small><b id="proc-live-review">--</b><i>advisory only</i></div>
+    </div>
+    <div class="proc-load-viz"><div class="proc-load-viz-head"><span>TOP RESOURCE ACTIVITY</span><small>CPU / current snapshot</small></div><div class="proc-load-bars" id="proc-load-bars"><span class="empty">Waiting for the first process sample…</span></div></div>
+  </div>
   <div class="panel"><div class="ph">Process radar<em id="p-n">waiting for process snapshot</em></div><div style="padding:10px 16px 0;display:flex;gap:8px"><input id="p-q" placeholder="filter process, executable path, owner, parent or session..." style="width:100%"><button class="btn" id="p-refresh">REFRESH</button></div>
-    <div class="msg" style="margin:10px 16px"><small>Physical desktop vs background process</small>“Visible GUI” means Windows enumerated at least one visible top-level window for that PID in the agent's interactive session. Session 0 indicates a service/system context. This does not prove the window is foreground, responsive or actively used. Full path and creation time identify the exact process instance.</div>
+    <details class="guided-detail" style="margin:10px 16px"><summary>HOW TO READ PROCESS VISIBILITY</summary><div class="msg"><small>Physical desktop vs background process</small>“Visible GUI” means Windows enumerated at least one visible top-level window for that PID in the agent's interactive session. Session 0 indicates a service/system context. This does not prove the window is foreground, responsive or actively used. Full path and creation time identify the exact process instance.</div></details>
     <div class="pb" style="overflow:auto;max-height:calc(100vh - 350px)"><table id="ptab"></table></div></div>
   <div class="panel" style="margin-top:14px"><div class="ph">Sustained resource review<em>advisory · never auto-kills</em></div><div class="pb list" id="proc-recs"></div></div>
 </section>
