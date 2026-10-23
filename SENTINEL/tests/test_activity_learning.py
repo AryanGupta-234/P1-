@@ -2,19 +2,17 @@ from sentinel import activity_learning
 
 
 def test_weighted_task_similarity_gives_rare_terms_more_influence():
-    common_weighted = activity_learning.weighted_jaccard(
-        ["python", "project"], ["python", "notes"],
-        document_frequency={"python": 20, "project": 1, "notes": 1},
+    common_term = activity_learning.weighted_jaccard(
+        ["python", "automation"], ["python", "notes"],
+        document_frequency={"python": 20, "automation": 1, "notes": 1},
         document_count=20,
     )
-    common_only = activity_learning.weighted_jaccard(
-        ["python", "project"], ["python", "notes"],
-        document_frequency={"python": 20, "project": 1, "notes": 1},
+    rare_term = activity_learning.weighted_jaccard(
+        ["python", "automation"], ["python", "notes"],
+        document_frequency={"python": 1, "automation": 1, "notes": 1},
         document_count=20,
     )
-    assert 0.0 < common_weighted <= 1.0
-    assert common_only == common_weighted
-
+    assert 0.0 < common_term < rare_term <= 1.0
 
 def test_task_candidate_ranking_prefers_recent_semantically_close_cluster():
     candidates = [
