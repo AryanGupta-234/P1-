@@ -415,7 +415,7 @@ def _suggestions(current_app_key: str, now: float | None = None) -> list[dict[st
         "JOIN activity_apps a ON a.app_key=t.to_app_key "
         "WHERE t.from_app_key=? AND t.weekday_local=? "
         "AND MIN(ABS(t.hour_local-?),24-ABS(t.hour_local-?))<=2 "
-        "GROUP BY t.to_app_key,a.app_name,a.executable ORDER BY observations DESC LIMIT 8",
+        "GROUP BY t.to_app_key,a.app_name,a.executable ORDER BY observations DESC",
         (current_app_key, weekday, hour, hour),
     )
     total_observations = sum(max(0, int(row[1] or 0)) for row in rows)
@@ -458,7 +458,7 @@ def _suggestions(current_app_key: str, now: float | None = None) -> list[dict[st
         key=lambda item: (item["confidence"], item["observations"], item["app_name"].casefold()),
         reverse=True,
     )
-    return suggestions
+    return suggestions[:8]
 
 def _maybe_auto_launch(current: dict[str, Any], now: float) -> None:
     global _LAST_AUTO_LAUNCH
