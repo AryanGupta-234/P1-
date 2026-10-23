@@ -960,8 +960,15 @@ async function boot() {
   };
 
   const jobs = [
-    ["command", "COMMAND DECK", async () => { updHero(); updTiles(); updMetrics(); renderCommandVisuals(); return true; }],
-    ["net", "NETWORK", async () => { updNet(); return true; }],
+    ["command", "COMMAND DECK", async () => {
+      updHero(); updTiles(); updMetrics(); renderCommandVisuals();
+      return historyReady && insightsReady;
+    }],
+    ["net", "NETWORK", async () => {
+      if (!Array.isArray(S?.net)) throw new Error("Initial connection snapshot is unavailable");
+      updNet(); return true;
+    }],
+    ["eng", "ENGINE DECK", async () => enginesReady || await loadEngines()],
     ["agent", "AGENT RUNTIME", () => loadAgent(true)],
     ["sys", "SYSTEM INVENTORY", () => loadSys(true)],
     ["proc", "WINDOWS PROCESS FIELD", () => loadProcesses(true)],
@@ -972,12 +979,12 @@ async function boot() {
     ["activityx", "USAGE INTELLIGENCE", () => loadActivityIntelligence(true)],
     ["intelx", "INTELLIGENCE MEMORY", () => loadIntelligence()],
     ["int", "INTELLIGENCE FEED", () => loadIntel()],
-    ["ai", "AI COUNCIL", async () => { updAI(); return true; }],
+    ["ai", "AI COUNCIL", async () => { updAI(); return aiReady; }],
     ["evi", "EVIDENCE VAULT", () => loadEvi()],
     ["ctl", "ACTION CONTROL", async () => { buildCtl(); ctlInitialized = true; return await loadActions(); }],
     ["fc", "FEATURE CONFIGURATION", () => loadFC()],
     ["tsk", "TASK CENTER", () => loadHist()],
-    ["act", "ACTIVITY STREAM", async () => { updHeart(); renderFeed(); return true; }]
+    ["act", "ACTIVITY STREAM", async () => { updHeart(); renderFeed(); return eventsReady; }]
   ];
   const allJobs = [...jobs, ...secondaryJobs];
   let completed = 0;
