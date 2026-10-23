@@ -609,6 +609,45 @@ function agentStateClass(state) {
   if (state === "unavailable" || state === "stopped" || state === "error") return "bad";
   return "mu";
 }
+function renderAgentHealthMap(matrix) {
+  const data = matrix && typeof matrix === "object" ? matrix : {};
+  const rows = Array.isArray(data.rows) ? data.rows : [];
+  const host = document.getElementById("ag-source-map");
+  const summary = document.getElementById("ag-map-summary");
+  if (!host) return;
+  const healthy = Number(data.healthy || 0);
+  const degraded = Number(data.degraded || 0) + Number(data.stale || 0);
+  const unavailable = Number(data.unavailable || 0);
+  const total = Number(data.total || rows.length || 0);
+  const toneFor = state => {
+    const value = String(state || "").toLowerCase();
+    if (["healthy", "operational", "running"].includes(value)) return "healthy";
+    if (["degraded", "stale"].includes(value)) return "degraded";
+    if (["unavailable", "stopped", "error"].includes(value)) return "unavailable";
+    return "unknown";
+  };
+  if (summary) summary.textContent = total
+    ? healthy + " / " + total + " HEALTHY · " + degraded + " NEED ATTENTION · " + unavailable + " UNAVAILABLE"
+    : "AWAITING FIRST HEARTBEAT";
+  if (!rows.length) {
+    host.innerHTML = '<div class="empty">Collector health has not reported a source map yet.</div>';
+    return;
+  }
+  host.innerHTML = rows.map(worker => {
+    const tone = toneFor(worker.state);
+    const age = worker.age_s == null ? "NO HEARTBEAT" : Math.max(0, Math.round(Number(worker.age_s))) + "s AGO";
+    const interval = Number(worker.every_s || 0);
+    const note = worker.error || worker.note || "No additional detail";
+    return '<article class="agent-source-card ' + tone + '" title="' + esc(note) + '">' +
+      '<div class="agent-source-head"><i></i><span>' + esc(String(worker.state || "unknown").toUpperCase()) +
+      '</span><small>' + esc(age) + '</small></div>' +
+      '<b>' + esc(worker.name || "Collector") + '</b>' +
+      '<div class="agent-source-foot"><span>' + (interval > 0 ? "EVERY " + interval + "s" : "EVENT DRIVEN") +
+      '</span><small>' + Number(worker.runs || 0).toLocaleString() + ' RUNS</small></div>' +
+      '</article>';
+  }).join("");
+}
+
 function updateAgentView(runtime, matrix, runs, storage) {
   if (!runtime) return;
   const logical = Math.max(1, Number(runtime.logical_processors || 1));
@@ -681,6 +720,7 @@ function updateAgentView(runtime, matrix, runs, storage) {
     ["UNAVAILABLE", matrix.unavailable || 0, "mu"]
   ].map(([label, count, tone]) => "<span class=\"tag " + tone + "\">" + label + " " + count + "</span>").join("");
   const workers = matrix.rows || [];
+  renderAgentHealthMap(matrix);
   $("#ag-workers").innerHTML = "<tr><th>STATE</th><th>FUNCTION / COLLECTOR</th><th>INTERVAL</th><th>RUNS</th><th>LAST HEARTBEAT / DETAIL</th></tr>"
     + workers.map(worker => {
       const tone = agentStateClass(worker.state);
@@ -1970,6 +2010,15 @@ const engineFacts = rows => rows.map(([label, value]) =>
   "<div><i>" + esc(label) + "</i><b>" + esc(value ?? "--") + "</b></div>"
 ).join("");
 
+function setEnginePulse(key, value, tone = "unknown") {
+  const card = document.querySelector('[data-engine-pulse="' + key + '"]');
+  const output = document.getElementById("engine-pulse-" + key);
+  if (output) output.textContent = String(value || "UNKNOWN").replaceAll("_", " ").toUpperCase();
+  if (card) {
+    card.classList.remove("online", "caution", "blocked", "unknown");
+    card.classList.add(["online", "caution", "blocked"].includes(tone) ? tone : "unknown");
+  }
+}
 function renderEngines(data) {
   ENGINE = data || {};
   const safe = data.safeguard || {}, runtime = data.runtime || {}, ai = data.ai || {}, mem = data.memory || {};
@@ -1983,6 +2032,7 @@ function renderEngines(data) {
     : safe.policy_note || "Backend action policy is active.";
   $("#engine-guard-mode").textContent = String(safe.mode || "UNKNOWN").replaceAll("_", " ").toUpperCase();
   $("#engine-safe-state").textContent = valorant ? "STRICT READ-ONLY" : safe.system_mutations_allowed ? "GUARDED / ACTIVE" : "FAIL-CLOSED";
+  setEnginePulse("safeguard", valorant ? "READ ONLY" : safe.system_mutations_allowed ? "GUARDED" : "FAIL-CLOSED", safe.mode === "fail_closed_unknown" ? "blocked" : valorant ? "caution" : "online");
   $("#engine-safe-facts").innerHTML = engineFacts([
     ["VALORANT", safe.valorant_active ? "DETECTED" : "NOT DETECTED"],
     ["PROCESS MONITOR", safe.process_detection_complete ? "HEALTHY" : "UNKNOWN / DISABLED"],
@@ -1992,6 +2042,7 @@ function renderEngines(data) {
     ["VANGUARD VGK", safe.vanguard_services?.vgk || "UNKNOWN"]
   ]);
   $("#engine-runtime-state").textContent = String(runtime.mode || "UNKNOWN").replaceAll("_", " ").toUpperCase();
+  setEnginePulse("runtime", runtime.mode || "UNKNOWN", ["resource_pressure", "reduced", "constrained"].includes(String(runtime.mode || "").toLowerCase()) ? "caution" : runtime.mode ? "online" : "unknown");
   $("#engine-runtime-facts").innerHTML = engineFacts([
     ["HOST CPU", runtime.cpu_percent == null ? "--" : fmt(runtime.cpu_percent, 1) + "%"],
     ["AVAILABLE RAM", runtime.available_memory_gib == null ? "--" : fmt(runtime.available_memory_gib, 2) + " GiB"],
@@ -2001,6 +2052,7 @@ function renderEngines(data) {
     ["DEEP AI", runtime.deep_ai_allowed ? "ADMITTED" : "DEFERRED"]
   ]);
   $("#engine-ai-state").textContent = ai.fast_triage_allowed ? "ORCHESTRATOR READY" : "RESOURCE / GAME GATED";
+  setEnginePulse("ai", ai.fast_triage_allowed ? "ADMITTED" : "DEFERRED", ai.fast_triage_allowed ? "online" : "caution");
   $("#engine-ai-facts").innerHTML = engineFacts([
     ["FAST TRIAGE", ai.fast_triage_allowed ? "ADMITTED" : "DEFERRED"],
     ["DEEP MODEL", ai.deep_allowed ? "ADMITTED" : "DEFERRED"],
@@ -2010,6 +2062,8 @@ function renderEngines(data) {
     ["EXECUTION AUTHORITY", "DETERMINISTIC POLICY"]
   ]);
   $("#engine-memory-state").textContent = String(mem.level || "UNKNOWN").toUpperCase() + " MEMORY PRESSURE";
+  const memoryLevel = String(mem.level || "").toLowerCase();
+  setEnginePulse("memory", memoryLevel || "UNKNOWN", ["high", "critical", "constrained"].includes(memoryLevel) ? "caution" : memoryLevel ? "online" : "unknown");
   $("#engine-memory-facts").innerHTML = engineFacts([
     ["AVAILABLE RAM", mem.available_gib == null ? "--" : fmt(mem.available_gib, 2) + " GiB"],
     ["RAM USED", mem.used_percent == null ? "--" : fmt(mem.used_percent, 1) + "%"],
@@ -2055,6 +2109,7 @@ function renderEngines(data) {
     : wprState === "recording" ? "ANOTHER WPR SESSION IS RECORDING"
     : safe.kernel_trace_allowed ? "READY · BOUNDED 12s CAPTURE" : "BLOCKED BY SAFEGUARD";
   $("#engine-wpr-state").textContent = wpr;
+  setEnginePulse("wpr", wpr, wpr.startsWith("READY") ? "online" : valorant ? "caution" : wpr.includes("BLOCKED") || wpr.includes("UNAVAILABLE") ? "blocked" : "unknown");
   $("#engine-wpr").disabled = !safe.kernel_trace_allowed || !wprAvailable || wprState === "recording";
   $("#engine-wpr").title = valorant ? "Tracing is hard-disabled while VALORANT is running."
     : "Propose a bounded WPR trace; an existing recording is never stopped or replaced.";
