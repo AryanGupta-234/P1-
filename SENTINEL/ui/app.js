@@ -942,7 +942,13 @@ async function boot() {
     resolveStream(false);
   }, 1800);
   stream.addEventListener("open", () => {
-    if (streamSettled) return;
+    if (streamSettled) {
+      degradedModules.delete("stream");
+      bootModuleState("stream", "READY", "Local event channel reconnected");
+      $("#p-online").className = "pill ok";
+      $("#p-online").textContent = "AGENT ONLINE";
+      return;
+    }
     streamSettled = true;
     clearTimeout(streamTimer);
     resolveStream(true);
