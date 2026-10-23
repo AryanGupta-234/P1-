@@ -1992,7 +1992,7 @@ nav button .badge{right:8px;top:5px}
 @keyframes bootOrbit{to{rotate:360deg}}
 .boot-scan-beam{position:absolute;z-index:4;left:10%;right:10%;top:6%;height:1px;background:linear-gradient(90deg,transparent,#8ce8d4,transparent);box-shadow:0 0 18px rgba(140,232,212,.75);animation:bootSuitScan 3.4s ease-in-out infinite}
 @keyframes bootSuitScan{0%,100%{transform:translateY(0);opacity:0}12%,80%{opacity:1}90%{transform:translateY(350px);opacity:0}}
-.boot-core-ring{position:absolute;z-index:4;left:50%;top:42%;width:90px;height:90px;transform:translate(-50%,-50%);display:grid;place-items:center;border-radius:50%;filter:drop-shadow(0 0 16px rgba(140,232,212,.32))}
+.boot-core-ring{position:absolute;z-index:4;left:50%;top:31%;width:90px;height:90px;transform:translate(-50%,-50%);display:grid;place-items:center;border-radius:50%;filter:drop-shadow(0 0 16px rgba(140,232,212,.32))}
 .boot-core-ring svg{position:absolute;inset:0;width:100%;height:100%;transform:rotate(-90deg);overflow:visible}
 .boot-gauge-track,.boot-gauge-progress{fill:none;stroke-width:1.4}
 .boot-gauge-track{stroke:rgba(178,239,225,.17)}
@@ -2042,7 +2042,7 @@ nav button .badge{right:8px;top:5px}
   .boot-orbit-ring.ring-three{width:170px;height:285px}
   .boot-scan-beam{animation-name:bootSuitScanMobile}
   @keyframes bootSuitScanMobile{0%,100%{transform:translateY(0);opacity:0}12%,80%{opacity:1}90%{transform:translateY(220px);opacity:0}}
-  .boot-core-ring{top:42%;width:70px;height:70px}
+  .boot-core-ring{top:31%;width:70px;height:70px}
   .boot-flow{margin-top:21px}
   .boot-title{text-align:center;margin-top:15px}
   .boot-sub{text-align:center}
