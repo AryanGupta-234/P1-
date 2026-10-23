@@ -806,8 +806,6 @@ async function boot() {
   renderIns();
   updateBootTelemetry();
   markDataReady("core", "Snapshot loaded · " + Number(S.proc_total || 0).toLocaleString() + " cached process records");
-  markDataReady("command", "Initial live values and host state restored");
-  markDataReady("net", "Connection snapshot restored");
   bp(20, "LOADING FOUNDATION DATA", "History, events, policy, runtime status and AI transcript");
 
   const foundation = await Promise.allSettled([
@@ -841,7 +839,7 @@ async function boot() {
     insights => { INS = insights; renderIns(); }, "Performance insights");
   const enginesReady = readFoundation(3, "eng", value => value && typeof value === "object",
     engines => renderEngines(engines), "Safeguards and engine policies");
-  const statusReady = readFoundation(4, "sys", value => value && typeof value === "object",
+  const statusReady = readFoundation(4, "core", value => value && typeof value === "object",
     status => { ST = status; }, "Runtime and source status");
   const aiReady = readFoundation(5, "ai", value => value && typeof value === "object",
     transcript => (transcript.transcript || []).forEach(addTr), "AI transcript");
@@ -853,7 +851,6 @@ async function boot() {
   if (enginesReady) markPageWarm("eng");
   if (historyReady && eventsReady && insightsReady) markPageWarm("act");
   if (aiReady) markPageWarm("ai");
-  if (statusReady) markPageWarm("sys");
 
   // Initialize interactions once. Workspace jobs below own the first data read.
   $("#a-q").oninput = renderFeed;
@@ -875,7 +872,7 @@ async function boot() {
   $("#p-q").oninput = () => { clearTimeout(procQueryTimer); procQueryTimer = setTimeout(() => loadProcesses(true), 260); };
   $("#p-refresh").onclick = () => loadProcesses(true);
   $("#n-q").oninput = () => S && updNet();
-  $("[data-command-route]").forEach(button => button.onclick = () => show(button.dataset.commandRoute));
+  $$("[data-command-route]").forEach(button => button.onclick = () => show(button.dataset.commandRoute));
   $("#a-exp").onclick = () => {
     const content = LOGS.map(row => `${new Date(row.ts * 1000).toISOString()}\t${row.level}\t${row.src}\t${row.msg}`).join("\n");
     const link = document.createElement("a");
@@ -963,6 +960,8 @@ async function boot() {
   };
 
   const jobs = [
+    ["command", "COMMAND DECK", async () => { updHero(); updTiles(); updMetrics(); renderCommandVisuals(); return true; }],
+    ["net", "NETWORK", async () => { updNet(); return true; }],
     ["agent", "AGENT RUNTIME", () => loadAgent(true)],
     ["sys", "SYSTEM INVENTORY", () => loadSys(true)],
     ["proc", "WINDOWS PROCESS FIELD", () => loadProcesses(true)],
