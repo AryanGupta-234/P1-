@@ -4,6 +4,20 @@ const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": 
 const qs = new URLSearchParams(location.search);
 let TOKEN = qs.get("t") || ""; try { if (TOKEN) localStorage.setItem("st", TOKEN); else TOKEN = localStorage.getItem("st") || ""; } catch (e) { }
 const api = (p, body) => fetch(p, { method: body ? "POST" : "GET", headers: { "X-Sentinel-Token": TOKEN, "Content-Type": "application/json" }, body: body ? JSON.stringify(body) : undefined }).then(r => r.json());
+async function apiRetry(path, attempts = 2) {
+  let lastError;
+  for (let attempt = 0; attempt <= attempts; attempt++) {
+    try {
+      const result = await api(path);
+      if (result?.error) throw new Error(result.error);
+      return result;
+    } catch (error) {
+      lastError = error;
+      if (attempt < attempts) await new Promise(resolve => setTimeout(resolve, 350 * (attempt + 1)));
+    }
+  }
+  throw lastError;
+}
 
 const H = {}, MAXH = 300; let S = null, view = "cmd";
 const LOGS = []; let paused = false, lastLogId = 0;
@@ -27,8 +41,13 @@ function markPageWarm(key) {
 }
 function bp(p, stage, msg, cls = "") {
   const progress = $("#bootProgress"), pct = $("#bootPct"), stageNode = $("#bootStage");
-  if (progress) progress.style.width = Math.max(0, Math.min(100, p)) + "%";
+  if (progress) { const value = Math.max(0, Math.min(100, p)); progress.style.width = value + "%"; progress.setAttribute("aria-valuenow", String(Math.round(value))); const gauge = $("#bootGauge"); if (gauge) gauge.style.strokeDashoffset = String(295.3 * (1 - value / 100)); }
   if (pct) pct.textContent = String(Math.round(p)).padStart(2, "0") + "%";
+  const nodeState = $("#bootNodeState");
+  if (nodeState && stage) nodeState.textContent = stage;
+  const lanes = $$(".boot-lanes > div");
+  const activeLane = p < 16 ? 0 : p < 32 ? 1 : p < 48 ? 2 : p < 64 ? 3 : p < 82 ? 4 : 5;
+  lanes.forEach((lane, index) => lane.classList.toggle("active", index === activeLane));
   if (stage && stageNode) stageNode.textContent = stage;
   const detail = $("#bootDetail");
   if (msg && detail) detail.textContent = msg;
@@ -61,7 +80,9 @@ function bootModuleState(key, state, detail = "") {
   if (!item) return;
   item.classList.remove("loading", "ready", "warn");
   const normalized = String(state || "").toLowerCase();
-  item.classList.add(normalized === "loading" ? "loading" : normalized === "ready" ? "ready" : "warn");
+  if (normalized === "loading") item.classList.add("loading");
+  else if (normalized === "ready") item.classList.add("ready");
+  else if (["degraded", "blocked", "warn", "error"].includes(normalized)) item.classList.add("warn");
   const status = item.querySelector("strong");
   const note = item.querySelector("small");
   if (status) status.textContent = String(state || "").toUpperCase();
@@ -75,9 +96,19 @@ function endBoot() {
 }
 function starfield() {
   const c = $("#starfield"), x = c.getContext("2d"); if (matchMedia("(prefers-reduced-motion:reduce)").matches) return;
-  let w, h, st = []; const rs = () => { w = c.width = innerWidth; h = c.height = innerHeight; st = Array.from({ length: Math.min(110, w * h / 14000 | 0) }, () => ({ x: Math.random() * w, y: Math.random() * h, r: Math.random() * 1.2 + .3, v: Math.random() * .12 + .02 })); };
-  rs(); addEventListener("resize", rs);
-  (function f() { x.clearRect(0, 0, w, h); x.fillStyle = "#cfe8a0"; for (const s of st) { s.y -= s.v; if (s.y < 0) { s.y = h; s.x = Math.random() * w; } x.globalAlpha = .3 + s.r / 2; x.beginPath(); x.arc(s.x, s.y, s.r, 0, 6.3); x.fill(); } requestAnimationFrame(f); })();
+  let w, h, st = [], frame = 0, lastPaint = 0;
+  const resize = () => { w = c.width = innerWidth; h = c.height = innerHeight; st = Array.from({ length: Math.min(48, Math.ceil(w * h / 28000)) }, () => ({ x: Math.random() * w, y: Math.random() * h, r: Math.random() * 1.1 + .3, v: Math.random() * .1 + .02 })); };
+  const draw = timestamp => {
+    frame = 0;
+    if (document.visibilityState !== "visible") return;
+    if (timestamp - lastPaint >= 42) {
+      lastPaint = timestamp; x.clearRect(0, 0, w, h); x.fillStyle = "#cfe8a0";
+      for (const star of st) { star.y -= star.v; if (star.y < 0) { star.y = h; star.x = Math.random() * w; } x.globalAlpha = .25 + star.r / 2; x.beginPath(); x.arc(star.x, star.y, star.r, 0, 6.3); x.fill(); }
+    }
+    frame = requestAnimationFrame(draw);
+  };
+  const resume = () => { if (document.visibilityState === "visible" && !frame) frame = requestAnimationFrame(draw); };
+  resize(); addEventListener("resize", resize, { passive: true }); document.addEventListener("visibilitychange", resume); resume();
 }
 
 /* ---------- charts ---------- */
@@ -159,7 +190,7 @@ let INS = [];
 function renderIns() { $("#ins").innerHTML = INS.slice(0, 7).map(i => `<div class="ins ${esc(i.sev)}"><time>${hms(i.ts)}</time><b>${esc(i.title)}</b><span>${esc(i.detail)}${i.culprit ? " · " + esc(i.culprit) : ""}</span></div>`).join("") || '<div class="empty">all clear - no problems detected</div>'; $("#i-n").textContent = INS.length + " total"; }
 
 /* ---------- processes: full identity, path and interactive-session facts ---------- */
-let sortK = "cpu", sortD = -1, PROC_ROWS = [], PROC_META = { total: 0, matched: 0, updated_at: 0 }, procFetchBusy = false, procLastFetch = 0, procQueryTimer = 0;
+let sortK = "cpu", sortD = -1, PROC_ROWS = [], PROC_META = { total: 0, matched: 0, sampled_at: 0, updated_at: 0 }, procFetchBusy = false, procLastFetch = 0, procQueryTimer = 0;
 function procIdentity(r) { return `${r.pid}:${Number(r.create_time || 0).toPrecision(15)}`; }
 function updProc() {
   const rows = PROC_ROWS.slice().sort((a, b) => {
@@ -192,12 +223,19 @@ async function loadProcesses(force = false) {
   if (!force && Date.now() - procLastFetch < 4500) { updProc(); return; }
   procFetchBusy = true;
   try {
-    const d = await api("/api/processes?limit=2000&q=" + encodeURIComponent(q));
+    const endpoint = "/api/processes?limit=2000&q=" + encodeURIComponent(q);
+    let d = await api(endpoint);
+    // The agent collector owns process enumeration. If the page races the
+    // collector's first Windows scan, wait briefly for its real snapshot.
+    for (let attempt = 0; force && !d.error && !d.sampled_at && attempt < 6; attempt++) {
+      await new Promise(resolve => setTimeout(resolve, 250));
+      d = await api(endpoint);
+    }
     if (d.error) throw new Error(d.error);
     // Deduplicate on process-instance identity, not PID (Windows reuses PIDs).
     const unique = new Map();
     for (const row of (d.rows || [])) unique.set(procIdentity(row), row);
-    PROC_ROWS = [...unique.values()]; PROC_META = { total: d.total || 0, matched: d.matched ?? PROC_ROWS.length, inaccessible: d.inaccessible || 0, updated_at: d.updated_at || 0 };
+    PROC_ROWS = [...unique.values()]; PROC_META = { total: d.total || 0, matched: d.matched ?? PROC_ROWS.length, inaccessible: d.inaccessible || 0, sampled_at: d.sampled_at || 0, updated_at: d.updated_at || 0 };
     updProc(); procLastFetch = Date.now();
   } catch (e) { toast("Process inventory: " + e.message, "warn"); }
   finally { procFetchBusy = false; }
@@ -486,10 +524,15 @@ function show(v) {
   $("#vtitle").textContent = TITLES[v];
   try { localStorage.setItem("sv", v); } catch (e) { }
   $$(".view").forEach(element => element.classList.toggle("on", element.id === "v-" + v));
-  $$("#nav button").forEach(button => button.classList.toggle("on", button.dataset.v === v));
+  $$("#nav button").forEach(button => {
+    const selected = button.dataset.v === v;
+    button.classList.toggle("on", selected);
+    if (selected) button.setAttribute("aria-current", "page");
+    else button.removeAttribute("aria-current");
+  });
 
-  // Boot preloads each workspace. A fresh workspace is displayed immediately
-  // instead of issuing the same API calls again during the first navigation.
+  // Recently opened workspaces render from their short-lived local cache;
+  // inactive screens fetch only when requested.
   if (pageIsWarm(v)) {
     if (v === "cmd") { updHero(); updTiles(); updMetrics(); }
     else if (v === "act") { updHeart(); renderFeed(); }
@@ -537,57 +580,47 @@ function show(v) {
   })[v]?.();
 }
 async function boot() {
+  const bootStartedAt = performance.now();
   starfield();
   bp(4, "POWERING SENTINEL", "Preparing the local command environment");
   buildTiles();
   buildChips();
-  $$("#nav button").forEach(button => button.onclick = () => show(button.dataset.v));
+  $$("#nav button").forEach(button => {
+    const label = button.querySelector(".lb")?.textContent?.trim() || TITLES[button.dataset.v] || button.dataset.v;
+    button.setAttribute("aria-label", label); button.title = label;
+    if (button.dataset.v === view) button.setAttribute("aria-current", "page");
+    button.onclick = () => show(button.dataset.v);
+  });
 
   const moduleDefinitions = [
-    ["core", "CORE TELEMETRY", "Host snapshot, counters and live stream"],
-    ["eng", "ENGINE DECK", "Safeguard, runtime, AI and memory policies"],
-    ["agent", "AGENT RUNTIME", "Worker health, resource use and lifecycle"],
-    ["sys", "SYSTEM INVENTORY", "Cached platform, security and volume inventory"],
-    ["proc", "PROCESS RADAR", "Process identities and review metadata"],
-    ["net", "NETWORK VIEW", "Connections and live traffic charts"],
-    ["ker", "KERNEL ARCHIVE", "Kernel counters and archived samples"],
-    ["adv", "THERMAL / ETW", "Hardware sensors, provider and trace readiness"],
-    ["activityx", "USAGE INTELLIGENCE", "Foreground sessions, tasks and learned routines"],
-    ["intelx", "INTELLIGENCE MEMORY", "Ranked context, memories and goals"],
-    ["int", "INTELLIGENCE FEED", "Recent local intelligence results"],
-    ["evi", "EVIDENCE VAULT", "Recent events, searchable records and filters"],
-    ["ctl", "ACTION CONTROL", "Pending approvals and automation policy"],
-    ["fc", "FEATURE CONFIGURATION", "Persisted preferences and audit history"],
-    ["tsk", "TASK CENTER", "Collector jobs and action history"],
-    ["act", "ACTIVITY STREAM", "Agent events and collector heartbeats"]
+    ["core", "SESSION", "Local auth and system state"],
+    ["command", "COMMAND", "Live metrics and visual layers"],
+    ["agent", "RUNTIME", "Collector workers and heartbeat"],
+    ["sys", "SYSTEM MAP", "Windows platform inventory"],
+    ["proc", "PROCESS FIELD", "Live Windows process scan"],
+    ["net", "NETWORK", "Interfaces and connections"],
+    ["adv", "THERMAL / ETW", "Hardware and kernel telemetry"],
+    ["stream", "LIVE LINK", "Agent event channel"]
   ];
   $("#bootModules").replaceChildren();
   moduleDefinitions.forEach(([key, label, detail]) => bootModule(key, label, "WAITING", detail));
 
   bp(10, "AUTHENTICATING", TOKEN ? "Local session token accepted" : "No local session token found", TOKEN ? "ok" : "bad");
-  if (!TOKEN) {
+    if (!TOKEN) {
     bp(100, "AUTHENTICATION REQUIRED", "Open SENTINEL from its installed desktop shortcut", "warn");
     $("#bootDetail").textContent = "Authentication required · use the installed desktop shortcut";
     $("#boot").classList.add("boot-error");
     return;
   }
 
-  // First read the minimum shell state. The first snapshot seeds every live
-  // view so page initialization does not wait for the first server-sent event.
-  bootModuleState("core", "LOADING", "Fetching initial local snapshot and telemetry history");
-  bp(18, "ESTABLISHING LOCAL SESSION", "Reading the agent snapshot, policy engines and persisted telemetry");
-  const foundation = await Promise.all([
-    api("/api/snapshot"),
-    api("/api/history?secs=300"),
-    api("/api/events?limit=300"),
-    api("/api/insights"),
-    api("/api/engines"),
-    api("/api/status"),
-    api("/api/ai")
-  ]);
-  const [initial, history, events, insights, engines, status, transcript] = foundation;
-  if (history?.error || initial?.error) {
-    const reason = history?.error || initial?.error || "The local agent rejected this session.";
+  // The live process snapshot gates first paint; history and secondary panels
+  // hydrate behind it so slow endpoints cannot hold the splash open.
+  bootModuleState("core", "LOADING", "Authenticating and synchronizing local telemetry");
+  bootModuleState("eng", "LOADING", "Reading safeguards and policy state");
+  bp(18, "SYNCHRONIZING LOCAL NODE", "Agent remains online while the dashboard reads process and system state");
+  const initial = await api("/api/snapshot");
+  if (initial?.error) {
+    const reason = initial.error || "The local agent rejected this session.";
     bootModuleState("core", "BLOCKED", String(reason).slice(0, 100));
     bp(100, "LOCAL SESSION REJECTED", String(reason).slice(0, 160), "warn");
     $("#boot").classList.add("boot-error");
@@ -595,27 +628,30 @@ async function boot() {
   }
 
   S = initial;
-  ST = status && !status.error ? status : null;
-  for (const [key, samples] of Object.entries(history || {})) {
-    if (Array.isArray(samples)) H[key] = samples.map(point => Number(point[1])).filter(Number.isFinite).slice(-MAXH);
-  }
   if (S?.live) {
     for (const [key, value] of Object.entries(S.live)) {
       if (Number.isFinite(Number(value)) && !(H[key] || []).length) H[key] = [Number(value)];
     }
   }
-  (Array.isArray(events) ? events : []).forEach(addLog);
-  INS = Array.isArray(insights) ? insights : [];
-  renderIns();
-  (transcript?.transcript || []).forEach(addTr);
-  if (engines && !engines.error) {
-    renderEngines(engines);
-    bootModuleState("eng", "READY", "Safeguard, runtime, AI and memory policy loaded");
-  } else {
-    bootModuleState("eng", "DEGRADED", "Engine status could not be read during startup");
-  }
-  bootModuleState("core", "READY", "Local token verified · initial snapshot and telemetry restored");
-  markPageWarm("eng");
+  INS = []; renderIns();
+  bootModuleState("core", "READY", "Live process and system snapshot ready");
+  void Promise.allSettled([
+    api("/api/history?secs=300"), api("/api/events?limit=300"),
+    api("/api/engines"), api("/api/status")
+  ]).then(([historyResult, eventResult, engineResult, statusResult]) => {
+    const history = historyResult.status === "fulfilled" ? historyResult.value : null;
+    const events = eventResult.status === "fulfilled" ? eventResult.value : [];
+    const engines = engineResult.status === "fulfilled" ? engineResult.value : null;
+    const status = statusResult.status === "fulfilled" ? statusResult.value : null;
+    for (const [key, samples] of Object.entries(history || {})) {
+      if (Array.isArray(samples)) H[key] = samples.map(point => Number(point[1])).filter(Number.isFinite).slice(-MAXH);
+    }
+    (Array.isArray(events) ? events : []).forEach(addLog);
+    if (engines && !engines.error) { renderEngines(engines); bootModuleState("eng", "READY", "Safeguards and policy state online"); markPageWarm("eng"); }
+    else bootModuleState("eng", "DEGRADED", "Engine state is still loading");
+    ST = status && !status.error ? status : null;
+    if (view === "cmd") { updMetrics(); updTiles(); }
+  });
 
   // Initialize every interaction before the views are painted.
   $("#a-q").oninput = renderFeed;
@@ -681,42 +717,36 @@ async function boot() {
     if (number >= 1 && number <= VKEYS.length) show(VKEYS[number - 1]);
   });
 
-  // Connect the stream before the parallel page warm-up. The snapshot above is
-  // already usable, so this handshake is bounded and cannot hold the splash.
+  // Keep the local live feed attached while workspace requests are in flight.
+  bootModuleState("stream", "LOADING", "Opening the local event stream");
   const stream = new EventSource("/api/stream?t=" + encodeURIComponent(TOKEN));
-  const firstTick = new Promise(resolve => {
-    const fallback = setTimeout(() => resolve(false), 1800);
-    stream.addEventListener("error", () => {
-      $("#p-online").className = "pill bad";
-      $("#p-online").textContent = "LINK RETRYING";
-    });
-    stream.onmessage = message => {
-      try {
-        const packet = JSON.parse(message.data);
-        if (packet.t === "tick") {
-          $("#p-online").className = "pill ok";
-          $("#p-online").textContent = "AGENT ONLINE";
-          onTick(packet.d);
-          resolve(true);
-          clearTimeout(fallback);
-        } else if (packet.t === "log") addLog(packet.d);
-        else if (packet.t === "insight") { INS.unshift(packet.d); renderIns(); alertInsight(packet.d); }
-        else if (packet.t === "action") loadActions();
-        else if (packet.t === "ai") addTr(packet.d);
-        else if (packet.t === "ai_status") $("#ai-status").textContent = packet.d.text;
-        else if (packet.t === "intel" && view === "int") loadIntel();
-      } catch (error) {
-        console.error("Invalid SENTINEL stream event", error);
-      }
-    };
+  stream.addEventListener("error", () => {
+    $("#p-online").className = "pill bad";
+    $("#p-online").textContent = "LINK RETRYING";
   });
+  stream.onmessage = message => {
+    try {
+      const packet = JSON.parse(message.data);
+      if (packet.t === "tick") {
+        $("#p-online").className = "pill ok"; $("#p-online").textContent = "AGENT ONLINE";
+        onTick(packet.d); bootModuleState("stream", "READY", "Live agent heartbeat received");
+      } else if (packet.t === "log") addLog(packet.d);
+      else if (packet.t === "insight") { INS.unshift(packet.d); renderIns(); alertInsight(packet.d); }
+      else if (packet.t === "action") loadActions();
+      else if (packet.t === "ai") addTr(packet.d);
+      else if (packet.t === "ai_status") $("#ai-status").textContent = packet.d.text;
+      else if (packet.t === "intel" && view === "int") loadIntel();
+    } catch (error) { console.error("Invalid SENTINEL stream event", error); }
+  };
 
-  bp(27, "CONFIGURING WORKSPACES", "Initializing page controls and restoring the last workspace");
+  bp(26, "STARTING WORKSPACE THREADS", "Reading the process inventory, thermal sensors and intelligence stores");
+  updHero(); updTiles(); updMetrics();
+  $("#kernel-capture").disabled = false;
   const jobs = [
-    ["cmd", "COMMAND DECK", async () => { updHero(); updTiles(); updMetrics(); }],
+    ["command", "COMMAND DECK", async () => { updHero(); updTiles(); updMetrics(); }],
     ["agent", "AGENT RUNTIME", () => loadAgent(true)],
     ["sys", "SYSTEM INVENTORY", () => loadSys(true)],
-    ["proc", "PROCESS RADAR", () => loadProcesses(true)],
+    ["proc", "WINDOWS PROCESS RADAR", () => loadProcesses(true)],
     ["net", "NETWORK VIEW", async () => { updNet(); }],
     ["ker", "KERNEL ARCHIVE", async () => { updKer(); await loadKernelArchive(); }],
     ["adv", "THERMAL / ETW", () => loadAdvanced(true)],
@@ -730,37 +760,61 @@ async function boot() {
     ["tsk", "TASK CENTER", () => loadHist()],
     ["act", "ACTIVITY STREAM", async () => { updHeart(); renderFeed(); }]
   ];
+  const criticalKeys = new Set(["command", "net"]);
+  const criticalJobs = jobs.filter(([key]) => criticalKeys.has(key));
+  const warmJobs = jobs.filter(([key]) => !criticalKeys.has(key));
   let completed = 0;
   const runJob = async ([key, label, work]) => {
-    bootModuleState(key, "LOADING", "Preparing " + label.toLowerCase());
+    bootModuleState(key, "LOADING", "Synchronizing " + label.toLowerCase());
     try {
       await work();
+      if (key === "proc" && !PROC_META.sampled_at) throw new Error("Windows process collector has not published a snapshot yet");
       markPageWarm(key);
-      bootModuleState(key, "READY", "Data and controls are prepared");
-      bp(30 + (++completed / jobs.length) * 66, "PREPARING " + label, label + " is ready", "ok");
+      const detail = key === "proc"
+        ? `${PROC_META.matched}/${PROC_META.total} active process records · ${PROC_META.inaccessible || 0} restricted`
+        : "Live data and controls synchronized";
+      if (key === "proc") $("#bootProcessCount").textContent = `${PROC_META.total.toLocaleString()} PROCESSES`;
+      bootModuleState(key, "READY", detail);
+      if (!bootDone) bp(26 + (++completed / criticalJobs.length) * 68, "INITIALIZING " + label, label + " is online", "ok");
       return { key, ok: true };
     } catch (error) {
       bootModuleState(key, "DEGRADED", (error?.message || String(error)).slice(0, 110));
-      bp(30 + (++completed / jobs.length) * 66, "DEGRADED · " + label, (error?.message || String(error)).slice(0, 150), "warn");
+      bp(26 + (++completed / jobs.length) * 68, "DEGRADED · " + label, (error?.message || String(error)).slice(0, 150), "warn");
       return { key, ok: false };
     }
   };
-  const results = await Promise.all(jobs.map(runJob));
-  await firstTick;
-  const degraded = results.filter(result => !result.ok).length;
-  if (degraded) bp(98, "READY WITH DEGRADED MODULES", degraded + " workspace(s) need a refresh or source recovery", "warn");
-  else bp(99, "ALL WORKSPACES PREPARED", "Dashboard cache, charts and controls are ready", "ok");
-
-  $("#kernel-capture").disabled = false;
+  const runBatch = async (queue) => {
+    let next = 0;
+    const worker = async () => { while (next < queue.length) await runJob(queue[next++]); };
+    await Promise.all(Array.from({ length: Math.min(6, queue.length) }, worker));
+  };
+  void runBatch(criticalJobs);
+  const degraded = 0;
+  if (!PROC_META.total) $("#bootProcessCount").textContent = "PROCESS DATA LIMITED";
+  if (degraded) bp(98, "ONLINE · DEGRADED MODULES", degraded + " workspace(s) need attention", "warn");
+  else bp(99, "ALL WORKSPACES ONLINE", "Windows process and telemetry views are ready", "ok");
   let savedView = "cmd";
   try { savedView = localStorage.getItem("sv") || "cmd"; } catch (e) { }
   if (TITLES[savedView] && savedView !== "cmd") show(savedView);
-  await new Promise(resolve => setTimeout(resolve, 420));
-  bp(100, degraded ? "ONLINE · DEGRADED MODULES" : "ONLINE", degraded ? "The dashboard is ready; unavailable sources remain clearly marked." : "All prepared workspaces are ready for navigation.", degraded ? "warn" : "ok");
+  const minSplashMs = 120, remaining = minSplashMs - (performance.now() - bootStartedAt);
+  if (remaining > 0) await new Promise(resolve => setTimeout(resolve, remaining));
+  bp(100, "SENTINEL ONLINE", "Live collectors continue syncing in the background", "ok");
   endBoot();
+  void runBatch([...criticalJobs.filter(([key]) => !["command", "net"].includes(key)), ...warmJobs]);
 }
 /* ---------- reversible performance intelligence / thermal workspace ---------- */
-let ADV = null, advLastLoad = 0, advBusy = false;
+let ADV = null, advLastLoad = 0, advBusy = false, advRetryTimer = null;
+function selectAdvWorkspace(group) {
+  const valid = ["overview", "thermal", "diagnostics", "tuning", "controls"].includes(group) ? group : "overview";
+  $$("#v-adv .adv-grid > .panel[data-adv-group]").forEach(panel => { panel.hidden = panel.dataset.advGroup !== valid; });
+  $$("#advWorkspaceTabs [data-adv-tab]").forEach(button => {
+    const active = button.dataset.advTab === valid;
+    button.classList.toggle("on", active);
+    if (active) button.setAttribute("aria-current", "page");
+    else button.removeAttribute("aria-current");
+  });
+  try { localStorage.setItem("adv-workspace", valid); } catch (error) { }
+}
 const avNum = (v, d = 1, suffix = "") => v == null || !Number.isFinite(Number(v)) ? "--" : Number(v).toFixed(d) + suffix;
 function advGauge(id, temp, threshold, valId, sourceId, source) {
   const dial = $("#" + id), value = $("#" + valId), src = $("#" + sourceId);
@@ -844,12 +898,15 @@ async function loadAdvanced(force = false) {
   if (advBusy || (!force && Date.now() - advLastLoad < 5000)) return;
   advBusy = true; advLastLoad = Date.now();
   try {
-    const d = await api("/api/advanced"); if (d.error) throw new Error(d.error); ADV = d;
+    const d = await apiRetry("/api/advanced", 2); ADV = d;
     const loadError = $("#adv-load-error");
-    if (loadError) { loadError.hidden = true; loadError.textContent = ""; }
+    if (loadError) { loadError.hidden = true; loadError.classList.remove("stale"); }
+    clearTimeout(advRetryTimer);
     renderAdvLiveMetrics(d.live_metrics || {});
     const game = d.game || null, gpu = d.gpu || {}, hs = d.hardware_sensors || {}, cfg = (d.settings || d.advanced_settings || {});
     const provider = d.hardware_provider || {};
+    const pipeline = $("#sensor-pipeline");
+    if (pipeline) pipeline.dataset.state = hs.available ? "connected" : provider.endpoint_state === "remote_server_not_started" ? "server-off" : provider.running ? "starting" : provider.installed ? "stopped" : "missing";
     const etw = d.etw_engine || {};
     $("#adv-game").textContent = game?.name || "STANDBY";
     $("#adv-session").textContent = d.sessions?.[0]?.status === "active" ? `Session #${d.sessions[0].id} · ${dur(Date.now()/1000 - d.sessions[0].started_at)}` : "No active session tracked";
@@ -915,11 +972,12 @@ async function loadAdvanced(force = false) {
     const fanValue = fanSensor ? Number(fanSensor.value) : gpu.fan_speed_pct;
     const fanSource = fanSensor
       ? `${fanSensor.name || "Fan"} · ${sensorProvider} RPM`
-      : (gpu.fan_speed_pct != null ? `nvidia-smi fan.speed percentage (not RPM)${hs.fan_reason ? " · " + hs.fan_reason : ""}`
-        : (hs.fan_reason || "Fan RPM telemetry unavailable / unsupported"));
-    $("#adv-fan-value").textContent = fanSensor ? `${avNum(fanValue, 0)} RPM` : fanValue != null ? `${avNum(fanValue, 0)}%` : "--";
+      : (gpu.fan_speed_pct != null ? "GPU fan percentage (RPM not exposed)" : "Fan RPM unavailable");
+    $("#adv-fan-value").textContent = fanSensor ? `${avNum(fanValue, 0)} RPM` : fanValue != null ? `${avNum(fanValue, 0)}%` : "NO SENSOR";
     $("#adv-fan-source").textContent = fanSource;
     const rotor = $("#adv-fan");
+    rotor.title = hs.fan_reason || "Fan RPM sensor not exposed on this device.";
+    $("#adv-fan-card")?.classList.toggle("unavailable", fanValue == null);
     const fanHz = fanSensor ? Math.max(.12, Math.min(3, 60 / Math.max(1, fanValue))) : fanValue != null ? Math.max(.45, 4 - Number(fanValue) * .035) : 1.5;
     rotor.style.animationDuration = `${fanHz}s`;
     rotor.classList.toggle("running", fanValue != null && Number(fanValue) > 0);
@@ -955,16 +1013,13 @@ async function loadAdvanced(force = false) {
       ? sensorRows.slice(0,100).map(sensor => `<div class="sensor-row"><div><b>${esc(sensor.name || "Unnamed sensor")}</b><small>${esc(sensor.parent || sensor.device_class || sensorProvider)} · ${esc(sensor.type || "Sensor")} · ${esc(sensor.device_class || "platform")}</small></div><strong>${sensor.value == null ? "--" : avNum(sensor.value, 2)} ${esc(sensor.unit || (sensor.type === "Temperature" ? "°C" : ""))}</strong></div>`).join("") + (sensorRows.length > 100 ? `<div class="empty">${sensorRows.length - 100} additional sensor rows omitted from this view.</div>` : "")
       : `<div class="empty">${esc(hs.reason || "No numeric hardware sensors have been returned by the provider.")}</div>`;
     const providerButton = $("#adv-provider-install");
-    if (providerButton) providerButton.textContent = provider.connected ? "SENSOR ENGINE CONNECTED" : provider.installed ? "RETRY SENSOR ENGINE" : "INSTALL SENSOR ENGINE";
+    if (providerButton) providerButton.textContent = provider.installed ? "REFRESH SENSOR STATUS" : "INSTALL SENSOR LIBRARY";
     const providerStatus = $("#adv-provider-status");
-    if (providerStatus) providerStatus.textContent = provider.connected
-      ? `CONNECTED · ${provider.sensor_count || hs.sensor_count || 0} numeric sensors · localhost:${provider.port || 8085}`
-      : provider.endpoint_state === "remote_server_not_started"
-        ? "PROCESS RUNNING · HTTP SENSOR SERVER OFF · " + (provider.next_step || "Open LibreHardwareMonitor and enable Options > Remote Web Server > Run.")
-        : provider.installed ? (provider.running
-          ? (provider.next_step || "Provider is running; waiting for its local sensor endpoint.")
-          : (provider.next_step || "Provider installed but not running."))
-        : (provider.next_step || "Not installed · official package is checksum-verified before extraction.");
+    if (providerStatus) providerStatus.textContent = provider.installed
+      ? (hs.available
+        ? `SENSOR FEED \u00b7 ${hs.sensor_count || 0} measured readings \u00b7 ${hs.sensor_backend || hs.provider || "thermal fallback"}`
+        : (hs.reason || "Direct sensor reader is warming up; Windows ACPI and NVIDIA sources are also checked."))
+      : (provider.next_step || "Not installed ? official package is checksum-verified before extraction.");
     advSpark("adv-clock-spark","gpuclk"); advSpark("adv-power-spark","gpupwr"); advPowerClockWaterfall();
     $("#adv-thermal-timeline").innerHTML = advRows((d.thermal_events || []).slice(0,16).map(x=>`<div class="event"><b>${esc(x.sensor)} · ${esc(x.event)}</b><small>${hms(x.ts)} · ${x.value==null?"value unavailable":avNum(x.value,1)+" °C"} ${esc(x.detail || "")}</small></div>`), "No thermal warning or GPU throttle transitions have been recorded.");
     const drivers = d.etw_engine?.driver_modules || [];
@@ -986,10 +1041,14 @@ async function loadAdvanced(force = false) {
     if(document.activeElement?.id!=="adv-etw-interval")$("#adv-etw-interval").value=cfg.etw_auto_interval_s ?? 300;
     if(game && !$("#adv-profile-game").value)$("#adv-profile-game").value=game.name;
   } catch(e) {
-    const message = `Performance intelligence data could not be loaded: ${e.message || String(e)}`;
     const errorPanel = $("#adv-load-error");
-    if (errorPanel) { errorPanel.textContent = message; errorPanel.hidden = false; }
-    toast(message, "warn");
+    const errorText = $("#adv-load-error-text");
+    if (errorPanel) { errorPanel.hidden = false; errorPanel.classList.toggle("stale", !!ADV); }
+    if (errorText) errorText.textContent = ADV
+      ? "Agent link interrupted · showing the latest sensor snapshot"
+      : "Agent link interrupted · retrying connection";
+    clearTimeout(advRetryTimer);
+    if (view === "adv") advRetryTimer = setTimeout(() => loadAdvanced(true), ADV ? 5000 : 1800);
   }
   finally { advBusy = false; }
 }
@@ -1002,14 +1061,25 @@ function advProfilePayload(){
 }
 let advDryRun = null;
 function initAdvanced(){
+  let initialWorkspace = "overview";
+  try { initialWorkspace = localStorage.getItem("adv-workspace") || "overview"; } catch (error) { }
+  selectAdvWorkspace(initialWorkspace);
+  $$("#advWorkspaceTabs [data-adv-tab]").forEach(button => button.onclick = () => selectAdvWorkspace(button.dataset.advTab));
+  $("#adv-retry").onclick = () => loadAdvanced(true);
+  $$("[data-tuner-direction]").forEach(button => button.onclick = () => {
+    const direction = button.dataset.tunerDirection;
+    $("#adv-tuner-direction").value = direction;
+    $$("[data-tuner-direction]").forEach(item => item.classList.toggle("on", item === button));
+  });
   $("#adv-refresh").onclick=()=>loadAdvanced(true);
   const providerButton = $("#adv-provider-install");
   if (providerButton) providerButton.onclick = async () => {
     const original = providerButton.textContent;
+    let result = null;
     providerButton.disabled = true;
-    providerButton.textContent = "VERIFYING & STARTING…";
+    providerButton.textContent = "CHECKING SENSOR LIBRARY…";
     try {
-      const result = await api("/api/hardware/provider/start", {});
+      result = await api("/api/hardware/provider/start", {});
       if (result.error) throw new Error(result.error);
       toast(result.message || "Sensor provider start request completed", result.connected ? "ok" : "warn");
       await loadAdvanced(true);
@@ -1019,7 +1089,8 @@ function initAdvanced(){
       $("#adv-provider-status").textContent = message;
     } finally {
       providerButton.disabled = false;
-      providerButton.textContent = original;
+      const state = result?.provider || {};
+      providerButton.textContent = state.installed ? "REFRESH SENSOR STATUS" : original;
     }
   };
   $("#adv-profile-save").onclick=async()=>{const r=await api("/api/advanced/game-profile/save",{game:$("#adv-profile-game").value.trim(),profile:advProfilePayload()});if(r.error)return toast(r.error,"bad");toast("Per-game profile saved to SQLite","ok");loadAdvanced(true);};
@@ -1227,9 +1298,9 @@ async function loadIntelligence() {
   ixBusy = true;
   try {
     const [ctxRaw, memRaw, activeRaw, pausedRaw, completedRaw, runtimeRaw] = await Promise.all([
-      api("/api/intelligence/context"), api("/api/intelligence/memories?limit=100"),
-      api("/api/intelligence/goals?status=active"), api("/api/intelligence/goals?status=paused"),
-      api("/api/intelligence/goals?status=completed"), api("/api/intelligence/runtime")
+      apiRetry("/api/intelligence/context", 2), apiRetry("/api/intelligence/memories?limit=100", 2),
+      apiRetry("/api/intelligence/goals?status=active", 2), apiRetry("/api/intelligence/goals?status=paused", 2),
+      apiRetry("/api/intelligence/goals?status=completed", 2), apiRetry("/api/intelligence/runtime", 2)
     ]);
     const ctx = ixObject(ctxRaw);
     if (ctx.error) throw new Error(String(ctx.error));
@@ -1258,7 +1329,16 @@ async function loadIntelligence() {
     renderIXMemories();
     await renderIXGoals();
     renderIXRuntime();
+    const loadError = $("#ix-load-error");
+    if (loadError) { loadError.hidden = true; loadError.classList.remove("stale"); }
   } catch (error) {
+    const loadError = $("#ix-load-error");
+    const errorText = $("#ix-load-error-text");
+    const hasSnapshot = IX.state.length + IX.memories.length + IX.goals.length > 0;
+    if (loadError) { loadError.hidden = false; loadError.classList.toggle("stale", hasSnapshot); }
+    if (errorText) errorText.textContent = hasSnapshot
+      ? "Agent link interrupted · showing the latest intelligence snapshot"
+      : "Intelligence data is temporarily unavailable · retry the local agent link";
     toast("Intelligence refresh: " + (error?.message || String(error)), "warn");
   } finally {
     ixBusy = false;
@@ -1382,6 +1462,7 @@ function renderIXRuntime() {
 }
 function initIntelligence() {
   $("#ix-refresh-state").onclick = loadIntelligence;
+  $("#ix-retry").onclick = loadIntelligence;
   $("#ix-memory-search").onclick = async () => { const q = $("#ix-memory-q").value.trim(); const include = $("#ix-include-sensitive")?.checked ? "&include_sensitive=1" : ""; const d = await api("/api/intelligence/memories?q=" + encodeURIComponent(q) + "&limit=100" + include); if (d.error) return toast(d.error, "warn"); IX.memories = ixList(d, "memories", "items", "results", "rows"); renderIXMemories(); };
   $("#ix-memory-semantic").onclick = async () => { const q = $("#ix-memory-q").value.trim(); if (!q) return toast("Enter a search query first", "warn"); const d = await api("/api/intelligence/memory/semantic?q=" + encodeURIComponent(q) + "&limit=30"); if (d.error) return toast(d.error, "warn"); IX.memories = ixList(d, "memories", "items", "results", "rows"); renderIXMemories(); toast("Local semantic retrieval complete", "ok"); };
   $("#ix-memory-add").onclick = async () => { const content = $("#ix-memory-content").value.trim(); if (!content) return toast("Enter memory content", "warn"); const r = await api("/api/intelligence/memory/add", { content, kind: $("#ix-memory-kind").value, sensitivity: $("#ix-memory-sensitivity").value, verification: "unverified", confidence: .5 }); if (r.error) return toast(r.error, "bad"); $("#ix-memory-content").value = ""; toast("Memory saved locally", "ok"); loadIntelligence(); };

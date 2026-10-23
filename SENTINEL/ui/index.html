@@ -1,32 +1,30 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>SENTINEL · 1.0.8</title>
+<title>SENTINEL &middot; 1.2.7</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cpath d='M32 4l24 14v28L32 60 8 46V18z' fill='none' stroke='%23b8e65b' stroke-width='4'/%3E%3Ccircle cx='32' cy='32' r='8' fill='%23ff6b38'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="app.css"></head>
+<link rel="stylesheet" href="app.css?v=1.2.7"></head>
 <body><div class="ambient"></div><canvas id="starfield"></canvas>
-<div class="boot" id="boot" role="status" aria-live="polite" aria-label="SENTINEL startup">
-  <div class="boot-grid" aria-hidden="true"></div>
-  <div class="boot-scanline" aria-hidden="true"></div>
+<div class="boot" id="boot" role="status" aria-live="polite" aria-label="SENTINEL Windows node initialization">
+  <div class="boot-grid" aria-hidden="true"></div><div class="boot-scanline" aria-hidden="true"></div>
   <div class="boot-console">
-    <div class="boot-visual">
-      <div class="boot-reactor" aria-hidden="true">
-        <i class="reactor-orbit orbit-a"></i><i class="reactor-orbit orbit-b"></i><i class="reactor-orbit orbit-c"></i>
-        <i class="reactor-core"></i>
+    <div class="boot-topline"><span>SENTINEL <i>LOCAL RUNTIME</i></span><span id="bootNodeState">SYSTEMS INITIALIZING</span><span>NODE / 01</span></div>
+    <div class="boot-body">
+      <div class="boot-visual">
+        <div class="boot-reactor" aria-hidden="true"><svg class="boot-gauge" viewBox="0 0 100 100"><circle class="boot-gauge-track" cx="50" cy="50" r="47"/><circle class="boot-gauge-progress" id="bootGauge" cx="50" cy="50" r="47"/></svg><i class="reactor-orbit orbit-a"></i><i class="reactor-orbit orbit-b"></i><i class="reactor-orbit orbit-c"></i><i class="reactor-core"></i><span class="boot-crosshair"></span><b class="boot-reactor-word">S / 01</b></div>
+        <div class="boot-node-readout"><small>WINDOWS PROCESS FIELD</small><b id="bootProcessCount">SYNCING</b><span>LIVE SNAPSHOT</span></div>
+        <div class="boot-visual-spectrum" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+        <div class="boot-signal-label"><i></i> COLLECTORS RUNNING IN BACKGROUND</div>
       </div>
-      <div class="boot-visual-label">LOCAL WINDOWS NODE</div>
-      <div class="boot-visual-state"><i></i> SECURE INITIALIZATION</div>
-      <div class="boot-visual-spectrum" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
-    </div>
-    <div class="boot-content">
-      <div class="boot-title">SENTINEL</div>
-      <div class="boot-sub">PERFORMANCE GUARDIAN / STARTUP SEQUENCE</div>
-      <div class="boot-progress-meta"><span id="bootDetail">Preparing local runtime services…</span><b id="bootPct">00%</b></div>
-      <div class="boot-track"><div class="boot-progress" id="bootProgress"></div></div>
-      <div class="boot-stage"><span id="bootStage">POWERING SYSTEM</span><span>LOCAL / WINDOWS 11</span></div>
-      <div class="boot-modules" id="bootModules" aria-label="Workspace initialization states"></div>
-      <div class="boot-log-wrap">
-        <div class="boot-log-head"><span>INITIALIZATION JOURNAL</span><span>LIVE DIAGNOSTICS</span></div>
-        <div class="boot-log" id="bootLog" aria-live="polite" aria-relevant="additions"></div>
+      <div class="boot-content">
+        <div class="boot-eyebrow"><span>BOOT SEQUENCE / 1.2.7</span><span>LOCAL INTELLIGENCE</span></div>
+        <div class="boot-title">SENTINEL<span class="boot-title-cursor"></span></div>
+        <div class="boot-sub">SENSE THE SYSTEM. SHAPE THE RESPONSE.</div>
+        <div class="boot-lanes" aria-hidden="true"><div><i></i><span>SESSION</span></div><div><i></i><span>PROCESS</span></div><div><i></i><span>SYSTEM</span></div><div><i></i><span>NETWORK</span></div><div><i></i><span>THERMAL</span></div><div><i></i><span>LIVE LINK</span></div></div>
+        <div class="boot-progress-meta"><span id="bootDetail">Synchronizing the Windows node</span><b id="bootPct">00%</b></div>
+        <div class="boot-track"><div class="boot-progress" id="bootProgress" role="progressbar" aria-label="Workspace initialization" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"></div></div>
+        <div class="boot-stage"><span id="bootStage">POWERING SYSTEM</span><span>6 LIVE SYSTEMS</span></div>
+        <div class="boot-modules" id="bootModules" aria-label="Workspace initialization states"></div>
+        <div class="boot-log-wrap"><div class="boot-log-head"><span>INITIALIZATION FEED</span><span>REAL TIME</span></div><div class="boot-log" id="bootLog" aria-live="polite" aria-relevant="additions"></div></div>
       </div>
     </div>
   </div>
@@ -260,78 +258,96 @@
 
 <!-- ADVANCED PERFORMANCE / REVERSIBILITY -->
 <section class="view" id="v-adv">
-  <div class="row" style="margin-bottom:10px"><div><b>Performance intelligence &amp; reversible tuning</b><small>Evidence first · dry run · snapshot · approval · measure · rollback.</small></div><button class="btn or" id="adv-refresh">REFRESH TELEMETRY</button></div>
-  <div class="msg adv-load-error" id="adv-load-error" hidden></div>
+  <div class="adv-page-head"><div><span class="adv-kicker">SENTINEL / SYSTEM CONTROL</span><h2>PERFORMANCE DECK</h2><p>Thermals, diagnostics and reversible tuning in one workspace.</p></div><button class="btn or" id="adv-refresh">REFRESH TELEMETRY</button></div>
+  <div class="msg adv-load-error" id="adv-load-error" hidden><span id="adv-load-error-text">Connecting to the local agent…</span><button class="btn sm" id="adv-retry">RETRY LINK</button></div>
   <div class="metrics" id="adv-metrics">
     <div class="metric"><small>ACTIVE GAME</small><b id="adv-game">--</b><span id="adv-session">No session tracked</span></div>
     <div class="metric"><small>ETW ENGINE</small><b id="adv-etw-state">--</b><span id="adv-etw-meta">Windows Performance Toolkit</span></div>
     <div class="metric"><small>BASELINE SAMPLES</small><b id="adv-baseline-count">--</b><span>per game / hour / metric</span></div>
     <div class="metric"><small>REVERSIBLE CHANGES</small><b id="adv-undo-count">--</b><span>journaled and not reverted</span></div>
   </div>
+  <nav class="adv-tabs" id="advWorkspaceTabs" aria-label="Performance workspace sections">
+    <button type="button" class="adv-tab on" aria-current="page" data-adv-tab="overview"><i>01</i><span>OVERVIEW</span></button>
+    <button type="button" class="adv-tab" data-adv-tab="thermal"><i>02</i><span>THERMAL</span></button>
+    <button type="button" class="adv-tab" data-adv-tab="diagnostics"><i>03</i><span>DIAGNOSTICS</span></button>
+    <button type="button" class="adv-tab" data-adv-tab="tuning"><i>04</i><span>TUNING</span></button>
+    <button type="button" class="adv-tab" data-adv-tab="controls"><i>05</i><span>CONTROLS</span></button>
+  </nav>
   <div class="adv-grid">
-    <div class="panel adv-span"><div class="ph">Latest system measurements <em id="adv-live-meta">waiting for collector samples</em></div>
+    <div class="panel adv-span" data-adv-group="overview"><div class="ph">Latest system measurements <em id="adv-live-meta">waiting for collector samples</em></div>
       <div class="pb"><div id="adv-live-metrics" class="adv-live-grid"><div class="empty">Live CPU, memory, kernel, disk and network samples will appear here as collectors report them.</div></div></div>
     </div>
-    <div class="panel adv-span"><div class="ph">Thermal headroom <em>measured sensors only</em></div>
-      <div class="pb adv-provider-bar"><div><b>HARDWARE SENSOR ENGINE</b><small id="adv-provider-status">Not installed · official package is checksum-verified before extraction.</small></div><button class="btn or" id="adv-provider-install">INSTALL SENSOR ENGINE</button></div>
+    <div class="panel adv-span" data-adv-group="thermal"><div class="ph">Thermal telemetry <em>measured sensors</em></div>
+      <div class="pb adv-provider-bar"><div><b>HARDWARE SENSOR ENGINE</b><small id="adv-provider-status">Not installed · official package is checksum-verified before extraction.</small></div><button class="btn or" id="adv-provider-install">INSTALL SENSOR LIBRARY</button></div>
+      <div class="pb sensor-pipeline" id="sensor-pipeline" data-state="unknown" aria-label="Thermal sensor data path">
+        <div class="sensor-pipeline-step"><i>01</i><b>Hardware</b><small>CPU · GPU · fans</small></div><span class="sensor-pipeline-link" aria-hidden="true"></span>
+        <div class="sensor-pipeline-step"><i>02</i><b>LibreHardwareMonitor</b><small>Local sensor reader</small></div><span class="sensor-pipeline-link" aria-hidden="true"></span>
+        <div class="sensor-pipeline-step"><i>03</i><b>Thermal algorithms</b><small>CPU · GPU · ACPI fallback</small></div><span class="sensor-pipeline-link" aria-hidden="true"></span>
+        <div class="sensor-pipeline-step"><i>04</i><b>SENTINEL</b><small>Measured telemetry</small></div>
+      </div>
       <div class="pb heat-grid">
         <div class="heat-card"><div class="heat-dial" id="adv-cpu-dial"><div><b id="adv-cpu-temp">--</b><small id="adv-cpu-label">CPU °C</small></div></div><div class="heat-meta"><b id="adv-cpu-title">CPU package</b><small id="adv-cpu-source">Optional external sensor not enabled</small><small id="adv-cpu-threshold-note">Warning threshold -- °C</small></div></div>
         <div class="heat-card"><div class="heat-dial" id="adv-gpu-dial"><div><b id="adv-gpu-temp">--</b><small>GPU °C</small></div></div><div class="heat-meta"><b>GPU temperature</b><small id="adv-gpu-source">NVIDIA nvidia-smi</small><small id="adv-gpu-throttle">No active throttle flag reported</small></div></div>
-        <div class="heat-card"><div class="fan-wrap"><svg id="adv-fan" class="fan-rotor" viewBox="0 0 100 100" aria-label="Fan speed visualization"><circle cx="50" cy="50" r="46"/><g><path d="M50 47 C30 10 53 5 58 13 C65 24 54 37 53 47Z"/><path d="M53 50 C90 30 95 53 87 58 C76 65 63 54 53 53Z"/><path d="M50 53 C70 90 47 95 42 87 C35 76 46 63 47 53Z"/><path d="M47 50 C10 70 5 47 13 42 C24 35 37 46 47 47Z"/></g><circle cx="50" cy="50" r="8"/></svg></div><div class="heat-meta"><b>Fan telemetry</b><strong id="adv-fan-value">--</strong><small id="adv-fan-source">RPM unavailable</small></div></div>
+        <div class="heat-card fan-card" id="adv-fan-card"><div class="fan-wrap"><svg id="adv-fan" class="fan-rotor" viewBox="0 0 100 100" aria-label="Fan speed visualization"><circle cx="50" cy="50" r="46"/><g><path d="M50 47 C30 10 53 5 58 13 C65 24 54 37 53 47Z"/><path d="M53 50 C90 30 95 53 87 58 C76 65 63 54 53 53Z"/><path d="M50 53 C70 90 47 95 42 87 C35 76 46 63 47 53Z"/><path d="M47 50 C10 70 5 47 13 42 C24 35 37 46 47 47Z"/></g><circle cx="50" cy="50" r="8"/></svg></div><div class="heat-meta"><b>Fan speed</b><strong id="adv-fan-value">--</strong><small id="adv-fan-source">RPM unavailable</small></div></div>
       </div>
       <div class="pb"><div class="ph" style="padding:8px 0;border:0">Per-core temperature map <em id="adv-core-meta">Optional LHM sensors only</em></div><div id="adv-core-map" class="core-heatmap"><div class="empty">Per-core sensor data is unavailable. Platform ACPI readings, when exposed by Windows, are shown separately.</div></div></div>
     </div>
-    <div class="panel adv-span"><div class="ph">Detected hardware sensors <em id="adv-sensor-count">waiting for provider</em></div><div class="pb sensor-inventory" id="adv-sensor-inventory"><div class="empty">Start the sensor engine to enumerate supported temperatures, clocks, fans, voltage, power and load readings.</div></div></div>
-    <div class="panel"><div class="ph">Hardware clocks, power &amp; voltage <em>provider measurements first · NVIDIA fallback</em></div><div class="pb kv" id="adv-gpu-stats"></div><div class="pb"><div class="adv-spark-row"><span>GPU clock</span><svg id="adv-clock-spark" viewBox="0 0 260 44"></svg></div><div class="adv-spark-row"><span>GPU power</span><svg id="adv-power-spark" viewBox="0 0 260 44"></svg></div><div class="adv-waterfall-wrap"><div class="adv-waterfall-heading">Time-aligned power / clock waterfall <em>last 60 samples</em></div><svg id="adv-power-clock-waterfall" viewBox="0 0 560 150" role="img" aria-label="GPU clock and power waterfall, earlier to recent"></svg><div class="adv-waterfall-legend"><span><i class="clock"></i> GPU clock (MHz)</span><span><i class="power"></i> GPU power (W)</span><span>Earlier → recent</span></div></div></div></div>
-    <div class="panel"><div class="ph">Thermal / power limit timeline <em>sensor transitions, no inferred events</em></div><div class="pb list" id="adv-thermal-timeline"><div class="empty">Waiting for sensor transitions.</div></div></div>
-    <div class="panel"><div class="ph">Live ETW kernel engine <em id="adv-etw-source">periodic bounded trace windows</em></div><div class="pb">
+    <div class="panel adv-span" data-adv-group="thermal"><details class="sensor-detail"><summary><span>Sensor inventory</span><em id="adv-sensor-count">waiting for provider</em></summary><div class="pb sensor-inventory" id="adv-sensor-inventory"><div class="empty">Waiting for the hardware sensor feed.</div></div></details></div>
+    <div class="panel adv-span" data-adv-group="thermal"><div class="ph">Hardware telemetry <em>clocks · power · voltage</em></div><div class="pb kv" id="adv-gpu-stats"></div><div class="pb"><div class="adv-spark-row"><span>GPU clock</span><svg id="adv-clock-spark" viewBox="0 0 260 44"></svg></div><div class="adv-spark-row"><span>GPU power</span><svg id="adv-power-spark" viewBox="0 0 260 44"></svg></div><div class="adv-waterfall-wrap"><div class="adv-waterfall-heading">Power / clock history <em>60 samples</em></div><svg id="adv-power-clock-waterfall" viewBox="0 0 560 150" role="img" aria-label="GPU clock and power waterfall, earlier to recent"></svg><div class="adv-waterfall-legend"><span><i class="clock"></i> GPU clock</span><span><i class="power"></i> GPU power</span><span>Earlier → recent</span></div></div></div></div>
+    <div class="panel" data-adv-group="diagnostics"><div class="ph">Thermal / power limit timeline <em>sensor transitions, no inferred events</em></div><div class="pb list" id="adv-thermal-timeline"><div class="empty">Waiting for sensor transitions.</div></div></div>
+    <div class="panel" data-adv-group="diagnostics"><div class="ph">Live ETW kernel engine <em id="adv-etw-source">periodic bounded trace windows</em></div><div class="pb">
       <div class="row"><span class="tag" id="adv-etw-status">DISABLED</span><button class="btn sm or" id="adv-etw-capture">CAPTURE 12s ETW</button></div>
       <div class="msg" id="adv-etw-note" style="margin-top:8px">ETW is not a continuous stream in this build. When enabled and explicitly opted in, SENTINEL captures short kernel trace windows while a game is active.</div>
       <div class="list" id="adv-drivers" style="margin-top:8px"></div><div class="list" id="adv-etw-events"></div>
     </div></div>
-    <div class="panel"><div class="ph">Personal performance baseline <em id="adv-baseline-heading">per game and local hour</em></div><div class="pb"><div class="msg">Welford running statistics learn observed CPU, GPU, DPC/ISR, paging, disk and network metrics by game and time of day. A deviation is a lead, not proof of cause.</div><div class="list" id="adv-baseline-table"></div></div></div>
-    <div class="panel"><div class="ph">Cause correlation <em>preceding system changes</em></div><div class="pb list" id="adv-correlation"><div class="empty">Correlated event candidates will appear when a metric deviates from its personal baseline.</div></div></div>
-    <div class="panel adv-span"><div class="ph">Game-session reports <em>before / after snapshots</em></div><div class="pb list" id="adv-sessions"><div class="empty">No completed game sessions yet.</div></div></div>
-    <div class="panel"><div class="ph">Per-game profile <em>priority · CPU Sets · power · timer</em></div><div class="pb adv-form">
+    <div class="panel" data-adv-group="diagnostics"><div class="ph">Personal performance baseline <em id="adv-baseline-heading">per game and local hour</em></div><div class="pb"><div class="msg">Welford running statistics learn observed CPU, GPU, DPC/ISR, paging, disk and network metrics by game and time of day. A deviation is a lead, not proof of cause.</div><div class="list" id="adv-baseline-table"></div></div></div>
+    <div class="panel" data-adv-group="diagnostics"><div class="ph">Cause correlation <em>preceding system changes</em></div><div class="pb list" id="adv-correlation"><div class="empty">Correlated event candidates will appear when a metric deviates from its personal baseline.</div></div></div>
+    <div class="panel adv-span" data-adv-group="diagnostics"><div class="ph">Game-session reports <em>before / after snapshots</em></div><div class="pb list" id="adv-sessions"><div class="empty">No completed game sessions yet.</div></div></div>
+    <div class="panel" data-adv-group="tuning"><div class="ph">Per-game profile <em>priority · CPU Sets · power · timer</em></div><div class="pb adv-form">
       <label>Game executable name<input id="adv-profile-game" placeholder="e.g. VALORANT-Win64-Shipping.exe"></label>
       <label>Process priority<select id="adv-priority"><option value="normal">Normal</option><option value="below_normal">Below normal</option><option value="above_normal" selected>Above normal</option></select></label>
-      <label>CPU Sets<select id="adv-cpu-sets"><option value="unchanged">Leave scheduler placement unchanged</option><option value="performance">Prefer performance cores</option><option value="efficiency">Prefer efficiency cores</option></select></label>
-      <label>CPU affinity (optional logical CPU indexes)<input id="adv-affinity" placeholder="e.g. 0,2,4,6"></label>
-      <label>Background process allowlist (optional)<input id="adv-bg-allow" placeholder="OneDrive.exe, Discord.exe"></label>
-      <label class="tog"><span>Apply selected power plan<small>Restored on game exit / undo</small></span><input id="adv-power-enable" type="checkbox"></label>
-      <label>Power plan GUID<input id="adv-power-guid" value="8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c"></label>
-      <label>Timer resolution<select id="adv-timer"><option value="0">No request</option><option value="1">1 ms</option><option value="2">2 ms</option></select></label>
+      <details class="profile-more"><summary>ADVANCED SCHEDULER OPTIONS</summary><div class="profile-more-grid">
+        <label>CPU placement<select id="adv-cpu-sets"><option value="unchanged">Unchanged</option><option value="performance">Performance cores</option><option value="efficiency">Efficiency cores</option></select></label>
+        <label>CPU affinity<input id="adv-affinity" placeholder="Logical CPUs: 0,2,4,6"></label>
+        <label>Background allowlist<input id="adv-bg-allow" placeholder="OneDrive.exe, Discord.exe"></label>
+        <label class="tog"><span>Apply power plan<small>Restored on exit / undo</small></span><input id="adv-power-enable" type="checkbox"></label>
+        <label>Power plan GUID<input id="adv-power-guid" value="8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c"></label>
+        <label>Timer request<select id="adv-timer"><option value="0">No request</option><option value="1">1 ms</option><option value="2">2 ms</option></select></label>
+      </div></details>
       <div class="row"><button class="btn" id="adv-profile-save">SAVE PROFILE</button><button class="btn or" id="adv-profile-propose">PROPOSE FOR ACTIVE GAME</button></div>
-      <small>CPU Set placement is a scheduling preference, not a core reservation. Every profile change requires approval and is restored when the tracked game exits.</small>
+      <small>Changes are approval gated and restored when the tracked game exits.</small>
     </div></div>
-    <div class="panel"><div class="ph">Closed-loop tuner <em>approve · measure · keep or revert</em></div><div class="pb adv-form">
-      <label>Reversible adjustment<select id="adv-tuner-kind"><option value="power_plan">High performance power plan</option><option value="timer_resolution">1 ms timer request</option></select></label>
-      <label>Metric to measure<select id="adv-tuner-metric"><option value="dlat">Disk latency</option><option value="dpc">DPC time</option><option value="irq">Interrupt time</option><option value="cpu">CPU load</option><option value="ping">Ping latency</option><option value="jitter">Network jitter</option><option value="gpu">GPU utilization</option></select></label>
-      <label>Desired direction<select id="adv-tuner-direction"><option value="lower">Lower is better</option><option value="higher">Higher is better</option></select></label>
-      <div class="msg">The tuner measures a recent baseline, waits for explicit approval, then evaluates a 45-second measurement window. Less than 3% improvement triggers an undo. It cannot guarantee causality; use stable scenes and avoid changing other settings during the trial.</div>
-      <button class="btn or" id="adv-tuner-start">START CONTROLLED EXPERIMENT</button><div class="list" id="adv-tuner-history"></div>
+    <div class="panel tuner-panel" data-adv-group="tuning"><div class="ph">Closed-loop tuner <em>CONTROLLED TRIAL</em></div><div class="pb tuner-ui">
+      <div class="tuner-options">
+        <label><span>ADJUSTMENT</span><select id="adv-tuner-kind"><option value="power_plan">High performance plan</option><option value="timer_resolution">1 ms timer request</option></select></label>
+        <label><span>MEASURE</span><select id="adv-tuner-metric"><option value="dlat">Disk latency</option><option value="dpc">DPC time</option><option value="irq">Interrupt time</option><option value="cpu">CPU load</option><option value="ping">Ping latency</option><option value="jitter">Network jitter</option><option value="gpu">GPU utilization</option></select></label>
+      </div>
+      <div class="tuner-direction"><span>OPTIMIZE FOR</span><div class="tuner-segment"><button type="button" class="on" data-tuner-direction="lower">LOWER</button><button type="button" data-tuner-direction="higher">HIGHER</button></div><select id="adv-tuner-direction" class="sr-only" aria-label="Desired metric direction"><option value="lower">Lower is better</option><option value="higher">Higher is better</option></select></div>
+      <div class="tuner-flow" aria-label="Tuner process"><div class="tuner-step active"><i>01</i><b>BASELINE</b><small>Recent samples</small></div><span></span><div class="tuner-step"><i>02</i><b>APPROVAL</b><small>Review change</small></div><span></span><div class="tuner-step"><i>03</i><b>MEASURE</b><small>45 second trial</small></div><span></span><div class="tuner-step"><i>04</i><b>DECIDE</b><small>Keep or undo</small></div></div>
+      <div class="tuner-action"><small>Changes require approval. A weak result is rolled back automatically.</small><button class="btn or" id="adv-tuner-start">RUN TRIAL <b>→</b></button></div>
+      <details class="tuner-history"><summary>TRIAL HISTORY <span>VIEW</span></summary><div class="list" id="adv-tuner-history"></div></details>
     </div></div>
-    <div class="panel"><div class="ph">Evidence-gated network tuning <em>Wi-Fi only · AC power · approval</em></div><div class="pb"><div class="msg" id="adv-network-evidence">Waiting for ping and jitter evidence.</div><button class="btn" id="adv-wifi-propose">PROPOSE WI-FI POWER ADJUSTMENT</button>
+    <div class="panel" data-adv-group="tuning"><div class="ph">Evidence-gated network tuning <em>Wi-Fi only · AC power · approval</em></div><div class="pb"><div class="msg" id="adv-network-evidence">Waiting for ping and jitter evidence.</div><button class="btn" id="adv-wifi-propose">PROPOSE WI-FI POWER ADJUSTMENT</button>
       <hr><label>Third-party updater service<select id="adv-updater"><option value="gupdate">Google Update (gupdate)</option><option value="gupdatem">Google Update Machine (gupdatem)</option><option value="edgeupdate">Microsoft Edge Update (edgeupdate)</option><option value="edgeupdatem">Microsoft Edge Update Machine</option><option value="adobearmservice">Adobe ARM Update</option></select></label><button class="btn" id="adv-updater-propose">PROPOSE TEMPORARY PAUSE</button><small>Updater stopping is medium risk and never automatic. Windows Update, Defender and security services are not on the allowlist. Standby-list flushing and forced process termination remain disabled.</small>
     </div></div>
-    <div class="panel"><div class="ph">Advanced sensor settings <em>persistent operator controls</em></div><div class="pb adv-form">
+    <div class="panel" data-adv-group="controls"><div class="ph">Advanced sensor settings <em>persistent operator controls</em></div><div class="pb adv-form">
       <label class="tog"><span>Enable bounded kernel ETW engine<small>Windows Performance Toolkit required</small></span><input id="adv-etw-enabled" type="checkbox"></label>
       <label class="tog"><span>Automatically sample active performance sessions<small>Dedicated diagnostic opt-in; WPR records bounded 12-second windows. General system autopilot is not required.</small></span><input id="adv-etw-auto" type="checkbox"></label>
       <label>Automatic WPR sample interval · seconds<input id="adv-etw-interval" type="number" min="120" max="900" value="300"></label>
-      <label class="tog"><span>Enable hardware sensor polling<small>Read-only local sensor collection; managed provider is started by SENTINEL</small></span><input id="adv-lhm-enabled" type="checkbox"></label>
-      <label>LibreHardwareMonitor local HTTP port<input id="adv-lhm-port" type="number" min="1" max="65535" value="8085"></label>
+      <label class="tog"><span>Enable hardware sensor polling<small>Direct read-only library sampling with Windows ACPI fallback</small></span><input id="adv-lhm-enabled" type="checkbox"></label>
+      <label>Optional local HTTP fallback port<input id="adv-lhm-port" type="number" min="1" max="65535" value="8085"></label>
       <label>CPU early-warning threshold °C<input id="adv-cpu-threshold" type="number" min="50" max="110" value="88"></label>
       <label>GPU early-warning threshold °C<input id="adv-gpu-threshold" type="number" min="50" max="110" value="82"></label>
       <button class="btn" id="adv-settings-save">SAVE SENSOR SETTINGS</button>
-      <small>The INSTALL SENSOR ENGINE control downloads the official LibreHardwareMonitor release and verifies its published SHA-256 before extraction. Its HTTP endpoint is bound to 127.0.0.1 only. Some readings may require LibreHardwareMonitor's optional PawnIO driver; SENTINEL never accepts that prompt or installs the driver automatically. Available sensors depend on ASUS firmware/embedded-controller support. SENTINEL never changes fan curves.</small>
+      <small>INSTALL SENSOR LIBRARY downloads the official LibreHardwareMonitor release and verifies its SHA-256 before extraction. SENTINEL reads the managed sensor library directly, so no monitor window or remote web server is needed. Windows ACPI thermal zones and NVIDIA telemetry provide additional fallbacks. Some readings may require the optional PawnIO driver; SENTINEL never installs it automatically or changes fan curves.</small>
     </div></div>
-    <div class="panel adv-span"><div class="ph">Action dry-run preview <em>no system changes until approved</em></div><div class="pb adv-form">
+    <div class="panel adv-span" data-adv-group="controls"><div class="ph">Action dry-run preview <em>no system changes until approved</em></div><div class="pb adv-form">
       <label>Action to inspect<select id="adv-preview-kind"><option value="etw_capture">Bounded kernel ETW capture · safe diagnostic</option><option value="wpr_trace">WPR GeneralProfile.Light trace · safe diagnostic</option><option value="power_plan">Switch to High Performance plan · medium risk</option><option value="timer_resolution">Request 1 ms timer resolution · medium risk</option></select></label>
       <div class="msg">Run the dry-run first. It checks platform support, risk, current state and rollback availability without making a change. Medium-risk proposals are then queued for explicit approval.</div>
       <div class="row"><button class="btn" id="adv-preview-run">RUN DRY-RUN</button><button class="btn or" id="adv-preview-propose" disabled>PROPOSE ACTION</button></div>
       <div class="list" id="adv-preview-output"><div class="empty">No preview has been run.</div></div>
     </div></div>
-    <div class="panel adv-span"><div class="ph">Action rollback journal <em>snapshot · risk · undo history</em><button class="btn sm danger" id="adv-revert-all">REVERT ALL SENTINEL CHANGES</button></div><div class="pb"><div class="msg">Safe diagnostic actions can be opted into. Medium-risk system changes always require approval. Dangerous/unreversible actions are blocked. Revert-all only reverts actions with a captured undo record; it does not reverse third-party or user changes.</div><div class="list" id="adv-journal"></div></div></div>
+    <div class="panel adv-span" data-adv-group="controls"><div class="ph">Action rollback journal <em>snapshot · risk · undo history</em><button class="btn sm danger" id="adv-revert-all">REVERT ALL SENTINEL CHANGES</button></div><div class="pb"><div class="msg">Safe diagnostic actions can be opted into. Medium-risk system changes always require approval. Dangerous/unreversible actions are blocked. Revert-all only reverts actions with a captured undo record; it does not reverse third-party or user changes.</div><div class="list" id="adv-journal"></div></div></div>
   </div>
 </section>
 
@@ -477,6 +493,7 @@
 
 <!-- ADDITIVE AIE INTELLIGENCE -->
 <section class="view" id="v-intelx">
+  <div class="msg adv-load-error" id="ix-load-error" hidden><span id="ix-load-error-text">Connecting to the local agent…</span><button class="btn sm" id="ix-retry">RETRY LINK</button></div>
   <div class="metrics" id="ix-metrics">
     <div class="metric"><small>OBSERVED ENTITIES</small><b id="ix-count">--</b><span>evidence-linked state</span><div class="meter"><i id="ix-count-m"></i></div></div>
     <div class="metric"><small>LOCAL MEMORIES</small><b id="ix-memory-count">--</b><span>explicitly stored</span><div class="meter"><i id="ix-memory-m"></i></div></div>
@@ -520,4 +537,4 @@
   </div>
 </section>
 </main></div>
-<script src="app.js"></script></body></html>
+<script src="app.js?v=1.2.7"></script></body></html>

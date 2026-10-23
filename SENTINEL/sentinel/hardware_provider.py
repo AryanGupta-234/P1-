@@ -80,6 +80,8 @@ def _config_xml(port: int | None = None) -> bytes:
     if not 1 <= listener_port <= 65535:
         raise ValueError("sensor-provider port must be between 1 and 65535")
     settings = {
+        # UserOption invokes its Changed callback when subscribed. Persisting
+        # True therefore starts the loopback listener as the form initializes.
         "runWebServerMenuItem": "True",
         "listenerIp": "127.0.0.1",
         "listenerPort": str(listener_port),
@@ -94,6 +96,8 @@ def _config_xml(port: int | None = None) -> bytes:
         "nicMenuItem": "True",
         "psuMenuItem": "True",
         "batteryMenuItem": "True",
+        # Keep the managed sensor reader in the tray so SENTINEL does not
+        # steal focus or repeatedly cover the workspace with its window.
         "startMinMenuItem": "True",
         "minTrayMenuItem": "True",
     }
@@ -239,15 +243,15 @@ def _install() -> Path:
 
 
 def _process_running(executable: Path | None = None) -> bool:
-    expected = os.path.normcase(os.path.abspath(str(executable))) if executable else None
     try:
         for process in psutil.process_iter(["name", "exe"]):
             try:
                 name = str(process.info.get("name") or "").casefold()
-                actual = process.info.get("exe")
-                if expected and actual and os.path.normcase(os.path.abspath(actual)) == expected:
-                    return True
-                if name in PROCESS_NAMES and (not expected or not actual):
+                # The user may have started the managed install from a different
+                # path (or Windows may report a versioned path). Treat any LHM
+                # instance as running so recovery never launches a second GUI or
+                # repeats its optional driver prompt.
+                if name in PROCESS_NAMES:
                     return True
             except (psutil.NoSuchProcess, psutil.AccessDenied, OSError):
                 continue
@@ -310,16 +314,11 @@ def status() -> dict[str, Any]:
         "provider_stopped" if executable is not None else
         "not_installed"
     )
-    next_step = (
-        "Sensor endpoint is responding."
-        if connected else
-        "Open the LibreHardwareMonitor tray icon/window, choose Options > Remote Web Server > Run, "
-        "then verify the configured localhost port. The HTTP server is a separate switch from launching the monitor."
-        if running else
-        "Start the managed LibreHardwareMonitor provider from the Thermal workspace."
-        if executable is not None else
-        "Install the managed LibreHardwareMonitor provider from the Thermal workspace."
-    )
+    next_step = ("Optional loopback endpoint responds; SENTINEL reads the library directly."
+                 if connected else
+                 "Sensor library is installed; direct in-process sensor sampling is used. No monitor window or HTTP server is needed."
+                 if executable is not None else
+                 "Install the sensor library from the Thermal workspace to enable direct hardware readings.")
     return {
         "installed": executable is not None,
         "running": running,
@@ -337,67 +336,23 @@ def status() -> dict[str, Any]:
 
 
 def start_if_installed() -> dict[str, Any]:
-    """Restart the managed provider on demand after an unexpected exit."""
-    global _LAST_START_ATTEMPT
-    if not core.IS_WIN or core.CFG.get("advanced", {}).get("lhm_enabled") is not True:
-        return status()
-    executable = _find_executable()
-    if executable is None:
-        return status()
-    probe = _probe()
-    if probe["connected"] or _process_running(executable):
-        return status()
-    now = time.monotonic()
-    with _LOCK:
-        if now - _LAST_START_ATTEMPT < 60:
-            return status()
-        _LAST_START_ATTEMPT = now
-        try:
-            _write_config(executable, configured_port())
-            flags = getattr(subprocess, "DETACHED_PROCESS", 0) | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
-            subprocess.Popen(
-                [str(executable)], cwd=str(executable.parent),
-                stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                close_fds=True, creationflags=flags,
-            )
-        except Exception as exc:
-            return {
-                "installed": True, "running": False, "connected": False,
-                "sensor_count": 0, "version": VERSION,
-                "message": f"Provider launch failed: {type(exc).__name__}: {str(exc)[:160]}",
-            }
+    """Return package status; direct sensor reads do not start a monitor window."""
     return status()
 
 
 def install_and_start() -> dict[str, Any]:
-    """Explicit operator-triggered installation from the checksum-pinned release."""
+    """Install the checksum-pinned library without launching its separate GUI."""
     if not core.IS_WIN:
         raise RuntimeError("LibreHardwareMonitor can only be installed on Windows")
     executable = _install()
     port = configured_port()
     _write_config(executable, port)
-    if not _process_running(executable) and not _probe(port)["connected"]:
-        flags = getattr(subprocess, "DETACHED_PROCESS", 0) | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
-        subprocess.Popen(
-            [str(executable)], cwd=str(executable.parent),
-            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-            close_fds=True, creationflags=flags,
-        )
-    deadline = time.monotonic() + 7.0
     probe = _probe(port)
-    while not probe["connected"] and time.monotonic() < deadline:
-        time.sleep(0.35)
-        probe = _probe(port)
     provider_status = status()
-    connected = bool(probe["connected"])
-    message = (
-        f"LibreHardwareMonitor {VERSION} is installed and its local sensor server is responding with {probe['sensor_count']} numeric sensor(s)."
-        if connected else
-        "LibreHardwareMonitor was installed and launched, but its HTTP sensor server is not active. In its tray icon/window choose Options > Remote Web Server > Run; the server is a separate switch from launching the monitor. The optional PawnIO driver prompt remains your decision."
-    )
+    message = f"LibreHardwareMonitor {VERSION} sensor library installed. SENTINEL reads sensors directly; its separate monitor window and HTTP switch are not needed."
     return {
-        "ok": True, "installed": True, "running": provider_status["running"] or connected,
-        "connected": connected, "sensor_count": int(probe["sensor_count"]),
+        "ok": True, "installed": True, "running": provider_status["running"],
+        "connected": bool(probe["connected"]), "sensor_count": int(probe["sensor_count"]),
         "version": VERSION, "port": port, "message": message,
         "first_run_note": provider_status["driver_policy"],
         "provider": provider_status,

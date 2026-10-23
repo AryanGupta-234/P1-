@@ -184,6 +184,7 @@ def test_lhm_reader_supports_asus_cpu_core_and_fan_sensor_names(monkeypatch):
         return SimpleNamespace(returncode=0, stdout=json.dumps(payload), stderr="")
 
     monkeypatch.setattr(advanced, "_run", fake_run)
+    monkeypatch.setattr(advanced, "_lhm_library_sensors", lambda: ([], "direct reader not used in this WMI test"))
     monkeypatch.setattr(advanced, "_lhm_rest_sensors", lambda _port: ([], "loopback REST server not enabled"))
 
     result = advanced._lhm_sample()
@@ -393,6 +394,7 @@ def test_lhm_rest_fallback_reads_loopback_data_json_and_maps_asus_fans(monkeypat
     monkeypatch.setattr(advanced, "IS_WIN", True)
     monkeypatch.setitem(advanced.CFG, "advanced", {"lhm_enabled": True, "lhm_http_port": 8085})
     monkeypatch.setattr(advanced, "_lhm_wmi_sensors", lambda: ([], "WMI namespace unavailable"))
+    monkeypatch.setattr(advanced, "_lhm_library_sensors", lambda: ([], "direct reader not used in this REST test"))
 
     tree = {
         "Version": "0.9.6",

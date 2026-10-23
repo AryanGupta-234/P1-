@@ -1,12 +1,12 @@
-## Startup, workspace preloading and interface polish (v1.0.8)
+## Startup and interface (v1.2.7)
 
-The desktop HUD now performs a staged startup: it restores the first local snapshot, history and policy state, opens the live stream, then prepares the command, agent, process, system, network, kernel, thermal, activity, intelligence, evidence, control and configuration workspaces behind the splash screen. A visible initialization checklist and journal report which modules are ready or degraded. A 20-second workspace warm cache avoids repeating those first page API calls when navigating immediately after startup; stale pages are refreshed normally. The splash has no skip control and does not use a session-based shortcut around initialization.
+The boot console now presents a live Windows-node initialization sequence, process count, six animated data lanes and per-workspace readiness. After restoring the local snapshot and opening the event stream, the dashboard hydrates six first-screen datasets first, then loads remaining workspaces with six concurrent asynchronous loaders behind the first paint. This reads the agent's existing collector threads; it does not restart them. If startup races the first process scan, the UI briefly waits for the collector to publish a timestamped Windows process snapshot. The splash closes as soon as critical data is ready (with a 350 ms minimum duration for the animation), and degraded sources remain identified by module.
 
-The shared interface layer now applies consistent responsive grid sizing, safe text wrapping for long process paths and telemetry labels, flexible panel headings, table cell wrapping, glass layers and restrained ambient motion. The startup reactor, live module-state indicators, spectrum visual, panel sheen and view transitions provide the animated graphical elements; operating-system reduced-motion preferences remain respected.
+The main dashboard now uses a consistent, responsive command surface with clearer focus and disabled states, smoother page and metric transitions, and reduced-motion support. The Performance Deck groups thermal, diagnostics, tuning and controls into aligned tabbed layouts. Thermal sampling reads LibreHardwareMonitor directly, with Windows ACPI and NVIDIA fallbacks; it no longer launches the monitor window or depends on its optional HTTP server.
 
-### LibreHardwareMonitor endpoint readiness
+### LibreHardwareMonitor sensor startup
 
-A launched LibreHardwareMonitor process is not considered sensor-ready until its loopback `/data.json` endpoint returns a valid hardware tree. SENTINEL reports whether the provider is installed, running, connected, or running without its Remote Web Server. When the process is alive but the endpoint is off, open its tray icon/window and select **Options → Remote Web Server → Run**. The endpoint listens on the configured localhost port (8085 by default). The agent resumes an explicitly enabled managed provider at its next startup, but it does not click the server menu, accept PawnIO prompts or install optional kernel drivers for the operator.
+SENTINEL samples the managed LibreHardwareMonitor library directly and does not launch its window or depend on Remote Web Server. The sensor feed also checks Windows ACPI and NVIDIA sources. RPM and GPU temperature readings appear only when the device exposes those sensors; this ASUS Vivobook currently exposes CPU temperatures but no fan RPM sensor. The optional PawnIO driver remains an operator choice.
 
 # SENTINEL
 
@@ -175,7 +175,7 @@ Per-game profiles can set process priority, CPU affinity/Windows CPU Sets, optio
 
 ETW capture uses optional Windows Performance Toolkit `xperf` for bounded 12-second NT Kernel Logger windows; automatic windows are disabled until explicitly opted into and are sampled no more than once every 120 seconds during a detected game. This is not a continuous decoded trace. Driver names appear only when xperf or event fields resolve a `.sys` module. Unresolved attribution remains unresolved.
 
-NVIDIA GPU metrics use `nvidia-smi`. Fan speed is reported as a percentage unless an external sensor source reports RPM. CPU/per-core temperatures and RPM can be read from an already-running LibreHardwareMonitor WMI provider only after explicit opt-in; SENTINEL never installs or launches it. Fan curves are not written. Dangerous actions such as standby-list flushing, process termination, working-set trimming and fan control are disabled. The current UI does not decode per-window frame pacing or dropped frames.
+NVIDIA GPU metrics use `nvidia-smi`. Fan speed is reported as a percentage unless the managed sensor library reports RPM. CPU/per-core temperatures and RPM are read by SENTINEL's direct, read-only library integration. Fan curves are not written. Dangerous actions such as standby-list flushing, process termination, working-set trimming and fan control are disabled. The current UI does not decode per-window frame pacing or dropped frames.
 
 See [AUDIT_AND_LIMITATIONS.md](AUDIT_AND_LIMITATIONS.md) for risk boundaries and the Windows validation matrix.
 
@@ -193,7 +193,7 @@ No license is currently specified. All rights remain with the copyright holder u
 
 ### Windows integration reliability notes
 
-The optional sensor reader probes the correct LibreHardwareMonitor WMI namespace and the legacy OpenHardwareMonitor namespace, classifies Intel/AMD CPU package/core sensors by hardware identity, and reports when an ASUS embedded-controller fan sensor is not exposed. SENTINEL never installs or launches either provider.
+The optional sensor reader loads LibreHardwareMonitor's managed sensor library in-process, classifies Intel/AMD CPU package/core sensors by hardware identity, and reports when an ASUS embedded-controller fan sensor is not exposed. SENTINEL does not launch the monitor GUI or depend on its separate HTTP web server.
 
 Game-session teardown now retains a restore_pending record when an undo fails and retries that record at runtime and on the next agent start. ETW parsing retains per-event timestamps, uses process-start image records and PID-reuse checks for process names, and names driver modules only when ETW fields or xperf DPC/ISR output actually identify a .sys module.
 
@@ -202,14 +202,14 @@ These additions have regression tests, but must still be validated on the target
 
 ### Hardware sensors: WMI and loopback REST
 
-SENTINEL reads optional hardware sensors only after you enable the sensor reader and start the sensor provider yourself. It first probes the supported WMI namespaces, then falls back to LibreHardwareMonitor's read-only local `GET http://127.0.0.1:8085/data.json` tree when configured. You can change the local port in the THERMAL sensor settings. The endpoint is loopback-only from SENTINEL's side; it does not follow redirects or call fan-control APIs. A provider configured with HTTP authentication is reported as unavailable because SENTINEL does not store hardware-monitor credentials.
+SENTINEL reads optional hardware sensors from its managed LibreHardwareMonitor library and also checks Windows ACPI and NVIDIA sources. It does not require the monitor's Remote Web Server switch, avoiding the former inactive-server startup error.
 
-For the REST path, start LibreHardwareMonitor yourself, enable its Web Server / Remote Web Server on localhost (default port 8085), and then enable SENTINEL's optional sensor reader. Availability of CPU package/core and ASUS embedded-controller fan RPM remains dependent on the exact laptop model, firmware and sensor provider. SENTINEL never installs or launches LHM and never writes fan curves.
+CPU temperature availability and fan RPM depend on the model, firmware and provider. SENTINEL never launches the monitor GUI or writes fan curves.
 
 
 ## Managed hardware sensor provider (v1.0.6)
 
-The Performance view can install and launch the official LibreHardwareMonitor Windows release from its explicit **Install Sensor Engine** control. SENTINEL pins release v0.9.6, verifies the published SHA-256 before extraction, bounds archive size and paths, and configures its HTTP sensor endpoint on `127.0.0.1:8085` only. Collection is read-only and the provider is restarted if its managed process exits while sensor polling is enabled.
+The Performance view can install the official LibreHardwareMonitor release from its explicit **Install Sensor Library** control. SENTINEL verifies the published SHA-256 before extraction and reads sensors directly in-process. No separate monitor window or HTTP endpoint is started.
 
 The dashboard enumerates provider readings with device, sensor class and unit, including temperatures, CPU/GPU clocks, power, voltage, load and fan RPM when firmware exposes them. A zero-RPM fan value is preserved as an observed stopped-fan state. NVIDIA telemetry remains a separate fallback source. Windows ACPI values are identified as platform thermal zones rather than CPU package readings.
 

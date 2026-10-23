@@ -7,6 +7,7 @@ Toolkit ETW controller; no custom driver is installed or required.
 from __future__ import annotations
 
 import csv
+import base64
 import ctypes
 import datetime as _dt
 import json
@@ -1422,6 +1423,68 @@ def _lhm_rest_sensors(port: int) -> tuple[list[dict], str]:
                 pass
 
 
+def _lhm_library_sensors() -> tuple[list[dict], str]:
+    """Read the pinned LHM library directly; do not depend on its optional HTTP switch."""
+    if not IS_WIN:
+        return [], "Direct hardware library reader is Windows-only"
+    try:
+        from . import hardware_provider
+        executable = hardware_provider._find_executable()
+        if executable is None:
+            return [], "Managed LibreHardwareMonitor library is not installed"
+        library = executable.parent / "LibreHardwareMonitorLib.dll"
+        if not library.is_file():
+            return [], "Managed LibreHardwareMonitor library file is missing"
+        ps_library = "'" + str(library).replace("'", "''") + "'"
+        script = rf"""
+$ErrorActionPreference='Stop'
+$null=[Reflection.Assembly]::LoadFrom({ps_library})
+$computer=[LibreHardwareMonitor.Hardware.Computer]::new()
+$computer.IsCpuEnabled=$true
+$computer.IsGpuEnabled=$true
+$computer.IsMotherboardEnabled=$true
+$computer.IsMemoryEnabled=$true
+$computer.IsStorageEnabled=$true
+$computer.Open()
+$rows=New-Object 'System.Collections.Generic.List[object]'
+function Read-Hardware($hardware,$depth) {{
+    if($depth -gt 12) {{ return }}
+    try {{ $hardware.Update() }} catch {{ return }}
+    foreach($sensor in $hardware.Sensors) {{
+        if($null -eq $sensor.Value) {{ continue }}
+        $value=[double]$sensor.Value
+        if([double]::IsNaN($value) -or [double]::IsInfinity($value)) {{ continue }}
+        $rows.Add([pscustomobject]@{{
+            Name=[string]$sensor.Name; Parent=[string]$hardware.Name
+            SensorType=[string]$sensor.SensorType; Value=$value
+            Identifier=[string]$sensor.Identifier
+        }})
+    }}
+    foreach($child in $hardware.SubHardware) {{ Read-Hardware $child ($depth + 1) }}
+}}
+try {{
+    foreach($hardware in $computer.Hardware) {{ Read-Hardware $hardware 0 }}
+    [pscustomobject]@{{sensors=@($rows.ToArray())}} | ConvertTo-Json -Compress -Depth 5
+}} finally {{ $computer.Close() }}
+"""
+        encoded = base64.b64encode(script.encode("utf-16le")).decode("ascii")
+        result = _run(["powershell.exe", "-NoLogo", "-NoProfile", "-NonInteractive", "-EncodedCommand", encoded], 9)
+        if result.returncode != 0:
+            detail = (result.stderr or result.stdout or "LibreHardwareMonitor library read failed").strip()
+            return [], detail[:220]
+        payload = (result.stdout or "").strip().lstrip("\ufeff")
+        if not payload:
+            return [], "LibreHardwareMonitor library returned an empty sensor snapshot"
+        parsed = json.loads(payload)
+        rows = parsed.get("sensors", []) if isinstance(parsed, dict) else []
+        if isinstance(rows, dict):
+            rows = [rows]
+        clean = [row for row in rows[:600] if isinstance(row, dict)]
+        return clean, f"LibreHardwareMonitor direct library · {len(clean)} sensor record(s)" if clean else "LibreHardwareMonitor library returned no numeric sensors"
+    except Exception as exc:
+        return [], f"{type(exc).__name__}: {str(exc)[:180]}"
+
+
 def _lhm_sensor_result(sensor_rows: list[dict], provider: str, source: str, namespace: str) -> dict:
     """Normalize all numeric sensor classes while retaining source and hardware identity."""
     normalized: list[dict] = []
@@ -1534,7 +1597,7 @@ def _lhm_sensor_result(sensor_rows: list[dict], provider: str, source: str, name
         "cpu_load": cpu_load[:32], "gpu_load": gpu_load[:32],
         "cpu_sensor_count": len(cpu_temperatures), "fan_sensor_count": len(fan_rpm),
         "cpu_reason": "" if cpu_temperatures else "Provider is responding, but no CPU temperature sensors were exposed for this hardware",
-        "fan_reason": "" if fan_rpm else "Provider is responding, but no fan RPM sensors were exposed; embedded-controller access may be unavailable",
+        "fan_reason": "" if fan_rpm else "This device does not publish a fan RPM sensor through LibreHardwareMonitor.",
     }
 
 
@@ -1616,27 +1679,39 @@ def _lhm_sample() -> dict:
     if not 1 <= port <= 65535:
         return {"available": False, "reason": "LHM local HTTP port must be between 1 and 65535"}
 
+    library_rows, library_reason = _lhm_library_sensors()
     wmi_rows, wmi_reason = _lhm_wmi_sensors()
     rest_rows, rest_reason = _lhm_rest_sensors(port)
     merged: dict[str, dict] = {}
-    for row in [*wmi_rows, *rest_rows]:
+    for row in [*wmi_rows, *rest_rows, *library_rows]:
         key = str(row.get("Identifier") or row.get("SensorId") or "").casefold()
         if not key:
             key = f"{row.get('Parent','')}|{row.get('Name','')}|{row.get('SensorType',row.get('Type',''))}".casefold()
         merged[key] = row
     if merged:
         rest_used = bool(rest_rows)
-        provider = "LibreHardwareMonitor" if rest_used or "root\\LibreHardwareMonitor" in wmi_reason else "OpenHardwareMonitor"
-        if rest_used:
+        library_used = bool(library_rows)
+        provider = "LibreHardwareMonitor" if rest_used or library_used or "root\\LibreHardwareMonitor" in wmi_reason else "OpenHardwareMonitor"
+        if library_used:
+            from . import hardware_provider
+            provider = f"LibreHardwareMonitor {hardware_provider.VERSION}"
+            source = "direct hardware library"
+            namespace = "managed library; no HTTP server required"
+        elif rest_used:
             version = ""
             try:
                 version = rest_reason.split("·", 1)[0].strip()
             except Exception:
                 pass
             provider = version or "LibreHardwareMonitor"
-        source = "loopback REST /data.json" if rest_used else "WMI"
-        namespace = f"http://127.0.0.1:{port}/data.json" if rest_used else wmi_reason
+            source = "loopback REST /data.json"
+            namespace = f"http://127.0.0.1:{port}/data.json"
+        else:
+            source = "WMI"
+            namespace = wmi_reason
         result = _lhm_sensor_result(list(merged.values()), provider, source, namespace)
+        result["sensor_backend"] = "direct-library" if library_used else "loopback-http" if rest_used else "wmi"
+        result["library_status"] = library_reason
         result["wmi_status"] = wmi_reason
         result["rest_status"] = rest_reason
         result["rest_used"] = rest_used
@@ -1654,7 +1729,7 @@ def _lhm_sample() -> dict:
         return fallback
     return {
         "available": False,
-        "reason": f"WMI: {wmi_reason}; local REST: {rest_reason}; ACPI: {fallback.get('reason', 'unavailable')}"[:260],
+        "reason": f"Direct library: {library_reason}; WMI: {wmi_reason}; local REST: {rest_reason}; ACPI: {fallback.get('reason', 'unavailable')}"[:260],
         "wmi_status": wmi_reason,
         "rest_status": rest_reason,
         "namespace": f"http://127.0.0.1:{port}/data.json",

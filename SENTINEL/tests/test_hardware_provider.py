@@ -71,7 +71,7 @@ def test_provider_config_rejects_an_invalid_persisted_port(monkeypatch):
 
 
 
-def test_status_distinguishes_running_monitor_from_disabled_http_server(tmp_path: Path, monkeypatch):
+def test_status_explains_direct_reader_without_enabled_http_server(tmp_path: Path, monkeypatch):
     executable = tmp_path / "LibreHardwareMonitor.Windows.Forms.exe"
     executable.write_bytes(b"provider")
     monkeypatch.setattr(hardware_provider, "configured_port", lambda: 8085)
@@ -93,5 +93,6 @@ def test_status_distinguishes_running_monitor_from_disabled_http_server(tmp_path
     assert result["running"] is True
     assert result["connected"] is False
     assert result["endpoint_state"] == "remote_server_not_started"
-    assert "Options > Remote Web Server > Run" in result["next_step"]
+    assert "direct" in result["next_step"].lower()
+    assert "no monitor window" in result["next_step"].lower()
     assert result["port"] == 8085

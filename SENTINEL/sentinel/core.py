@@ -44,7 +44,7 @@ DEFAULTS = {
     },
     "retention_days": 14,
     "advanced": {
-        "etw_enabled": False, "lhm_enabled": False, "cpu_temp_warn_c": 88.0,
+        "etw_enabled": True, "lhm_enabled": False, "cpu_temp_warn_c": 88.0,
         "gpu_temp_warn_c": 82.0, "lhm_http_port": 8085, "auto_report_sessions": True,
         "etw_auto_interval_s": 300,
     },
@@ -391,6 +391,13 @@ try:
         _disk_cfg = _config_from_storage(json.loads(_stored[0]))
         if isinstance(_disk_cfg, dict):
             CFG.update(_disk_cfg)
+            # SQLite is authoritative. Migrate the legacy mismatch after its
+            # config has been loaded, preserving only the saved bounded opt-in.
+            if (CFG.get("autopilot", {}).get("etw_capture") is True
+                    and CFG.get("advanced", {}).get("etw_enabled") is False
+                    and CFG.get("advanced", {}).get("etw_engine_optin_migrated") is not True):
+                CFG["advanced"]["etw_enabled"] = True
+                CFG["advanced"]["etw_engine_optin_migrated"] = True
             save_cfg(CFG)
     else:
         save_cfg(CFG)

@@ -267,7 +267,8 @@ class H(BaseHTTPRequestHandler):
             if query:
                 rows = [row for row in rows if query in " ".join(str(row.get(key) or "") for key in
                     ("name", "pid", "exe", "parent_name", "parent_pid", "username", "app_kind", "status", "path_state", "session_id")).casefold()]
-            return self._json({"updated_at": time.time(), "total": int(STATE.get("proc_total", len(STATE.get("procs", []))) or 0),
+            return self._json({"updated_at": time.time(), "sampled_at": float(STATE.get("proc_scan_at", 0) or 0),
+                "total": int(STATE.get("proc_total", len(STATE.get("procs", []))) or 0),
                 "matched": len(rows), "rows": rows[:limit],
                 "inaccessible": int(STATE.get("proc_inaccessible", 0) or 0),
                 "recommendations": STATE.get("proc_recommendations", [])})
