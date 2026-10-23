@@ -608,8 +608,12 @@ async function boot() {
   INS = Array.isArray(insights) ? insights : [];
   renderIns();
   (transcript?.transcript || []).forEach(addTr);
-  if (engines && !engines.error) renderEngines(engines);
-  else bootModuleState("eng", "DEGRADED", "Engine status could not be read during startup");
+  if (engines && !engines.error) {
+    renderEngines(engines);
+    bootModuleState("eng", "READY", "Safeguard, runtime, AI and memory policy loaded");
+  } else {
+    bootModuleState("eng", "DEGRADED", "Engine status could not be read during startup");
+  }
   bootModuleState("core", "READY", "Local token verified · initial snapshot and telemetry restored");
   markPageWarm("eng");
 
