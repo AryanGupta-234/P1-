@@ -72,6 +72,19 @@ def test_managed_sensor_provider_ui_and_boot_contract_are_present():
     assert ".system-node-banner" in css
     assert "<details class=" in html
     assert "ixLoaded = true" in app and "if (ixBusy) return ixLoaded" in app
+    assert 'id="ag-source-map"' in html
+    assert 'id="ag-map-summary"' in html
+    assert 'data-engine-pulse="safeguard"' in html
+    assert 'data-engine-pulse="runtime"' in html
+    assert 'data-engine-pulse="ai"' in html
+    assert 'data-engine-pulse="memory"' in html
+    assert 'data-engine-pulse="wpr"' in html
+    assert "function renderAgentHealthMap(matrix)" in app
+    assert "function setEnginePulse(" in app
+    assert "renderAgentHealthMap(matrix)" in app
+    assert ".agent-health-map" in css and ".agent-source-card" in css
+    assert ".engine-pulse-rail" in css and ".engine-pulse-card" in css
+    assert "DETAILED WORKER / HEARTBEAT TELEMETRY" in html
     assert ".boot-console" in css and ".boot-module.loading" in css
     assert ".boot-live-readouts" in css
     assert "overflow-wrap:anywhere" in css
