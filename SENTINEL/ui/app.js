@@ -345,8 +345,24 @@ function updAI() {
   if ($("#ai-runtime")) $("#ai-runtime").innerHTML = `<div class="row"><b>Agent process</b><span class="tag ${rt.pid ? "ok" : "bad"}">${rt.pid ? "RUNNING" : "UNKNOWN"}</span></div><small>PID ${esc(rt.pid ?? "--")} · ${esc(rt.execution_context || "context unknown")} · desktop access ${rt.desktop_access_expected ? "available in this session" : "not expected"}</small><small>${esc(rt.executable || "")} · ${esc(rt.username || "")}</small><small>Agent CPU ${fmt(rt.cpu_percent, 1)}% · RAM ${fmt(rt.rss_mb, 1)} MB (${fmt(rt.memory_percent, 2)}%) · ${esc(rt.threads ?? "--")} threads · ${esc(rt.handles ?? "--")} handles</small><small>Agent I/O read ${esc(rt.io_read_bytes == null ? "unknown" : (rt.io_read_bytes / 1048576).toFixed(1) + " MB")} · write ${esc(rt.io_write_bytes == null ? "unknown" : (rt.io_write_bytes / 1048576).toFixed(1) + " MB")}</small><div class="row"><b>Inference</b><span class="tag ${a.online ? "ok" : "bad"}">${a.busy ? "BUSY · " + esc(a.busy) : a.online ? "IDLE / READY" : "OFFLINE"}</span></div><small>Current task: ${esc(a.current_task || "none")} · model: ${esc(a.current_model || "none")}</small><small>Requests ${u.requests || 0} · success ${u.successes || 0} · failures ${u.failures || 0} · last latency ${fmt(u.last_duration_s, 2)}s</small><small>Usage history persists across agent restarts · retention: ${esc(u.history_limit || "all stored requests")}</small><small>Prompt tokens ${esc(u.last_prompt_tokens ?? "unknown")} · output tokens ${esc(u.last_output_tokens ?? "unknown")} · last model ${esc(u.last_model || "--")}</small><small>RAM headroom ${fmt(a.model_policy?.available_memory_gib, 2)} GiB · route ${esc(a.model_policy?.reason || "not evaluated")}</small>`;
 }
 const NICE = { wpr_trace: "Capture WPR diagnostic trace", etw_capture: "Capture kernel ETW window" };
+let ACTION_ROWS = [];
+let actionsLoaded = false;
+let actionsFetchPromise = null;
+async function getActionRows(force = false) {
+  if (!force && actionsLoaded) return ACTION_ROWS;
+  if (actionsFetchPromise) return actionsFetchPromise;
+  actionsFetchPromise = (async () => {
+    const rows = await apiRetry("/api/actions", 1);
+    if (!Array.isArray(rows)) throw new Error(rows?.error || "Invalid action history response");
+    ACTION_ROWS = rows;
+    actionsLoaded = true;
+    return ACTION_ROWS;
+  })();
+  try { return await actionsFetchPromise; }
+  finally { actionsFetchPromise = null; }
+}
 async function loadActions() {
-  const a = await api("/api/actions"), p = a.filter(x => x.state === "pending");
+  const a = await getActionRows(true), p = a.filter(x => x.state === "pending");
   $("#b-act").hidden = !p.length; $("#b-act").textContent = p.length;
   $("#pend").innerHTML = p.map(x => `<div class="act"><div class="d"><b>${esc(x.desc)}</b><span>${esc(x.risk || "unknown risk")} · risk ${esc(x.risk_score ?? "--")}/100 · ${esc(x.priority || "normal")} priority · confidence ${Math.round(Number(x.confidence || 0) * 100)}% · ${esc(x.origin)}</span><small>${esc(x.approval_decision || "manual_approval")} · ${esc(x.approval_reason || x.result || "")}</small></div>${x.approval_decision === "blocked" ? '<span class="tag bad">BLOCKED</span>' : x.approval_decision === "auto_approved" ? '<span class="tag ok">AUTO APPROVED</span>' : `<button class="btn sm" data-r="${x.id}">APPROVE</button>`}<button class="btn sm or" data-d="${x.id}">DISMISS</button></div>`).join("") || '<div class="empty">nothing waiting for approval</div>';
   $$("[data-r]").forEach(b => b.onclick = async () => {
@@ -363,6 +379,7 @@ async function loadActions() {
   });
   $$("[data-d]").forEach(b => b.onclick = async () => { await api("/api/action/dismiss", { id: +b.dataset.d }); loadActions(); });
   $("#hist").innerHTML = a.filter(x => x.state !== "pending").slice(0, 14).map(x => `<div class="act"><div class="d"><b>${esc(x.desc)}</b><span>${esc(x.state)} · ${esc(x.origin)} · ${esc(x.result || "")}</span></div><span class="tag">${hms(x.ts)}</span></div>`).join("") || '<div class="empty">no actions yet</div>';
+  return true;
 }
 function buildCtl() {
   const ap = S.autopilot, policy = S.approval_policy || {}, lab = { wpr_trace: ["Auto WPR diagnostic", "bounded, read-only capture; never stops an existing trace"], etw_capture: ["Auto kernel ETW windows", "short trace windows only while a game is active"] };
@@ -1100,6 +1117,7 @@ async function loadAdvanced(force = false) {
     if(document.activeElement?.id!=="adv-lhm-port")$("#adv-lhm-port").value=cfg.lhm_http_port ?? 8085;
     if(document.activeElement?.id!=="adv-etw-interval")$("#adv-etw-interval").value=cfg.etw_auto_interval_s ?? 300;
     if(game && !$("#adv-profile-game").value)$("#adv-profile-game").value=game.name;
+    return true;
   } catch(e) {
     const errorPanel = $("#adv-load-error");
     const errorText = $("#adv-load-error-text");
@@ -1109,6 +1127,7 @@ async function loadAdvanced(force = false) {
       : "Agent link interrupted · retrying connection";
     clearTimeout(advRetryTimer);
     if (view === "adv") advRetryTimer = setTimeout(() => loadAdvanced(true), ADV ? 5000 : 1800);
+    return false;
   }
   finally { advBusy = false; }
 }
@@ -1605,7 +1624,7 @@ async function loadEvi() {
 }
 function csvExport() { const q = v => '"' + String(v).replace(/"/g, '""') + '"'; const t = "time,level,source,message\n" + evRows.map(r => [new Date(r.ts * 1000).toISOString(), r.level, r.src, r.msg].map(q).join(",")).join("\n"); const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([t], { type: "text/csv" })); a.download = "sentinel-evidence-" + Date.now() + ".csv"; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000); toast("Exported " + evRows.length + " records", "ok"); }
 let HISTA = [];
-async function loadHist() { HISTA = await api("/api/actions"); updTasks(); }
+async function loadHist() { HISTA = await getActionRows(false); updTasks(); return true; }
 function updTasks() {
   if (!S) return; const [ok, tot] = sensors(), pend = HISTA.filter(a => a.state === "pending").length;
   $("#t-m").innerHTML = mcard("ACTIVE JOBS", ok, "collectors running", tot ? ok / tot * 100 : 0, ok < tot) + mcard("TOOLS", Object.keys(NICE).length, "allowlisted actions", 60) + mcard("ACTION RUNS", HISTA.length, "retained records", Math.min(100, HISTA.length * 5)) + mcard("AWAITING APPROVAL", pend, "open CONTROL to decide", Math.min(100, pend * 25), pend > 0) + mcard("INSIGHTS", INS.length, "this session", Math.min(100, INS.length * 4));
