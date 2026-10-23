@@ -1787,3 +1787,76 @@ nav button:hover{transform:translateX(2px)}
   from{opacity:0;transform:translateY(12px) scale(.992)}
   to{opacity:1;transform:translateY(0) scale(1)}
 }
+
+/* Agent heartbeat topology: visual first, full timings and diagnostics on demand. */
+.agent-health-visual{
+  margin:12px 0 14px;padding:13px;border:1px solid rgba(132,205,193,.16);border-radius:14px;
+  background:radial-gradient(ellipse at 92% 0,rgba(98,199,232,.09),transparent 36%),
+    linear-gradient(145deg,rgba(13,30,34,.84),rgba(6,16,21,.9));
+  box-shadow:inset 0 1px rgba(255,255,255,.04),0 14px 34px rgba(0,0,0,.15);
+}
+.agent-health-visual-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px}
+.agent-health-visual-head>div{display:grid;gap:2px}
+.agent-health-visual-head>div>span{font:700 7px var(--mo);letter-spacing:.18em;color:#76afa2}
+.agent-health-visual-head>div>b{font:750 14px var(--hd);letter-spacing:.07em;color:#e0f3eb}
+.agent-health-visual-head>em{font:700 7px var(--mo);letter-spacing:.1em;color:#85aca2;font-style:normal;text-align:right}
+.agent-health-map{display:grid;grid-template-columns:repeat(auto-fit,minmax(155px,1fr));gap:7px}
+.agent-source-card{
+  --source-tone:#859a93;position:relative;min-width:0;overflow:hidden;padding:10px 11px;
+  display:grid;gap:8px;border:1px solid rgba(132,205,193,.1);border-radius:9px;
+  background:linear-gradient(145deg,rgba(9,23,27,.78),rgba(5,14,19,.76));
+  transition:transform .2s,border-color .2s,background .2s,box-shadow .2s;
+}
+.agent-source-card:before{content:"";position:absolute;inset:0 auto 0 0;width:2px;background:var(--source-tone);opacity:.9}
+.agent-source-card:hover{transform:translateY(-2px);border-color:color-mix(in srgb,var(--source-tone) 40%,transparent);box-shadow:0 12px 25px rgba(0,0,0,.18)}
+.agent-source-card.healthy{--source-tone:#76d7a2}
+.agent-source-card.degraded{--source-tone:#ffbd7d}
+.agent-source-card.unavailable{--source-tone:#ff7888}
+.agent-source-card.unknown{--source-tone:#839894}
+.agent-source-head{display:flex;align-items:center;gap:6px;min-width:0}
+.agent-source-head>i{width:7px;height:7px;flex:none;border-radius:50%;background:var(--source-tone);box-shadow:0 0 10px color-mix(in srgb,var(--source-tone) 62%,transparent)}
+.agent-source-card.healthy .agent-source-head>i{animation:agentHeartbeat 2.4s ease-in-out infinite}
+.agent-source-head>span{font:700 7px var(--mo);letter-spacing:.1em;color:var(--source-tone)}
+.agent-source-head>small{margin-left:auto;font:6px var(--mo);color:#67827c;white-space:nowrap}
+.agent-source-card>b{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:700 10px var(--hd);color:#d7ebe2}
+.agent-source-foot{display:flex;justify-content:space-between;gap:6px;font:6px var(--mo);letter-spacing:.08em;color:#6b8881}
+.agent-source-foot small{color:#90aca3}
+@keyframes agentHeartbeat{0%,100%{box-shadow:0 0 3px color-mix(in srgb,var(--source-tone) 32%,transparent)}50%{box-shadow:0 0 13px color-mix(in srgb,var(--source-tone) 86%,transparent)}}
+.agent-health-legend{display:flex;gap:14px;flex-wrap:wrap;margin-top:10px}
+.agent-health-legend>span{display:inline-flex;align-items:center;gap:6px;font:6px var(--mo);letter-spacing:.11em;color:#718c84}
+.agent-health-legend i{width:6px;height:6px;border-radius:50%;background:#819a91}
+.agent-health-legend i.healthy{background:#76d7a2}.agent-health-legend i.degraded{background:#ffbd7d}.agent-health-legend i.unavailable{background:#ff7888}
+#v-agent .agent-health-counts{display:flex;gap:7px;flex-wrap:wrap}
+#v-agent .agent-health-counts .tag{border-radius:99px;padding:4px 9px}
+#v-agent .guided-detail>summary{display:flex;align-items:center;justify-content:space-between}
+
+/* Compact engine-state overview above the deeper policy cards. */
+.engine-pulse-rail{
+  display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;margin:0 0 12px;
+}
+.engine-pulse-card{
+  --pulse-tone:#839894;position:relative;overflow:hidden;min-width:0;display:grid;gap:7px;
+  padding:11px 12px;border:1px solid rgba(132,205,193,.13);border-radius:10px;
+  background:radial-gradient(ellipse at 90% 0,color-mix(in srgb,var(--pulse-tone) 12%,transparent),transparent 60%),
+    linear-gradient(145deg,rgba(15,34,38,.82),rgba(7,17,22,.89));
+  transition:transform .2s,border-color .2s,box-shadow .2s;
+}
+.engine-pulse-card:hover{transform:translateY(-2px);border-color:color-mix(in srgb,var(--pulse-tone) 38%,transparent);box-shadow:0 12px 26px rgba(0,0,0,.18)}
+.engine-pulse-card>i{position:absolute;right:12px;top:13px;width:7px;height:7px;border-radius:50%;background:var(--pulse-tone);box-shadow:0 0 12px color-mix(in srgb,var(--pulse-tone) 65%,transparent)}
+.engine-pulse-card>small{font:700 6px var(--mo);letter-spacing:.12em;color:#73948b;overflow-wrap:anywhere;padding-right:12px}
+.engine-pulse-card>b{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:750 clamp(10px,1.1vw,14px) var(--hd);color:#dfefe8}
+.engine-pulse-card.online{--pulse-tone:#75d8a5}
+.engine-pulse-card.caution{--pulse-tone:#ffbd7d}
+.engine-pulse-card.blocked{--pulse-tone:#ff7c8d}
+.engine-pulse-card.unknown{--pulse-tone:#839894}
+@media(max-width:1050px){.engine-pulse-rail{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:620px){
+  .agent-health-map{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .agent-health-visual{padding:10px}
+  .agent-health-visual-head{align-items:flex-start;flex-direction:column}
+  .agent-health-visual-head>em{text-align:left}
+  .engine-pulse-rail{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media(prefers-reduced-motion:reduce){
+  .agent-source-card,.agent-source-card.healthy .agent-source-head>i,.engine-pulse-card{animation:none!important;transition:none!important}
+}
