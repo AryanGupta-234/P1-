@@ -753,6 +753,7 @@ async function boot() {
     ["net", "NETWORK", "Connections and latency charts"],
     ["adv", "THERMAL / ETW", "Thermal sensors and kernel diagnostics"],
     ["eng", "ENGINE DECK", "Safeguards, runtime and memory policy"],
+    ["health", "SOURCE HEALTH", "Runtime and collector source status"],
     ["stream", "LIVE LINK", "Event stream and heartbeat"],
     ["ker", "KERNEL ARCHIVE", "Historical counter samples"],
     ["activityx", "USAGE INTELLIGENCE", "Foreground activity and learned routines"],
@@ -816,15 +817,17 @@ async function boot() {
     apiRetry("/api/status", 1),
     apiRetry("/api/ai", 1)
   ]);
+  let foundationDegraded = 0;
   const readFoundation = (index, key, validate, apply, label) => {
     const result = foundation[index];
     if (result.status !== "fulfilled" || result.value?.error || !validate(result.value)) {
       const reason = result.status === "rejected" ? result.reason?.message : result.value?.error || "Unexpected data format";
+      foundationDegraded++;
       markDataFailure(key, reason || (label + " unavailable"));
       return false;
     }
     apply(result.value);
-    markDataReady(key, label + " synchronized");
+    bootModuleState(key, "READY", label + " synchronized");
     return true;
   };
   const historyReady = readFoundation(0, "command", value => value && typeof value === "object" && !Array.isArray(value),
@@ -839,7 +842,7 @@ async function boot() {
     insights => { INS = insights; renderIns(); }, "Performance insights");
   const enginesReady = readFoundation(3, "eng", value => value && typeof value === "object",
     engines => renderEngines(engines), "Safeguards and engine policies");
-  const statusReady = readFoundation(4, "core", value => value && typeof value === "object",
+  const statusReady = readFoundation(4, "health", value => value && typeof value === "object",
     status => { ST = status; }, "Runtime and source status");
   const aiReady = readFoundation(5, "ai", value => value && typeof value === "object",
     transcript => (transcript.transcript || []).forEach(addTr), "AI transcript");
@@ -848,9 +851,6 @@ async function boot() {
       if (Number.isFinite(Number(value)) && !(H[key] || []).length) H[key] = [Number(value)];
     }
   }
-  if (enginesReady) markPageWarm("eng");
-  if (historyReady && eventsReady && insightsReady) markPageWarm("act");
-  if (aiReady) markPageWarm("ai");
 
   // Initialize interactions once. Workspace jobs below own the first data read.
   $("#a-q").oninput = renderFeed;
@@ -989,7 +989,7 @@ async function boot() {
   const allJobs = [...jobs, ...secondaryJobs];
   let completed = 0;
   const total = allJobs.length;
-  let degraded = 0;
+  let degraded = foundationDegraded;
   const runJob = async ([key, label, work]) => {
     bootModuleState(key, "LOADING", "Loading " + label.toLowerCase());
     try {
