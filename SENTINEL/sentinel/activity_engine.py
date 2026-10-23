@@ -24,7 +24,7 @@ from typing import Any
 
 import psutil
 
-from . import core
+from . import activity_learning, core
 
 IS_WIN = os.name == "nt"
 _STOP = threading.Event()
@@ -176,35 +176,42 @@ def _task_cluster(terms: list[str], app_key: str, app_name: str,
                   foreground_seconds: float, active_seconds: float, ts: float) -> int | None:
     if not terms:
         return None
-    incoming = set(terms)
+
     rows = core.db(
-        "SELECT id,terms_json,app_keys_json FROM activity_tasks ORDER BY last_seen DESC LIMIT ?",
+        "SELECT id,terms_json,app_keys_json,observations,last_seen FROM activity_tasks "
+        "ORDER BY last_seen DESC LIMIT ?",
         (_MAX_TASK_CLUSTERS,),
     )
-    best_id, best_score, best_terms, best_apps = None, 0.0, set(), set()
+    candidates = []
     for row in rows:
         try:
-            existing = set(json.loads(row[1] or "[]"))
-            apps = set(json.loads(row[2] or "[]"))
+            existing_terms = json.loads(row[1] or "[]")
+            app_keys = json.loads(row[2] or "[]")
         except (TypeError, ValueError):
-            existing, apps = set(), set()
-        score = _similarity(incoming, existing)
-        if score > best_score:
-            best_id, best_score, best_terms, best_apps = int(row[0]), score, existing, apps
+            existing_terms, app_keys = [], []
+        candidates.append({
+            "id": int(row[0]),
+            "terms": existing_terms if isinstance(existing_terms, list) else [],
+            "app_keys": app_keys if isinstance(app_keys, list) else [],
+            "observations": int(row[3] or 0),
+            "last_seen": float(row[4] or 0.0),
+        })
 
-    # Dynamic clustering: labels are generated from observed terms, not an
-    # application-name/category allowlist.
-    if best_id is None or best_score < 0.28:
-        task_id = core.insert_id(
+    # The learning model uses corpus rarity and recency, rather than treating
+    # every shared token as equally informative.
+    ranked = activity_learning.rank_task_candidates(terms, candidates, now=ts)
+    best_id = int(ranked[0][1]["id"]) if ranked and ranked[0][0] >= 0.28 else None
+    best_row = ranked[0][1] if best_id is not None else None
+    if best_row is None:
+        return core.insert_id(
             "INSERT INTO activity_tasks(label,terms_json,app_keys_json,observations,foreground_seconds,active_seconds,first_seen,last_seen) "
             "VALUES(?,?,?,?,?,?,?,?)",
             (context_label(terms), json.dumps(terms), json.dumps([app_key]), 1,
              max(0.0, foreground_seconds), max(0.0, active_seconds), ts, ts),
         )
-        return task_id
 
-    merged_terms = sorted(set(best_terms).union(terms))[:32]
-    merged_apps = sorted(set(best_apps).union({app_key}))[:40]
+    merged_terms = sorted(set(best_row["terms"]).union(terms))[:32]
+    merged_apps = sorted(set(best_row["app_keys"]).union({app_key}))[:40]
     core.db(
         "UPDATE activity_tasks SET label=?,terms_json=?,app_keys_json=?,observations=observations+1,"
         "foreground_seconds=foreground_seconds+?,active_seconds=active_seconds+?,last_seen=? WHERE id=?",
@@ -212,7 +219,6 @@ def _task_cluster(terms: list[str], app_key: str, app_name: str,
          max(0.0, foreground_seconds), max(0.0, active_seconds), ts, best_id),
     )
     return best_id
-
 
 def _window_snapshot() -> dict[str, Any] | None:
     """Read only foreground-process metadata and a short-lived title for local tokenization."""
@@ -412,22 +418,47 @@ def _suggestions(current_app_key: str, now: float | None = None) -> list[dict[st
         "GROUP BY t.to_app_key,a.app_name,a.executable ORDER BY observations DESC LIMIT 8",
         (current_app_key, weekday, hour, hour),
     )
+    total_observations = sum(max(0, int(row[1] or 0)) for row in rows)
+    alternative_count = max(1, len(rows))
     suggestions = []
     for app_key, observations, last_seen, app_name, executable in rows:
         count = int(observations or 0)
-        age_days = max(0.0, (ts - float(last_seen or ts)) / 86400.0)
-        confidence = min(0.97, count / (count + 2.5)) * math.exp(-age_days / 120.0)
+        seen_at = float(last_seen or ts)
+        age_days = max(0.0, (ts - seen_at) / 86400.0)
+        matching_edges = core.db(
+            "SELECT hour_local,observations FROM activity_transitions "
+            "WHERE from_app_key=? AND to_app_key=? AND weekday_local=?",
+            (current_app_key, app_key, weekday),
+        )
+        distance = min(
+            (activity_learning.hour_distance(int(edge[0]), hour) for edge in matching_edges),
+            default=3,
+        )
+        confidence, probability = activity_learning.routine_confidence(
+            count, total_observations, alternative_count, age_days, distance
+        )
         suggestions.append({
             "app_key": app_key, "app_name": app_name, "executable": executable,
-            "observations": count, "confidence": round(confidence, 3),
-            "last_seen": float(last_seen or 0),
-            "reason": f"Observed after this application {count} time(s) in a similar weekday/time window",
+            "observations": count, "confidence": confidence,
+            "conditional_probability": probability,
+            "last_seen": seen_at,
+            "reason": (
+                f"Observed after this application {count} time(s) in a similar "
+                f"weekday/time window; learned next-app probability {probability:.0%}"
+            ),
             "already_running": bool(executable and _running_executable(str(executable))),
             "launchable": _safe_launch_path(str(executable or "")),
-            "auto_threshold": count >= _settings()["min_launch_observations"] and confidence >= 0.8,
+            "auto_threshold": (
+                count >= _settings()["min_launch_observations"]
+                and confidence >= 0.8
+                and probability >= 0.55
+            ),
         })
+    suggestions.sort(
+        key=lambda item: (item["confidence"], item["observations"], item["app_name"].casefold()),
+        reverse=True,
+    )
     return suggestions
-
 
 def _maybe_auto_launch(current: dict[str, Any], now: float) -> None:
     global _LAST_AUTO_LAUNCH
