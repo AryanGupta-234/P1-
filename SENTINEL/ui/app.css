@@ -2102,9 +2102,9 @@ nav button .badge{right:8px;top:5px}
   .command-launchers>button b{font-size:9px}
 }
 @media(prefers-reduced-motion:reduce){
-  .boot-grid,.boot-scanline,.boot-orbit-ring,.boot-scan-beam,.boot-part,.boot-core-ring>i,.boot-title-cursor,.boot-progress,.boot-stage-spark,.boot-statusline i,
+  .boot-grid,.boot-scanline,.boot-orbit-ring,.boot-scan-beam,.boot-core-ring>i,.boot-title-cursor,.boot-progress,.boot-stage-spark,.boot-statusline i,
   nav button.on svg,.command-launchers>button,.cmd-launch-icon,.metric,.tile,.panel,.view{animation:none!important;transition:none!important}
-  .boot,.boot-console,.boot-progress{transition:none!important;animation:none!important}
+  .boot-part{opacity:1!important;transform:none!important}.boot,.boot-console,.boot-progress{transition:none!important;animation:none!important}
 }
 
 
