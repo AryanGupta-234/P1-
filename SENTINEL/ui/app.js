@@ -273,7 +273,7 @@ function updProc() {
   if (box) box.innerHTML = reviewRows.map(r => `<div class="row"><div><b>${esc(r.name)} · PID ${r.pid}</b><small>${esc(r.reason)} · CPU ${fmt(r.cpu,1)}% · RAM ${r.mem} MB · ${r.observations} consecutive samples</small><small class="proc-path">${esc(r.exe)}</small></div><span class="tag warn">REVIEW ONLY</span></div>`).join("") || '<div class="empty">No sustained background resource-use candidate currently meets the conservative review threshold.</div>';
 }
 async function loadProcesses(force = false) {
-  if (procFetchBusy || (view !== "proc" && !force)) return;
+  if (procFetchBusy || (view !== "proc" && !force)) return PROC_META.sampled_at > 0;
   const q = $("#p-q")?.value || "";
   if (!force && Date.now() - procLastFetch < 4500) { updProc(); return; }
   procFetchBusy = true;
@@ -282,7 +282,7 @@ async function loadProcesses(force = false) {
     let d = await api(endpoint);
     // The agent collector owns process enumeration. If the page races the
     // collector's first Windows scan, wait briefly for its real snapshot.
-    for (let attempt = 0; force && !d.error && !d.sampled_at && attempt < 6; attempt++) {
+    for (let attempt = 0; force && !d.error && !d.sampled_at && attempt < 16; attempt++) {
       await new Promise(resolve => setTimeout(resolve, 250));
       d = await api(endpoint);
     }
@@ -292,7 +292,8 @@ async function loadProcesses(force = false) {
     for (const row of (d.rows || [])) unique.set(procIdentity(row), row);
     PROC_ROWS = [...unique.values()]; PROC_META = { total: d.total || 0, matched: d.matched ?? PROC_ROWS.length, inaccessible: d.inaccessible || 0, sampled_at: d.sampled_at || 0, updated_at: d.updated_at || 0 };
     updProc(); procLastFetch = Date.now();
-  } catch (e) { toast("Process inventory: " + e.message, "warn"); }
+    return PROC_META.sampled_at > 0;
+  } catch (e) { toast("Process inventory: " + e.message, "warn"); return false; }
   finally { procFetchBusy = false; }
 }
 function maybeRefreshProcesses() { if (view === "proc" && Date.now() - procLastFetch > 5000) loadProcesses(true); }
@@ -315,8 +316,10 @@ async function loadKernelArchive() {
     table.innerHTML = "<tr><th>HOUR (LOCAL)</th><th>SAMPLES</th><th>AVG</th><th>MIN</th><th>MAX</th></tr>" +
       (d.rows || []).map(r => `<tr><td>${new Date(r.hour_epoch * 3600000).toLocaleString()}</td><td>${esc(r.samples)}</td><td>${fmt(r.avg, 3)}</td><td>${fmt(r.min, 3)}</td><td>${fmt(r.max, 3)}</td></tr>`).join("") ||
       '<tr><td colspan="5"><div class="empty">No archived samples yet. Hourly rollups appear after raw samples age beyond the retention window.</div></td></tr>';
+    return true;
   } catch (e) {
     table.innerHTML = `<tr><td>${esc(e.message || "archive unavailable")}</td></tr>`;
+    return false;
   }
 }
 function updKer() {
@@ -333,7 +336,7 @@ function updKer() {
 }
 
 /* ---------- intel / ai / control ---------- */
-async function loadIntel() { const d = await api("/api/intel"); $("#intel").innerHTML = d.map(g => `<div style="margin-bottom:14px"><div style="font:12px var(--mo);color:var(--or);letter-spacing:.1em">&gt; ${esc(g.q)}</div>` + g.items.map(i => `<div class="ref"><b><a href="${esc(i.url)}" target="_blank" rel="noopener noreferrer">${esc(i.title)}</a></b><span>${esc(i.src)} · ${esc(i.snippet)}</span></div>`).join("") + "</div>").join("") || '<div class="empty">crawler is warming up - first results in ~30 s. Or search above.</div>'; }
+async function loadIntel() { const d = await apiRetry("/api/intel", 1); if (d.error || !Array.isArray(d)) throw new Error(d.error || "Invalid intelligence feed"); $("#intel").innerHTML = d.map(g => `<div style="margin-bottom:14px"><div style="font:12px var(--mo);color:var(--or);letter-spacing:.1em">&gt; ${esc(g.q)}</div>` + g.items.map(i => `<div class="ref"><b><a href="${esc(i.url)}" target="_blank" rel="noopener noreferrer">${esc(i.title)}</a></b><span>${esc(i.src)} · ${esc(i.snippet)}</span></div>`).join("") + "</div>").join("") || '<div class="empty">crawler is warming up - first results in ~30 s. Or search above.</div>'; return true; }
 function addTr(t) { const d = document.createElement("div"); d.className = "msg " + t.role; d.innerHTML = `<small>${esc(t.role === "user" ? "you" : t.role + " · " + t.model)} · ${hms(t.ts)}</small>${esc(t.text)}`; const b = $("#tr"); b.appendChild(d); b.scrollTop = b.scrollHeight; }
 function updAI() {
   const a = S.ai || {}, u = a.usage || {}, rt = ST?.agent || {};
@@ -525,7 +528,7 @@ function updateAgentView(runtime, matrix, runs, storage) {
   }).join("") || "<div class=\"empty\">No agent run history is available.</div>";
 }
 async function loadAgent(force = false) {
-  if (agentBusy || (!force && Date.now() - agentLastLoad < 6000)) return;
+  if (agentBusy || (!force && Date.now() - agentLastLoad < 6000)) return !!AGENT_DETAIL;
   agentBusy = true;
   agentLastLoad = Date.now();
   try {
@@ -534,10 +537,12 @@ async function loadAgent(force = false) {
     AGENT_DETAIL = data;
     if (data.runtime) agentPushSample(data.runtime);
     updateAgentView(data.runtime, data.sensor_matrix, data.runs, data.storage);
+    return true;
   } catch (error) {
     $("#ag-state").textContent = "API LOST";
     $("#ag-state").className = "pill bad";
     toast("Agent overview unavailable: " + error.message, "warn");
+    return false;
   } finally {
     agentBusy = false;
   }
@@ -1298,14 +1303,15 @@ function renderActivityIntelligence(data) {
   });
 }
 async function loadActivityIntelligence(force=false) {
-  if (activityBusy || (view !== "activityx" && !force)) return;
-  if (!force && Date.now() - activityLastLoad < 2500) return;
+  if (activityBusy || (view !== "activityx" && !force)) return !!ACTIVITY;
+  if (!force && Date.now() - activityLastLoad < 2500) return !!ACTIVITY;
   activityBusy = true; activityLastLoad = Date.now();
   try {
     const data = await api("/api/activity");
     if (data.error) throw new Error(data.error);
     ACTIVITY = data; renderActivityIntelligence(data);
-  } catch(error) { toast("Activity intelligence: " + (error.message || String(error)), "warn"); }
+    return true;
+  } catch(error) { toast("Activity intelligence: " + (error.message || String(error)), "warn"); return false; }
   finally { activityBusy = false; }
 }
 function initActivityIntelligence() {
@@ -1386,6 +1392,7 @@ async function loadIntelligence() {
     renderIXRuntime();
     const loadError = $("#ix-load-error");
     if (loadError) { loadError.hidden = true; loadError.classList.remove("stale"); }
+    return true;
   } catch (error) {
     const loadError = $("#ix-load-error");
     const errorText = $("#ix-load-error-text");
@@ -1395,6 +1402,7 @@ async function loadIntelligence() {
       ? "Agent link interrupted · showing the latest intelligence snapshot"
       : "Intelligence data is temporarily unavailable · retry the local agent link";
     toast("Intelligence refresh: " + (error?.message || String(error)), "warn");
+    return false;
   } finally {
     ixBusy = false;
   }
@@ -1545,17 +1553,23 @@ const tagOK = (ok, a = "OK", b = "OFF") => `<span class="tag ${ok ? "ok" : "bad"
 let CAT = "processes";
 const CATS = { processes: ["name", "pid"], apps: ["name", "version", "publisher"], drivers: ["name", "display", "state", "start"], services: ["name", "display", "state", "start"], tasks: ["name", "state", "path"], interfaces: ["name", "ip", "mbps", "up"], startup: ["name", "where", "cmd"] };
 async function loadCat() {
-  const d = await api("/api/catalog?kind=" + CAT + "&limit=150&q=" + encodeURIComponent($("#cat-q").value)); if (d.error) return; const c = CATS[CAT];
+  const d = await apiRetry("/api/catalog?kind=" + CAT + "&limit=150&q=" + encodeURIComponent($("#cat-q").value), 1);
+  if (d.error) return false;
+  const c = CATS[CAT];
   $("#cat-t").innerHTML = "<tr>" + c.map(k => `<th>${k.toUpperCase()}</th>`).join("") + "</tr>" + d.rows.map(r => "<tr>" + c.map(k => `<td>${esc(r[k])}</td>`).join("") + "</tr>").join("") || "";
   $("#cat-n").textContent = d.matched + " of " + d.total + " records";
+  return true;
 }
 let sysLastFetch = 0, sysFetchBusy = false;
+let SYS_SNAPSHOT = null;
 async function loadSys(force = false) {
-  if (sysFetchBusy || (!force && Date.now() - sysLastFetch < 15000)) return;
+  if (sysFetchBusy || (!force && Date.now() - sysLastFetch < 15000)) return !!SYS_SNAPSHOT;
   sysFetchBusy = true; sysLastFetch = Date.now();
   try {
 
-    const d = await api("/api/inventory");
+    const d = await apiRetry("/api/inventory", 1);
+    if (d.error) throw new Error(d.error);
+    SYS_SNAPSHOT = d;
     const c = d.counts || {}, p = d.platform || {}, sec = d.security || {}, health = d.health || {};
     $("#sys-m").innerHTML = [["PROCESSES", "processes"], ["INSTALLED APPS", "apps"], ["SYSTEM DRIVERS", "drivers"], ["SERVICES", "services"], ["STARTUP ENTRIES", "startup"]].map(([l, k]) => mcard(l, c[k] ?? "--", d.ts ? "latest snapshot" : "not scanned", Math.min(100, (c[k] || 0) / 3))).join("");
     $("#sys-ts").textContent = d.ts ? "scanned " + hms(d.ts) : "no successful snapshot";
@@ -1570,10 +1584,13 @@ async function loadSys(force = false) {
     $("#sys-storage").innerHTML = `<div class="row"><b>SQLite database</b><span class="tag ${storage.database_exists ? "ok" : "bad"}">${storage.database_exists ? "PRESENT" : "MISSING"}</span></div><small>${esc(storage.database || "path unavailable")} · ${fmt((storage.database_bytes || 0) / 1048576, 2)} MB · config revision ${esc(storage.config_revision?.revision ?? "--")}</small><small>${(storage.snapshots || []).length} bounded latest-state snapshot(s)</small><small>${Object.entries(storage.rows || {}).map(([k,v]) => `${k}: ${v ?? "unavailable"}`).join(" · ")}</small>`;
     $("#cat-k").innerHTML = Object.keys(CATS).map(k => `<button class="chip${k === CAT ? " on" : ""}" data-k="${k}">${k.toUpperCase()}</button>`).join("");
     $$("#cat-k .chip").forEach(b => b.onclick = () => { CAT = b.dataset.k; loadCat(); $$("#cat-k .chip").forEach(x => x.classList.toggle("on", x === b)); });
-    $("#cat-q").oninput = loadCat; loadCat();
+    $("#cat-q").oninput = loadCat;
+    const catalogReady = await loadCat();
+    return catalogReady;
   } catch (e) {
     toast("System inventory: " + (e?.message || "source unavailable"), "warn");
     const box = $("#sys-health"); if (box) box.innerHTML = `<div class="empty">System inventory request failed: ${esc(e?.message || "unknown error")}. Source health remains unknown until a successful scan.</div>`;
+    return false;
   } finally { sysFetchBusy = false; }
 }
 function maybeRefreshSystem() { if (view === "sys" && Date.now() - sysLastFetch >= 15000) loadSys(false); }
@@ -1581,9 +1598,10 @@ function maybeRefreshSystem() { if (view === "sys" && Date.now() - sysLastFetch 
 let evRows = [];
 async function loadEvi() {
   if (ST?.sources && $("#e-src").options.length === 1) $("#e-src").innerHTML += ST.sources.map(x => `<option>${esc(x)}</option>`).join("");
-  evRows = await api("/api/events?limit=600&q=" + encodeURIComponent($("#e-q").value) + "&level=" + $("#e-lv").value + "&src=" + $("#e-src").value); evRows.reverse();
+  evRows = await apiRetry("/api/events?limit=600&q=" + encodeURIComponent($("#e-q").value) + "&level=" + $("#e-lv").value + "&src=" + $("#e-src").value, 1); if (!Array.isArray(evRows)) throw new Error(evRows?.error || "Invalid evidence response"); evRows.reverse();
   $("#e-t").innerHTML = "<tr><th>TIME</th><th>LEVEL</th><th>SOURCE</th><th>MESSAGE</th></tr>" + evRows.map(r => `<tr><td>${hms(r.ts)}</td><td><span class="tag ${r.level === "error" ? "bad" : r.level === "ok" ? "ok" : "mu"}">${esc(r.level)}</span></td><td>${esc(r.src)}</td><td>${esc(r.msg)}</td></tr>`).join("");
   $("#e-n").textContent = evRows.length + " shown of " + Number(ST?.events || 0).toLocaleString() + " stored";
+  return true;
 }
 function csvExport() { const q = v => '"' + String(v).replace(/"/g, '""') + '"'; const t = "time,level,source,message\n" + evRows.map(r => [new Date(r.ts * 1000).toISOString(), r.level, r.src, r.msg].map(q).join(",")).join("\n"); const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([t], { type: "text/csv" })); a.download = "sentinel-evidence-" + Date.now() + ".csv"; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000); toast("Exported " + evRows.length + " records", "ok"); }
 let HISTA = [];
@@ -1610,10 +1628,11 @@ function fcFill(p) {
   $$("#v-fc input").forEach(i => i.onchange = i.oninput = fcDirty); fcDirty();
 }
 async function loadFC(keepForm) {
-  const d = await api("/api/profile"); FC = d; FCsaved = d.profile; if (!keepForm) fcFill(d.profile);
+  const d = await apiRetry("/api/profile", 1); if (d.error || !d.profile) throw new Error(d.error || "Feature profile is unavailable"); FC = d; FCsaved = d.profile; if (!keepForm) fcFill(d.profile);
   $("#fc-pre").innerHTML = Object.keys(PRESETS).map(k => `<button class="chip on" data-p="${k}">${k.toUpperCase()}</button>`).join("");
   $$("#fc-pre [data-p]").forEach(b => b.onclick = () => { const x = PRESETS[b.dataset.p], p = { automation: x.automation, sensors: Object.fromEntries(SENS.map(([k]) => [k, x.sensors[k] !== false])), intervals: x.intervals, thresholds: x.thresholds }; fcFill(p); toast(b.dataset.p + " loaded - review, then save", "warn"); });
-  const audit = await api("/api/config/history"); const rows = audit.history || []; $("#fc-audit").innerHTML = rows.map(r => `<div class="ln info"><span class="t">${hms(r.ts)}</span><span class="s">rev ${r.revision}</span><span class="m">${esc((r.changed || []).join(", ") || "settings verified; no value changes")}</span></div>`).join("") || '<div class="empty">no configuration changes yet</div>';
+  const audit = await apiRetry("/api/config/history", 1); if (audit.error) throw new Error(audit.error); const rows = audit.history || []; $("#fc-audit").innerHTML = rows.map(r => `<div class="ln info"><span class="t">${hms(r.ts)}</span><span class="s">rev ${r.revision}</span><span class="m">${esc((r.changed || []).join(", ") || "settings verified; no value changes")}</span></div>`).join("") || '<div class="empty">no configuration changes yet</div>';
+  return true;
 }
 function initFC() {
   $("#fc-save").onclick = async () => { const b = $("#fc-save"); b.disabled = true; const r = await api("/api/profile", { profile: fcRead() }); b.disabled = false; if (r.error) return toast(r.error, "bad"); toast(r.changed && r.changed.length ? "Saved: " + r.changed.join(", ") : "No changes to save", "ok"); FCsaved = r.profile; fcFill(r.profile); loadFC(true); };
@@ -1722,10 +1741,12 @@ async function loadEngines() {
     const data = await api("/api/engines");
     if (data.error) throw new Error(data.error);
     renderEngines(data);
+    return true;
   } catch (error) {
     $("#engine-health").textContent = "ENGINE API UNAVAILABLE";
     $("#engine-health").className = "pill bad";
     toast("Engine status: " + (error.message || "unavailable"), "warn");
+    return false;
   }
 }
 
