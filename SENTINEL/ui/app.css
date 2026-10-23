@@ -1659,3 +1659,18 @@ nav button:hover{transform:translateX(2px)}
     animation:none!important;
   }
 }
+
+.engine-note-disclosure{margin-top:9px;min-width:0}
+.engine-note-disclosure>summary{
+  list-style:none;display:inline-flex;align-items:center;gap:7px;cursor:pointer;
+  padding:6px 8px;border:1px solid rgba(92,177,198,.14);border-radius:7px;
+  background:rgba(5,17,24,.32);font:7px var(--mo);letter-spacing:.11em;color:#6f9ca3;
+  transition:color .2s,border-color .2s,background .2s;
+}
+.engine-note-disclosure>summary::-webkit-details-marker{display:none}
+.engine-note-disclosure>summary:after{content:"＋";font-size:10px;color:#8ed9df}
+.engine-note-disclosure[open]>summary:after{content:"−"}
+.engine-note-disclosure>summary:hover,.engine-note-disclosure[open]>summary{color:#c5edf0;border-color:rgba(92,177,198,.35);background:rgba(21,54,62,.34)}
+.engine-note-disclosure .engine-note{display:block;margin-top:8px;line-height:1.65}
+.view.on .engine-note-disclosure[open]{animation:workspacePanelEnter .26s ease both}
+@media(prefers-reduced-motion:reduce){.view.on .engine-note-disclosure[open]{animation:none}}
