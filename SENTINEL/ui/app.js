@@ -224,7 +224,10 @@ function updateSignalTile(prefix, raw, unit, scale, precision = 1) {
   const bar = document.getElementById(prefix + "-bar");
   const tile = bar?.closest(".signal-tile");
   if (output) output.textContent = valid ? value.toFixed(precision) + unit : "--";
-  if (bar) bar.style.width = valid ? Math.max(0, Math.min(100, value / Math.max(1, scale) * 100)) + "%" : "0%";
+  if (bar) {
+    bar.style.width = "100%";
+    bar.style.setProperty("--signal-level", valid ? Math.max(0, Math.min(100, value / Math.max(1, scale) * 100)) + "%" : "0%");
+  }
   if (tile) {
     tile.classList.toggle("unavailable", !valid);
     tile.classList.toggle("elevated", valid && value / Math.max(1, scale) >= 0.8);
