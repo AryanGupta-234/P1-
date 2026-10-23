@@ -221,6 +221,39 @@ def snapshot():
     }
 
 
+def boot_snapshot():
+    """Return the small, pre-collected state needed for the first screen.
+
+    Workspace-specific details load lazily after the shell is visible. Keep
+    runtime probes, inventory refreshes and process-row serialization off this
+    latency-sensitive path.
+    """
+    now = time.time()
+    ai = STATE.get("ai") or {}
+    return {
+        "now": now,
+        "uptime": now - START,
+        "live": LIVE,
+        "cores": STATE.get("cores", []),
+        "proc_total": STATE.get("proc_total", 0),
+        "proc_recommendations": STATE.get("proc_recommendations", []),
+        "net": STATE.get("net", [])[:120],
+        "gpu": STATE.get("gpu", {}),
+        "game": STATE.get("game"),
+        "system": STATE.get("system", {}),
+        "services": STATE.get("services", {}),
+        "culprits": STATE.get("culprits", []),
+        "kernel": STATE.get("kernel", {}),
+        "autoruns": STATE.get("autoruns"),
+        "ai": {key: value for key, value in ai.items() if key != "transcript"},
+        "heart": HEART,
+        "traces": STATE.get("traces", []),
+        "autopilot": CFG["autopilot"],
+        "approval_policy": CFG.get("approval_policy", {"auto_approve_reversible_medium": False}),
+    }
+
+
+
 class H(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
     def log_message(self, *a): pass
@@ -258,6 +291,8 @@ class H(BaseHTTPRequestHandler):
         if not self._authed(qs):
             return self._json({"error": "unauthorized"}, 401)
         p = u.path
+        if p == "/api/boot":
+            return self._json(boot_snapshot())
         if p == "/api/snapshot":
             return self._json(snapshot())
         if p == "/api/processes":
