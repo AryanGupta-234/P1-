@@ -1674,3 +1674,16 @@ nav button:hover{transform:translateX(2px)}
 .engine-note-disclosure .engine-note{display:block;margin-top:8px;line-height:1.65}
 .view.on .engine-note-disclosure[open]{animation:workspacePanelEnter .26s ease both}
 @media(prefers-reduced-motion:reduce){.view.on .engine-note-disclosure[open]{animation:none}}
+
+.boot-retry{
+  justify-self:start;display:inline-flex;align-items:center;gap:10px;margin-top:12px;
+  padding:10px 14px;border:1px solid rgba(255,173,117,.38);border-radius:9px;
+  background:linear-gradient(110deg,rgba(255,140,93,.12),rgba(98,199,232,.07));
+  color:#ffd0b7;font:700 8px var(--mo);letter-spacing:.12em;cursor:pointer;
+  box-shadow:0 0 18px rgba(255,140,93,.08);
+  transition:transform .2s,border-color .2s,box-shadow .2s,background .2s;
+}
+.boot-retry i{font-style:normal;font-size:13px;color:#ffb38b}
+.boot-retry:hover{transform:translateY(-2px);border-color:rgba(255,173,117,.7);box-shadow:0 8px 28px rgba(255,140,93,.14)}
+.boot-retry:active{transform:scale(.98)}
+@media(prefers-reduced-motion:reduce){.boot-retry{transition:none}}
