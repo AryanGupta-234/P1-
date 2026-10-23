@@ -50,6 +50,16 @@ def test_managed_sensor_provider_ui_and_boot_contract_are_present():
     assert 'apiRetry("/api/boot", 1)' in app
     assert 'apiRetry("/api/history?secs=300", 1)' in app
     assert 'apiRetry("/api/events?limit=120", 1)' in app
+    boot_start = app.index("async function boot()")
+    first_paint = app.index("endBoot();", boot_start)
+    for startup_request in (
+        "apiRetry(\"/api/boot\", 1)",
+        "apiRetry(\"/api/history?secs=300\", 1)",
+        "apiRetry(\"/api/events?limit=120\", 1)",
+        "apiRetry(\"/api/insights\", 1)",
+    ):
+        assert boot_start < app.index(startup_request, boot_start) < first_paint
+    assert "setTimeout(resolve, 1800)" in app
     assert "await runPool(jobs)" not in app
     assert "await runPool(secondaryJobs)" not in app
     assert "function starfield()" not in app
