@@ -1154,3 +1154,22 @@ input,select,textarea{
     transition:none!important;animation:none!important
   }
 }
+
+
+/* Final text-safety pass: content may be long, generated or user supplied. */
+#app :where(p,small,span,b,strong,i,em,label,a,td,th,dt,dd,code){
+  min-width:0;overflow-wrap:anywhere;word-break:normal;
+}
+#app :where(.msg,.ref,.event,.ins,.act,.row,.kv,.engine-process-row,.adv-row){
+  min-width:0;max-width:100%;
+}
+#app .msg{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.55}
+#app .pill,#app .tag,#app .chip{
+  max-width:100%;white-space:normal;overflow-wrap:anywhere;line-height:1.3;
+}
+#app .ph>*{min-width:0;max-width:100%}
+#app .row{align-items:flex-start}
+#app .row>div{flex:1 1 auto}
+#app :where(.process-path,.engine-process-row small,.adv-row small,.ref span){
+  overflow-wrap:anywhere;word-break:break-word;
+}
