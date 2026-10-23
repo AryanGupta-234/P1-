@@ -1982,8 +1982,8 @@ nav button .badge{right:8px;top:5px}
   radial-gradient(ellipse at 50% 45%,rgba(55,149,151,.16),transparent 54%),rgba(5,18,23,.48)}
 .boot-suit-stage{position:relative;width:min(100%,340px);height:420px;display:grid;place-items:center;isolation:isolate}
 .boot-suit-figure{position:relative;z-index:3;width:90%;height:100%;overflow:visible;filter:drop-shadow(0 0 15px rgba(92,212,194,.13))}
-.boot-part{transform-box:fill-box;transform-origin:center;opacity:0;animation:suitAssemble .62s cubic-bezier(.16,1,.3,1) forwards}
-.boot-part-head{animation-delay:.03s}.boot-part-torso{animation-delay:.18s}.boot-part-arms{animation-delay:.32s}.boot-part-waist{animation-delay:.45s}.boot-part-legs{animation-delay:.58s}
+.boot-part{transform-box:fill-box;transform-origin:center;opacity:0;animation:suitAssemble .42s cubic-bezier(.16,1,.3,1) forwards}
+.boot-part-head{animation-delay:.03s}.boot-part-torso{animation-delay:.10s}.boot-part-arms{animation-delay:.18s}.boot-part-waist{animation-delay:.26s}.boot-part-legs{animation-delay:.34s}
 @keyframes suitAssemble{0%{opacity:0;transform:translateY(-24px) scale(.94)}75%{opacity:1}100%{opacity:1;transform:translateY(0) scale(1)}}
 .boot-orbit-ring{position:absolute;z-index:1;left:50%;top:49%;border:1px solid rgba(140,232,212,.16);border-radius:50%;pointer-events:none;transform:translate(-50%,-50%)}
 .boot-orbit-ring.ring-one{width:292px;height:292px;border-style:dashed;animation:bootOrbit 26s linear infinite}
