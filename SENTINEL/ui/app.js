@@ -998,7 +998,7 @@ async function boot() {
   const splashResult = await Promise.race([
     Promise.all([
       coreSyncPromise,
-      new Promise(resolve => setTimeout(() => resolve(true), 460))
+      new Promise(resolve => setTimeout(() => resolve(true), 760))
     ]).then(([result]) => ({ settled: true, result })),
     new Promise(resolve => setTimeout(() => resolve({ settled: false }), 1800))
   ]);
