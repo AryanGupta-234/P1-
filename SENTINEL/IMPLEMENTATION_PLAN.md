@@ -1,7 +1,7 @@
 # SENTINEL Implementation Plan
 
 **Target:** Windows 11 x64 · local-first desktop runtime  
-**Plan revision:** 1.0 · **Release baseline:** 1.2.22  
+**Plan revision:** 1.0 · **Release baseline:** 1.2.23  
 **Status:** `[x]` existing capability · `[~]` integration/verification in progress · `[ ]` planned
 
 This is the single consolidated backlog for the next SENTINEL upgrade. It extends the existing collectors, SQLite store, maintenance executor, safeguard, adaptive runtime, AI council, memory engine, rollback journal and dashboard; it does not replace them.
@@ -52,7 +52,7 @@ Make SENTINEL a Windows-specialist, goal-driven performance and reliability assi
 
 ## P1 — Liquid-glass UI and data-rich boot
 
-**Initial visual foundation applied in 1.2.22**
+**Initial visual foundation and accent unification applied in 1.2.23**
 - [x] Graphite `#171717`, deep forest `#06110c`, signal red `#a31c1b`, restrained green active/healthy accent.
 - [x] Local Windows font stacks (Segoe UI Variable / Aptos / Bahnschrift and Cascadia Code); no remote font blocking boot.
 - [x] Liquid-glass treatment for shell, nav, cards and boot console; restrained highlights.

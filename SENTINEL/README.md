@@ -1,4 +1,4 @@
-# SENTINEL 1.2.22 — Windows Intelligence & Liquid Glass foundation
+# SENTINEL 1.2.23 — Windows Intelligence & Liquid Glass foundation
 
 The consolidated upgrade backlog is [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md). It covers the Windows Knowledge Engine, local specialist-model evaluation, evidence correlation, expanded maintenance library, goal-driven learning, scheduler, chat/voice, least-privilege elevation, boot optimisation and GUI-first redesign.
 
@@ -267,7 +267,7 @@ Read-only OEM discovery identifies the Windows BIOS manufacturer/model and suppo
 Read-only Steam and Epic manifest discovery feeds a game relocation planner. It validates source manifest, target NTFS volume and manifest install size plus 10% free-space headroom. SENTINEL does not move launcher-owned folders, edit manifests or touch save data; the actual move remains inside the launcher. Xbox / WindowsApps package folders remain outside direct relocation.
 
 
-## 1.2.22 visual and planning foundation
+## 1.2.23 visual and planning foundation
 
 The dashboard theme uses graphite `#171717`, deep forest `#06110c` and signal red `#a31c1b`, with green as the positive/active accent. Typography uses local Windows font stacks to avoid network-dependent startup. The detailed data-hydrating splash and existing API/DOM contracts are retained while the interface moves to the new liquid-glass system.
 
