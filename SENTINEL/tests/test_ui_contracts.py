@@ -41,8 +41,10 @@ def test_managed_sensor_provider_ui_and_boot_contract_are_present():
     assert "SKIP INTRO" not in html + app + css
     assert "API_CONCURRENCY = 4" in app
     assert "API_TIMEOUT_MS = 16000" in app
-    assert "await runPool(jobs)" in app
-    assert "await runPool(secondaryJobs)" in app
+    assert "const hydration = runPool(allJobs)" in app
+    assert "await hydration" in app
+    assert "await runPool(jobs)" not in app
+    assert "await runPool(secondaryJobs)" not in app
     assert "void runBatch" not in app
     assert "const minimumDisplayMs = 900" in app
     assert "Promise.allSettled([" in app
@@ -91,6 +93,32 @@ def test_managed_sensor_provider_ui_and_boot_contract_are_present():
     assert "workspacePanelEnter" in css and "commandHeroScan" in css
     assert "boot().catch(error =>" in app
     assert "provider.next_step" in app
+
+
+def test_complete_shell_redesign_and_full_workspace_boot_hydration():
+    html = (ROOT / "ui" / "index.html").read_text(encoding="utf-8")
+    app = (ROOT / "ui" / "app.js").read_text(encoding="utf-8")
+    css = (ROOT / "ui" / "app.css").read_text(encoding="utf-8")
+    version = (ROOT / "VERSION").read_text(encoding="utf-8").strip()
+
+    assert version == "1.2.13"
+    assert "<title>SENTINEL &middot; 1.2.13</title>" in html
+    assert 'class="boot-orbit-scene"' in html
+    assert 'class="boot-reactor-core"' in html
+    assert 'id="bootGauge"' in html and 'id="bootProgress"' in html
+    assert 'id="bootModules"' in html and 'id="bootLog"' in html
+    assert 'class="boot-compat" hidden' in html
+    assert 'id="starfield"' not in html
+    assert "function starfield()" not in app and "starfield();" not in app
+    assert "const allJobs = [...jobs, ...secondaryJobs]" in app
+    assert "const hydration = runPool(allJobs)" in app
+    assert app.index("const hydration = runPool(allJobs)") < app.index("await hydration") < app.index("endBoot();", app.index("async function boot()"))
+    assert "#app{" in css and "grid-template-columns:228px minmax(0,1fr)" in css
+    assert ".boot-orbit-scene" in css and ".boot-reactor-core" in css
+    assert "@media(prefers-reduced-motion:reduce)" in css
+    assert all(f'id="v-{key}"' in html for key in (
+        "cmd","eng","agent","act","proc","net","ker","adv","int","ai","ctl","sys","evi","tsk","activityx","intelx","fc"
+    ))
 
 def test_activity_workspace_and_learned_launch_are_connected():
     html = (ROOT / "ui" / "index.html").read_text(encoding="utf-8")

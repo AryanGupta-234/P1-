@@ -184,23 +184,6 @@ function updateBootTelemetry() {
   if (processCount && Number(S?.proc_total || 0) > 0) processCount.textContent = Number(S.proc_total).toLocaleString() + " PROCESSES";
 }
 
-function starfield() {
-  const c = $("#starfield"), x = c.getContext("2d"); if (matchMedia("(prefers-reduced-motion:reduce)").matches) return;
-  let w, h, st = [], frame = 0, lastPaint = 0;
-  const resize = () => { w = c.width = innerWidth; h = c.height = innerHeight; st = Array.from({ length: Math.min(48, Math.ceil(w * h / 28000)) }, () => ({ x: Math.random() * w, y: Math.random() * h, r: Math.random() * 1.1 + .3, v: Math.random() * .1 + .02 })); };
-  const draw = timestamp => {
-    frame = 0;
-    if (document.visibilityState !== "visible") return;
-    if (timestamp - lastPaint >= 42) {
-      lastPaint = timestamp; x.clearRect(0, 0, w, h); x.fillStyle = "#cfe8a0";
-      for (const star of st) { star.y -= star.v; if (star.y < 0) { star.y = h; star.x = Math.random() * w; } x.globalAlpha = .25 + star.r / 2; x.beginPath(); x.arc(star.x, star.y, star.r, 0, 6.3); x.fill(); }
-    }
-    frame = requestAnimationFrame(draw);
-  };
-  const resume = () => { if (document.visibilityState === "visible" && !frame) frame = requestAnimationFrame(draw); };
-  resize(); addEventListener("resize", resize, { passive: true }); document.addEventListener("visibilitychange", resume); resume();
-}
-
 /* ---------- charts ---------- */
 function prep(c) { const r = devicePixelRatio || 1, w = c.clientWidth, h = c.clientHeight; if (c.width !== w * r || c.height !== h * r) { c.width = w * r; c.height = h * r; } const x = c.getContext("2d"); x.setTransform(r, 0, 0, r, 0, 0); x.clearRect(0, 0, w, h); return [x, w, h]; }
 function line(x, d, w, h, col, lo, hi, fill) {
@@ -863,7 +846,6 @@ function show(v) {
 }
 async function boot() {
   const bootStartedAt = performance.now();
-  starfield();
   bp(3, "POWERING SENTINEL", "Preparing the local command environment");
   buildTiles();
   buildChips();
@@ -1164,9 +1146,10 @@ async function boot() {
     await Promise.all(Array.from({ length: Math.min(API_CONCURRENCY, queue.length) }, worker));
   };
 
-  // Primary operational datasets first; all remaining pages hydrate before first paint.
-  bp(22, "HYDRATING OPERATIONAL DATA", "Four bounded request workers · no duplicate agent collectors");
-  await runPool(jobs);
+  // One bounded queue hydrates every workspace concurrently with the live-link handshake.
+  // The splash remains visible until all full datasets have either loaded or been marked degraded.
+  bp(22, "SYNCHRONIZING WORKSPACES", "Four bounded request workers · full data before first paint");
+  const hydration = runPool(allJobs);
   const streamConnected = await streamReady;
   if (!streamSettled) {
     streamSettled = true;
@@ -1177,8 +1160,7 @@ async function boot() {
     streamConnected ? "Local event channel opened" : "Live link will reconnect in the background");
   if (!streamConnected) markDataFailure("stream", "The event channel did not open before the splash timeout");
   else degradedModules.delete("stream");
-  bp(72, "HYDRATING WORKSPACES", "Loading intelligence, evidence, action and history datasets");
-  await runPool(secondaryJobs);
+  await hydration;
 
   // Bring the command canvas up with the loaded history and current snapshot.
   if (S) {

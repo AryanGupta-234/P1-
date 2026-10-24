@@ -1,39 +1,89 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>SENTINEL &middot; 1.2.12</title>
+<title>SENTINEL &middot; 1.2.13</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cpath d='M32 4l24 14v28L32 60 8 46V18z' fill='none' stroke='%23b8e65b' stroke-width='4'/%3E%3Ccircle cx='32' cy='32' r='8' fill='%23ff6b38'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="app.css?v=1.2.12"></head>
-<body><div class="ambient"></div><canvas id="starfield"></canvas>
+<link rel="stylesheet" href="app.css?v=1.2.13"></head>
+<body><div class="ambient" aria-hidden="true"></div>
 <div class="boot" id="boot" role="status" aria-live="polite" aria-label="SENTINEL Windows node initialization">
-  <div class="boot-grid" aria-hidden="true"></div><div class="boot-scanline" aria-hidden="true"></div>
+  <div class="boot-grid" aria-hidden="true"></div>
+  <div class="boot-scanline" aria-hidden="true"></div>
   <div class="boot-console">
-    <div class="boot-topline"><span>SENTINEL <i>LOCAL RUNTIME</i></span><span id="bootNodeState">SYSTEMS INITIALIZING</span><span>NODE / 01</span></div>
+    <div class="boot-topline">
+      <span class="boot-wordmark"><i class="boot-wordmark-symbol">S</i><b>SENTINEL</b><small>LOCAL PERFORMANCE INTELLIGENCE</small></span>
+      <span class="boot-node-indicator"><i></i><span id="bootNodeState">INITIALIZING LOCAL CORE</span></span>
+      <span class="boot-top-version">WINDOWS DESKTOP <b>01</b></span>
+    </div>
     <div class="boot-body">
-      <div class="boot-visual">
-        <div class="boot-reactor" aria-hidden="true"><svg class="boot-gauge" viewBox="0 0 100 100"><circle class="boot-gauge-track" cx="50" cy="50" r="47"/><circle class="boot-gauge-progress" id="bootGauge" cx="50" cy="50" r="47"/></svg><i class="reactor-orbit orbit-a"></i><i class="reactor-orbit orbit-b"></i><i class="reactor-orbit orbit-c"></i><i class="reactor-core"></i><span class="boot-crosshair"></span><b class="boot-reactor-word">S / 01</b></div>
-        <div class="boot-node-readout"><small>WINDOWS PROCESS FIELD</small><b id="bootProcessCount">SYNCING</b><span>LIVE SNAPSHOT</span></div>
-        <div class="boot-live-readouts" aria-label="Live system telemetry">
-          <div><small>CPU</small><b id="bootCpuValue">--</b><i data-boot-bar="cpu"></i></div>
-          <div><small>MEMORY</small><b id="bootRamValue">--</b><i data-boot-bar="ram"></i></div>
-          <div><small>GPU</small><b id="bootGpuValue">--</b><i data-boot-bar="gpu"></i></div>
-          <div><small>DPC</small><b id="bootDpcValue">--</b><i data-boot-bar="dpc"></i></div>
+      <div class="boot-visual" aria-hidden="true">
+        <div class="boot-orbit-scene">
+          <i class="boot-orbit orbit-a"></i>
+          <i class="boot-orbit orbit-b"></i>
+          <i class="boot-orbit orbit-c"></i>
+          <i class="boot-orbit-satellite satellite-a"></i>
+          <i class="boot-orbit-satellite satellite-b"></i>
+          <div class="boot-reactor">
+            <svg class="boot-gauge" viewBox="0 0 100 100">
+              <circle class="boot-gauge-track" cx="50" cy="50" r="47"></circle>
+              <circle class="boot-gauge-progress" id="bootGauge" cx="50" cy="50" r="47"></circle>
+            </svg>
+            <span class="boot-reactor-halo"></span>
+            <div class="boot-reactor-core">
+              <svg class="boot-sigil" viewBox="0 0 100 100">
+                <path d="M50 5 89 27v46L50 95 11 73V27Z" fill="none" stroke="currentColor" stroke-width="1.5"></path>
+                <path d="M67 29H44c-9 0-14 5-14 12s5 12 14 12h12c9 0 14 5 14 12s-5 12-14 12H31" fill="none" stroke="currentColor" stroke-width="7" stroke-linecap="round"></path>
+                <path d="M50 5v11M89 27l-10 6M89 73l-10-6M50 95V84M11 73l10-6M11 27l10 6" fill="none" stroke="currentColor" stroke-opacity=".45"></path>
+              </svg>
+              <small>CORE / 01</small>
+            </div>
+            <i class="boot-reactor-sweep"></i>
+            <b class="boot-reactor-word">S / 01</b>
+          </div>
+          <span class="boot-orbit-label label-top">LOCAL NODE</span>
+          <span class="boot-orbit-label label-bottom">SECURE RUNTIME</span>
         </div>
-        <div class="boot-visual-spectrum" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
-        <div class="boot-signal-label"><i></i> COLLECTORS RUNNING IN BACKGROUND</div>
+        <div class="boot-visual-foot">
+          <span><i></i> LOCAL SESSION</span>
+          <span>READY TO SYNCHRONIZE</span>
+        </div>
       </div>
       <div class="boot-content">
-        <div class="boot-eyebrow"><span>BOOT SEQUENCE / 1.2.12</span><span>LOCAL INTELLIGENCE</span></div>
-        <div class="boot-title">SENTINEL<span class="boot-title-cursor"></span></div>
-        <div class="boot-sub">SENSE THE SYSTEM. SHAPE THE RESPONSE.</div>
-        <div class="boot-lanes" aria-hidden="true"><div><i></i><span>SESSION</span></div><div><i></i><span>PROCESS</span></div><div><i></i><span>SYSTEM</span></div><div><i></i><span>NETWORK</span></div><div><i></i><span>THERMAL</span></div><div><i></i><span>LIVE LINK</span></div></div>
-        <div class="boot-progress-meta"><span id="bootDetail">Synchronizing the Windows node</span><b id="bootPct">00%</b></div>
+        <div class="boot-eyebrow"><span>WINDOWS / LOCAL-FIRST</span><span>STARTUP SEQUENCE</span></div>
+        <h1 class="boot-title">SENTINEL<span class="boot-title-cursor"></span></h1>
+        <p class="boot-sub">Clarity for your entire system.</p>
+        <div class="boot-lane-wrap">
+          <div class="boot-lane-caption"><span>INITIALIZATION PATH</span><span>01 — 06</span></div>
+          <div class="boot-lanes" aria-hidden="true">
+            <div class="active"><i></i><span>01</span></div>
+            <div><i></i><span>02</span></div>
+            <div><i></i><span>03</span></div>
+            <div><i></i><span>04</span></div>
+            <div><i></i><span>05</span></div>
+            <div><i></i><span>06</span></div>
+          </div>
+        </div>
+        <div class="boot-progress-meta"><span id="bootDetail">Preparing your workspace</span><b id="bootPct">00%</b></div>
         <div class="boot-track"><div class="boot-progress" id="bootProgress" role="progressbar" aria-label="Workspace initialization" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"></div></div>
-        <div class="boot-stage"><span id="bootStage">POWERING SYSTEM</span><span>20 DATA MODULES</span></div>
-        <div class="boot-modules" id="bootModules" aria-label="Workspace initialization states"></div>
-        <div class="boot-log-wrap"><div class="boot-log-head"><span>INITIALIZATION FEED</span><span>REAL TIME</span></div><div class="boot-log" id="bootLog" aria-live="polite" aria-relevant="additions"></div></div>
-        <button class="boot-retry" id="bootRetry" type="button" hidden>RETRY LOCAL DATA SYNC <i>↻</i></button>
+        <div class="boot-stage"><span id="bootStage">INITIALIZING CORE</span><span class="boot-stage-side"><i></i> FULL DATA SYNCHRONIZATION</span></div>
+        <div class="boot-assurance">
+          <span><i class="assurance-lock"></i> PRIVATE BY DESIGN</span>
+          <span><i class="assurance-pulse"></i> LIVE SYSTEM DATA</span>
+          <span><i class="assurance-node"></i> WINDOWS NATIVE</span>
+        </div>
+        <button class="boot-retry" id="bootRetry" type="button" hidden>RETRY CONNECTION <span aria-hidden="true">↻</span></button>
       </div>
     </div>
+    <div class="boot-bottomline"><span>BUILT FOR CONTROL. DESIGNED FOR CLARITY.</span><span>LOCAL RUNTIME <i></i></span></div>
+  </div>
+  <div class="boot-compat" hidden aria-hidden="true">
+    <span id="bootProcessCount">SYNCING</span>
+    <div class="boot-live-readouts">
+      <div><small>CPU</small><b id="bootCpuValue">--</b><i data-boot-bar="cpu"></i></div>
+      <div><small>MEMORY</small><b id="bootRamValue">--</b><i data-boot-bar="ram"></i></div>
+      <div><small>GPU</small><b id="bootGpuValue">--</b><i data-boot-bar="gpu"></i></div>
+      <div><small>DPC</small><b id="bootDpcValue">--</b><i data-boot-bar="dpc"></i></div>
+    </div>
+    <div class="boot-modules" id="bootModules"></div>
+    <div class="boot-log-wrap"><div class="boot-log" id="bootLog"></div></div>
   </div>
 </div>
 <div id="toasts" aria-live="polite"></div>
@@ -660,4 +710,4 @@
   </div>
 </section>
 </main></div>
-<script src="app.js?v=1.2.12"></script></body></html>
+<script src="app.js?v=1.2.13"></script></body></html>

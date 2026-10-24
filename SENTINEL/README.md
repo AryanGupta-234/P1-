@@ -1,3 +1,11 @@
+## Complete SENTINEL interface redesign (v1.2.13)
+
+The desktop shell now uses one consistent graphite, signal-lime and ember visual system across the header, navigation, command cockpit, telemetry cards, tables, forms, advanced workspaces, action surfaces and dialogs. Navigation remains labeled on wide displays and collapses to an icon rail on compact screens. Workspace content and backend bindings are retained.
+
+The startup screen has a new animated local-core visual, a six-step progress path and one concise status line instead of a dense text feed. The startup queue keeps the full workspace data requirement: all workspaces are hydrated through one bounded four-request worker pool while the live event channel connects, and the splash closes only after each workspace has loaded or been marked degraded. The continuous JavaScript starfield renderer is removed; motion uses lightweight CSS transforms and opacity, with reduced-motion support.
+
+This release changes the interface and startup scheduling only. It does not grant new Windows action permissions or change approval, rollback, or safeguard policies.
+
 ## Agent health topology and Engine pulse rail (v1.2.12)
 
 The Agent workspace now renders collector heartbeats as a compact status map with state, age and run count before the detailed worker table. The detailed timings and per-function notes remain available in an expanded view. The Engine Deck adds a five-part pulse rail for safeguard, adaptive runtime, AI admission, memory pressure and WPR availability; each state comes from the existing backend engine response. Intelligence routing, memory and plan-lifecycle explanations are also collapsed into optional disclosures. These are presentation-only changes and do not add collectors, authorize actions or change the underlying admission and rollback policies.
