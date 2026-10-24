@@ -2,7 +2,7 @@
 import ctypes, json, os, threading, time, urllib.parse, psutil, platform, sys, hmac
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from . import core, actions, ai, intel, inventory, intelligence, advanced, activity_engine
-from . import safeguard, runtime_engine, memory_engine, ai_engine, security_engine, hardware_provider
+from . import safeguard, runtime_engine, memory_engine, ai_engine, security_engine, hardware_provider, maintenance
 from .core import CFG, STATE, LIVE, HIST, HEART, START, db, log, save_cfg
 
 UI = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "ui")
@@ -258,6 +258,17 @@ class H(BaseHTTPRequestHandler):
         if not self._authed(qs):
             return self._json({"error": "unauthorized"}, 401)
         p = u.path
+        if p == "/api/maintenance/status":
+            try: return self._json(maintenance.status(refresh=(qs.get("refresh") or ["0"])[0] == "1"))
+            except Exception as exc: return self._json({"error": f"{type(exc).__name__}: {str(exc)[:240]}"}, 503)
+        if p == "/api/maintenance/job":
+            try: return self._json(maintenance.job((qs.get("id") or [""])[0]))
+            except (ValueError, TypeError) as exc: return self._json({"error": str(exc)}, 404)
+        if p == "/api/maintenance/journal":
+            try: return self._json(maintenance.journal(min(100, int((qs.get("limit") or ["50"])[0]))))
+            except (ValueError, TypeError) as exc: return self._json({"error": str(exc)}, 400)
+        if p == "/api/maintenance/digest":
+            return self._json(maintenance.daily_digest())
         if p == "/api/snapshot":
             return self._json(snapshot())
         if p == "/api/processes":
@@ -477,6 +488,33 @@ class H(BaseHTTPRequestHandler):
         if not isinstance(body, dict):
             return self._json({"error": "request body must be a JSON object"}, 400)
         p = u.path
+        if p == "/api/maintenance/preview":
+            try:
+                action = str(body.get("action") or "")
+                args = body.get("args") if isinstance(body.get("args"), dict) else {}
+                return self._json(maintenance.preview_action(action, args), 201)
+            except PermissionError as exc: return self._json({"error": str(exc)}, 403)
+            except (ValueError, TypeError) as exc: return self._json({"error": str(exc)}, 400)
+            except Exception as exc: return self._json({"error": f"{type(exc).__name__}: {str(exc)[:260]}"}, 409)
+        if p == "/api/maintenance/execute":
+            try:
+                return self._json(maintenance.execute_preview(str(body.get("preview_token") or ""),
+                                                               confirmed=body.get("confirmed") is True), 202)
+            except PermissionError as exc: return self._json({"error": str(exc)}, 403)
+            except (ValueError, TypeError) as exc: return self._json({"error": str(exc)}, 400)
+            except Exception as exc: return self._json({"error": f"{type(exc).__name__}: {str(exc)[:260]}"}, 409)
+        if p == "/api/maintenance/undo":
+            try: return self._json(maintenance.undo(int(body.get("journal_id", 0)), confirmed=body.get("confirmed") is True))
+            except PermissionError as exc: return self._json({"error": str(exc)}, 403)
+            except (ValueError, TypeError) as exc: return self._json({"error": str(exc)}, 400)
+            except Exception as exc: return self._json({"error": f"{type(exc).__name__}: {str(exc)[:260]}"}, 409)
+        if p == "/api/maintenance/policy":
+            try: return self._json(maintenance.update_policy(body))
+            except PermissionError as exc: return self._json({"error": str(exc)}, 403)
+            except (ValueError, TypeError) as exc: return self._json({"error": str(exc)}, 400)
+        if p == "/api/maintenance/goal":
+            try: return self._json(maintenance.goal_plan(str(body.get("goal") or "")))
+            except (ValueError, TypeError) as exc: return self._json({"error": str(exc)}, 400)
         if p == "/api/hardware/provider/start":
             try:
                 result = hardware_provider.install_and_start()

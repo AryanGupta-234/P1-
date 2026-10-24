@@ -37,12 +37,16 @@ PROTECTED_NAMES = frozenset({
 TRACE_ACTIONS = frozenset({"wpr_trace", "etw_capture"})
 PROCESS_ACTIONS = frozenset({
     "bg_priority", "trim_bg", "terminate_process", "game_profile_apply",
-    "timer_resolution",
+    "timer_resolution", "maint_process_tune",
 })
 MUTATING_ACTIONS = frozenset({
     "bg_priority", "trim_bg", "terminate_process", "game_profile_apply",
     "timer_resolution", "power_plan", "wifi_max_performance",
     "pause_updater_service", "flush_dns", "wpr_trace", "etw_capture",
+    "maint_startup_disable", "maint_cleanup", "maint_dns_set", "maint_adapter_restart",
+    "maint_winsock_reset", "maint_driver_install", "maint_driver_rollback",
+    "maint_windows_repair", "maint_service_restart", "maint_power_mode",
+    "maint_trim_volume", "maint_process_tune",
 })
 
 _probe_cache: dict[str, Any] = {"at": 0.0, "valorant": False, "complete": False, "error": ""}
@@ -183,6 +187,13 @@ def check_action(kind: str, args: dict | None = None) -> dict[str, Any]:
 
     if kind in PROCESS_ACTIONS and not current["process_detection_complete"]:
         return {"allowed": False, "code": "process_state_unknown", "reason": "Process inventory is stale or incomplete. Refresh process identities before attempting a process change."}
+
+    if kind == "maint_service_restart":
+        service = str(args.get("service") or "").casefold()
+        if service in VANGUARD_SERVICES or service.startswith("vg"):
+            return {"allowed": False, "code": "vanguard_service_protected", "reason": "Vanguard services are permanently excluded from SENTINEL service controls."}
+        if service not in {"audiosrv", "bthserv", "wuauserv", "bits", "spooler", "dhcp", "dnscache"}:
+            return {"allowed": False, "code": "service_not_allowlisted", "reason": "Service is not on the narrow Windows maintenance allowlist."}
 
     if kind == "pause_updater_service":
         service = str(args.get("service") or "").casefold()
