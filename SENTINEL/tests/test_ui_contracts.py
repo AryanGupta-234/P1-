@@ -136,3 +136,15 @@ def test_original_detailed_boot_console_remains_available():
     for element_id in ("bootModules", "bootLog", "bootProgress", "bootDetail", "bootGauge",
                        "bootCpuValue", "bootRamValue", "bootGpuValue", "bootDpcValue"):
         assert f'id="{element_id}"' in html
+
+
+def test_maintenance_health_report_and_game_planner_are_visible():
+    html = (ROOT / "ui" / "index.html").read_text(encoding="utf-8")
+    app = (ROOT / "ui" / "app.js").read_text(encoding="utf-8")
+    assert 'id="maint-health-report"' in html
+    assert 'id="maint-game-choice"' in html
+    assert 'id="maint-game-target"' in html
+    assert 'id="maint-game-plan"' in html
+    assert "function renderMaintenanceIntelligence()" in app
+    assert 'api("/api/maintenance/game-relocation/plan"' in app
+    assert "health.coverage_count" in app

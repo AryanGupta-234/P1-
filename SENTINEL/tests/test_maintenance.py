@@ -105,3 +105,24 @@ def test_game_library_relocation_is_manifest_based_and_never_moves_files():
     assert "def game_relocation_plan(" in MAINTENANCE
     assert '"files_will_be_moved_by_sentinel": False' in MAINTENANCE
     assert "/api/maintenance/game-relocation/plan" in SERVER
+
+
+def test_thermal_forecast_uses_bounded_samples_and_is_alert_only():
+    assert "minutes_to_threshold" in MAINTENANCE
+    assert 'key = "thermal:" + name' in MAINTENANCE
+    assert "Trend-based alert only; no automatic fan, power, or process action." in MAINTENANCE
+
+
+def test_epic_empty_install_location_is_not_treated_as_current_directory():
+    assert 'raw_install_path = str(item.get("InstallLocation") or "").strip()' in MAINTENANCE
+    assert "if not app_name or not title or not raw_install_path:" in MAINTENANCE
+
+
+def test_game_relocation_plan_never_moves_launcher_owned_files():
+    start = MAINTENANCE.index("def game_relocation_plan(")
+    end = MAINTENANCE.index("def _average_metric(", start)
+    source = MAINTENANCE[start:end]
+    assert '"files_will_be_moved_by_sentinel": False' in source
+    assert "shutil.move" not in source
+    assert "os.rename(" not in source
+    assert "/api/maintenance/game-relocation/plan" in SERVER

@@ -250,3 +250,12 @@ The Maintenance workspace includes read-only inventory, DNS resolver timing, a l
 Diagnostic inventory runs on a background worker and defers WMI/driver scans during games or resource pressure. Idle and weekly schedules remain read-only. Disk trend sampling is bounded; thermal forecasts alert only. Game moves remain in launcher library tools; OEM fan controls remain guided through supported vendor software; BIOS, Secure Boot and security settings remain read-only.
 
 The separate adaptive medium-risk tuner requires five consecutive measured improvements for the same action target and game in addition to the existing global automation master, policy toggle, fixed allowlist, risk/confidence checks, live safeguard and verified undo snapshot. Dangerous and maintenance actions cannot use that approval path.
+
+
+## SENTINEL 1.2.21 — evidence intelligence and launcher planning
+
+The Maintenance workspace now presents a local evidence-health summary with coverage, severity, confidence and supporting measurements for sustained CPU pressure, memory pressure, storage headroom, thermal elevation, GPU throttling, network degradation and selected security posture. It is heuristic evidence correlation—not an AI diagnosis guarantee—and recommendations remain advisory.
+
+Read-only OEM discovery identifies the Windows BIOS manufacturer/model and supported thermal-profile utilities from installed-app inventory. Fan changes remain guided through signed OEM software; firmware/EC/ACPI register writes are disabled. Predictive thermal alerts are based on repeated samples and an estimated time to threshold, not a single instantaneous reading.
+
+Read-only Steam and Epic manifest discovery feeds a game relocation planner. It validates source manifest, target NTFS volume and manifest install size plus 10% free-space headroom. SENTINEL does not move launcher-owned folders, edit manifests or touch save data; the actual move remains inside the launcher. Xbox / WindowsApps package folders remain outside direct relocation.
