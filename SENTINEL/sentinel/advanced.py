@@ -907,6 +907,59 @@ def _metric_mean(metric: str, seconds: int = 30) -> tuple[float | None, int]:
     return float(statistics.mean(clean)), len(clean)
 
 
+
+
+def measured_improvement_streak(kind: str, args: dict | None = None) -> int:
+    """Consecutive >=3% measured improvements for the same action target and game.
+
+    This reports evidence only. approval_engine still decides; it additionally
+    requires the global automation switch, the medium-risk toggle, the fixed
+    reversible allowlist, a fresh safeguard pass and a verified undo snapshot.
+    """
+    from . import approval_engine
+    if kind not in approval_engine.AUTO_MEDIUM_ALLOWLIST:
+        return 0
+    state = STATE.get("advanced") if isinstance(STATE.get("advanced"), dict) else {}
+    session_id = state.get("active_session_id")
+    if not session_id:
+        return 0
+    session_rows = db("SELECT game_key FROM game_sessions WHERE id=?", (int(session_id),))
+    if not session_rows:
+        return 0
+    game_key = str(session_rows[0][0] or "")
+    if not game_key:
+        return 0
+
+    def target_key(value: dict) -> str:
+        value = value if isinstance(value, dict) else {}
+        if kind == "game_profile_apply":
+            stable = {
+                "game": str(value.get("game") or value.get("game_name") or game_key).casefold(),
+                "profile": value.get("profile") if isinstance(value.get("profile"), dict) else {},
+            }
+        else:
+            stable = value
+        return json.dumps(stable, sort_keys=True, separators=(",", ":"), default=str)
+
+    expected = target_key(args or {})
+    rows = db(
+        "SELECT e.outcome,a.args FROM tuner_experiments e "
+        "JOIN actions a ON a.id=e.action_id "
+        "JOIN game_sessions g ON g.id=e.game_session_id "
+        "WHERE a.kind=? AND g.game_key=? ORDER BY e.id DESC LIMIT 5",
+        (kind, game_key),
+    )
+    streak = 0
+    for outcome, raw_args in rows:
+        try:
+            previous_args = json.loads(raw_args or "{}")
+        except (TypeError, ValueError):
+            break
+        if str(outcome) != "kept_improved" or target_key(previous_args) != expected:
+            break
+        streak += 1
+    return streak
+
 def start_tuner_experiment(kind: str, args: dict, metric: str, direction: str) -> dict:
     """Create a user-approved experiment around one reversible allowlisted action."""
     allowed_metrics = {"cpu", "dpc", "irq", "pagesin", "pagesout", "dlat", "ping", "jitter", "gpu", "gpuclk", "gputemp", "gpupwr"}

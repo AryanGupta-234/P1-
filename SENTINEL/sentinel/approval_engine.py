@@ -38,6 +38,7 @@ def evaluate(
     auto_medium_enabled: bool = False,
     automation_enabled: bool = False,
     reversible: bool = False,
+    measured_streak: int = 0,
 ) -> dict:
     """Return risk, priority, confidence and a policy-bound approval decision."""
     preview = preview if isinstance(preview, dict) else {}
@@ -74,6 +75,7 @@ def evaluate(
         and automation_enabled
         and risk <= 25
         and confidence >= 0.92
+        and int(measured_streak) >= 5
     )
     if blocked:
         decision, reason = "blocked", (
@@ -86,7 +88,11 @@ def evaluate(
     elif tier == "safe":
         decision, reason = "policy_gated", "safe diagnostic action still requires its individual autopilot opt-in"
     else:
-        decision, reason = "manual_approval", "action requires explicit operator approval"
+        decision = "manual_approval"
+        if tier == "medium" and kind in AUTO_MEDIUM_ALLOWLIST and measured_streak < 5:
+            reason = f"requires five consecutive measured improvements for this action and game ({max(0, int(measured_streak))}/5)"
+        else:
+            reason = "action requires explicit operator approval"
 
     return {
         "risk_score": int(risk),

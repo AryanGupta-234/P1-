@@ -260,6 +260,7 @@ def propose(kind, args=None, origin="brain", reason=""):
         auto_medium_enabled=bool(CFG.get("approval_policy", {}).get("auto_approve_reversible_medium", False)),
         automation_enabled=bool(core.get_profile()["automation"]),
         reversible=journal_ready and tier == "medium",
+        measured_streak=advanced.measured_improvement_streak(kind, args),
     )
     auto_safe = (tier == "safe" and bool(CFG["autopilot"].get(kind))
                  and core.get_profile()["automation"])
@@ -306,6 +307,7 @@ def execute(aid, *, user_confirmed=False):
                 auto_medium_enabled=bool(CFG.get("approval_policy", {}).get("auto_approve_reversible_medium", False)),
                 automation_enabled=bool(core.get_profile()["automation"]),
                 reversible=True,
+                measured_streak=advanced.measured_improvement_streak(kind, args),
             )
             if not auto_decision["auto_approved"]:
                 return "explicit user approval required; " + auto_decision["reason"]
@@ -379,6 +381,7 @@ def list_actions(limit=40):
             automation_enabled=bool(core.get_profile()["automation"]),
             reversible=(r[2] in approval_engine.AUTO_MEDIUM_ALLOWLIST and preview.get("undo_available") is True)
                        or (r[2] in approval_engine.AUTO_MEDIUM_ALLOWLIST and r[3] != "pending" and bool(meta[1])),
+            measured_streak=advanced.measured_improvement_streak(r[2], args),
         )
         if tier == "safe" and CFG.get("autopilot", {}).get(r[2]) and core.get_profile()["automation"]:
             approval.update(decision="auto_approved", auto_approved=True,
