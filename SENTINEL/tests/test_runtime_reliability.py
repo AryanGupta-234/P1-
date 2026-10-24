@@ -645,7 +645,8 @@ def test_install_integration_verifies_desktop_and_all_users_shortcuts(monkeypatc
     assert "(Join-Path $commonStartMenuGroup 'SENTINEL.lnk')" in script
     assert "Test-Path -LiteralPath $item.Path -PathType Leaf" in script
     assert "$check.TargetPath -ne $pythonw" in script
-    assert "RunLevel Highest" in script
+    assert "RunLevel Limited" in script
+    assert "standard-user interactive Windows agent" in script
     assert "INSTALL_DESKTOP=" in script
     assert "INSTALL_START_MENU=" in script
 
