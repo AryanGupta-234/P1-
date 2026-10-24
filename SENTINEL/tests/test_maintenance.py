@@ -1,0 +1,66 @@
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+MAINTENANCE = (ROOT / "sentinel" / "maintenance.py").read_text(encoding="utf-8")
+SAFEGUARD = (ROOT / "sentinel" / "safeguard.py").read_text(encoding="utf-8")
+SERVER = (ROOT / "sentinel" / "server.py").read_text(encoding="utf-8")
+INSTALLER = (ROOT / "install.bat").read_text(encoding="utf-8")
+
+
+def test_maintenance_kill_switch_defaults_on_and_mutations_are_previewed():
+    assert "kill_switch INTEGER NOT NULL DEFAULT 1" in MAINTENANCE
+    assert "def preview_action(" in MAINTENANCE and "def execute_preview(" in MAINTENANCE
+    assert "confirmed is not True" in MAINTENANCE
+    assert "_PREVIEW_LOCK" in MAINTENANCE
+    assert '"automatic_allowed": False' in MAINTENANCE
+
+
+def test_vanguard_guard_covers_every_maintenance_mutation():
+    for action in (
+        "maint_startup_disable", "maint_cleanup", "maint_dns_set", "maint_adapter_restart",
+        "maint_winsock_reset", "maint_driver_install", "maint_driver_rollback",
+        "maint_windows_repair", "maint_service_restart", "maint_power_mode",
+        "maint_trim_volume", "maint_process_tune",
+    ):
+        assert action in SAFEGUARD
+    assert "valorant_read_only" in SAFEGUARD
+    assert "process_state_unknown" in SAFEGUARD
+
+
+def test_scheduler_is_diagnostic_only():
+    start = MAINTENANCE.index("def _scheduler_loop()")
+    end = MAINTENANCE.index("def start()", start)
+    scheduler = MAINTENANCE[start:end]
+    assert "_read_only_diagnostics()" in scheduler
+    assert "execute_preview(" not in scheduler and "_apply_action(" not in scheduler
+    assert 'if not policy["scheduler_enabled"] or not IS_WIN' in scheduler
+
+
+def test_dns_test_is_read_only_and_dns_setter_is_valid():
+    lines = [line for line in MAINTENANCE.splitlines() if "Set-DnsClientServerAddress" in line]
+    assert lines and all("-AddressFamily" not in line for line in lines)
+    assert "def test_dns_servers(" in MAINTENANCE and "Resolve-DnsName" in MAINTENANCE
+    assert "/api/maintenance/dns-test" in SERVER
+
+
+def test_resource_pressure_defers_driver_inventory_and_thermal_is_predictive():
+    assert "Deferred during game session or resource pressure." in MAINTENANCE
+    assert "available_gib >= 3.0" in MAINTENANCE and "cpu_percent < 85.0" in MAINTENANCE
+    assert "minutes_to_threshold" in MAINTENANCE
+    assert "now - float(latest[0][0]) >= 900" in MAINTENANCE
+
+
+def test_status_refresh_runs_off_the_request_thread():
+    assert "def queue_diagnostics(" in MAINTENANCE
+    assert "threading.Thread(target=_refresh_diagnostics_worker" in MAINTENANCE
+
+
+def test_revert_all_skips_operations_without_safe_undo():
+    assert "def revert_all(" in MAINTENANCE
+    assert "no safe automatic undo" in MAINTENANCE
+    assert "/api/maintenance/revert-all" in SERVER
+
+
+def test_installer_checks_new_engines():
+    assert "sentinel\\maintenance.py" in INSTALLER
+    assert "sentinel\\approval_engine.py" in INSTALLER

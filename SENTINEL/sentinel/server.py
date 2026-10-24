@@ -488,6 +488,20 @@ class H(BaseHTTPRequestHandler):
         if not isinstance(body, dict):
             return self._json({"error": "request body must be a JSON object"}, 400)
         p = u.path
+        if p == "/api/maintenance/dns-test":
+            try:
+                return self._json(maintenance.test_dns_servers(body.get("servers") if isinstance(body.get("servers"), list) else []))
+            except (ValueError, TypeError) as exc:
+                return self._json({"error": str(exc)}, 400)
+            except Exception as exc:
+                return self._json({"error": f"{type(exc).__name__}: {str(exc)[:240]}"}, 503)
+        if p == "/api/maintenance/revert-all":
+            try:
+                return self._json(maintenance.revert_all(confirmed=body.get("confirmed") is True))
+            except PermissionError as exc:
+                return self._json({"error": str(exc)}, 403)
+            except Exception as exc:
+                return self._json({"error": f"{type(exc).__name__}: {str(exc)[:240]}"}, 409)
         if p == "/api/maintenance/preview":
             try:
                 action = str(body.get("action") or "")

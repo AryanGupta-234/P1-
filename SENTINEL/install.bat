@@ -110,6 +110,8 @@ if exist "%VERSION_DIR%" (
   )
   if not exist "%VERSION_DIR%\agent.py" goto :incomplete
   if not exist "%VERSION_DIR%\sentinel\core.py" goto :incomplete
+  if not exist "%VERSION_DIR%\sentinel\maintenance.py" goto :incomplete
+  if not exist "%VERSION_DIR%\sentinel\approval_engine.py" goto :incomplete
   if not exist "%VERSION_DIR%\ui\index.html" goto :incomplete
   if not exist "%VERSION_DIR%\requirements.txt" goto :incomplete
   if not exist "%VERSION_DIR%\.venv\Scripts\python.exe" goto :incomplete
@@ -135,6 +137,14 @@ if exist "%VERSION_DIR%" (
   )
   if not exist "%STAGING_DIR%\agent.py" (
     echo ERROR: Agent entry point is missing from the staged release.
+    goto :fail
+  )
+  if not exist "%STAGING_DIR%\sentinel\maintenance.py" (
+    echo ERROR: SENTINEL maintenance engine is missing from the staged release.
+    goto :fail
+  )
+  if not exist "%STAGING_DIR%\sentinel\approval_engine.py" (
+    echo ERROR: SENTINEL approval engine is missing from the staged release.
     goto :fail
   )
   if not exist "%STAGING_DIR%\sentinel\core.py" (

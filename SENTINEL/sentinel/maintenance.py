@@ -39,7 +39,8 @@ PROTECTED_STARTUP_WORDS = ("defender", "securityhealth", "windows security", "se
 _STARTED = False
 _STOP = threading.Event()
 _DIAG_LOCK = threading.Lock()
-_DIAG_CACHE: dict[str, Any] = {"at": 0.0, "payload": None}
+_DIAG_CACHE: dict[str, Any] = {"at": 0.0, "payload": None, "refreshing": False}
+_PREVIEW_LOCK = threading.Lock()
 _JOB_LOCK = threading.Lock()
 
 
@@ -60,7 +61,7 @@ def ensure_schema() -> None:
         id INTEGER PRIMARY KEY AUTOINCREMENT, ts REAL NOT NULL, kind TEXT NOT NULL,
         value REAL, detail_json TEXT NOT NULL)""")
     core.db("""CREATE TABLE IF NOT EXISTS maintenance_policy(
-        id INTEGER PRIMARY KEY CHECK(id=1), kill_switch INTEGER NOT NULL DEFAULT 0,
+        id INTEGER PRIMARY KEY CHECK(id=1), kill_switch INTEGER NOT NULL DEFAULT 1,
         scheduler_enabled INTEGER NOT NULL DEFAULT 0, idle_minutes INTEGER NOT NULL DEFAULT 15,
         weekly_diagnostics INTEGER NOT NULL DEFAULT 1, last_idle_run REAL NOT NULL DEFAULT 0,
         last_weekly_run REAL NOT NULL DEFAULT 0)""")
@@ -464,7 +465,7 @@ def _snapshot_for(action: str, args: dict) -> dict:
 
 def _action_policy(action: str) -> dict:
     dangerous = {"cleanup", "winsock_reset", "driver_install", "driver_rollback", "windows_repair", "trim_volume"}
-    admin = {"adapter_restart", "winsock_reset", "driver_install", "driver_rollback",
+    admin = {"dns_set", "adapter_restart", "winsock_reset", "driver_install", "driver_rollback",
              "windows_repair", "service_restart", "trim_volume", "process_tune"}
     restore = {"winsock_reset", "driver_install", "driver_rollback", "windows_repair"}
     return {"risk": "dangerous" if action in dangerous else "medium", "administrator_required": action in admin,
@@ -555,6 +556,19 @@ def _current_snapshot_matches(action: str, args: dict, original: dict) -> bool:
         current = _snapshot_for(action, args)
         if action == "cleanup":
             return hashlib.sha256(json.dumps(current["files"], sort_keys=True).encode()).hexdigest() == hashlib.sha256(json.dumps(original["files"], sort_keys=True).encode()).hexdigest()
+        if action == "dns_set":
+            return (current["interface"] == original["interface"] and current["family"] == original["family"]
+                    and current["servers"] == original["servers"]
+                    and current["adapter"].get("InterfaceGuid") == original["adapter"].get("InterfaceGuid"))
+        if action == "adapter_restart":
+            return (current["interface"] == original["interface"]
+                    and current["adapter"].get("InterfaceGuid") == original["adapter"].get("InterfaceGuid")
+                    and current["adapter"].get("Status") == original["adapter"].get("Status"))
+        if action == "startup_disable":
+            return (current.get("command") == original.get("command")
+                    and current.get("registry_type") == original.get("registry_type"))
+        if action == "power_mode":
+            return current["scheme"] == original["scheme"]
         if action == "driver_install":
             return current["update"]["update_id"] == original["update"]["update_id"] and current["device"]["DriverVersion"] == original["device"]["DriverVersion"]
         if action == "winsock_reset":
@@ -568,27 +582,28 @@ def execute_preview(token: str, *, confirmed: bool = False) -> dict:
     ensure_schema()
     if confirmed is not True:
         raise PermissionError("Explicit user confirmation is required.")
-    rows = core.db("SELECT action,args_json,snapshot_json,created_at,expires_at,consumed FROM maintenance_previews WHERE token=?", (str(token),))
-    if not rows:
-        raise ValueError("Preview was not found or has expired.")
-    action, args_json, snapshot_json, created, expires, consumed = rows[0]
-    if consumed:
-        raise ValueError("Preview token has already been used.")
-    if time.time() > float(expires):
-        raise ValueError("Preview expired. Generate a fresh preview.")
-    args, before = json.loads(args_json), json.loads(snapshot_json)
-    if _policy()["kill_switch"]:
-        raise PermissionError("Maintenance kill switch is enabled.")
-    if _action_policy(action)["administrator_required"]:
-        _require_admin()
-    _require_safeguard("maint_" + action, args)
-    _assert_budget()
-    if not _current_snapshot_matches(action, args, before):
-        raise RuntimeError("System state changed after preview. No action was run; generate a new preview.")
-    token_update = core.db("UPDATE maintenance_previews SET consumed=1 WHERE token=? AND consumed=0", (str(token),))
-    job_id, now = uuid.uuid4().hex, time.time()
-    core.db("INSERT INTO maintenance_jobs(job_id,action,state,created_at,updated_at) VALUES(?,?,?,?,?)",
-            (job_id, action, "queued", now, now))
+    with _PREVIEW_LOCK:
+        rows = core.db("SELECT action,args_json,snapshot_json,created_at,expires_at,consumed FROM maintenance_previews WHERE token=?", (str(token),))
+        if not rows:
+            raise ValueError("Preview was not found or has expired.")
+        action, args_json, snapshot_json, created, expires, consumed = rows[0]
+        if consumed:
+            raise ValueError("Preview token has already been used.")
+        if time.time() > float(expires):
+            raise ValueError("Preview expired. Generate a fresh preview.")
+        args, before = json.loads(args_json), json.loads(snapshot_json)
+        if _policy()["kill_switch"]:
+            raise PermissionError("Maintenance kill switch is enabled.")
+        if _action_policy(action)["administrator_required"]:
+            _require_admin()
+        _require_safeguard("maint_" + action, args)
+        _assert_budget()
+        if not _current_snapshot_matches(action, args, before):
+            raise RuntimeError("System state changed after preview. No action was run; generate a new preview.")
+        core.db("UPDATE maintenance_previews SET consumed=1 WHERE token=? AND consumed=0", (str(token),))
+        job_id, now = uuid.uuid4().hex, time.time()
+        core.db("INSERT INTO maintenance_jobs(job_id,action,state,created_at,updated_at) VALUES(?,?,?,?,?)",
+                (job_id, action, "queued", now, now))
     worker = threading.Thread(target=_job_worker, args=(job_id, action, args, before), name="maintenance-" + action, daemon=True)
     worker.start()
     return {"ok": True, "job_id": job_id, "state": "queued", "action": action}
@@ -598,12 +613,12 @@ def _job_worker(job_id: str, action: str, args: dict, before: dict) -> None:
     core.db("UPDATE maintenance_jobs SET state='running',updated_at=? WHERE job_id=?", (time.time(), job_id))
     try:
         _require_safeguard("maint_" + action, args)
-        if not _current_snapshot_matches(action, args, before):
-            raise RuntimeError("System state changed while queued; action stopped before mutation.")
+        if _policy()["kill_switch"]:
+            raise PermissionError("Maintenance kill switch was enabled after approval; queued action cancelled.")
         if _action_policy(action)["administrator_required"]:
             _require_admin()
         if not _current_snapshot_matches(action, args, before):
-            raise RuntimeError("System state changed while the operation was queued; aborted before mutation.")
+            raise RuntimeError("System state changed while queued; action stopped before mutation.")
         if _action_policy(action)["restore_point_required"]:
             _run_restore_point(action)
         result, after, undo, can_undo = _apply_action(action, args, before)
@@ -653,7 +668,7 @@ def _apply_action(action: str, args: dict, before: dict) -> tuple[str, dict, dic
     if action == "dns_set":
         servers = [str(ipaddress.ip_address(x)) for x in args.get("servers", [])]
         interface, family = before["interface"], before["family"]
-        _powershell(f"Set-DnsClientServerAddress -InterfaceAlias {_q(interface)} -AddressFamily {family} -ServerAddresses @({','.join(_q(x) for x in servers)}) -ErrorAction Stop")
+        _powershell(f"Set-DnsClientServerAddress -InterfaceAlias {_q(interface)} -ServerAddresses @({','.join(_q(x) for x in servers)}) -ErrorAction Stop")
         undo = {"kind": "dns_restore", "interface": interface, "family": family,
                 "original": before["servers"], "applied": servers}
         return f"DNS updated for {interface} ({family}); original resolver settings are journaled.", {"interface": interface, "family": family, "servers": servers}, undo, True
@@ -771,6 +786,10 @@ def undo(journal_id: int, *, confirmed: bool = False) -> dict:
     action, before_json, after_json, undo_json, can_undo, status = rows[0]
     if not can_undo or status != "done":
         raise PermissionError("This operation has no automatic undo. Use the guided recovery instructions.")
+    policy = _action_policy(action)
+    if policy["administrator_required"]:
+        _require_admin()
+    _require_safeguard("maint_" + action, {})
     detail = json.loads(undo_json)
     if detail.get("kind") == "startup_restore":
         if winreg is None:
@@ -788,9 +807,9 @@ def undo(journal_id: int, *, confirmed: bool = False) -> dict:
             raise RuntimeError("Current DNS settings no longer match Sentinel's change; preserving the user's change.")
         family = detail["family"]
         if detail["original"]:
-            _powershell(f"Set-DnsClientServerAddress -InterfaceAlias {_q(detail['interface'])} -AddressFamily {family} -ServerAddresses @({','.join(_q(x) for x in detail['original'])})")
+            _powershell(f"Set-DnsClientServerAddress -InterfaceAlias {_q(detail['interface'])} -ServerAddresses @({','.join(_q(x) for x in detail['original'])})")
         else:
-            _powershell(f"Set-DnsClientServerAddress -InterfaceAlias {_q(detail['interface'])} -AddressFamily {family} -ResetServerAddresses")
+            _powershell(f"Set-DnsClientServerAddress -InterfaceAlias {_q(detail['interface'])} -ResetServerAddresses")
     elif detail.get("kind") == "power_restore":
         if _active_scheme() != detail["applied"]:
             raise RuntimeError("Power scheme changed outside Sentinel; preserving that user change.")
@@ -818,6 +837,69 @@ def journal(limit: int = 50) -> list[dict]:
              "status": r[4], "result": r[5]} for r in rows]
 
 
+
+
+def test_dns_servers(servers: list[str], name: str = "www.microsoft.com") -> dict:
+    if not IS_WIN:
+        raise RuntimeError("DNS resolver testing is available only on Windows.")
+    if not isinstance(servers, list) or not 1 <= len(servers) <= 4:
+        raise ValueError("Provide between one and four DNS server addresses.")
+    normalized = []
+    for server in servers:
+        address = str(ipaddress.ip_address(server))
+        if address not in normalized:
+            normalized.append(address)
+    query_name = str(name or "www.microsoft.com").strip()
+    if not re.fullmatch(r"[A-Za-z0-9.-]{1,253}", query_name) or ".." in query_name:
+        raise ValueError("DNS test name is invalid.")
+    script = f"""$ErrorActionPreference='Stop'
+    $servers=@({','.join(_q(x) for x in normalized)})
+    $results=@()
+    foreach($server in $servers) {{
+      $times=@()
+      $errorText=''
+      for($i=0;$i -lt 3;$i++) {{
+        $watch=[Diagnostics.Stopwatch]::StartNew()
+        try {{
+          Resolve-DnsName -Name {_q(query_name)} -Server $server -DnsOnly -ErrorAction Stop | Out-Null
+          $watch.Stop()
+          $times += [math]::Round($watch.Elapsed.TotalMilliseconds,2)
+        }} catch {{
+          $watch.Stop()
+          $errorText=$_.Exception.Message
+        }}
+      }}
+      $avg=$null
+      if($times.Count -gt 0){{$avg=[math]::Round((($times | Measure-Object -Average).Average),2)}}
+      $results += [pscustomobject]@{{server=$server;successful=$times.Count;average_ms=$avg;error=$errorText}}
+    }}
+    ConvertTo-Json -InputObject $results -Depth 4 -Compress"""
+    result = _ps_json(script, 45)
+    rows = [result] if isinstance(result, dict) else result if isinstance(result, list) else []
+    rows.sort(key=lambda row: float(row.get("average_ms") or 1e9) if int(row.get("successful") or 0) else 1e9)
+    return {"query": query_name, "results": rows,
+            "recommended": next((row["server"] for row in rows if int(row.get("successful") or 0)), None),
+            "note": "Three read-only lookups per resolver. No DNS settings were changed."}
+
+
+
+
+def revert_all(*, confirmed: bool = False) -> dict:
+    if confirmed is not True:
+        raise PermissionError("Explicit confirmation is required to revert all reversible maintenance changes.")
+    rows = core.db("SELECT id,action,undo_available,status FROM maintenance_journal ORDER BY id DESC LIMIT 200")
+    reverted, skipped, failed = [], [], []
+    for journal_id, action, can_undo, state in rows:
+        if not can_undo or state != "done":
+            skipped.append({"journal_id": int(journal_id), "action": action, "reason": "no safe automatic undo"})
+            continue
+        try:
+            reverted.append(undo(int(journal_id), confirmed=True))
+        except Exception as exc:
+            failed.append({"journal_id": int(journal_id), "action": action,
+                           "error": f"{type(exc).__name__}: {str(exc)[:160]}"})
+    return {"ok": not failed, "reverted": reverted, "skipped": skipped, "failed": failed}
+
 def _idle_seconds() -> float:
     if not IS_WIN:
         return 0.0
@@ -839,8 +921,10 @@ def _predictive_scan() -> list[dict]:
         try:
             usage = psutil.disk_usage(part.mountpoint)
             key = "disk_free:" + part.mountpoint
-            core.db("INSERT INTO maintenance_samples(ts,kind,value,detail_json) VALUES(?,?,?,?)",
-                    (now, key, float(usage.free), json.dumps({"total": usage.total})))
+            latest = core.db("SELECT ts FROM maintenance_samples WHERE kind=? ORDER BY ts DESC LIMIT 1", (key,))
+            if not latest or now - float(latest[0][0]) >= 900:
+                core.db("INSERT INTO maintenance_samples(ts,kind,value,detail_json) VALUES(?,?,?,?)",
+                        (now, key, float(usage.free), json.dumps({"total": usage.total})))
             history = core.db("SELECT ts,value FROM maintenance_samples WHERE kind=? AND ts>=? ORDER BY ts DESC LIMIT 24",
                               (key, now - 7 * 86400))
             if len(history) >= 3:
@@ -851,27 +935,64 @@ def _predictive_scan() -> list[dict]:
                 if usage.free < 5 * 1024**3 or (days is not None and days < 7):
                     findings.append({"kind": "disk_capacity", "mountpoint": part.mountpoint,
                                      "free_gib": round(usage.free / 1024**3, 1),
-                                     "projected_days_to_full": round(days, 1) if days is not None else None})
+                                     "projected_days_to_full": round(days, 1) if days is not None else None,
+                                     "note": "Predictive alert only; cleanup is never triggered automatically."})
         except OSError:
             continue
     sensors = core.STATE.get("hardware_sensors") or {}
     for sensor in sensors.get("sensors", []) if isinstance(sensors, dict) else []:
-        if isinstance(sensor, dict) and sensor.get("value") is not None and "temp" in str(sensor.get("type", "")).casefold():
-            try:
-                value = float(sensor["value"])
-                if value >= 88:
-                    findings.append({"kind": "thermal_warning", "sensor": sensor.get("name"), "celsius": value,
-                                     "note": "Alert only; no automatic power or fan action."})
-            except (TypeError, ValueError):
-                pass
+        if not isinstance(sensor, dict) or sensor.get("value") is None:
+            continue
+        if "temp" not in str(sensor.get("type", "")).casefold():
+            continue
+        try:
+            value = float(sensor["value"])
+            if not -20.0 <= value <= 150.0:
+                continue
+            name = str(sensor.get("name") or "temperature")[:100]
+            key = "thermal:" + name
+            latest = core.db("SELECT ts FROM maintenance_samples WHERE kind=? ORDER BY ts DESC LIMIT 1", (key,))
+            if not latest or now - float(latest[0][0]) >= 30:
+                core.db("INSERT INTO maintenance_samples(ts,kind,value,detail_json) VALUES(?,?,?,?)",
+                        (now, key, value, json.dumps({"sensor_type": sensor.get("type")})))
+            history = core.db("SELECT ts,value FROM maintenance_samples WHERE kind=? AND ts>=? ORDER BY ts DESC LIMIT 20",
+                              (key, now - 600))
+            minutes = None
+            if len(history) >= 3:
+                ordered = list(reversed(history))
+                elapsed_minutes = max(0.1, (ordered[-1][0] - ordered[0][0]) / 60.0)
+                rise = (ordered[-1][1] - ordered[0][1]) / elapsed_minutes
+                if rise > 0 and value < 88.0:
+                    minutes = max(0.0, (88.0 - value) / rise)
+            if value >= 88.0 or (minutes is not None and minutes <= 15.0):
+                findings.append({"kind": "thermal_warning", "sensor": name, "celsius": round(value, 1),
+                                 "minutes_to_threshold": round(minutes, 1) if minutes is not None else None,
+                                 "note": "Alert only; no automatic fan, power, or process action."})
+        except (TypeError, ValueError):
+            continue
     return findings
 
 
 def _read_only_diagnostics() -> dict:
     errors = {}
     results = {}
-    for key, function in (("adapters", _get_adapters), ("dns", _get_dns), ("drivers", _get_drivers),
-                          ("driver_updates", _get_driver_updates), ("startup", _startup_inventory)):
+    resource_safe = False
+    try:
+        game_active = bool(core.STATE.get("game")) or bool(safeguard.snapshot().get("valorant_active"))
+        available_gib = psutil.virtual_memory().available / (1024 ** 3)
+        cpu_percent = psutil.cpu_percent(interval=0.1)
+        resource_safe = not game_active and available_gib >= 3.0 and cpu_percent < 85.0
+    except Exception:
+        resource_safe = False
+    scan_functions = [("adapters", _get_adapters), ("dns", _get_dns), ("startup", _startup_inventory)]
+    if resource_safe:
+        scan_functions.extend([("drivers", _get_drivers), ("driver_updates", _get_driver_updates)])
+    else:
+        results["drivers"] = []
+        results["driver_updates"] = []
+        errors["drivers"] = "Deferred during game session or resource pressure."
+        errors["driver_updates"] = "Deferred during game session or resource pressure."
+    for key, function in scan_functions:
         try:
             results[key] = function()
         except Exception as exc:
@@ -911,17 +1032,56 @@ def _read_only_diagnostics() -> dict:
             }, "source_errors": errors}
 
 
-def status(refresh: bool = False) -> dict:
-    if not refresh:
+def _placeholder_status() -> dict:
+    policy = _policy()
+    return {"updated_at": 0, "diagnostics_state": "collecting" if IS_WIN else "unsupported",
+            "administrator": _is_admin(), "safeguard": safeguard.snapshot(),
+            "adapters": [], "dns": [], "drivers": [], "driver_updates": [], "startup": [],
+            "volumes": [], "top_memory_processes": [], "thermal": core.STATE.get("hardware_sensors") or {},
+            "scheduler": policy, "budget": _budget_state(), "kill_switch": policy["kill_switch"],
+            "power_scheme": None, "journal": journal(30), "predictive": [],
+            "source_errors": {}, "guided_recovery": {
+                "game_relocation": "Use the supported launcher library manager (Steam/Epic/Xbox); Sentinel does not move launcher-owned game folders directly.",
+                "vendor_fan_control": "Use the OEM's supported profile utility. Sentinel does not write undocumented EC/ACPI fan registers.",
+                "bios_secure_boot": "Read-only inspection and instructions only.",
+            }}
+
+
+def _refresh_diagnostics_worker() -> None:
+    try:
+        payload = _read_only_diagnostics()
+        payload["diagnostics_state"] = "ready"
         with _DIAG_LOCK:
-            cached = _DIAG_CACHE.get("payload")
-            if cached and time.time() - float(_DIAG_CACHE.get("at") or 0) < 30:
-                return cached
-    payload = _read_only_diagnostics()
+            _DIAG_CACHE.update(at=time.time(), payload=payload, refreshing=False)
+        core.STATE["maintenance"] = payload
+        core.publish("maintenance_status", {"state": "ready", "updated_at": payload.get("updated_at"),
+                                             "source_errors": payload.get("source_errors", {})})
+    except Exception as exc:
+        with _DIAG_LOCK:
+            cached = _DIAG_CACHE.get("payload") or _placeholder_status()
+            cached["diagnostics_state"] = "degraded"
+            cached.setdefault("source_errors", {})["maintenance"] = f"{type(exc).__name__}: {str(exc)[:160]}"
+            _DIAG_CACHE.update(at=time.time(), payload=cached, refreshing=False)
+        core.log("maintenance", f"background diagnostics failed: {type(exc).__name__}: {str(exc)[:160]}", "warn")
+
+
+def queue_diagnostics(force: bool = False) -> dict:
     with _DIAG_LOCK:
-        _DIAG_CACHE.update(at=time.time(), payload=payload)
-    core.STATE["maintenance"] = payload
+        cached = _DIAG_CACHE.get("payload")
+        fresh = cached and time.time() - float(_DIAG_CACHE.get("at") or 0) < 30
+        if _DIAG_CACHE.get("refreshing"):
+            return cached or _placeholder_status()
+        if fresh and not force:
+            return cached
+        _DIAG_CACHE["refreshing"] = True
+    threading.Thread(target=_refresh_diagnostics_worker, name="maintenance-diagnostics", daemon=True).start()
+    payload = dict(cached or _placeholder_status())
+    payload["diagnostics_state"] = "refreshing"
     return payload
+
+
+def status(refresh: bool = False) -> dict:
+    return queue_diagnostics(force=refresh)
 
 
 def goal_plan(goal: str) -> dict:
@@ -985,7 +1145,7 @@ def _idle_seconds() -> float:
 def _scheduler_loop() -> None:
     while not _STOP.wait(60):
         policy = _policy()
-        if not policy["scheduler_enabled"] or policy["kill_switch"] or not IS_WIN:
+        if not policy["scheduler_enabled"] or not IS_WIN:
             continue
         safe = safeguard.snapshot()
         if not safe.get("process_detection_complete") or safe.get("valorant_active"):
@@ -1017,6 +1177,7 @@ def start() -> None:
         return
     _STARTED = True
     _STOP.clear()
+    queue_diagnostics(force=True)
     core.thread(_scheduler_loop, "maintenance-scheduler")
 
 
