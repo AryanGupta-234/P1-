@@ -4,6 +4,7 @@ ROOT = Path(__file__).resolve().parents[1]
 MAINTENANCE = (ROOT / "sentinel" / "maintenance.py").read_text(encoding="utf-8")
 SAFEGUARD = (ROOT / "sentinel" / "safeguard.py").read_text(encoding="utf-8")
 SERVER = (ROOT / "sentinel" / "server.py").read_text(encoding="utf-8")
+MAINTENANCE = (ROOT / "sentinel" / "maintenance.py").read_text(encoding="utf-8")
 INSTALLER = (ROOT / "install.bat").read_text(encoding="utf-8")
 
 
@@ -79,3 +80,28 @@ def test_driver_candidate_requires_device_id_or_instance_prefix_match():
     assert 'normalized_device == str(value).strip().casefold()' in MAINTENANCE
     assert 'normalized_device.startswith(str(value).strip().casefold() + "\\\\")' in MAINTENANCE
     assert "hardware.includes(id)" not in (ROOT / "ui" / "app.js").read_text(encoding="utf-8")
+
+
+def test_system_evidence_report_uses_local_rolling_metrics_and_preserves_safety():
+    assert "def _system_health_report(" in MAINTENANCE
+    assert "core.HIST.get(key, [])" in MAINTENANCE
+    assert '"cpu_pressure"' in MAINTENANCE and '"memory_pressure"' in MAINTENANCE
+    assert '"thermal_pressure"' in MAINTENANCE and '"disk_capacity"' in MAINTENANCE
+    assert '"network_latency"' in MAINTENANCE and '"gpu_throttle"' in MAINTENANCE
+    assert "automatic_execution\": False" in MAINTENANCE
+
+
+def test_oem_utility_detection_is_registry_read_only_and_guided_only():
+    assert "def _oem_control_inventory(" in MAINTENANCE
+    assert "SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall" in MAINTENANCE
+    assert '"control_mode": "guided_only"' in MAINTENANCE
+    assert '"firmware_writes_enabled": False' in MAINTENANCE
+
+
+def test_game_library_relocation_is_manifest_based_and_never_moves_files():
+    assert "def _game_library_inventory(" in MAINTENANCE
+    assert "appmanifest_*.acf" in MAINTENANCE
+    assert "*.item" in MAINTENANCE
+    assert "def game_relocation_plan(" in MAINTENANCE
+    assert '"files_will_be_moved_by_sentinel": False' in MAINTENANCE
+    assert "/api/maintenance/game-relocation/plan" in SERVER

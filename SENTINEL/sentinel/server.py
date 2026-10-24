@@ -495,6 +495,14 @@ class H(BaseHTTPRequestHandler):
                 return self._json({"error": str(exc)}, 400)
             except Exception as exc:
                 return self._json({"error": f"{type(exc).__name__}: {str(exc)[:240]}"}, 503)
+        if p == "/api/maintenance/game-relocation/plan":
+            try:
+                return self._json(maintenance.game_relocation_plan(str(body.get("game_id") or ""),
+                                                                   str(body.get("target_drive") or "")))
+            except (ValueError, TypeError) as exc:
+                return self._json({"error": str(exc)}, 400)
+            except Exception as exc:
+                return self._json({"error": f"{type(exc).__name__}: {str(exc)[:240]}"}, 409)
         if p == "/api/maintenance/revert-all":
             try:
                 return self._json(maintenance.revert_all(confirmed=body.get("confirmed") is True))

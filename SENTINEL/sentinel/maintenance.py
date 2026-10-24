@@ -1001,6 +1001,350 @@ def _predictive_scan() -> list[dict]:
     return findings
 
 
+
+
+_OEM_ALIASES = {
+    "asus": ("myasus", "armoury crate", "asus system control interface", "asus optimization"),
+    "lenovo": ("lenovo vantage", "lenovo utility"),
+    "dell": ("dell power manager", "mydell", "dell optimizer", "alienware command center"),
+    "hp": ("omen gaming hub", "hp command center", "myhp"),
+    "msi": ("msi center", "dragon center"),
+    "acer": ("nitrosense", "predatorsense", "acersense"),
+}
+_OEM_FAN_TOOLS = {
+    "asus": ("MyASUS", "Armoury Crate"), "lenovo": ("Lenovo Vantage",),
+    "dell": ("Dell Power Manager", "Alienware Command Center"),
+    "hp": ("OMEN Gaming Hub", "HP Command Center"), "msi": ("MSI Center",),
+    "acer": ("NitroSense", "PredatorSense", "AcerSense"),
+}
+
+
+def _system_identity() -> dict:
+    result = {"manufacturer": "", "model": "", "system_sku": "", "baseboard_manufacturer": ""}
+    if not IS_WIN or winreg is None:
+        return result
+    try:
+        access = winreg.KEY_READ | getattr(winreg, "KEY_WOW64_64KEY", 0)
+        with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r"HARDWARE\DESCRIPTION\System\BIOS", 0, access) as key:
+            mapping = {"SystemManufacturer":"manufacturer", "SystemProductName":"model",
+                       "SystemSKU":"system_sku", "BaseBoardManufacturer":"baseboard_manufacturer"}
+            for source, target in mapping.items():
+                try:
+                    result[target] = str(winreg.QueryValueEx(key, source)[0] or "").strip()[:180]
+                except OSError:
+                    pass
+    except OSError:
+        pass
+    return result
+
+
+def _oem_control_inventory(running_names: set[str] | None = None) -> dict:
+    identity = _system_identity()
+    vendor = next((key for key in _OEM_ALIASES if key in identity["manufacturer"].casefold()), "")
+    aliases = _OEM_ALIASES.get(vendor, ())
+    running_names = {str(name).casefold() for name in (running_names or set())}
+    matches = {}
+    if IS_WIN and winreg is not None and aliases:
+        paths = (
+            (winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall", getattr(winreg, "KEY_WOW64_64KEY", 0)),
+            (winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall", getattr(winreg, "KEY_WOW64_32KEY", 0)),
+            (winreg.HKEY_CURRENT_USER, r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall", 0),
+        )
+        for hive, path, view in paths:
+            try:
+                with winreg.OpenKey(hive, path, 0, winreg.KEY_READ | view) as root:
+                    for index in range(min(1500, winreg.QueryInfoKey(root)[0])):
+                        try:
+                            subkey = winreg.EnumKey(root, index)
+                            with winreg.OpenKey(root, subkey, 0, winreg.KEY_READ) as app:
+                                name = str(winreg.QueryValueEx(app, "DisplayName")[0] or "").strip()
+                                if not name or not any(alias in name.casefold() for alias in aliases):
+                                    continue
+                                def field(key: str, limit: int = 160) -> str:
+                                    try:
+                                        return str(winreg.QueryValueEx(app, key)[0] or "").strip()[:limit]
+                                    except OSError:
+                                        return ""
+                                matches[name.casefold()] = {
+                                    "name": name[:160], "version": field("DisplayVersion", 60),
+                                    "publisher": field("Publisher", 120),
+                                    "install_location": field("InstallLocation", 350),
+                                    "running": any(alias.replace(" ", "") in proc.replace(" ", "")
+                                                   for alias in aliases for proc in running_names),
+                                }
+                        except OSError:
+                            continue
+            except OSError:
+                continue
+    utilities = sorted(matches.values(), key=lambda row: row["name"].casefold())
+    fan_tools = _OEM_FAN_TOOLS.get(vendor, ())
+    installed = next((item for item in utilities
+                      if any(tool.casefold() in item["name"].casefold() for tool in fan_tools)), None)
+    if installed:
+        state = "installed"
+        message = installed["name"] + " is installed. Use its supported Windows UI for OEM thermal/fan profiles."
+    elif fan_tools:
+        state = "not_detected"
+        message = "No supported OEM fan-profile utility was detected in installed applications. Check the OEM's official tools: " + ", ".join(fan_tools) + "."
+    else:
+        state = "unsupported_vendor"
+        message = "No vendor-specific thermal utility was identified; use only a signed manufacturer utility."
+    return {**identity, "vendor_key": vendor, "utilities": utilities,
+            "suggested_profile_tools": list(fan_tools), "status": state,
+            "control_mode": "guided_only", "message": message, "firmware_writes_enabled": False}
+
+
+def _steam_roots() -> list[str]:
+    candidates = [os.path.join(os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)"), "Steam"),
+                  os.path.join(os.environ.get("ProgramFiles", r"C:\Program Files"), "Steam")]
+    if IS_WIN and winreg is not None:
+        try:
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Valve\Steam", 0, winreg.KEY_READ) as key:
+                for field in ("SteamPath", "InstallPath"):
+                    try:
+                        value = str(winreg.QueryValueEx(key, field)[0] or "").strip()
+                        if value:
+                            candidates.append(value)
+                    except OSError:
+                        pass
+        except OSError:
+            pass
+    roots, seen = [], set()
+    for candidate in candidates:
+        path = os.path.abspath(os.path.expandvars(candidate))
+        if os.path.isdir(path) and os.path.normcase(path) not in seen:
+            roots.append(path)
+            seen.add(os.path.normcase(path))
+    return roots
+
+
+def _vdf_value(content: str, key: str) -> str:
+    match = re.search(r'"' + re.escape(key) + r'"\s*"((?:[^"\\]|\\.)*)"', content, re.IGNORECASE)
+    return match.group(1).replace("\\\\", "\\").replace('\\"', '"') if match else ""
+
+
+def _game_library_inventory() -> list[dict]:
+    if not IS_WIN:
+        return []
+    games, seen = [], set()
+    for root in _steam_roots():
+        libraries = [root]
+        try:
+            raw = Path(os.path.join(root, "steamapps", "libraryfolders.vdf")).read_text(
+                encoding="utf-8", errors="replace")[:1024 * 1024]
+            for match in re.finditer(r'"path"\s*"((?:[^"\\]|\\.)*)"', raw, re.IGNORECASE):
+                library = os.path.abspath(os.path.expandvars(match.group(1).replace("\\\\", "\\")))
+                if os.path.isdir(library) and os.path.normcase(library) not in {os.path.normcase(x) for x in libraries}:
+                    libraries.append(library)
+        except OSError:
+            pass
+        for library in libraries[:40]:
+            app_dir = os.path.join(library, "steamapps")
+            try:
+                manifests = list(Path(app_dir).glob("appmanifest_*.acf"))[:500]
+            except OSError:
+                manifests = []
+            for manifest in manifests:
+                try:
+                    raw = manifest.read_text(encoding="utf-8", errors="replace")[:256 * 1024]
+                    app_id = re.search(r"appmanifest_(\d+)\.acf$", manifest.name, re.IGNORECASE)
+                    name, install_dir = _vdf_value(raw, "name"), _vdf_value(raw, "installdir")
+                    size = _vdf_value(raw, "SizeOnDisk")
+                    if not app_id or not name or not install_dir:
+                        continue
+                    common = os.path.abspath(os.path.join(app_dir, "common"))
+                    install_path = os.path.abspath(os.path.join(common, install_dir))
+                    if os.path.commonpath([install_path, common]).casefold() != common.casefold() or not os.path.isdir(install_path):
+                        continue
+                    game_id = "steam:" + app_id.group(1)
+                    if game_id in seen:
+                        continue
+                    seen.add(game_id)
+                    games.append({"game_id": game_id, "launcher": "Steam", "name": name[:180],
+                                  "install_path": install_path, "library_root": library,
+                                  "size_bytes": int(size) if size.isdigit() else None,
+                                  "relocation_mode": "launcher_native"})
+                except (OSError, ValueError):
+                    continue
+    epic_root = os.path.join(os.environ.get("ProgramData", r"C:\ProgramData"),
+                             "Epic", "EpicGamesLauncher", "Data", "Manifests")
+    try:
+        items = list(Path(epic_root).glob("*.item"))[:1000]
+    except OSError:
+        items = []
+    for path in items:
+        try:
+            item = json.loads(path.read_text(encoding="utf-8", errors="replace"))
+            app_id = str(item.get("AppName") or "").strip()
+            name = str(item.get("DisplayName") or app_id).strip()
+            install = os.path.abspath(os.path.expandvars(str(item.get("InstallLocation") or "")))
+            if not app_id or not name or not os.path.isdir(install):
+                continue
+            try:
+                size = int(item.get("InstallSize") or item.get("SizeOnDisk"))
+            except (ValueError, TypeError):
+                size = None
+            game_id = "epic:" + app_id
+            if game_id not in seen:
+                seen.add(game_id)
+                games.append({"game_id": game_id, "launcher": "Epic Games", "name": name[:180],
+                              "install_path": install, "library_root": os.path.dirname(install),
+                              "size_bytes": size, "relocation_mode": "launcher_guided"})
+        except (OSError, ValueError, TypeError):
+            continue
+    return sorted(games, key=lambda row: (row["launcher"], row["name"].casefold()))[:500]
+
+
+def game_relocation_plan(game_id: str, target_drive: str) -> dict:
+    game = next((row for row in _game_library_inventory() if row["game_id"] == str(game_id)), None)
+    if not game:
+        raise ValueError("Installed game manifest was not found. Refresh game inventory.")
+    drive = str(target_drive or "").rstrip(":\\\\").upper()
+    if not re.fullmatch(r"[A-Z]", drive):
+        raise ValueError("Target must be a single Windows drive letter.")
+    source = os.path.splitdrive(game["install_path"])[0].rstrip(":\\\\").upper()
+    partition = next((part for part in psutil.disk_partitions(all=False)
+                      if os.path.splitdrive(part.mountpoint)[0].rstrip(":\\\\").upper() == drive), None)
+    if not partition:
+        raise ValueError("Target volume is not mounted.")
+    usage = psutil.disk_usage(partition.mountpoint)
+    if source == drive:
+        raise ValueError("Game is already installed on this drive.")
+    size = game.get("size_bytes")
+    if size is None or size <= 0:
+        raise ValueError("Launcher manifest has no trustworthy install size; SENTINEL will not guess.")
+    required = int(size * 1.10)
+    enough = int(usage.free) >= required
+    steps = (["Open Steam → Settings → Storage and add/select a library on the target drive.",
+              "Select the installed game → Move → choose the target Steam library.",
+              "Allow Steam to complete the move; verify installed files if requested."]
+             if game["launcher"] == "Steam" else
+             ["Open Epic Games Launcher → Library and inspect its supported game-management options.",
+              "Use a built-in Move option only if your installed launcher version provides it.",
+              "Otherwise use the launcher's backup/reinstall/verification workflow; do not move folders behind manifests."])
+    return {"game": game, "source_drive": source, "target_drive": drive,
+            "size_bytes": int(size), "required_free_bytes": required,
+            "available_free_bytes": int(usage.free), "enough_space": enough, "can_plan": enough,
+            "files_will_be_moved_by_sentinel": False,
+            "instructions": steps if enough else [
+                "Target volume lacks manifest size plus 10% headroom.",
+                "Choose a larger target before starting launcher-managed migration."],
+            "safety_note": "Read-only plan. SENTINEL never moves launcher-owned files, edits manifests or touches save data."}
+
+
+def _average_metric(key: str, seconds: int = 45) -> float | None:
+    now = time.time()
+    values = []
+    for ts, value in core.HIST.get(key, []):
+        try:
+            if now - float(ts) <= seconds and value is not None:
+                values.append(float(value))
+        except (TypeError, ValueError):
+            continue
+    if len(values) >= 3:
+        return sum(values) / len(values)
+    try:
+        value = core.LIVE.get(key)
+        return float(value) if value is not None else None
+    except (TypeError, ValueError):
+        return None
+
+
+def _system_health_report(payload: dict) -> dict:
+    findings, coverage = [], {}
+    cpu_avg = _average_metric("cpu")
+    memory = psutil.virtual_memory()
+    coverage.update(cpu=cpu_avg is not None, memory=True)
+    if cpu_avg is not None and cpu_avg >= 82:
+        procs = sorted(core.STATE.get("procs", []), key=lambda row: float(row.get("cpu") or 0), reverse=True)[:5]
+        findings.append({"code":"cpu_pressure","severity":"high" if cpu_avg >= 95 else "warning",
+            "title":"Sustained CPU utilization is elevated","confidence":0.88 if len(core.HIST.get("cpu",[]))>=10 else 0.66,
+            "detail":"Recent collector samples show elevated CPU use; process rows are evidence, not instructions to terminate.",
+            "evidence":{"average_cpu_percent":round(cpu_avg,1),"top_processes":[
+                {"name":x.get("name"),"pid":x.get("pid"),"cpu_percent":x.get("cpu"),
+                 "executable":x.get("exe"),"create_time":x.get("create_time")} for x in procs]},
+            "recommended_actions":["Inspect sustained process consumers and active workloads before changing priority or affinity."],
+            "allowed_actions":["process_tune"]})
+    if memory.percent >= 88:
+        top = sorted(payload.get("top_memory_processes",[]),key=lambda row:float(row.get("rss_mb") or 0),reverse=True)[:5]
+        findings.append({"code":"memory_pressure","severity":"high" if memory.percent>=95 else "warning",
+            "title":"Available physical memory is low","confidence":0.95,
+            "detail":"Physical memory use is elevated. Inspect resident memory consumers before tuning.",
+            "evidence":{"memory_percent":round(memory.percent,1),"available_gib":round(memory.available/1024**3,2),
+                "top_processes":[{"name":x.get("name"),"pid":x.get("pid"),"rss_mb":x.get("rss_mb"),
+                                 "executable":x.get("exe")} for x in top]},
+            "recommended_actions":["Review applications you recognize; any process adjustment requires an exact identity preview."],
+            "allowed_actions":["process_tune"]})
+    volumes = payload.get("volumes",[])
+    coverage["storage"] = bool(volumes)
+    for row in volumes:
+        try: free,used=float(row.get("free_gib") or 0),float(row.get("used_percent") or 0)
+        except (TypeError,ValueError): continue
+        if free<8 or used>=93:
+            findings.append({"code":"disk_capacity","severity":"high" if free<3 or used>=98 else "warning",
+                "title":"Storage headroom is low on "+str(row.get("mountpoint")),
+                "confidence":0.96,"detail":"This volume is approaching its capacity threshold.",
+                "evidence":{"mountpoint":row.get("mountpoint"),"free_gib":round(free,1),
+                            "used_percent":round(used,1),"filesystem":row.get("filesystem")},
+                "recommended_actions":["Review the bounded temporary/shader cleanup manifest before deleting anything.",
+                    "Game folders, downloads, documents and Windows Update storage are not automatic cleanup targets."],
+                "allowed_actions":["cleanup"]})
+    sensor_data=payload.get("thermal") or {}
+    temps=[]
+    for sensor in sensor_data.get("sensors",[]) if isinstance(sensor_data,dict) else []:
+        try:
+            if "temp" in str(sensor.get("type","")).casefold():
+                val=float(sensor.get("value"))
+                if -20<=val<=150: temps.append({"name":str(sensor.get("name") or "temperature"),"celsius":round(val,1)})
+        except (AttributeError,TypeError,ValueError): continue
+    coverage["thermal"]=bool(temps)
+    hottest=max(temps,key=lambda x:x["celsius"],default=None)
+    if hottest and hottest["celsius"]>=85:
+        findings.append({"code":"thermal_pressure","severity":"high" if hottest["celsius"]>=92 else "warning",
+            "title":"Hardware temperature is elevated","confidence":0.82,
+            "detail":"Correlate the sensor with sustained load and GPU throttling; sensor coverage varies by hardware.",
+            "evidence":{"hottest_sensor":hottest,"sensor_count":len(temps),"gpu":core.STATE.get("gpu",{})},
+            "recommended_actions":["Check airflow, dust and workload; use an OEM thermal-profile utility if detected.",
+                "SENTINEL never writes undocumented fan firmware, EC or ACPI registers."],"allowed_actions":[]})
+    gpu=core.STATE.get("gpu") or {}
+    coverage["gpu"]=bool(gpu)
+    if gpu.get("throttle"):
+        findings.append({"code":"gpu_throttle","severity":"warning","title":"GPU reports a throttling condition",
+            "confidence":0.86,"detail":"The graphics driver reports an active throttle reason.",
+            "evidence":{"name":gpu.get("name"),"temperature":gpu.get("temp"),"utilization":gpu.get("util"),
+                        "throttle_reasons":gpu.get("throttle")},
+            "recommended_actions":["Compare temperature, power limit and workload in supported GPU/OEM software."],
+            "allowed_actions":[]})
+    ping,loss,jitter=_average_metric("ping"),_average_metric("loss"),_average_metric("jitter")
+    coverage["network"]=ping is not None or loss is not None
+    if (loss is not None and loss>0) or (ping is not None and ping>=120) or (jitter is not None and jitter>=40):
+        findings.append({"code":"network_latency","severity":"warning","title":"Network latency or packet loss is elevated",
+            "confidence":0.74 if ping is not None else 0.55,
+            "detail":"A current probe shows degradation; one probe cannot identify Wi-Fi, router, ISP or remote-server cause.",
+            "evidence":{"average_ping_ms":round(ping,1) if ping is not None else None,
+                "packet_loss_percent":round(loss,1) if loss is not None else None,
+                "average_jitter_ms":round(jitter,1) if jitter is not None else None,"probe_target":"1.1.1.1"},
+            "recommended_actions":["Compare resolver latency and inspect adapter state before considering a reset."],
+            "allowed_actions":["dns_set","adapter_restart"]})
+    system=core.STATE.get("system") or {}
+    coverage["platform"]=bool(system or payload.get("system_identity",{}).get("model"))
+    if system.get("defender_rt") is False:
+        findings.append({"code":"defender_realtime_off","severity":"high","title":"Windows Defender real-time protection reports OFF",
+            "confidence":0.9,"detail":"Security-posture observation only. SENTINEL will not change Defender settings.",
+            "evidence":{"defender_realtime":False},"recommended_actions":["Review Windows Security directly."],"allowed_actions":[]})
+    severity_order={"critical":0,"high":1,"warning":2,"info":3}
+    findings.sort(key=lambda x:(severity_order.get(x["severity"],4),-float(x["confidence"])))
+    coverage_count=sum(bool(value) for value in coverage.values())
+    score=max(0,100-sum({"critical":25,"high":16,"warning":8,"info":0}.get(x["severity"],0) for x in findings))
+    state="insufficient_data" if coverage_count<3 else (
+        "attention_required" if any(x["severity"] in ("critical","high") for x in findings) else
+        "watch" if findings else "healthy_observed")
+    return {"generated_at":time.time(),"engine":"local-evidence-correlator-v1",
+        "health_score":score if coverage_count>=3 else None,"state":state,
+        "coverage":coverage,"coverage_count":coverage_count,"findings":findings[:20],
+        "note":"Heuristic evidence summary, not a diagnosis guarantee. Findings are limited to local measurements available to SENTINEL."}
+
+
 def _read_only_diagnostics() -> dict:
     errors = {}
     results = {}
@@ -1036,9 +1380,12 @@ def _read_only_diagnostics() -> dict:
         except OSError:
             continue
     processes = []
+    running_names = set()
     for proc in psutil.process_iter(attrs=["pid", "name", "exe", "memory_info", "create_time"]):
         try:
             info = proc.info
+            if info.get("name"):
+                running_names.add(str(info["name"]))
             if info.get("memory_info"):
                 processes.append({"pid": info["pid"], "name": info.get("name"), "exe": info.get("exe"),
                                   "rss_mb": round(info["memory_info"].rss / 1048576, 1),
@@ -1047,17 +1394,22 @@ def _read_only_diagnostics() -> dict:
             continue
     processes.sort(key=lambda item: item["rss_mb"], reverse=True)
     policy = _policy()
-    return {"updated_at": time.time(), "administrator": _is_admin(), "safeguard": safeguard.snapshot(),
+    payload = {"updated_at": time.time(), "administrator": _is_admin(), "safeguard": safeguard.snapshot(),
             **results, "volumes": volumes, "top_memory_processes": processes[:15],
             "thermal": core.STATE.get("hardware_sensors") or {}, "scheduler": policy,
             "budget": _budget_state(), "kill_switch": policy["kill_switch"],
             "power_scheme": _active_scheme() if IS_WIN else None,
             "journal": journal(30), "predictive": _predictive_scan(),
+            "system_identity": _system_identity(),
+            "oem_control": _oem_control_inventory(running_names),
+            "game_libraries": _game_library_inventory(),
             "guided_recovery": {
                 "game_relocation": "Move games through Steam, Epic, Xbox or the game's own library manager so library manifests stay consistent.",
                 "vendor_fan_control": "Use the supported laptop vendor utility. Sentinel will not write undocumented EC/ACPI fan registers.",
                 "bios_secure_boot": "Read-only inspection and instructions only. Sentinel never edits BIOS/UEFI or Secure Boot.",
             }, "source_errors": errors}
+    payload["system_health"] = _system_health_report(payload)
+    return payload
 
 
 def _placeholder_status() -> dict:
@@ -1116,34 +1468,58 @@ def goal_plan(goal: str) -> dict:
     text = str(goal or "").strip().casefold()
     if not text or len(text) > 240:
         raise ValueError("Goal must contain between 1 and 240 characters.")
-    snapshot = status()
-    findings, recommendations = [], []
-    if any(word in text for word in ("fast", "slow", "lag", "stutter", "performance")):
-        findings.extend([{"type": "memory_consumer", **item} for item in snapshot["top_memory_processes"][:5]])
-        recommendations += ["Inspect CPU, memory, disk and network evidence before changing settings.",
-                            "Use a reviewed non-realtime process profile only after checking its exact process identity.",
-                            "Power-plan changes require a preview and explicit approval."]
-    if any(word in text for word in ("cool", "hot", "thermal", "temperature", "fan")):
-        recommendations += ["Compare measured CPU/GPU sensor data with thermal and throttling evidence.",
-                            "Use the manufacturer's supported quiet/fan profile; no undocumented fan register is modified."]
-    if any(word in text for word in ("quiet", "silent", "noise")):
-        recommendations.append("Review the vendor quiet profile. Fan control remains vendor-specific and guided.")
-    if any(word in text for word in ("battery", "power", "portable")):
-        recommendations.append("Review power mode and battery state; a power-plan switch can be previewed and confirmed.")
-    if any(word in text for word in ("network", "wifi", "internet", "dns")):
-        recommendations.append("Run DNS latency diagnostics and inspect physical adapters before proposing repair.")
-    if any(word in text for word in ("disk", "storage", "space", "full")):
-        recommendations.append("Review volume free-space trends and the exact temporary/shader cleanup manifest.")
-    if not recommendations:
-        recommendations = ["Inspect local telemetry, inventory and recent event evidence.",
-                           "Only allowlisted actions can be proposed, and a rule engine—not the model—controls execution."]
-    return {"goal": goal, "generated_by": "local-rule-planner", "findings": findings,
-            "recommendations": recommendations,
-            "allowed_actions": ["startup_disable", "cleanup", "dns_set", "adapter_restart", "winsock_reset",
-                "driver_install", "driver_rollback", "windows_repair", "service_restart", "power_mode",
-                "trim_volume", "process_tune"],
-            "automatic_execution": False, "needs_preview_and_confirmation": True,
-            "safeguard": snapshot["safeguard"], "security_settings_never_modified": True}
+    payload = status()
+    report = payload.get("system_health") or _system_health_report(payload)
+    findings = report.get("findings", [])
+    categories = {
+        "performance": ("cpu_pressure", "memory_pressure", "gpu_throttle", "thermal_pressure"),
+        "fast": ("cpu_pressure", "memory_pressure", "gpu_throttle", "disk_capacity"),
+        "slow": ("cpu_pressure", "memory_pressure", "disk_capacity", "network_latency"),
+        "lag": ("cpu_pressure", "memory_pressure", "gpu_throttle", "network_latency", "thermal_pressure"),
+        "thermal": ("thermal_pressure", "gpu_throttle"),
+        "heat": ("thermal_pressure", "gpu_throttle"),
+        "cool": ("thermal_pressure", "gpu_throttle"),
+        "fan": ("thermal_pressure",),
+        "network": ("network_latency",),
+        "wifi": ("network_latency",),
+        "internet": ("network_latency",),
+        "dns": ("network_latency",),
+        "storage": ("disk_capacity",),
+        "disk": ("disk_capacity",),
+        "space": ("disk_capacity",),
+        "memory": ("memory_pressure",),
+        "ram": ("memory_pressure",),
+        "gpu": ("gpu_throttle", "thermal_pressure"),
+        "security": ("defender_realtime_off",),
+    }
+    relevant = {code for token, codes in categories.items() if token in text for code in codes}
+    selected = [item for item in findings
+                if item["code"] in relevant or item["severity"] in ("critical", "high")]
+    if not relevant:
+        selected = findings[:12]
+    recommendations = []
+    for item in selected:
+        recommendations.extend(item.get("recommended_actions", []))
+    if not selected:
+        recommendations.append("No current threshold was crossed in measured CPU, memory, thermal, disk or network signals. Re-scan during the workload where the problem occurs.")
+    if any(token in text for token in ("battery", "power", "portable")):
+        recommendations.append("Review battery condition and the current Windows power plan; any plan change still requires a separate preview and confirmation.")
+    if any(token in text for token in ("quiet", "silent", "noise")):
+        vendor = payload.get("oem_control") or {}
+        recommendations.append(vendor.get("message") or "Use the manufacturer's signed thermal-profile utility. Direct fan-register writes remain disabled.")
+    if any(token in text for token in ("game", "move", "relocate", "library")):
+        recommendations.append("Use the Game Library section to build a capacity-checked migration plan. SENTINEL will not move launcher-owned folders.")
+    allowed = sorted({action for item in selected for action in item.get("allowed_actions", [])})
+    return {
+        "goal": goal, "generated_by": "local-evidence-correlator-v1",
+        "health_score": report.get("health_score"), "health_state": report.get("state"),
+        "coverage": report.get("coverage", {}),
+        "findings": selected, "recommendations": list(dict.fromkeys(recommendations)),
+        "allowed_actions": allowed, "automatic_execution": False,
+        "needs_preview_and_confirmation": True,
+        "safeguard": payload.get("safeguard"),
+        "security_and_launcher_manifests_never_modified": True,
+    }
 
 
 def daily_digest() -> dict:
