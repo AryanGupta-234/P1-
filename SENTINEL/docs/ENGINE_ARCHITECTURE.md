@@ -184,3 +184,24 @@ CI validates Python behavior across supported Python versions, Python compilatio
 
 
 **Elevation:** the current installed-agent policy accepts an elevated administrator session for WPR. Performance Log Users-only operation is not enabled by the Safeguard in this release.
+
+
+## Windows Specialist Intelligence — planned extension
+
+The existing AI Orchestrator remains the model-admission and resource-governance authority. A separate Windows Specialist Intelligence package combines local, version-aware documentation retrieval; current telemetry and bounded ETW/Event Log/PnP/power/network evidence; a loopback-only local model adapter; and deterministic output validation. Knowledge records retain publisher, URL, licence, retrieval date, content hash, Windows-build applicability and component/API metadata. LoRA fine-tuning is considered only after held-out evaluation demonstrates measurable benefit over retrieval plus prompting.
+
+The model may generate hypotheses, request read-only probes and recommend existing action IDs. It cannot execute commands, select arbitrary paths, create capabilities, change approval requirements, grant elevation or override Safeguard. Structured outputs are schema-checked and evidence/action references must resolve locally.
+
+## Goal-driven maintenance loop — planned extension
+
+The target loop is observe → diagnose → propose → policy → preview → explicit approval → execute → verify → journal → conditional undo → outcome memory. Maintenance mutations remain manual-only in the current implementation. Any future low-risk autonomy tier is a separate, disabled-by-default policy requiring independent review and a narrow reversible allowlist. Schedulers can prepare recommendations and previews; they do not approve maintenance mutations.
+
+Outcome records are tied to exact action versions, target identity, Windows build, workload/session context and before/after evidence. Learned preferences affect recommendation ranking only and cannot alter risk tiers or action capabilities.
+
+## Privilege model — planned least-privilege refactor
+
+The current installer/agent has an elevated-session assumption for Windows operations. The target design separates ordinary observation/UI from privileged execution. A narrow broker accepts known action IDs and schema-bound parameters, issues one-time expiring approvals, verifies the signed-in user/session and rechecks Safeguard before execution. Arbitrary shell strings, model-generated scripts, persistent administrator tokens and generic run-as-admin endpoints are prohibited. UAC is requested when an approved operation requires elevation.
+
+## Boot and design system
+
+The splash remains a real data-hydration phase with bounded concurrency and truthful ready/degraded module states. Optimisation is based on instrumentation, shared boot snapshots, cache reuse, duplicate-work elimination and moving expensive optional diagnostics outside critical startup—not skipping workspace data. The graphite/forest/red liquid-glass palette is defined in `SENTINEL/ui/app.css`; accessibility and reduced-motion preferences remain first-class.

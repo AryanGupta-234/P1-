@@ -945,10 +945,11 @@ function renderMaintenanceIntelligence(){
       '<small>Confidence '+Math.round(Number(item.confidence||0)*100)+'% · '+esc((item.allowed_actions||[]).join(", ")||"Guided / observation only")+'</small>'+
       '</div></div>').join("");
     const coverage=Object.entries(health.coverage||{}).filter(([,value])=>value).map(([key])=>key);
+    const coverageCount=Number.isFinite(Number(health.coverage_count))?Number(health.coverage_count):coverage.length;
     host.innerHTML='<div class="maint-health-head"><div><small>LOCAL EVIDENCE HEALTH</small>'+
       '<b>'+esc(health.health_score==null?"--":health.health_score+"/100")+'</b>'+
       '<span>'+esc(String(health.state||"collecting").replaceAll("_"," ").toUpperCase())+'</span></div>'+
-      '<div class="maint-health-coverage">'+coverage.length+' evidence domains · '+esc(coverage.join(" / ")||"waiting for telemetry")+'</div></div>'+
+      '<div class="maint-health-coverage">'+coverageCount+' evidence domains · '+esc(coverage.join(" / ")||"waiting for telemetry")+'</div></div>'+
       (findings||'<div class="empty">No monitored threshold is currently crossed, or more telemetry is needed.</div>')+
       '<small class="maint-health-note">'+esc(health.note||"Local evidence summary. No system changes are made by this report.")+'</small>';
   }

@@ -995,7 +995,7 @@ def _predictive_scan() -> list[dict]:
             if value >= 88.0 or (minutes is not None and minutes <= 15.0):
                 findings.append({"kind": "thermal_warning", "sensor": name, "celsius": round(value, 1),
                                  "minutes_to_threshold": round(minutes, 1) if minutes is not None else None,
-                                 "note": "Alert only; no automatic fan, power, or process action."})
+                                 "note": "Trend-based alert only; no automatic fan, power, or process action."})
         except (TypeError, ValueError):
             continue
     return findings
@@ -1175,11 +1175,15 @@ def _game_library_inventory() -> list[dict]:
     for path in items:
         try:
             item = json.loads(path.read_text(encoding="utf-8", errors="replace"))
-            app_id = str(item.get("AppName") or "").strip()
-            name = str(item.get("DisplayName") or app_id).strip()
-            install = os.path.abspath(os.path.expandvars(str(item.get("InstallLocation") or "")))
-            if not app_id or not name or not os.path.isdir(install):
+            app_name = str(item.get("AppName") or "").strip()
+            title = str(item.get("DisplayName") or app_name).strip()
+            raw_install_path = str(item.get("InstallLocation") or "").strip()
+            if not app_name or not title or not raw_install_path:
                 continue
+            install = os.path.abspath(os.path.expandvars(raw_install_path))
+            if not os.path.isdir(install):
+                continue
+            app_id, name = app_name, title
             try:
                 size = int(item.get("InstallSize") or item.get("SizeOnDisk"))
             except (ValueError, TypeError):

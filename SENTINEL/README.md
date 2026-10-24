@@ -1,3 +1,9 @@
+# SENTINEL 1.2.22 — Windows Intelligence & Liquid Glass foundation
+
+The consolidated upgrade backlog is [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md). It covers the Windows Knowledge Engine, local specialist-model evaluation, evidence correlation, expanded maintenance library, goal-driven learning, scheduler, chat/voice, least-privilege elevation, boot optimisation and GUI-first redesign.
+
+**Safety contract:** maintenance mutations remain manual-only; every write needs a fresh preview and explicit confirmation. Launcher-owned Steam/Epic folders are never moved directly. OEM fan controls remain guided. BIOS/firmware, Secure Boot, Defender/Tamper Protection and Riot Vanguard are outside automatic modification. The model is advisory and cannot grant permissions or execute commands.
+
 ## Agent health topology and Engine pulse rail (v1.2.12)
 
 The Agent workspace now renders collector heartbeats as a compact status map with state, age and run count before the detailed worker table. The detailed timings and per-function notes remain available in an expanded view. The Engine Deck adds a five-part pulse rail for safeguard, adaptive runtime, AI admission, memory pressure and WPR availability; each state comes from the existing backend engine response. Intelligence routing, memory and plan-lifecycle explanations are also collapsed into optional disclosures. These are presentation-only changes and do not add collectors, authorize actions or change the underlying admission and rollback policies.
@@ -259,3 +265,10 @@ The Maintenance workspace now presents a local evidence-health summary with cove
 Read-only OEM discovery identifies the Windows BIOS manufacturer/model and supported thermal-profile utilities from installed-app inventory. Fan changes remain guided through signed OEM software; firmware/EC/ACPI register writes are disabled. Predictive thermal alerts are based on repeated samples and an estimated time to threshold, not a single instantaneous reading.
 
 Read-only Steam and Epic manifest discovery feeds a game relocation planner. It validates source manifest, target NTFS volume and manifest install size plus 10% free-space headroom. SENTINEL does not move launcher-owned folders, edit manifests or touch save data; the actual move remains inside the launcher. Xbox / WindowsApps package folders remain outside direct relocation.
+
+
+## 1.2.22 visual and planning foundation
+
+The dashboard theme uses graphite `#171717`, deep forest `#06110c` and signal red `#a31c1b`, with green as the positive/active accent. Typography uses local Windows font stacks to avoid network-dependent startup. The detailed data-hydrating splash and existing API/DOM contracts are retained while the interface moves to the new liquid-glass system.
+
+See [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) for phased TODOs and completion criteria.
