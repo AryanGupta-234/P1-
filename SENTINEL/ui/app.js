@@ -880,7 +880,10 @@ function renderMaintenance(){
   const d=MNT,put=(id,value)=>{const node=document.getElementById(id);if(node)node.textContent=value;};
   put("maint-state",maintState(d.diagnostics_state));
   put("maint-state-note",d.updated_at?"Last scan "+new Date(d.updated_at*1000).toLocaleTimeString():"Read-only inventory is being prepared");
-  put("maint-admin",d.administrator?"YES":"NO");
+  const privilege=d.privilege||{};
+  const elevated=privilege.agent_elevated===true||d.administrator===true;
+  put("maint-admin",elevated?"ELEVATED":"STANDARD USER");
+  put("maint-admin-note",elevated?"This process has an elevated Windows token.":"UAC is requested only for approved administrator actions.");
   put("maint-budget",String(d.budget?.available_hour??"--")+"/"+String(d.budget?.hour_limit??"--")+" / HR");
   put("maint-budget-note",String(d.budget?.available_day??"--")+" actions available today");
   const guard=d.safeguard||{};
@@ -987,9 +990,9 @@ function renderMaintenanceDigest(){
 async function loadMaintenance(refresh=false){
   try{
     const suffix=refresh?"?refresh=1":"";
-    const values=await Promise.all([api("/api/maintenance/status"+suffix),api("/api/maintenance/journal?limit=50"),api("/api/maintenance/digest")]);
+    const values=await Promise.all([api("/api/maintenance/status"+suffix),api("/api/maintenance/journal?limit=50"),api("/api/maintenance/digest"),api("/api/maintenance/privilege")]);
     if(values[0].error)throw new Error(values[0].error);
-    MNT=values[0];MNT_JOURNAL=Array.isArray(values[1])?values[1]:[];MNT_DIGEST=values[2]||null;
+    MNT=values[0];MNT.privilege=values[3]||{};MNT_JOURNAL=Array.isArray(values[1])?values[1]:[];MNT_DIGEST=values[2]||null;
     renderMaintenance();return true;
   }catch(error){
     const label=document.getElementById("maint-diag-status");if(label)label.textContent="DIAGNOSTICS UNAVAILABLE";
@@ -1010,7 +1013,7 @@ async function maintenancePreview(action,args,label){
     if(!confirm("FINAL CONFIRMATION\n\n"+(label||action)+danger+"\n\nExecute this exact one-time preview?"))return;
     const result=await api("/api/maintenance/execute",{preview_token:preview.preview_token,confirmed:true});
     if(result.error)throw new Error(result.error);
-    toast("Maintenance job queued","warn");watchMaintenanceJob(result.job_id);
+    toast(result.elevation_required?"Windows UAC approval requested":"Maintenance job queued","warn");watchMaintenanceJob(result.job_id);
   }catch(error){toast(error.message||String(error),"bad");}
   finally{if(button&&button.tagName==="BUTTON")button.disabled=false;}
 }
@@ -1026,7 +1029,7 @@ function watchMaintenanceJob(jobId,attempt=0){
       const host=document.getElementById("maint-job-list");
       if(host)host.innerHTML='<div class="maint-journal-row"><div><b>'+esc(job.action)+' · '+title+'</b><small>'+esc(job.job_id)+'</small><small>'+esc(job.result||job.error||"")+'</small></div><span class="tag">'+title+'</span></div>'+(host.innerHTML||"");
       const badge=document.getElementById("maint-last-job-state");if(badge)badge.textContent=title;
-      if(["done","failed","rolled_back"].includes(job.state)){
+      if(["done","failed","cancelled","rolled_back"].includes(job.state)){
         toast(job.result||job.error||"Maintenance job "+title,job.state==="done"?"ok":"warn");
         if("Notification"in window&&Notification.permission==="granted"&&document.hidden){try{new Notification("SENTINEL maintenance "+title.toLowerCase(),{body:job.result||job.error||job.action});}catch(e){}}
         await loadMaintenance(true);return;
@@ -1038,7 +1041,7 @@ function watchMaintenanceJob(jobId,attempt=0){
 function onMaintenanceJob(payload){
   if(!payload)return;
   const badge=document.getElementById("maint-last-job-state");if(badge)badge.textContent=String(payload.state||"UPDATED").toUpperCase();
-  if(["done","failed","rolled_back"].includes(payload.state)){
+  if(["done","failed","cancelled","rolled_back"].includes(payload.state)){
     toast(payload.result||payload.error||"Maintenance job updated",payload.state==="done"?"ok":"warn");
     if("Notification"in window&&Notification.permission==="granted"&&document.hidden){try{new Notification("SENTINEL maintenance",{body:payload.result||payload.error||payload.state});}catch(e){}}
     loadMaintenance(true);
@@ -1319,7 +1322,7 @@ async function boot() {
     toast("Exported " + LOGS.length + " events", "ok");
   };
   initPalette(); initNotify(); initFC(); initIntelligence(); initActivityIntelligence();
-  initAdvanced(); initAgent(); initEngines(); initMaintenance(); initVoice(); bindJ("#metrics");
+  initAdvanced(); initAgent(); initEngines(); initMaintenance(); initWindowsKnowledge(); initVoice(); bindJ("#metrics");
   $("#e-go").onclick = loadEvi;
   $("#e-csv").onclick = csvExport;
   $("#e-q").onkeydown = event => event.key === "Enter" && loadEvi();
@@ -2040,6 +2043,7 @@ async function loadIntelligence() {
     renderIXMemories();
     await renderIXGoals();
     renderIXRuntime();
+    void loadWindowsKnowledgeStatus();
     const loadError = $("#ix-load-error");
     if (loadError) { loadError.hidden = true; loadError.classList.remove("stale"); }
     ixLoaded = true;
@@ -2057,6 +2061,102 @@ async function loadIntelligence() {
   } finally {
     ixBusy = false;
   }
+}
+let IX_KNOWLEDGE = { status: null, results: [] };
+async function loadWindowsKnowledgeStatus(){
+  const state=document.getElementById("ix-kb-state"),stats=document.getElementById("ix-kb-stats");
+  try{
+    const [data,sources]=await Promise.all([
+      apiRetry("/api/knowledge/status",1),apiRetry("/api/knowledge/sources?limit=80",1)
+    ]);
+    if(data.error)throw new Error(data.error);
+    IX_KNOWLEDGE.status=data;
+    IX_KNOWLEDGE.sources=Array.isArray(sources)?sources:[];
+    if(state)state.textContent=String(data.sources||0)+" SOURCES · "+String(data.chunks||0)+" CHUNKS";
+    if(stats)stats.textContent=(data.documents||0)+" documents indexed across "+(data.sources||0)+
+      " approved sources · "+(data.chunks||0)+" searchable chunks · Windows build "+
+      (data.windows?.build||"unknown")+" · "+(data.windows?.edition||"edition unknown")+" · "+
+      (data.windows?.architecture||"architecture unknown")+" · LOCAL ONLY";
+    renderWindowsKnowledgeSources();
+    return data;
+  }catch(error){
+    if(state)state.textContent="KNOWLEDGE INDEX UNAVAILABLE";
+    if(stats)stats.textContent=error.message||String(error);
+    return null;
+  }
+}
+function renderWindowsKnowledgeSources(){
+  const host=document.getElementById("ix-kb-sources");if(!host)return;
+  const rows=Array.isArray(IX_KNOWLEDGE.sources)?IX_KNOWLEDGE.sources:[];
+  host.innerHTML=rows.length?rows.map(source=>
+    '<div class="ix-kb-source-row"><div><b>'+esc(source.title)+'</b><small>'+esc(source.publisher)+' · '+
+    esc(source.component)+' · '+esc(source.windows_edition||"any edition")+' · '+
+    esc(source.architecture||"any architecture")+' · '+esc(source.licence||"licence not recorded")+'</small><small>'+esc(source.url)+'</small></div>'+
+    '<span>'+esc(String(source.document_count||0))+' DOC / '+esc(String(source.chunk_count||0))+
+    ' CHUNKS</span></div>').join(""):'<div class="empty">No sources registered. Add a Microsoft or OEM documentation page above.</div>';
+}
+function renderWindowsKnowledgeResults(){
+  const host=document.getElementById("ix-kb-results");if(!host)return;
+  const rows=Array.isArray(IX_KNOWLEDGE.results)?IX_KNOWLEDGE.results:[];
+  host.innerHTML=rows.length?rows.map(item=>{
+    const src=item.source||{},doc=item.document||{},build=item.windows_build||{};
+    return '<article class="ix-kb-result"><div class="ix-kb-result-head"><b>'+esc(doc.title||src.title||"Documentation chunk")+
+      '</b><span>'+Math.round(Number(item.score||0)*100)+'% relevance</span></div>'+
+      '<p>'+esc(item.snippet||"")+'</p><div class="ix-kb-source">'+esc(src.publisher||"Publisher unknown")+
+      ' · '+esc(src.component||"other")+' · '+esc(build.compatibility||"build unknown")+'</div>'+
+      '<small>'+esc(src.url||"")+' · '+esc(src.licence||"licence not recorded")+' · SHA-256 '+esc(String(doc.sha256||"").slice(0,16))+
+      ' · '+esc(item.citation||"")+'</small><small>'+esc(item.windows_edition?.required||"any edition")+
+      ' · '+esc(item.architecture?.required||"any architecture")+
+      (item.api_version?" · API "+esc(item.api_version):"")+'</small></article>';
+  }).join(""):'<div class="empty">No indexed passages matched. Add an approved source or use different technical terms.</div>';
+}
+async function searchWindowsKnowledge(){
+  const query=document.getElementById("ix-kb-query")?.value.trim()||"";
+  if(!query)return toast("Enter a Windows troubleshooting query first","warn");
+  const button=document.getElementById("ix-kb-search");if(button){button.disabled=true;button.textContent="SEARCHING";}
+  try{
+    const data=await api("/api/knowledge/search?q="+encodeURIComponent(query)+"&limit=10");
+    if(data.error)throw new Error(data.error);
+    IX_KNOWLEDGE.results=Array.isArray(data.results)?data.results:[];
+    renderWindowsKnowledgeResults();
+    toast("Local knowledge search returned "+IX_KNOWLEDGE.results.length+" citations","ok");
+  }catch(error){toast("Knowledge search: "+(error.message||String(error)),"bad");}
+  finally{if(button){button.disabled=false;button.textContent="SEARCH LOCAL INDEX";}}
+}
+function initWindowsKnowledge(){
+  const add=document.getElementById("ix-kb-add"),search=document.getElementById("ix-kb-search");
+  if(search)search.onclick=searchWindowsKnowledge;
+  const query=document.getElementById("ix-kb-query");
+  if(query)query.addEventListener("keydown",event=>{if(event.key==="Enter")searchWindowsKnowledge();});
+  if(add)add.onclick=async()=>{
+    const url=document.getElementById("ix-kb-url")?.value.trim()||"";
+    const title=document.getElementById("ix-kb-title")?.value.trim()||"";
+    const component=document.getElementById("ix-kb-component")?.value||"other";
+    const licence=document.getElementById("ix-kb-licence")?.value.trim()||"not_recorded";
+    const windows_edition=document.getElementById("ix-kb-edition")?.value||null;
+    const architecture=document.getElementById("ix-kb-architecture")?.value||null;
+    const api_version=document.getElementById("ix-kb-api-version")?.value.trim()||null;
+    const min_build=Number(document.getElementById("ix-kb-min-build")?.value)||null;
+    const max_build=Number(document.getElementById("ix-kb-max-build")?.value)||null;
+    if(!url||!title)return toast("Enter the official documentation URL and title","warn");
+    add.disabled=true;add.textContent="REGISTERING SOURCE";
+    try{
+      const source=await api("/api/knowledge/source/register",{url,title,component,licence,windows_edition,architecture,api_version,min_build,max_build});
+      if(source.error)throw new Error(source.error);
+      add.textContent="INDEXING DOCUMENTATION";
+      const indexed=await api("/api/knowledge/source/ingest",{source_id:source.source_id});
+      if(indexed.error)throw new Error(indexed.error);
+      document.getElementById("ix-kb-url").value="";
+      document.getElementById("ix-kb-title").value="";
+      document.getElementById("ix-kb-licence").value="";
+      document.getElementById("ix-kb-api-version").value="";
+      document.getElementById("ix-kb-min-build").value="";
+      document.getElementById("ix-kb-max-build").value="";
+      await loadWindowsKnowledgeStatus();
+      toast(indexed.inserted?"Official page indexed locally":"This page version was already indexed","ok");
+    }catch(error){toast("Knowledge ingestion: "+(error.message||String(error)),"bad");await loadWindowsKnowledgeStatus();}
+    finally{add.disabled=false;add.textContent="ADD + INDEX OFFICIAL SOURCE";}
+  };
 }
 function renderIXState() {
   const rows = Array.isArray(IX.state) ? IX.state.slice(0, 24) : [];

@@ -126,3 +126,26 @@ def test_game_relocation_plan_never_moves_launcher_owned_files():
     assert "shutil.move" not in source
     assert "os.rename(" not in source
     assert "/api/maintenance/game-relocation/plan" in SERVER
+
+
+def test_admin_operations_use_single_job_id_uac_broker_and_not_app_wide_elevation():
+    broker = (ROOT / "sentinel" / "privilege_broker.py").read_text(encoding="utf-8")
+    agent = (ROOT / "agent.py").read_text(encoding="utf-8")
+    assert "def launch_privileged_job(" in broker
+    assert 'shell(None, "runas"' in broker
+    assert "ADMIN_ACTIONS" in broker
+    assert "maintenance_job_requests" in MAINTENANCE
+    assert "def _claim_privileged_request(" in MAINTENANCE
+    assert "def execute_privileged_job(" in MAINTENANCE
+    assert "current_user_binding" in MAINTENANCE
+    assert 'sys.argv[1] in ("install", "uninstall", "--privileged-job")' in agent
+    assert "-RunLevel Limited" in agent
+
+
+def test_elevated_request_is_preview_bound_and_rechecked_in_child():
+    assert 'state = "awaiting_elevation" if needs_elevation else "queued"' in MAINTENANCE
+    assert "min(float(expires), now + 180)" in MAINTENANCE
+    assert '_require_safeguard("maint_" + action, args)' in MAINTENANCE
+    assert "not _current_snapshot_matches(action, args, before)" in MAINTENANCE
+    assert "UPDATE maintenance_job_requests SET state='executing'" in MAINTENANCE
+    assert "connection.commit()\n            raise PermissionError(\"Privileged job ticket expired." in MAINTENANCE

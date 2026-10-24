@@ -6,7 +6,7 @@ The background scheduler is read-only: it never changes Windows unattended.
 """
 from __future__ import annotations
 import base64, ctypes, hashlib, ipaddress, json, os, platform, re, subprocess
-import threading, time, uuid
+import threading, time, uuid, sqlite3
 from pathlib import Path
 from typing import Any
 
@@ -65,6 +65,10 @@ def ensure_schema() -> None:
         scheduler_enabled INTEGER NOT NULL DEFAULT 0, idle_minutes INTEGER NOT NULL DEFAULT 15,
         weekly_diagnostics INTEGER NOT NULL DEFAULT 1, last_idle_run REAL NOT NULL DEFAULT 0,
         last_weekly_run REAL NOT NULL DEFAULT 0)""")
+    core.db("""CREATE TABLE IF NOT EXISTS maintenance_job_requests(
+        job_id TEXT PRIMARY KEY, action TEXT NOT NULL, args_json TEXT NOT NULL,
+        snapshot_json TEXT NOT NULL, principal TEXT NOT NULL, session_id INTEGER NOT NULL,
+        created_at REAL NOT NULL, expires_at REAL NOT NULL, state TEXT NOT NULL DEFAULT 'pending')""")
     core.db("INSERT OR IGNORE INTO maintenance_policy(id) VALUES(1)")
 
 
@@ -588,8 +592,11 @@ def execute_preview(token: str, *, confirmed: bool = False) -> dict:
     ensure_schema()
     if confirmed is not True:
         raise PermissionError("Explicit user confirmation is required.")
+    needs_elevation = False
+    binding = None
     with _PREVIEW_LOCK:
-        rows = core.db("SELECT action,args_json,snapshot_json,created_at,expires_at,consumed FROM maintenance_previews WHERE token=?", (str(token),))
+        rows = core.db("SELECT action,args_json,snapshot_json,created_at,expires_at,consumed FROM maintenance_previews WHERE token=?",
+                       (str(token),))
         if not rows:
             raise ValueError("Preview was not found or has expired.")
         action, args_json, snapshot_json, created, expires, consumed = rows[0]
@@ -598,24 +605,147 @@ def execute_preview(token: str, *, confirmed: bool = False) -> dict:
         if time.time() > float(expires):
             raise ValueError("Preview expired. Generate a fresh preview.")
         args, before = json.loads(args_json), json.loads(snapshot_json)
+        policy = _action_policy(action)
+        needs_elevation = bool(policy["administrator_required"] and not _is_admin())
+        if needs_elevation:
+            from . import privilege_broker
+            if action not in privilege_broker.ADMIN_ACTIONS:
+                raise PermissionError("This action has no registered elevated capability.")
+            binding = privilege_broker.current_user_binding()
         if _policy()["kill_switch"]:
             raise PermissionError("Maintenance kill switch is enabled.")
-        if _action_policy(action)["administrator_required"]:
-            _require_admin()
         _require_safeguard("maint_" + action, args)
         _assert_budget()
         if not _current_snapshot_matches(action, args, before):
             raise RuntimeError("System state changed after preview. No action was run; generate a new preview.")
-        core.db("UPDATE maintenance_previews SET consumed=1 WHERE token=? AND consumed=0", (str(token),))
         job_id, now = uuid.uuid4().hex, time.time()
+        state = "awaiting_elevation" if needs_elevation else "queued"
+        core.db("UPDATE maintenance_previews SET consumed=1 WHERE token=? AND consumed=0", (str(token),))
         core.db("INSERT INTO maintenance_jobs(job_id,action,state,created_at,updated_at) VALUES(?,?,?,?,?)",
-                (job_id, action, "queued", now, now))
-    worker = threading.Thread(target=_job_worker, args=(job_id, action, args, before), name="maintenance-" + action, daemon=True)
+                (job_id, action, state, now, now))
+        if needs_elevation:
+            core.db("""INSERT INTO maintenance_job_requests
+                       (job_id,action,args_json,snapshot_json,principal,session_id,created_at,expires_at,state)
+                       VALUES(?,?,?,?,?,?,?,?, 'pending')""",
+                    (job_id, action, json.dumps(args, sort_keys=True), json.dumps(before, sort_keys=True, default=str),
+                     binding["principal"], binding["session_id"], now, min(float(expires), now + 180)))
+    if needs_elevation:
+        threading.Thread(target=_launch_privileged_job_worker, args=(job_id,),
+                         name="maintenance-uac-" + action, daemon=True).start()
+        core.log("maintenance", f"{action} queued for a one-time Windows UAC approval", "info", job_id=job_id)
+        return {"ok": True, "job_id": job_id, "state": "awaiting_elevation", "action": action,
+                "elevation_required": True, "approval_required": True}
+    worker = threading.Thread(target=_job_worker, args=(job_id, action, args, before),
+                              name="maintenance-" + action, daemon=True)
     worker.start()
-    return {"ok": True, "job_id": job_id, "state": "queued", "action": action}
+    return {"ok": True, "job_id": job_id, "state": "queued", "action": action,
+            "elevation_required": False}
 
 
-def _job_worker(job_id: str, action: str, args: dict, before: dict) -> None:
+def _launch_privileged_job_worker(job_id: str) -> None:
+    from . import privilege_broker
+    try:
+        privilege_broker.launch_privileged_job(job_id)
+    except PermissionError as exc:
+        state = "cancelled"
+        error = str(exc)[:700]
+        core.db("UPDATE maintenance_job_requests SET state='cancelled' WHERE job_id=? AND state='pending'", (job_id,))
+        core.db("UPDATE maintenance_jobs SET state=?,updated_at=?,error=? WHERE job_id=?",
+                (state, time.time(), error, job_id))
+        core.log("maintenance", f"Administrator approval declined for job {job_id}", "warn")
+        core.publish("maintenance_job", {"job_id": job_id, "state": state, "error": error})
+    except Exception as exc:
+        state = "failed"
+        error = f"{type(exc).__name__}: {str(exc)[:600]}"
+        core.db("UPDATE maintenance_job_requests SET state='failed' WHERE job_id=? AND state='pending'", (job_id,))
+        core.db("UPDATE maintenance_jobs SET state=?,updated_at=?,error=? WHERE job_id=?",
+                (state, time.time(), error, job_id))
+        core.log("maintenance", f"Administrator helper could not start: {error[:260]}", "error")
+        core.publish("maintenance_job", {"job_id": job_id, "state": state, "error": error[:500]})
+
+
+def _claim_privileged_request(job_id: str) -> dict:
+    """Atomically consume a same-user, same-session, short-lived elevated job ticket."""
+    from . import privilege_broker
+    if not re.fullmatch(r"[0-9a-f]{32}", str(job_id or "")):
+        raise ValueError("Privileged job identifier is invalid.")
+    binding = privilege_broker.current_user_binding()
+    connection = sqlite3.connect(core.DB_PATH, timeout=12, isolation_level=None)
+    connection.row_factory = sqlite3.Row
+    try:
+        connection.execute("PRAGMA busy_timeout=12000")
+        connection.execute("BEGIN IMMEDIATE")
+        row = connection.execute("SELECT * FROM maintenance_job_requests WHERE job_id=?", (job_id,)).fetchone()
+        if not row or row["state"] != "pending":
+            raise PermissionError("Privileged job ticket is missing, expired or already used.")
+        if time.time() > float(row["expires_at"]):
+            connection.execute("UPDATE maintenance_job_requests SET state='expired' WHERE job_id=?", (job_id,))
+            connection.execute("UPDATE maintenance_jobs SET state='failed',updated_at=?,error=? WHERE job_id=?",
+                               (time.time(), "Elevation request expired; preview again.", job_id))
+            connection.commit()
+            raise PermissionError("Privileged job ticket expired. Generate a fresh preview.")
+        if (str(row["principal"]).casefold() != binding["principal"]
+                or int(row["session_id"]) != int(binding["session_id"])):
+            connection.execute("UPDATE maintenance_job_requests SET state='rejected' WHERE job_id=?", (job_id,))
+            connection.execute("UPDATE maintenance_jobs SET state='failed',updated_at=?,error=? WHERE job_id=?",
+                               (time.time(), "Elevation identity/session mismatch.", job_id))
+            connection.commit()
+            raise PermissionError("Elevated helper identity does not match the approved user session.")
+        job = connection.execute("SELECT action,state FROM maintenance_jobs WHERE job_id=?", (job_id,)).fetchone()
+        if not job or job["action"] != row["action"] or job["state"] != "awaiting_elevation":
+            connection.execute("UPDATE maintenance_job_requests SET state='rejected' WHERE job_id=?", (job_id,))
+            connection.commit()
+            raise PermissionError("Maintenance job state does not match its approval ticket.")
+        updated = connection.execute(
+            "UPDATE maintenance_job_requests SET state='executing' WHERE job_id=? AND state='pending'", (job_id,))
+        if updated.rowcount != 1:
+            raise PermissionError("Privileged job ticket was already consumed.")
+        request = {"action": row["action"], "args": json.loads(row["args_json"]),
+                   "before": json.loads(row["snapshot_json"])}
+        connection.commit()
+        return request
+    except Exception:
+        if connection.in_transaction:
+            connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+
+def execute_privileged_job(job_id: str) -> int:
+    """Entrypoint for the elevated child; it can consume one allowlisted job only."""
+    if not IS_WIN:
+        raise PermissionError("The maintenance helper is available only on Windows.")
+    if not _is_admin():
+        error = "The maintenance helper did not receive an elevated Windows token."
+        core.db("UPDATE maintenance_job_requests SET state='failed' WHERE job_id=? AND state='pending'",
+                (str(job_id),))
+        core.db("UPDATE maintenance_jobs SET state='failed',updated_at=?,error=? WHERE job_id=? AND state='awaiting_elevation'",
+                (time.time(), error, str(job_id)))
+        raise PermissionError(error)
+    from . import privilege_broker
+    try:
+        request = _claim_privileged_request(job_id)
+    except Exception as exc:
+        error = f"{type(exc).__name__}: {str(exc)[:700]}"
+        core.db("UPDATE maintenance_jobs SET state='failed',updated_at=?,error=? WHERE job_id=? AND state='awaiting_elevation'",
+                (time.time(), error, str(job_id)))
+        core.db("UPDATE maintenance_job_requests SET state='failed' WHERE job_id=? AND state='pending'",
+                (str(job_id),))
+        raise
+    action = request["action"]
+    if action not in privilege_broker.ADMIN_ACTIONS or not _action_policy(action)["administrator_required"]:
+        core.db("UPDATE maintenance_job_requests SET state='rejected' WHERE job_id=?", (job_id,))
+        core.db("UPDATE maintenance_jobs SET state='failed',updated_at=?,error=? WHERE job_id=?",
+                (time.time(), "Action is not registered for administrator execution.", job_id))
+        raise PermissionError("Action is not registered for administrator execution.")
+    succeeded = _perform_job(str(job_id), action, request["args"], request["before"])
+    core.db("UPDATE maintenance_job_requests SET state=? WHERE job_id=? AND state='executing'",
+            ("completed" if succeeded else "failed", job_id))
+    return 0 if succeeded else 1
+
+
+def _perform_job(job_id: str, action: str, args: dict, before: dict) -> bool:
     core.db("UPDATE maintenance_jobs SET state='running',updated_at=? WHERE job_id=?", (time.time(), job_id))
     try:
         _require_safeguard("maint_" + action, args)
@@ -636,13 +766,18 @@ def _job_worker(job_id: str, action: str, args: dict, before: dict) -> None:
                 (time.time(), str(result)[:1800], int(journal_id), job_id))
         core.log("maintenance", f"{action} completed: {str(result)[:300]}", "ok", journal_id=journal_id)
         core.publish("maintenance_job", {"job_id": job_id, "state": "done", "result": str(result)[:800], "journal_id": journal_id})
+        return True
     except Exception as exc:
         error = f"{type(exc).__name__}: {str(exc)[:900]}"
         core.db("UPDATE maintenance_jobs SET state='failed',updated_at=?,error=? WHERE job_id=?",
                 (time.time(), error, job_id))
         core.log("maintenance", f"{action} failed safely: {error[:300]}", "warn")
         core.publish("maintenance_job", {"job_id": job_id, "state": "failed", "error": error[:500]})
+        return False
 
+
+def _job_worker(job_id: str, action: str, args: dict, before: dict) -> None:
+    _perform_job(job_id, action, args, before)
 
 def _apply_action(action: str, args: dict, before: dict) -> tuple[str, dict, dict, bool]:
     if action == "startup_disable":

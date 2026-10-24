@@ -108,6 +108,8 @@ def test_dashboard_uses_wpr_as_capture_requirement_and_xperf_as_optional():
     app = (ROOT / "ui" / "app.js").read_text(encoding="utf-8")
     assert "wpr.exe" in app
     assert "Xperf is optional" in app
+    assert 'id="engine-wpr" disabled' in html
+    assert "dedicated per-action UAC trace broker is not yet implemented" in html
     assert 'id="adv-etw-interval"' in html
     assert "etw_auto_interval_s" in app
 
@@ -148,3 +150,25 @@ def test_maintenance_health_report_and_game_planner_are_visible():
     assert "function renderMaintenanceIntelligence()" in app
     assert 'api("/api/maintenance/game-relocation/plan"' in app
     assert "health.coverage_count" in app
+
+
+def test_windows_knowledge_workspace_and_admin_broker_are_connected():
+    html = (ROOT / "ui" / "index.html").read_text(encoding="utf-8")
+    app = (ROOT / "ui" / "app.js").read_text(encoding="utf-8")
+    server = (ROOT / "sentinel" / "server.py").read_text(encoding="utf-8")
+    for element_id in (
+        "ix-kb-url", "ix-kb-title", "ix-kb-licence", "ix-kb-edition",
+        "ix-kb-architecture", "ix-kb-api-version", "ix-kb-component",
+        "ix-kb-min-build", "ix-kb-max-build", "ix-kb-add", "ix-kb-query",
+        "ix-kb-search", "ix-kb-sources",
+        "ix-kb-results", "ix-kb-state", "maint-admin-note",
+    ):
+        assert f'id="{element_id}"' in html
+    assert "function initWindowsKnowledge()" in app
+    assert 'api("/api/knowledge/source/register"' in app
+    assert 'api("/api/knowledge/source/ingest"' in app
+    assert 'api("/api/knowledge/search?' in app
+    assert "/api/maintenance/privilege" in app
+    assert "/api/knowledge/status" in server and "/api/knowledge/search" in server
+    assert "/api/knowledge/sources" in server
+    assert "/api/knowledge/source/ingest" in server

@@ -41,10 +41,11 @@ def _admin_error(message):
 
 
 def _ensure_admin():
-    """Require an elevated Windows token before any SENTINEL CLI action runs.
+    """Require elevation only for install, uninstall or one approved helper job.
 
-    Returns None when already elevated, 0 after successfully handing off to an
-    elevated process, or 1 when elevation cannot be verified/requested.
+    The long-running observer and dashboard remain standard-user processes.
+    Returns None when elevated, 0 after successfully handing off to an elevated
+    process, or 1 when elevation cannot be verified/requested.
     """
     if not IS_WIN:
         return None
@@ -83,7 +84,9 @@ def _ensure_admin():
         return 1
 
 
-if __name__ == "__main__":
+if __name__ == "__main__" and sys.argv[1:2] and sys.argv[1] in ("install", "uninstall", "--privileged-job"):
+    # Only installation/removal and a single preview-bound maintenance helper
+    # request elevation. The long-running observer/dashboard remains standard-user.
     _elevation_result = _ensure_admin()
     if _elevation_result is not None:
         raise SystemExit(_elevation_result)
@@ -484,17 +487,17 @@ try {
     $action = New-ScheduledTaskAction -Execute $pythonw -Argument ('"{0}"' -f $script) -WorkingDirectory $workdir
     $trigger = New-ScheduledTaskTrigger -AtLogOn -User $loggedOn
     $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -RestartCount 999 -RestartInterval (New-TimeSpan -Minutes 1) -ExecutionTimeLimit ([TimeSpan]::Zero) -MultipleInstances IgnoreNew
-    $principal = New-ScheduledTaskPrincipal -UserId $loggedOn -LogonType Interactive -RunLevel Highest
+    $principal = New-ScheduledTaskPrincipal -UserId $loggedOn -LogonType Interactive -RunLevel Limited
 
     $oldTask = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
     if ($oldTask) {
         Stop-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
         Unregister-ScheduledTask -TaskName $taskName -Confirm:$false
     }
-    Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Settings $settings -Principal $principal -Description "SENTINEL $version interactive Windows agent" | Out-Null
+    Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Settings $settings -Principal $principal -Description "SENTINEL $version standard-user interactive Windows agent" | Out-Null
 
     $registered = Get-ScheduledTask -TaskName $taskName -ErrorAction Stop
-    if ($registered.Principal.RunLevel.ToString() -ne 'Highest') { throw "Scheduled task $taskName was not registered with highest privileges" }
+    if ($registered.Principal.RunLevel.ToString() -ne 'Limited') { throw "Scheduled task $taskName must run with standard-user privileges" }
     if ($registered.Actions[0].Execute -ne $pythonw -or $registered.Actions[0].Arguments -ne ('"{0}"' -f $script)) {
         throw "Scheduled task action does not point to SENTINEL $version"
     }
@@ -672,6 +675,16 @@ def main():
         return install()
     if arguments and arguments[0] == "uninstall":
         return uninstall()
+    if arguments and arguments[0] == "--privileged-job":
+        if len(arguments) != 2:
+            print("A single approved maintenance job ID is required.")
+            return 2
+        from sentinel import maintenance
+        try:
+            return maintenance.execute_privileged_job(arguments[1])
+        except Exception as exc:
+            print(f"Privileged maintenance request rejected: {type(exc).__name__}: {str(exc)[:220]}")
+            return 1
     if arguments and arguments[0] in ("stop", "upgrade-stop"):
         return stop_agent()
     if arguments and arguments[0] == "open":

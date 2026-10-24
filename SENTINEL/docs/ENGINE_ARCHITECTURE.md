@@ -183,7 +183,7 @@ The local API remains authenticated and loopback-bound. The UI is an operator su
 CI validates Python behavior across supported Python versions, Python compilation, JavaScript syntax, and the existing AIE suite. A green CI run does not test live Vanguard compatibility, WPR permission on every Windows build, hardware performance, or the absence of anti-cheat false positives. Those are separate target-machine validation items.
 
 
-**Elevation:** the current installed-agent policy accepts an elevated administrator session for WPR. Performance Log Users-only operation is not enabled by the Safeguard in this release.
+**Elevation (1.2.24):** the installed observer/dashboard runs with the interactive user's limited token. Maintenance action IDs in the broker manifest use a per-action UAC helper. WPR/ETW still has an Administrator requirement and is not yet connected to that helper; trace capture remains fail-closed under the standard-user task until a dedicated trace-ticket broker is implemented. Performance Log Users-only operation is not enabled by the Safeguard.
 
 
 ## Windows Specialist Intelligence — planned extension
@@ -205,3 +205,25 @@ The current installer/agent has an elevated-session assumption for Windows opera
 ## Boot and design system
 
 The splash remains a real data-hydration phase with bounded concurrency and truthful ready/degraded module states. Optimisation is based on instrumentation, shared boot snapshots, cache reuse, duplicate-work elimination and moving expensive optional diagnostics outside critical startup—not skipping workspace data. The graphite/forest/red liquid-glass palette is defined in `SENTINEL/ui/app.css`; accessibility and reduced-motion preferences remain first-class.
+
+
+## Least-privilege privilege broker — implemented foundation (1.2.24)
+
+The scheduled interactive agent now uses the limited Windows token. The shared ProgramData store grants the signed-in account Modify rights and preserves SYSTEM/Administrators Full Control.
+
+For an administrator-required maintenance action, the operator creates a preview and gives explicit final confirmation. SENTINEL stores the exact action, arguments and original snapshot in a one-use ticket expiring with the preview (no more than 180 seconds), bound to the interactive principal and Windows session. The standard process launches only its own fixed `agent.py --privileged-job <32-hex-id>` entry point through the Windows `runas` consent UI. The helper checks principal/session, request state, fixed action manifest, kill switch, Safeguard and a fresh snapshot, then reuses the existing maintenance executor and journal. No arbitrary command or script is accepted and no administrator token is persisted. Declined UAC cancels the job.
+
+The guard in the child uses the Safeguard's own live metadata-only process probe; it does not trust a parent-process cached "game absent" result. It remains fail-closed if the process probe is unavailable. Windows UAC and account/session behavior still require validation on the target machine.
+
+## Windows Knowledge Engine — implemented initial slice (1.2.24)
+
+`sentinel/windows_knowledge.py` owns a local SQLite source/document/chunk index. Source registration is restricted to an explicit Microsoft, Windows and OEM allowlist over HTTPS. Ingestion is user-triggered, allows at most one same-host redirect, accepts HTML/plain text only, bounds response time/bytes, removes script/style/navigation/form payloads and preserves SHA-256 document revisions.
+
+Each source may carry a minimum/maximum Windows build, edition, architecture, component, licence metadata and API/command version. Retrieval is bounded local lexical search with build/edition/architecture/component filters when the local platform information is available. Every result carries the source URL, publisher, provenance metadata, content hash and local citation identifier. Retrieved text is treated as untrusted reference content and cannot create or execute maintenance actions.
+
+This release slice does not yet provide vector retrieval, continuous crawling, ranking calibration, model fine-tuning or automated source refresh. Those remain separate backlog items.
+
+
+## Trace elevation follow-up
+
+WPR/ETW capture currently remains blocked when the observer runs as a standard user. Before re-enabling capture, add a dedicated trace request type to the same privilege-broker model: one-use ticket, explicit user preview/confirmation, current user/session binding, exact provider/profile allowlist, WPR ownership check, bounded duration/output, process/game-state revalidation, and safe stop/finalization. Do not route this through arbitrary command execution or elevate the observer.

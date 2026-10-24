@@ -2030,3 +2030,39 @@ a{color:#a5dfae}.dot{background:var(--gr);box-shadow:0 0 8px rgba(131,212,154,.6
 :focus-visible{outline:2px solid #8fd69d;outline-offset:3px}
 @media(max-width:850px){.boot-console{border-radius:20px;padding:20px}}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important}}
+
+
+/* Windows Knowledge Engine cards */
+.ix-knowledge-panel{grid-column:1/-1}
+.ix-kb-stats{font:10px var(--mo);letter-spacing:.07em;color:var(--dim);padding:8px 0 12px}
+.ix-kb-register{display:grid;grid-template-columns:minmax(220px,1.5fr) minmax(180px,1fr) minmax(130px,.65fr) auto;gap:8px;align-items:center}
+.ix-kb-register input,.ix-kb-register select{min-width:0;width:100%}
+.ix-kb-result{padding:12px 14px;border:1px solid var(--line2);border-radius:13px;background:rgba(6,17,12,.35)}
+.ix-kb-result-head{display:flex;justify-content:space-between;gap:12px;align-items:center}
+.ix-kb-result-head b{font:600 13px var(--hd);color:var(--tx)}
+.ix-kb-result-head span{font:10px var(--mo);color:var(--cy)}
+.ix-kb-result p{margin:7px 0;font:12px/1.65 var(--hd);color:var(--soft);white-space:pre-wrap}
+.ix-kb-source,.ix-kb-result small{display:block;margin-top:5px;font:9px/1.5 var(--mo);color:var(--dim);overflow-wrap:anywhere}
+@media(max-width:1000px){.ix-kb-register{grid-template-columns:1fr 1fr}.ix-kb-register .btn{grid-column:1/-1}}
+@media(max-width:560px){.ix-kb-register{grid-template-columns:1fr}}
+
+
+/* Windows Knowledge Engine cards */
+.ix-knowledge-panel{grid-column:1/-1}
+.ix-kb-stats{font:10px var(--mo);letter-spacing:.07em;color:var(--dim);padding:8px 0 12px}
+.ix-kb-register{display:grid;grid-template-columns:minmax(220px,1.5fr) minmax(180px,1fr) minmax(130px,.65fr) auto;gap:8px;align-items:center}
+.ix-kb-register input,.ix-kb-register select{min-width:0;width:100%}
+.ix-kb-source-row{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 12px;border:1px solid var(--line2);border-radius:11px;background:rgba(6,17,12,.32)}
+.ix-kb-source-row b{display:block;font:600 12px var(--hd);color:var(--tx)}
+.ix-kb-source-row small{display:block;margin-top:3px;font:9px/1.5 var(--mo);color:var(--dim);overflow-wrap:anywhere}
+.ix-kb-source-row>span{font:9px var(--mo);color:var(--cy);white-space:nowrap}
+.ix-kb-result{padding:12px 14px;border:1px solid var(--line2);border-radius:13px;background:rgba(6,17,12,.35)}
+.ix-kb-result-head{display:flex;justify-content:space-between;gap:12px;align-items:center}
+.ix-kb-result-head b{font:600 13px var(--hd);color:var(--tx)}
+.ix-kb-result-head span{font:10px var(--mo);color:var(--cy)}
+.ix-kb-result p{margin:7px 0;font:12px/1.65 var(--hd);color:var(--soft);white-space:pre-wrap}
+.ix-kb-source,.ix-kb-result small{display:block;margin-top:5px;font:9px/1.5 var(--mo);color:var(--dim);overflow-wrap:anywhere}
+@media(max-width:1000px){.ix-kb-register{grid-template-columns:1fr 1fr}.ix-kb-register .btn{grid-column:1/-1}}
+@media(max-width:560px){.ix-kb-register{grid-template-columns:1fr}}
+
+.engine-note-warning{display:block!important;margin-top:8px;color:#ef8c83!important;border-left:2px solid #a31c1b;padding-left:9px}

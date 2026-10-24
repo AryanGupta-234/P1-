@@ -1,8 +1,8 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>SENTINEL &middot; 1.2.23</title>
+<title>SENTINEL &middot; 1.2.24</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cpath d='M32 4l24 14v28L32 60 8 46V18z' fill='none' stroke='%23b8e65b' stroke-width='4'/%3E%3Ccircle cx='32' cy='32' r='8' fill='%23ff6b38'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="app.css?v=1.2.23"></head>
+<link rel="stylesheet" href="app.css?v=1.2.24"></head>
 <body><div class="ambient"></div><canvas id="starfield"></canvas>
 <div class="boot" id="boot" role="status" aria-live="polite" aria-label="SENTINEL Windows node initialization">
   <div class="boot-grid" aria-hidden="true"></div><div class="boot-scanline" aria-hidden="true"></div>
@@ -22,7 +22,7 @@
         <div class="boot-signal-label"><i></i> COLLECTORS RUNNING IN BACKGROUND</div>
       </div>
       <div class="boot-content">
-        <div class="boot-eyebrow"><span>BOOT SEQUENCE / 1.2.23</span><span>LOCAL INTELLIGENCE</span></div>
+        <div class="boot-eyebrow"><span>BOOT SEQUENCE / 1.2.24</span><span>LOCAL INTELLIGENCE</span></div>
         <div class="boot-title">SENTINEL<span class="boot-title-cursor"></span></div>
         <div class="boot-sub">SENSE THE SYSTEM. SHAPE THE RESPONSE.</div>
         <div class="boot-lanes" aria-hidden="true"><div><i></i><span>SESSION</span></div><div><i></i><span>PROCESS</span></div><div><i></i><span>SYSTEM</span></div><div><i></i><span>NETWORK</span></div><div><i></i><span>THERMAL</span></div><div><i></i><span>LIVE LINK</span></div></div>
@@ -237,8 +237,9 @@
   <article class="panel engine-card engine-span">
    <div class="ph">06 / DEEP CAPTURE <em>WINDOWS PERFORMANCE RECORDER</em></div>
    <div class="pb engine-capture">
-    <div><div class="engine-state" id="engine-wpr-state">WPR STATUS UNKNOWN</div><details class="engine-note-disclosure"><summary>POLICY / DETAILS</summary><small class="engine-note">Uses inbox <b>wpr.exe</b> with bounded GeneralProfile.Light capture. Xperf is optional and not required to record.</small></details></div>
-    <button class="btn or" id="engine-wpr">PROPOSE 12s WPR CAPTURE</button>
+    <div><div class="engine-state" id="engine-wpr-state">WPR STATUS UNKNOWN</div><details class="engine-note-disclosure"><summary>POLICY / DETAILS</summary><small class="engine-note">Uses inbox <b>wpr.exe</b> with bounded GeneralProfile.Light capture. Xperf is optional and not required to record.</small>
+      <small class="engine-note engine-note-warning">WPR requires Administrator rights. Its dedicated per-action UAC trace broker is not yet implemented, so trace capture is intentionally unavailable while the observer runs as a standard user.</small></details></div>
+    <button class="btn or" id="engine-wpr" disabled aria-disabled="true" title="Dedicated per-action UAC trace broker is pending">WPR CAPTURE · ADMIN HELPER PENDING</button>
    </div>
   </article>
  </div>
@@ -489,7 +490,7 @@
   <div class="maint-head"><div><span class="maint-kicker">SENTINEL / WINDOWS OPERATIONS</span><h2>MAINTENANCE CONTROL</h2><p>Observe the node. Preview the change. Keep control of every action.</p></div><button class="btn" id="maint-refresh">REFRESH DIAGNOSTICS</button></div>
   <div class="metrics maint-metrics">
     <div class="metric"><small>DIAGNOSTIC STATE</small><b id="maint-state">COLLECTING</b><span id="maint-state-note">Background inventory</span></div>
-    <div class="metric"><small>ADMIN SESSION</small><b id="maint-admin">--</b><span>Current Windows token</span></div>
+    <div class="metric"><small>ADMIN SESSION</small><b id="maint-admin">--</b><span id="maint-admin-note">Administrator permission state</span></div>
     <div class="metric"><small>ACTION BUDGET</small><b id="maint-budget">--</b><span id="maint-budget-note">Rolling limits</span></div>
     <div class="metric"><small>VANGUARD SAFEGUARD</small><b id="maint-guard">--</b><span id="maint-guard-note">Fail-closed observer</span></div>
   </div>
@@ -719,7 +720,44 @@
     <div class="panel"><div class="ph">Goals &amp; reviewed plans <em>planning is not execution</em></div>
       <div class="pb"><div style="display:grid;gap:8px"><input id="ix-goal-title" placeholder="New goal title"><textarea id="ix-goal-desc" rows="2" placeholder="Describe the outcome you want..."></textarea><button class="btn or" id="ix-goal-add">CREATE GOAL</button></div>
         <details class="guided-detail" style="margin-top:12px"><summary>PLAN / EXECUTION BOUNDARY</summary><div class="msg"><small>Plan lifecycle</small>Local model suggestions are stored as integrity-checked drafts. Accepting a draft creates ordered goal steps only; it does not run commands or perform system actions.</div></details>
-        <div class="list" id="ix-goals" style="margin-top:12px"></div></div></div>
+        <div class="list" id="ix-goals" style="margin-top:12px"></div></div></div> 
+    <div class="panel ix-knowledge-panel">
+      <div class="ph">WINDOWS KNOWLEDGE ENGINE <em id="ix-kb-state">LOCAL INDEX / INITIALISING</em></div>
+      <div class="pb">
+        <div class="ix-kb-stats" id="ix-kb-stats">No documentation indexed yet. Add an official source to begin building the local reference library.</div>
+        <div class="ix-kb-register">
+          <input id="ix-kb-url" type="url" placeholder="https://learn.microsoft.com/...">
+          <input id="ix-kb-title" placeholder="Documentation title">
+          <input id="ix-kb-licence" placeholder="Licence / terms metadata (optional)">
+          <select id="ix-kb-edition"><option value="">ANY EDITION</option><option value="home">HOME</option><option value="pro">PRO</option><option value="enterprise">ENTERPRISE</option><option value="education">EDUCATION</option><option value="server">SERVER</option></select>
+          <select id="ix-kb-architecture"><option value="">ANY ARCHITECTURE</option><option value="x64">X64</option><option value="x86">X86</option><option value="arm64">ARM64</option></select>
+          <input id="ix-kb-min-build" type="number" min="7600" max="99999" placeholder="Min build (optional)">
+          <input id="ix-kb-max-build" type="number" min="7600" max="99999" placeholder="Max build (optional)">
+          <input id="ix-kb-api-version" placeholder="API / command version (optional)">
+          <select id="ix-kb-component">
+            <option value="windows">WINDOWS</option><option value="kernel">KERNEL</option>
+            <option value="scheduler">SCHEDULER</option><option value="process">PROCESS</option>
+            <option value="memory">MEMORY</option><option value="storage">STORAGE</option>
+            <option value="network">NETWORK</option><option value="power">POWER</option>
+            <option value="pnp">PNP / DEVICES</option><option value="drivers">DRIVERS</option>
+            <option value="servicing">SERVICING</option><option value="reliability">RELIABILITY</option>
+            <option value="security">SECURITY</option><option value="performance">PERFORMANCE</option>
+            <option value="wpr-etw">WPR / ETW</option><option value="sysinternals">SYSINTERNALS</option>
+            <option value="oem">OEM</option><option value="other">OTHER</option>
+          </select>
+          <button class="btn or" id="ix-kb-add">ADD + INDEX OFFICIAL SOURCE</button>
+        </div>
+        <div class="row" style="margin-top:12px">
+          <input id="ix-kb-query" placeholder="Search Windows knowledge with citations..." style="flex:1">
+          <button class="btn" id="ix-kb-search">SEARCH LOCAL INDEX</button>
+        </div>
+        <div class="list" id="ix-kb-sources" style="margin-top:12px"></div>
+        <div class="list" id="ix-kb-results" style="margin-top:12px"><div class="empty">Retrieval is local-only. Indexed text is evidence, never executable instructions.</div></div>
+        <details class="guided-detail" style="margin-top:12px"><summary>KNOWLEDGE / PROVENANCE CONTRACT</summary>
+          <div class="msg"><small>Documentation ingestion</small>Only HTTPS pages from the Microsoft and approved OEM/vendor domain allowlist can be fetched. Redirects must remain on the same host. Pages are reduced to bounded plain text, chunked and indexed locally. Source URL, publisher, licence metadata, build applicability and content hash are retained. Retrieved instructions are never executed.</div>
+        </details>
+      </div>
+    </div>
   </div>
 </section>
 
@@ -737,4 +775,4 @@
   </div>
 </section>
 </main></div>
-<script src="app.js?v=1.2.23"></script></body></html>
+<script src="app.js?v=1.2.24"></script></body></html>

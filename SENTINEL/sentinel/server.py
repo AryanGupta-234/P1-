@@ -2,7 +2,7 @@
 import ctypes, json, os, threading, time, urllib.parse, psutil, platform, sys, hmac
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from . import core, actions, ai, intel, inventory, intelligence, advanced, activity_engine
-from . import safeguard, runtime_engine, memory_engine, ai_engine, security_engine, hardware_provider, maintenance
+from . import safeguard, runtime_engine, memory_engine, ai_engine, security_engine, hardware_provider, maintenance, privilege_broker, windows_knowledge
 from .core import CFG, STATE, LIVE, HIST, HEART, START, db, log, save_cfg
 
 UI = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "ui")
@@ -258,6 +258,22 @@ class H(BaseHTTPRequestHandler):
         if not self._authed(qs):
             return self._json({"error": "unauthorized"}, 401)
         p = u.path
+        if p == "/api/maintenance/privilege":
+            return self._json(privilege_broker.status())
+        if p == "/api/knowledge/status":
+            return self._json(windows_knowledge.STORE.status())
+        if p == "/api/knowledge/sources":
+            return self._json(windows_knowledge.STORE.list_sources(min(200, int((qs.get("limit") or ["100"])[0]))))
+        if p == "/api/knowledge/search":
+            try:
+                components = [x for x in (qs.get("component") or []) if x]
+                return self._json(windows_knowledge.STORE.search(
+                    (qs.get("q") or [""])[0], windows_build=(qs.get("build") or [None])[0],
+                    windows_edition=(qs.get("edition") or [None])[0],
+                    architecture=(qs.get("architecture") or [None])[0],
+                    components=components, limit=min(20, int((qs.get("limit") or ["8"])[0]))))
+            except (ValueError, TypeError) as exc:
+                return self._json({"error": str(exc)}, 400)
         if p == "/api/maintenance/status":
             try: return self._json(maintenance.status(refresh=(qs.get("refresh") or ["0"])[0] == "1"))
             except Exception as exc: return self._json({"error": f"{type(exc).__name__}: {str(exc)[:240]}"}, 503)
@@ -473,21 +489,49 @@ class H(BaseHTTPRequestHandler):
 
     def do_POST(self):
         u = urllib.parse.urlparse(self.path); qs = urllib.parse.parse_qs(u.query)
+        p = u.path
         if not self._authed(qs):
             return self._json({"error": "unauthorized"}, 401)
         try:
             n = int(self.headers.get("Content-Length") or 0)
         except (TypeError, ValueError):
             return self._json({"error": "invalid Content-Length"}, 400)
-        if n < 0 or n > 65536:
-            return self._json({"error": "request body must not exceed 64 KiB"}, 413)
+        body_limit = 2 * 1024 * 1024 if p == "/api/knowledge/source/ingest" else 65536
+        if n < 0 or n > body_limit:
+            return self._json({"error": "request body exceeds the endpoint limit"}, 413)
         try:
             body = json.loads(self.rfile.read(n) or b"{}")
         except (ValueError, UnicodeDecodeError):
             return self._json({"error": "request body must be valid JSON"}, 400)
         if not isinstance(body, dict):
             return self._json({"error": "request body must be a JSON object"}, 400)
-        p = u.path
+        if p == "/api/knowledge/source/register":
+            try:
+                return self._json(windows_knowledge.STORE.register_source(
+                    str(body.get("url") or ""), str(body.get("title") or ""),
+                    component=body.get("component", "other"), licence=body.get("licence", "not_recorded"),
+                    min_build=body.get("min_build"), max_build=body.get("max_build"),
+                    windows_edition=body.get("windows_edition"), architecture=body.get("architecture"),
+                    api_version=body.get("api_version")), 201)
+            except (ValueError, TypeError) as exc:
+                return self._json({"error": str(exc)}, 400)
+        if p == "/api/knowledge/source/ingest":
+            try:
+                result = windows_knowledge.STORE.ingest_url(str(body.get("source_id") or ""))
+                log("windows-knowledge", "official documentation page indexed locally", "ok",
+                    source_id=result["source_id"], document_id=result["document_id"], chunks=result["chunks"])
+                return self._json(result, 201 if result["inserted"] else 200)
+            except (ValueError, TypeError) as exc:
+                return self._json({"error": str(exc)}, 400)
+            except Exception as exc:
+                log("windows-knowledge", f"documentation ingestion failed: {type(exc).__name__}", "warn")
+                return self._json({"error": f"{type(exc).__name__}: {str(exc)[:240]}"}, 503)
+        if p == "/api/knowledge/source/status":
+            try:
+                return self._json(windows_knowledge.STORE.set_source_status(
+                    str(body.get("source_id") or ""), str(body.get("status") or "")))
+            except (ValueError, TypeError) as exc:
+                return self._json({"error": str(exc)}, 400)
         if p == "/api/maintenance/dns-test":
             try:
                 return self._json(maintenance.test_dns_servers(body.get("servers") if isinstance(body.get("servers"), list) else []))

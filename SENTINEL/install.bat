@@ -112,6 +112,8 @@ if exist "%VERSION_DIR%" (
   if not exist "%VERSION_DIR%\sentinel\core.py" goto :incomplete
   if not exist "%VERSION_DIR%\sentinel\maintenance.py" goto :incomplete
   if not exist "%VERSION_DIR%\sentinel\approval_engine.py" goto :incomplete
+  if not exist "%VERSION_DIR%\sentinel\privilege_broker.py" goto :incomplete
+  if not exist "%VERSION_DIR%\sentinel\windows_knowledge.py" goto :incomplete
   if not exist "%VERSION_DIR%\ui\index.html" goto :incomplete
   if not exist "%VERSION_DIR%\requirements.txt" goto :incomplete
   if not exist "%VERSION_DIR%\.venv\Scripts\python.exe" goto :incomplete
@@ -141,6 +143,14 @@ if exist "%VERSION_DIR%" (
   )
   if not exist "%STAGING_DIR%\sentinel\maintenance.py" (
     echo ERROR: SENTINEL maintenance engine is missing from the staged release.
+    goto :fail
+  )
+  if not exist "%STAGING_DIR%\sentinel\privilege_broker.py" (
+    echo ERROR: SENTINEL privilege broker is missing from the staged release.
+    goto :fail
+  )
+  if not exist "%STAGING_DIR%\sentinel\windows_knowledge.py" (
+    echo ERROR: SENTINEL Windows Knowledge Engine is missing from the staged release.
     goto :fail
   )
   if not exist "%STAGING_DIR%\sentinel\approval_engine.py" (

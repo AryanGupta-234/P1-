@@ -21,6 +21,9 @@ def test_every_shortcut_is_verified_against_release_python_and_entrypoint():
     assert "$check.TargetPath -ne $pythonw" in source
     assert "$check.Arguments -ne $shortcutArgs" in source
     assert "SHORTCUT_OK=" in source
+    assert "-RunLevel Limited" in source
+    assert "standard-user interactive Windows agent" in source
+    assert "execute_privileged_job" in source
 
 
 def test_uninstaller_removes_direct_user_and_all_users_start_shortcuts():
@@ -38,4 +41,4 @@ def test_installer_reports_top_level_start_menu_entry():
 
 
 def test_release_version_was_bumped_for_immutable_installer_layout():
-    assert (ROOT / "VERSION").read_text(encoding="utf-8").strip() == "1.2.23"
+    assert (ROOT / "VERSION").read_text(encoding="utf-8").strip() == "1.2.24"

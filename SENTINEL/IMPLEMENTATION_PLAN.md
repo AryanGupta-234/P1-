@@ -1,7 +1,7 @@
 # SENTINEL Implementation Plan
 
 **Target:** Windows 11 x64 · local-first desktop runtime  
-**Plan revision:** 1.0 · **Release baseline:** 1.2.23  
+**Plan revision:** 1.0 · **Release baseline:** 1.2.24  
 **Status:** `[x]` existing capability · `[~]` integration/verification in progress · `[ ]` planned
 
 This is the single consolidated backlog for the next SENTINEL upgrade. It extends the existing collectors, SQLite store, maintenance executor, safeguard, adaptive runtime, AI council, memory engine, rollback journal and dashboard; it does not replace them.
@@ -44,11 +44,12 @@ Make SENTINEL a Windows-specialist, goal-driven performance and reliability assi
 - [ ] Audit every maintenance action for precondition → snapshot → execute → verify → journal → undo.
 - [ ] Verify restore-point availability and free space before deep repairs; do not imply one exists when System Protection is unavailable.
 - [ ] Add action capability manifests: privilege, Windows builds, target type, reversibility, resource cost, prohibited contexts and verification probe.
-- [ ] Refactor broad always-elevated assumptions to standard-user UI/observer plus a narrow elevated broker for operations that require Administrator rights.
-- [ ] Broker accepts known action IDs and schema-bound parameters only; never arbitrary PowerShell, command strings, executable paths or model-generated scripts.
-- [ ] Broker requests are one-time, expiring, session-bound, auditable and Safeguard-rechecked immediately before execution. Never persist reusable admin tokens.
-- [ ] Show privilege state in UI (available, elevation required, denied, unsupported, unknown); request UAC only after approval.
-- [ ] Fail closed when broker, token, identity or safeguard health is unknown.
+- [x] Refactor the installed scheduled agent to a standard-user token and invoke a narrow elevated helper only for approved Administrator-required maintenance jobs.
+- [x] Broker accepts a fixed action manifest and one-use job IDs only; it does not accept arbitrary PowerShell, command strings, executable paths or model-generated scripts.
+- [x] Broker requests are one-time, expiring, principal/session-bound, auditable and Safeguard-rechecked immediately before execution. No reusable administrator token is persisted.
+- [x] Show standard-user/elevated state in Maintenance and request UAC only after preview and final confirmation. Declined UAC cancels the job.
+- [x] Fail closed when broker, principal/session binding, current process identity or safeguard state is unknown.
+- [ ] Add a dedicated WPR/ETW UAC ticket adapter with trace ownership, provider allowlists, bounded capture and safe finalisation. Keep trace capture blocked under the standard-user task until this is implemented.
 
 ## P1 — Liquid-glass UI and data-rich boot
 
@@ -76,14 +77,14 @@ Make SENTINEL a Windows-specialist, goal-driven performance and reliability assi
 
 ## P2 — Windows Knowledge Engine (version-aware RAG)
 
-- [ ] Taxonomy: kernel/scheduler, processes/threads, memory, storage, network, power, PnP/devices, drivers, servicing, reliability, security and app/package management.
-- [ ] Local source registry/ingestion for Microsoft Learn, Windows Hardware Documentation, Windows Performance Toolkit, Sysinternals and official OEM material.
-- [ ] Metadata: URL, publisher, title, retrieval date, content hash, licence, topic/component, Windows edition/build and API/command version.
+- [x] Define a Windows knowledge component taxonomy for kernel/scheduler, process, memory, storage, network, power, PnP, drivers, servicing, reliability, security and OEM sources.
+- [x] Implement a local source registry and user-triggered HTTPS ingestion for approved Microsoft, Windows, Sysinternals and OEM documentation hosts.
+- [x] Store URL, publisher, title, ingestion time, SHA-256, licence metadata, component, Windows build range, edition, architecture and API/command version.
 - [ ] Prefer Microsoft primary sources; third-party references are corroboration with provenance.
 - [ ] Do not scrape arbitrary scripts, binaries or unknown downloads; ingest documentation, not executable instructions.
-- [ ] Chunk and index locally; reuse local embeddings; exclude sensitive memories from automatic retrieval.
+- [x] Chunk and index documentation locally; provide bounded lexical retrieval filtered by component, Windows build, edition and architecture. Vector retrieval remains pending.
 - [ ] Add freshness, deduplication, source retirement and re-indexing independent of fine-tuning.
-- [ ] Recommendations carry citations/provenance and distinguish documented fact, observed evidence, heuristic hypothesis and unknown.
+- [x] Return source URL, publisher, licence, build/edition/architecture applicability, content hash and local citation identifier with each knowledge passage.
 - [ ] Validate recommendations against detected Windows build, edition, architecture, device and component.
 
 ## P3 — Windows evidence and diagnosis
@@ -233,9 +234,10 @@ A feature is complete when its GUI state is visible, evidence/provenance exists,
 
 ## Immediate next actions
 
-1. [ ] Confirm 1.2.22 Windows CI after the 1.2.21 contract fixes.
+1. [ ] Confirm 1.2.24 Windows CI on Python 3.11/3.12 and validate per-action UAC on the target Windows laptop.
 2. [ ] Visually check graphite/forest/red across Command, Maintenance, Intelligence, Engine Deck and splash.
 3. [ ] Instrument boot phases before changing complete hydration.
-4. [ ] Design least-privilege elevation broker before adding admin-only actions.
-5. [ ] Start local Windows Knowledge Engine: source registry, build metadata and retrieval.
+4. [x] Implement the least-privilege per-action UAC broker; validate it on the target Windows laptop next.
+5. [x] Implement the first local Windows Knowledge slice: approved-source registry, build metadata, ingestion and lexical retrieval.
 6. [ ] Expand read-only evidence before introducing new mutations.
+7. [ ] Implement and validate the dedicated WPR/ETW trace-request broker without elevating the observer.

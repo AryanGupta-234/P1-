@@ -1,3 +1,11 @@
+# SENTINEL 1.2.24 — Per-action UAC & Windows Knowledge foundation
+
+SENTINEL's observer, collectors and dashboard run as the signed-in user with a standard token. Administrator-only maintenance is handed to a narrowly scoped helper only after the operator confirms the exact preview and approves Windows UAC. The helper accepts one short-lived SQLite-backed job ID, binds it to the same Windows principal and interactive session, rechecks the kill switch, safeguard and original state, and can execute only a fixed allowlist of maintenance action IDs. It cannot accept arbitrary commands, scripts or paths.
+
+The initial Windows Knowledge Engine registers approved Microsoft/OEM documentation URLs, fetches only HTTPS pages from its official-domain allowlist, bounds response size/time, removes active page payloads, stores versioned text chunks locally and returns source/build/edition/architecture citations. Retrieval is local lexical search; indexed text is reference material, never executable instructions.
+
+**Safety contract:** maintenance remains manual-only with a fresh preview and explicit confirmation. Declining UAC cancels the job. Steam/Epic game folders are never moved directly, OEM fan controls remain guided, and BIOS/firmware, Secure Boot, Defender/Tamper Protection and Riot Vanguard are not automatically modified.
+
 # SENTINEL 1.2.23 — Windows Intelligence & Liquid Glass foundation
 
 The consolidated upgrade backlog is [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md). It covers the Windows Knowledge Engine, local specialist-model evaluation, evidence correlation, expanded maintenance library, goal-driven learning, scheduler, chat/voice, least-privilege elevation, boot optimisation and GUI-first redesign.
@@ -64,7 +72,7 @@ python -m pip install -r requirements.txt
 python agent.py --demo
 ```
 
-Open the HUD at `http://127.0.0.1:8765/`. For a real Windows telemetry session, run `python agent.py`. On Windows, every direct CLI launch (including `open`, `--demo`, `stop` and `uninstall`) checks the process token and requests UAC elevation when needed. If elevation is declined or cannot be verified, SENTINEL exits without starting. Non-Windows demo use does not require elevation.
+Open the HUD at `http://127.0.0.1:8765/`. For a real Windows telemetry session, run `python agent.py`. On Windows, the observer/dashboard runs as the signed-in user with a standard token. Installation and uninstallation request Administrator permission. Individual maintenance actions request UAC only after you review and confirm their exact preview. The elevated helper accepts one short-lived, audited job ID; it cannot run arbitrary commands.
 The dashboard URL includes a generated access token. Keep it private.
 
 ## Windows installation
@@ -267,8 +275,21 @@ Read-only OEM discovery identifies the Windows BIOS manufacturer/model and suppo
 Read-only Steam and Epic manifest discovery feeds a game relocation planner. It validates source manifest, target NTFS volume and manifest install size plus 10% free-space headroom. SENTINEL does not move launcher-owned folders, edit manifests or touch save data; the actual move remains inside the launcher. Xbox / WindowsApps package folders remain outside direct relocation.
 
 
-## 1.2.23 visual and planning foundation
+## 1.2.24 visual and planning foundation
 
 The dashboard theme uses graphite `#171717`, deep forest `#06110c` and signal red `#a31c1b`, with green as the positive/active accent. Typography uses local Windows font stacks to avoid network-dependent startup. The detailed data-hydrating splash and existing API/DOM contracts are retained while the interface moves to the new liquid-glass system.
 
 See [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) for phased TODOs and completion criteria.
+
+
+## 1.2.24 — Runtime privilege separation and local Windows knowledge
+
+The installed interactive task uses the limited token. The ProgramData data directory grants the signed-in user Modify access and retains SYSTEM/Administrators Full Control so the normal agent and its same-user UAC helper can share the local SQLite journal. Install/uninstall still require Administrator rights; observation, telemetry, dashboard and model routing do not.
+
+For an administrator-required maintenance action, SENTINEL stores the exact action, arguments and before-snapshot in a one-use request that expires with the preview (maximum 180 seconds). The helper verifies principal/session identity, job state, action manifest, kill switch, Safeguard and before-snapshot, then calls the existing maintenance executor and journal. No reusable administrator token is stored. The UI reports standard-user/elevated state and job cancellation.
+
+The Intelligence workspace adds a source registry and local retrieval UI. Source records retain URL, publisher, user-supplied licence metadata, component, build range, edition, architecture and API/command version. The ingest route accepts user-triggered HTML/plain-text pages from approved HTTPS vendor documentation hosts only, follows at most one same-host redirect, strips active page elements, and stores SHA-256-versioned chunks. Search filters by component and available Windows compatibility metadata and shows provenance with each result.
+
+
+
+**Current trace privilege boundary:** WPR/ETW capture still has an Administrator requirement and is not yet connected to the per-action maintenance broker. It remains fail-closed in the standard-user task for this release; a dedicated trace-ticket broker is a tracked follow-up. Do not run the entire observer/dashboard elevated just to enable trace capture.
