@@ -69,7 +69,7 @@ const hms = ts => new Date(ts * 1000).toLocaleTimeString([], { hour12: false });
 const dur = s => { s = Math.floor(s); const d = Math.floor(s / 86400), h = Math.floor(s % 86400 / 3600), m = Math.floor(s % 3600 / 60); return (d ? d + "d " : "") + (h || d ? h + "h " : "") + m + "m " + (s % 60) + "s"; };
 
 /* ---------- P1 shell: titles, toasts, splash, starfield ---------- */
-const TITLES = { cmd: "COMMAND", eng: "ENGINE DECK", agent: "AGENT", sys: "SYSTEM", act: "ACTIVITY", activityx: "ACTIVITY INTELLIGENCE", proc: "PROCESSES", net: "NETWORK", ker: "KERNEL", adv: "TUNER / THERMAL", evi: "EVIDENCE", intelx: "INTELLIGENCE", int: "INTEL FEED", ai: "AI CORE", ctl: "CONTROL", fc: "FEATURES", tsk: "TASKS" };
+const TITLES = { cmd: "COMMAND", eng: "ENGINE DECK", agent: "AGENT", sys: "SYSTEM", act: "ACTIVITY", activityx: "ACTIVITY INTELLIGENCE", proc: "PROCESSES", net: "NETWORK", ker: "KERNEL", adv: "TUNER / THERMAL", evi: "EVIDENCE", intelx: "INTELLIGENCE", int: "INTEL FEED", ai: "AI CORE", ctl: "CONTROL", fc: "FEATURES", tsk: "TASKS", maint: "MAINTENANCE" };
 const VKEYS = Object.keys(TITLES);
 let bootDone = false;
 let bootInProgress = true;
@@ -182,6 +182,23 @@ function updateBootTelemetry() {
   }
   const processCount = document.getElementById("bootProcessCount");
   if (processCount && Number(S?.proc_total || 0) > 0) processCount.textContent = Number(S.proc_total).toLocaleString() + " PROCESSES";
+}
+
+function starfield() {
+  const c = $("#starfield"), x = c.getContext("2d"); if (matchMedia("(prefers-reduced-motion:reduce)").matches) return;
+  let w, h, st = [], frame = 0, lastPaint = 0;
+  const resize = () => { w = c.width = innerWidth; h = c.height = innerHeight; st = Array.from({ length: Math.min(48, Math.ceil(w * h / 28000)) }, () => ({ x: Math.random() * w, y: Math.random() * h, r: Math.random() * 1.1 + .3, v: Math.random() * .1 + .02 })); };
+  const draw = timestamp => {
+    frame = 0;
+    if (document.visibilityState !== "visible") return;
+    if (timestamp - lastPaint >= 42) {
+      lastPaint = timestamp; x.clearRect(0, 0, w, h); x.fillStyle = "#cfe8a0";
+      for (const star of st) { star.y -= star.v; if (star.y < 0) { star.y = h; star.x = Math.random() * w; } x.globalAlpha = .25 + star.r / 2; x.beginPath(); x.arc(star.x, star.y, star.r, 0, 6.3); x.fill(); }
+    }
+    frame = requestAnimationFrame(draw);
+  };
+  const resume = () => { if (document.visibilityState === "visible" && !frame) frame = requestAnimationFrame(draw); };
+  resize(); addEventListener("resize", resize, { passive: true }); document.addEventListener("visibilitychange", resume); resume();
 }
 
 /* ---------- charts ---------- */
@@ -533,7 +550,7 @@ function buildCtl() {
   const ap = S.autopilot, policy = S.approval_policy || {}, lab = { wpr_trace: ["Auto WPR diagnostic", "bounded, read-only capture; never stops an existing trace"], etw_capture: ["Auto kernel ETW windows", "short trace windows only while a game is active"] };
   $("#auto").innerHTML = Object.keys(lab).map(k => `<label class="tog"><span>${lab[k][0]}<small>${lab[k][1]}</small></span><input type="checkbox" class="sw" data-ap="${k}" ${ap[k] ? "checked" : ""}></label>`).join("")
     + `<div class="ph" style="padding:12px 0 4px;border-top:1px solid var(--line)">AUTONOMY MASTER CONTROL<em>global execution gate</em></div><label class="tog"><span>Enable autonomous execution<small>Required before any safe autopilot or eligible reversible medium-risk action can run without a click. Safeguard checks, action budgets and rollback gates remain mandatory.</small></span><input type="checkbox" class="sw" id="auto-master" ${S.automation_master ? "checked" : ""}></label>`
-    + `<div class="ph" style="padding:12px 0 4px;border-top:1px solid var(--line)">AUTONOMOUS APPROVAL POLICY<em>risk-scored · reversible only</em></div><label class="tog"><span>Auto-approve eligible medium-risk changes<small>Only game profiles, power plan, timer and Wi-Fi policy; risk ≤25, confidence ≥92%, a fresh safeguard pass and a verified undo snapshot. Updater pauses and dangerous actions remain manual/blocked.</small></span><input type="checkbox" class="sw" id="auto-medium" ${policy.auto_approve_reversible_medium !== false ? "checked" : ""}></label>`;
+    + `<div class="ph" style="padding:12px 0 4px;border-top:1px solid var(--line)">AUTONOMOUS APPROVAL POLICY<em>risk-scored · reversible only</em></div><label class="tog"><span>Auto-approve eligible medium-risk changes<small>Only reversible allowlisted game profiles, power plan, timer and Wi-Fi policy; requires five consecutive measured improvements for the same action and game, risk ≤25, confidence ≥92%, a fresh safeguard pass and a verified undo snapshot. Updater pauses and dangerous actions remain manual/blocked.</small></span><input type="checkbox" class="sw" id="auto-medium" ${policy.auto_approve_reversible_medium !== false ? "checked" : ""}></label>`;
   $("#auto-master").onchange = async () => { const control=$("#auto-master"); control.disabled=true; const r=await api("/api/profile",{profile:{automation:control.checked}}); control.disabled=false; if(r.error){control.checked=!control.checked;toast(r.error,"bad");}else{S.automation_master=control.checked;toast("Autonomous execution "+(control.checked?"enabled":"disabled"),"ok");} };
   $("#auto-medium").onchange = async () => { const control=$("#auto-medium"); control.disabled=true; const r=await api("/api/config",{approval_policy:{auto_approve_reversible_medium:control.checked}}); control.disabled=false; if(r.error){control.checked=!control.checked;toast(r.error,"bad");}else{S.approval_policy=S.approval_policy||{};S.approval_policy.auto_approve_reversible_medium=control.checked;toast("Reversible medium-risk approval policy "+(control.checked?"enabled":"disabled"),"ok");} };
   $$("[data-ap]").forEach(c => c.onchange = async () => { c.disabled = true; const r = await api("/api/config", { autopilot: { [c.dataset.ap]: c.checked } }); c.disabled = false; if (r.error) { c.checked = !c.checked; toast(r.error, "bad"); } else toast(`${c.dataset.ap} ${c.checked ? "enabled" : "disabled"} and saved`, "ok"); });
@@ -804,6 +821,7 @@ function show(v) {
     else if (v === "net" && S) updNet();
     else if (v === "ai" && S) updAI();
     else if (v === "tsk" && S) updTasks();
+    else if (v === "maint") loadMaintenance(false);
     return;
   }
 
@@ -822,6 +840,7 @@ function show(v) {
     else if (v === "tsk") loadHist();
     else if (v === "act") renderFeed();
     else if (v === "ctl") { buildCtl(); loadActions(); ctlInitialized = true; }
+    else if (v === "maint") loadMaintenance(false);
     return;
   }
   ({
@@ -841,11 +860,259 @@ function show(v) {
     sys: () => loadSys(true),
     evi: loadEvi,
     tsk: () => { updTasks(); loadHist(); },
-    fc: loadFC
+    fc: loadFC,
+    maint: () => loadMaintenance(false)
   })[v]?.();
 }
+
+/* ---------- Windows maintenance workspace ---------- */
+let MNT=null,MNT_JOURNAL=[],MNT_DIGEST=null,MNT_POLLING=Object.create(null);
+function maintSetOptions(id,rows,value,label,emptyLabel){
+  const node=document.getElementById(id);if(!node)return;
+  const selected=node.value;
+  const options=(rows||[]).map((row,index)=>'<option value="'+esc(String(value(row,index)??""))+'">'+esc(String(label(row,index)))+'</option>');
+  node.innerHTML=options.length?options.join(""):'<option value="">'+esc(emptyLabel||"No entries available")+'</option>';
+  if((rows||[]).some((row,index)=>String(value(row,index)??"")===selected))node.value=selected;
+}
+function maintState(state){return ({collecting:"COLLECTING",refreshing:"SCANNING",ready:"READY",degraded:"DEGRADED",unsupported:"WINDOWS ONLY"})[state]||String(state||"UNKNOWN").toUpperCase();}
+function renderMaintenance(){
+  if(!MNT)return;
+  const d=MNT,put=(id,value)=>{const node=document.getElementById(id);if(node)node.textContent=value;};
+  put("maint-state",maintState(d.diagnostics_state));
+  put("maint-state-note",d.updated_at?"Last scan "+new Date(d.updated_at*1000).toLocaleTimeString():"Read-only inventory is being prepared");
+  put("maint-admin",d.administrator?"YES":"NO");
+  put("maint-budget",String(d.budget?.available_hour??"--")+"/"+String(d.budget?.hour_limit??"--")+" / HR");
+  put("maint-budget-note",String(d.budget?.available_day??"--")+" actions available today");
+  const guard=d.safeguard||{};
+  put("maint-guard",guard.valorant_active?"GAME ACTIVE":(guard.process_detection_complete===false?"UNCERTAIN":"ARMED"));
+  put("maint-guard-note",guard.reason||"Mutation gate checks VALORANT and process-observer health");
+  put("maint-diag-status",maintState(d.diagnostics_state));
+  const kill=document.getElementById("maint-kill-switch"),scheduler=document.getElementById("maint-scheduler");
+  const weekly=document.getElementById("maint-weekly"),idle=document.getElementById("maint-idle-minutes");
+  if(kill)kill.checked=!!d.kill_switch;
+  if(scheduler)scheduler.checked=!!d.scheduler?.scheduler_enabled;
+  if(weekly)weekly.checked=d.scheduler?.weekly_diagnostics!==false;
+  if(idle&&d.scheduler?.idle_minutes)idle.value=d.scheduler.idle_minutes;
+  put("maint-policy-state",d.kill_switch?"ACTIONS BLOCKED":"MANUAL ACTIONS ENABLED");
+  maintSetOptions("maint-startup-entry",(d.startup||[]).filter(x=>!x.protected),x=>x.name,x=>x.name+" · "+x.scope,"No eligible startup entries");
+  maintSetOptions("maint-adapter",(d.adapters||[]).filter(x=>String(x.Status||"").toLowerCase()==="up"),x=>x.Name,x=>x.Name+" · "+(x.InterfaceDescription||"physical adapter"),"No connected physical adapters");
+  const choices=[];
+  (d.driver_updates||[]).forEach(update=>{
+    const ids=Array.isArray(update.hardware_ids)?update.hardware_ids:[];
+    const device=(d.drivers||[]).find(row=>{
+      const id=String(row.DeviceID||"").toLowerCase();
+      return id&&ids.some(value=>{const hardware=String(value||"").toLowerCase();return hardware&&(id===hardware||id.includes(hardware)||hardware.includes(id));});
+    });
+    if(device)choices.push({update,device});
+  });
+  MNT.driverChoices=choices;
+  maintSetOptions("maint-driver-choice",choices,(x,i)=>String(i),x=>x.update.title+" · "+x.device.DeviceName,"No hardware-matched driver offers");
+  maintSetOptions("maint-driver-rollback",(d.journal||[]).filter(x=>x.action==="driver_install"&&x.undo_available&&x.status==="done"),x=>x.id,x=>"#"+x.id+" · "+(x.result||"exported previous driver"),"No exported previous driver package");
+  maintSetOptions("maint-trim-drive",(d.volumes||[]).filter(x=>String(x.filesystem||"").toLowerCase()==="ntfs"),x=>String(x.device||x.mountpoint||"").replace(":\\",""),x=>(x.device||x.mountpoint)+" · "+x.free_gib+" GiB free","No NTFS volumes found");
+  maintSetOptions("maint-process",d.top_memory_processes||[],(x,i)=>String(i),x=>x.name+" · "+x.rss_mb+" MiB · PID "+x.pid,"Process inventory not ready");
+  const host=document.getElementById("maint-diagnostics");
+  if(host){
+    const volumes=(d.volumes||[]).map(x=>'<div class="maint-mini-stat"><small>'+esc(x.mountpoint||x.device)+'</small><b>'+esc(x.free_gib)+' GiB FREE</b><span>'+esc(x.used_percent)+'% used · '+esc(x.filesystem||"unknown")+'</span></div>');
+    const adapters=(d.adapters||[]).map(x=>'<div class="maint-data-row"><div><b>'+esc(x.Name)+'</b><small>'+esc(x.InterfaceDescription||"Physical adapter")+'</small></div><span class="tag">'+esc(x.Status)+'</span></div>');
+    const dns=(d.dns||[]).map(x=>'<div class="maint-data-row"><div><b>'+esc(x.InterfaceAlias)+' · '+esc(x.AddressFamily)+'</b><small>'+esc((x.ServerAddresses||[]).join(" · ")||"Automatic")+'</small></div><span class="tag">DNS</span></div>');
+    const processes=(d.top_memory_processes||[]).slice(0,6).map(x=>'<div class="maint-data-row"><div><b>'+esc(x.name)+'</b><small>PID '+esc(x.pid)+' · '+esc(x.exe||"")+'</small></div><span class="tag">'+esc(x.rss_mb)+' MiB</span></div>');
+    const drivers=(d.driver_updates||[]).map(x=>'<div class="maint-data-row"><div><b>'+esc(x.title)+'</b><small>Windows Update driver · '+esc((x.hardware_ids||[]).length)+' hardware ID(s)</small></div><span class="tag">OFFERED</span></div>');
+    const predictive=(d.predictive||[]).map(x=>'<div class="maint-data-row"><div><b>'+esc(x.kind)+' · '+esc(x.mountpoint||x.sensor||"System")+'</b><small>'+esc(x.note||"Predictive alert only")+'</small></div><span class="tag">'+esc(x.free_gib??x.celsius??"--")+(x.free_gib!=null?" GiB":x.celsius!=null?" °C":"")+'</span></div>');
+    const errors=Object.entries(d.source_errors||{}).map(([key,value])=>'<div class="msg warn"><small>'+esc(key)+' DEFERRED / DEGRADED</small>'+esc(value)+'</div>');
+    const guided=d.guided_recovery||{},vendor=d.vendor_fan_control||{};
+    host.innerHTML=
+      '<div class="maint-diag-card"><div class="maint-diag-title">STORAGE / CAPACITY</div><div class="maint-mini-grid">'+(volumes.join("")||'<div class="empty">Volume data unavailable.</div>')+'</div></div>'+
+      '<div class="maint-diag-card"><div class="maint-diag-title">PHYSICAL ADAPTERS / DNS</div>'+(adapters.join("")||'<div class="empty">No adapter inventory.</div>')+(dns.join("")||'<div class="empty">No DNS inventory.</div>')+'</div>'+
+      '<div class="maint-diag-card"><div class="maint-diag-title">MEMORY CONSUMERS</div>'+(processes.join("")||'<div class="empty">Process data deferred or unavailable.</div>')+'</div>'+
+      '<div class="maint-diag-card"><div class="maint-diag-title">DRIVER OFFERS</div>'+(drivers.join("")||'<div class="empty">No hardware-matched update offers.</div>')+'</div>'+
+      '<div class="maint-diag-card maint-wide"><div class="maint-diag-title">PREDICTIVE SIGNALS</div>'+(predictive.join("")||'<div class="empty">No disk or thermal threshold approaching. Trends improve as local samples accumulate.</div>')+'</div>'+
+      '<div class="maint-diag-card"><div class="maint-diag-title">OEM FAN CONTROL</div><b>'+esc(vendor.manufacturer||"Manufacturer not detected")+'</b><small>'+esc(vendor.model||"")+'</small><p>'+esc(vendor.message||"Use the signed OEM fan utility. Firmware writes are disabled.")+'</p></div>'+
+      '<div class="maint-diag-card"><div class="maint-diag-title">GUIDED RECOVERY</div><p>'+esc(guided.game_relocation||"Use the Steam/Epic/Xbox library manager for game relocation.")+'</p><p>'+esc(guided.bios_secure_boot||"BIOS/Secure Boot remain read-only.")+'</p></div>'+
+      (errors.length?'<div class="maint-diag-card maint-wide"><div class="maint-diag-title">DEFERRED SOURCES</div>'+errors.join("")+'</div>':"");
+  }
+  renderMaintenanceJournal();renderMaintenanceDigest();
+}
+function renderMaintenanceJournal(){
+  const host=document.getElementById("maint-journal");if(!host)return;
+  const rows=MNT_JOURNAL||[];
+  host.innerHTML=rows.length?rows.map(row=>{
+    const canUndo=row.undo_available&&row.status==="done";
+    return '<div class="maint-journal-row"><div><b>'+esc(row.action)+'</b><small>#'+esc(row.id)+' · '+esc(row.status)+' · '+new Date(row.created_at*1000).toLocaleString()+'</small><small>'+esc(row.result||"")+'</small></div><div class="maint-row-actions">'+(canUndo?'<button class="btn sm" data-maint-undo="'+esc(row.id)+'">UNDO</button>':'<span class="tag">GUIDED / NO UNDO</span>')+'</div></div>';
+  }).join(""):'<div class="empty">No maintenance operations recorded.</div>';
+  host.querySelectorAll("[data-maint-undo]").forEach(button=>button.onclick=async()=>{
+    if(!confirm("Undo this change? Current state is checked first; later user changes are preserved."))return;
+    try{
+      const result=await api("/api/maintenance/undo",{journal_id:Number(button.dataset.maintUndo),confirmed:true});
+      if(result.error)throw new Error(result.error);
+      toast("Maintenance change reverted","ok");await loadMaintenance(true);
+    }catch(error){toast(error.message||String(error),"bad");}
+  });
+}
+function renderMaintenanceDigest(){
+  const host=document.getElementById("maint-digest");if(!host||!MNT_DIGEST)return;
+  const d=MNT_DIGEST;
+  host.innerHTML='<div class="maint-digest-grid"><div><small>COMPLETED</small><b>'+esc(d.completed)+'</b></div><div><small>BLOCKED</small><b>'+esc(d.blocked)+'</b></div><div><small>PENDING</small><b>'+esc(d.pending_approvals)+'</b></div><div><small>FAILED</small><b>'+esc(d.failed)+'</b></div></div><div class="msg"><small>LAST 24 HOURS · '+esc(d.day)+'</small>Completed, blocked, pending and failed operations.</div>';
+}
+async function loadMaintenance(refresh=false){
+  try{
+    const suffix=refresh?"?refresh=1":"";
+    const values=await Promise.all([api("/api/maintenance/status"+suffix),api("/api/maintenance/journal?limit=50"),api("/api/maintenance/digest")]);
+    if(values[0].error)throw new Error(values[0].error);
+    MNT=values[0];MNT_JOURNAL=Array.isArray(values[1])?values[1]:[];MNT_DIGEST=values[2]||null;
+    renderMaintenance();return true;
+  }catch(error){
+    const label=document.getElementById("maint-diag-status");if(label)label.textContent="DIAGNOSTICS UNAVAILABLE";
+    const host=document.getElementById("maint-diagnostics");if(host)host.innerHTML='<div class="msg warn">'+esc(error.message||error)+'</div>';
+    return false;
+  }
+}
+async function maintenancePreview(action,args,label){
+  const button=document.activeElement;if(button&&button.tagName==="BUTTON")button.disabled=true;
+  try{
+    const preview=await api("/api/maintenance/preview",{action,args});
+    if(preview.error)throw new Error(preview.error);
+    const lines=[label||action].concat(preview.changes||[],preview.warnings||[]);
+    if(preview.administrator_required)lines.push("Administrator rights are required.");
+    if(preview.restore_point_required)lines.push("A restore point must succeed before the operation begins.");
+    if(!confirm(lines.join("\n\n")+"\n\nContinue to final confirmation?"))return;
+    const danger=preview.risk==="dangerous"?"\n\nDANGEROUS OPERATION: check the target and consequences.":"";
+    if(!confirm("FINAL CONFIRMATION\n\n"+(label||action)+danger+"\n\nExecute this exact one-time preview?"))return;
+    const result=await api("/api/maintenance/execute",{preview_token:preview.preview_token,confirmed:true});
+    if(result.error)throw new Error(result.error);
+    toast("Maintenance job queued","warn");watchMaintenanceJob(result.job_id);
+  }catch(error){toast(error.message||String(error),"bad");}
+  finally{if(button&&button.tagName==="BUTTON")button.disabled=false;}
+}
+function watchMaintenanceJob(jobId,attempt=0){
+  if(!jobId||attempt>=450||MNT_POLLING[jobId])return;
+  MNT_POLLING[jobId]=true;
+  setTimeout(async()=>{
+    delete MNT_POLLING[jobId];
+    try{
+      const job=await api("/api/maintenance/job?id="+encodeURIComponent(jobId));
+      if(job.error)throw new Error(job.error);
+      const title=String(job.state||"queued").toUpperCase();
+      const host=document.getElementById("maint-job-list");
+      if(host)host.innerHTML='<div class="maint-journal-row"><div><b>'+esc(job.action)+' · '+title+'</b><small>'+esc(job.job_id)+'</small><small>'+esc(job.result||job.error||"")+'</small></div><span class="tag">'+title+'</span></div>'+(host.innerHTML||"");
+      const badge=document.getElementById("maint-last-job-state");if(badge)badge.textContent=title;
+      if(["done","failed","rolled_back"].includes(job.state)){
+        toast(job.result||job.error||"Maintenance job "+title,job.state==="done"?"ok":"warn");
+        if("Notification"in window&&Notification.permission==="granted"&&document.hidden){try{new Notification("SENTINEL maintenance "+title.toLowerCase(),{body:job.result||job.error||job.action});}catch(e){}}
+        await loadMaintenance(true);return;
+      }
+      watchMaintenanceJob(jobId,attempt+1);
+    }catch(error){toast(error.message||String(error),"bad");}
+  },4000);
+}
+function onMaintenanceJob(payload){
+  if(!payload)return;
+  const badge=document.getElementById("maint-last-job-state");if(badge)badge.textContent=String(payload.state||"UPDATED").toUpperCase();
+  if(["done","failed","rolled_back"].includes(payload.state)){
+    toast(payload.result||payload.error||"Maintenance job updated",payload.state==="done"?"ok":"warn");
+    if("Notification"in window&&Notification.permission==="granted"&&document.hidden){try{new Notification("SENTINEL maintenance",{body:payload.result||payload.error||payload.state});}catch(e){}}
+    loadMaintenance(true);
+  }
+}
+function initMaintenance(){
+  const bind=(id,fn)=>{const node=document.getElementById(id);if(node)node.onclick=fn;};
+  bind("maint-refresh",()=>loadMaintenance(true));bind("maint-inventory-refresh",()=>loadMaintenance(true));
+  bind("maint-goal-run",async()=>{
+    const goal=document.getElementById("maint-goal")?.value.trim()||"";if(!goal)return toast("Describe the goal first","warn");
+    try{
+      const result=await api("/api/maintenance/goal",{goal});if(result.error)throw new Error(result.error);
+      const host=document.getElementById("maint-goal-result");if(!host)return;
+      const findings=(result.findings||[]).map(x=>'<div class="maint-data-row"><b>'+esc(x.name||x.type||x.pid||"Finding")+'</b><span>'+esc(x.rss_mb==null?"":x.rss_mb+" MiB")+'</span></div>').join("");
+      const recommendations=(result.recommendations||[]).map(x=>'<div class="maint-plan-item"><i></i><span>'+esc(x)+'</span></div>').join("");
+      host.innerHTML='<div class="maint-plan"><span class="maint-kicker">LOCAL RULE PLAN · '+esc(result.generated_by)+'</span>'+findings+recommendations+'<div class="msg"><small>CONTROL ENGINE</small>No action was executed. Select a specific operation below to preview it.</div></div>';
+    }catch(error){toast(error.message||String(error),"bad");}
+  });
+  bind("maint-policy-save",async()=>{
+    const kill=!!document.getElementById("maint-kill-switch").checked;
+    if(MNT?.kill_switch&&!kill&&!confirm("Release the maintenance kill switch? Mutations still require previews, confirmation and the Vanguard safeguard."))return;
+    const result=await api("/api/maintenance/policy",{kill_switch:kill,scheduler_enabled:!!document.getElementById("maint-scheduler").checked,
+      weekly_diagnostics:!!document.getElementById("maint-weekly").checked,idle_minutes:Number(document.getElementById("maint-idle-minutes").value||15),confirmed:true});
+    if(result.error)return toast(result.error,"bad");
+    toast("Maintenance safety policy saved","ok");await loadMaintenance(false);
+  });
+  bind("maint-cleanup-run",()=>maintenancePreview("cleanup",{scope:document.getElementById("maint-cleanup-scope").value},"Temporary / shader cache cleanup"));
+  bind("maint-startup-run",()=>{
+    const name=document.getElementById("maint-startup-entry").value;if(!name)return toast("Choose a startup entry","warn");
+    maintenancePreview("startup_disable",{name},"Disable selected startup app");
+  });
+  bind("maint-dns-test",async()=>{
+    const servers=(document.getElementById("maint-dns-servers").value||"").split(",").map(x=>x.trim()).filter(Boolean);
+    const host=document.getElementById("maint-dns-results");
+    try{
+      const result=await api("/api/maintenance/dns-test",{servers});if(result.error)throw new Error(result.error);
+      const rows=(result.results||[]).map(x=>'<div class="maint-data-row"><b>'+esc(x.server)+'</b><span>'+(x.successful>0?esc(x.average_ms)+" ms avg · "+esc(x.successful)+"/3":"FAILED")+'</span></div>').join("");
+      if(host)host.innerHTML='<small>RESOLVER BENCHMARK · '+esc(result.query)+'</small>'+rows+'<div class="msg">Fastest responder: '+esc(result.recommended||"none")+'. No settings changed.</div>';
+    }catch(error){if(host)host.textContent=error.message||String(error);toast(error.message||String(error),"bad");}
+  });
+  bind("maint-dns-run",()=>{
+    const servers=(document.getElementById("maint-dns-servers").value||"").split(",").map(x=>x.trim()).filter(Boolean);
+    const adapter=document.getElementById("maint-adapter").value;if(!adapter)return toast("Choose a connected physical adapter","warn");
+    maintenancePreview("dns_set",{interface:adapter,family:document.getElementById("maint-dns-family").value,servers},"Change DNS resolvers");
+  });
+  bind("maint-adapter-run",()=>{
+    const adapter=document.getElementById("maint-adapter").value;if(!adapter)return toast("Choose a connected physical adapter","warn");
+    maintenancePreview("adapter_restart",{interface:adapter},"Restart physical network adapter");
+  });
+  bind("maint-winsock-run",()=>maintenancePreview("winsock_reset",{},"Reset Winsock and TCP/IP"));
+  bind("maint-driver-run",()=>{
+    const candidate=MNT?.driverChoices?.[Number(document.getElementById("maint-driver-choice").value)];
+    if(!candidate)return toast("Select a hardware-matched driver update","warn");
+    maintenancePreview("driver_install",{update_id:candidate.update.update_id,device_id:candidate.device.DeviceID},"Install selected Windows Update driver");
+  });
+  bind("maint-driver-rollback-run",()=>{
+    const id=Number(document.getElementById("maint-driver-rollback").value);if(!id)return toast("Select an exported previous driver","warn");
+    maintenancePreview("driver_rollback",{journal_id:id},"Restore exported driver package");
+  });
+  bind("maint-repair-run",()=>maintenancePreview("windows_repair",{target:document.getElementById("maint-repair-target").value},"Run Windows repair"));
+  bind("maint-service-run",()=>maintenancePreview("service_restart",{service:document.getElementById("maint-service").value},"Restart allowlisted Windows service"));
+  bind("maint-power-run",()=>maintenancePreview("power_mode",{mode:document.getElementById("maint-power-mode").value},"Change Windows power profile"));
+  bind("maint-trim-run",()=>{
+    const drive=document.getElementById("maint-trim-drive").value;if(!drive)return toast("Select an NTFS volume","warn");
+    maintenancePreview("trim_volume",{drive},"Run SSD retrim");
+  });
+  bind("maint-process-run",()=>{
+    const process=MNT?.top_memory_processes?.[Number(document.getElementById("maint-process").value)];
+    if(!process)return toast("Select a process from inventory","warn");
+    const raw=document.getElementById("maint-affinity").value.trim();let affinity=null;
+    if(raw){affinity=raw.split(",").map(x=>Number(x.trim()));if(affinity.some(x=>!Number.isInteger(x)))return toast("Affinity must be comma-separated logical CPU indexes","bad");}
+    maintenancePreview("process_tune",{pid:process.pid,create_time:process.create_time,exe:process.exe,priority:document.getElementById("maint-priority").value,affinity},"Tune selected process");
+  });
+  bind("maint-revert-all",async()=>{
+    if(!confirm("Revert all outstanding reversible SENTINEL changes? Irreversible actions and externally changed values will be skipped."))return;
+    try{
+      const result=await api("/api/maintenance/revert-all",{confirmed:true});if(result.error)throw new Error(result.error);
+      toast("Reverted "+(result.reverted||[]).length+" · skipped "+(result.skipped||[]).length+" · failed "+(result.failed||[]).length,result.failed?.length?"warn":"ok");
+      await loadMaintenance(true);
+    }catch(error){toast(error.message||String(error),"bad");}
+  });
+}
+function initVoice(){
+  const button=document.getElementById("ai-voice");if(!button)return;
+  button.onclick=()=>{
+    const Recognition=window.SpeechRecognition||window.webkitSpeechRecognition;
+    if(!Recognition)return toast("Speech recognition is not available in this browser","warn");
+    if(button.dataset.active==="true")return;
+    const recognition=new Recognition();recognition.lang=navigator.language||"en-US";
+    recognition.interimResults=false;recognition.maxAlternatives=1;
+    button.dataset.active="true";button.disabled=true;button.textContent="LISTENING…";
+    recognition.onresult=event=>{
+      const spoken=event.results?.[0]?.[0]?.transcript||"";
+      const input=document.getElementById("ai-in");if(input){input.value=(input.value?input.value+" ":"")+spoken;input.focus();}
+    };
+    recognition.onerror=event=>toast("Voice input: "+event.error,"warn");
+    recognition.onend=()=>{button.dataset.active="false";button.disabled=false;button.textContent="VOICE";};
+    try{recognition.start();}
+    catch(error){button.dataset.active="false";button.disabled=false;button.textContent="VOICE";toast(error.message,"warn");}
+  };
+}
+
 async function boot() {
   const bootStartedAt = performance.now();
+  starfield();
   bp(3, "POWERING SENTINEL", "Preparing the local command environment");
   buildTiles();
   buildChips();
@@ -877,7 +1144,8 @@ async function boot() {
     ["ctl", "ACTION CONTROL", "Pending approvals and action history"],
     ["fc", "FEATURE CONFIG", "Saved preferences and audit history"],
     ["tsk", "TASK CENTER", "Jobs and action run history"],
-    ["act", "ACTIVITY STREAM", "Events and collector heartbeats"]
+    ["act", "ACTIVITY STREAM", "Events and collector heartbeats"],
+    ["maint", "MAINTENANCE", "Read-only inventory, safety policy and operations"]
   ];
   $("#bootModules").replaceChildren();
   modules.forEach(([key, label, detail]) => bootModule(key, label, "WAITING", detail));
@@ -999,7 +1267,7 @@ async function boot() {
     toast("Exported " + LOGS.length + " events", "ok");
   };
   initPalette(); initNotify(); initFC(); initIntelligence(); initActivityIntelligence();
-  initAdvanced(); initAgent(); initEngines(); bindJ("#metrics");
+  initAdvanced(); initAgent(); initEngines(); initMaintenance(); initVoice(); bindJ("#metrics");
   $("#e-go").onclick = loadEvi;
   $("#e-csv").onclick = csvExport;
   $("#e-q").onkeydown = event => event.key === "Enter" && loadEvi();
@@ -1078,6 +1346,11 @@ async function boot() {
       else if (packet.t === "ai") addTr(packet.d);
       else if (packet.t === "ai_status") $("#ai-status").textContent = packet.d.text;
       else if (packet.t === "intel" && view === "int") loadIntel();
+      else if (packet.t === "maintenance_job") onMaintenanceJob(packet.d);
+      else if (packet.t === "maintenance_status" || packet.t === "maintenance_digest") {
+        MNT = null;
+        if (view === "maint") loadMaintenance(false);
+      }
     } catch (error) { console.error("Invalid SENTINEL stream event", error); }
   };
 
@@ -1106,7 +1379,8 @@ async function boot() {
     ["ctl", "ACTION CONTROL", async () => { buildCtl(); ctlInitialized = true; return await loadActions(); }],
     ["fc", "FEATURE CONFIGURATION", () => loadFC()],
     ["tsk", "TASK CENTER", () => loadHist()],
-    ["act", "ACTIVITY STREAM", async () => { updHeart(); renderFeed(); return eventsReady; }]
+    ["act", "ACTIVITY STREAM", async () => { updHeart(); renderFeed(); return eventsReady; }],
+    ["maint", "MAINTENANCE", async () => await loadMaintenance(false)]
   ];
   const allJobs = [...jobs, ...secondaryJobs];
   let completed = 0;
@@ -1146,10 +1420,9 @@ async function boot() {
     await Promise.all(Array.from({ length: Math.min(API_CONCURRENCY, queue.length) }, worker));
   };
 
-  // One bounded queue hydrates every workspace concurrently with the live-link handshake.
-  // The splash remains visible until all full datasets have either loaded or been marked degraded.
-  bp(22, "SYNCHRONIZING WORKSPACES", "Four bounded request workers · full data before first paint");
-  const hydration = runPool(allJobs);
+  // Primary operational datasets first; all remaining pages hydrate before first paint.
+  bp(22, "HYDRATING OPERATIONAL DATA", "Four bounded request workers · no duplicate agent collectors");
+  await runPool(jobs);
   const streamConnected = await streamReady;
   if (!streamSettled) {
     streamSettled = true;
@@ -1160,7 +1433,8 @@ async function boot() {
     streamConnected ? "Local event channel opened" : "Live link will reconnect in the background");
   if (!streamConnected) markDataFailure("stream", "The event channel did not open before the splash timeout");
   else degradedModules.delete("stream");
-  await hydration;
+  bp(72, "HYDRATING WORKSPACES", "Loading intelligence, evidence, action and history datasets");
+  await runPool(secondaryJobs);
 
   // Bring the command canvas up with the loaded history and current snapshot.
   if (S) {

@@ -1,89 +1,39 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>SENTINEL &middot; 1.2.13</title>
+<title>SENTINEL &middot; 1.2.20</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cpath d='M32 4l24 14v28L32 60 8 46V18z' fill='none' stroke='%23b8e65b' stroke-width='4'/%3E%3Ccircle cx='32' cy='32' r='8' fill='%23ff6b38'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="app.css?v=1.2.13"></head>
-<body><div class="ambient" aria-hidden="true"></div>
+<link rel="stylesheet" href="app.css?v=1.2.20"></head>
+<body><div class="ambient"></div><canvas id="starfield"></canvas>
 <div class="boot" id="boot" role="status" aria-live="polite" aria-label="SENTINEL Windows node initialization">
-  <div class="boot-grid" aria-hidden="true"></div>
-  <div class="boot-scanline" aria-hidden="true"></div>
+  <div class="boot-grid" aria-hidden="true"></div><div class="boot-scanline" aria-hidden="true"></div>
   <div class="boot-console">
-    <div class="boot-topline">
-      <span class="boot-wordmark"><i class="boot-wordmark-symbol">S</i><b>SENTINEL</b><small>LOCAL PERFORMANCE INTELLIGENCE</small></span>
-      <span class="boot-node-indicator"><i></i><span id="bootNodeState">INITIALIZING LOCAL CORE</span></span>
-      <span class="boot-top-version">WINDOWS DESKTOP <b>01</b></span>
-    </div>
+    <div class="boot-topline"><span>SENTINEL <i>LOCAL RUNTIME</i></span><span id="bootNodeState">SYSTEMS INITIALIZING</span><span>NODE / 01</span></div>
     <div class="boot-body">
-      <div class="boot-visual" aria-hidden="true">
-        <div class="boot-orbit-scene">
-          <i class="boot-orbit orbit-a"></i>
-          <i class="boot-orbit orbit-b"></i>
-          <i class="boot-orbit orbit-c"></i>
-          <i class="boot-orbit-satellite satellite-a"></i>
-          <i class="boot-orbit-satellite satellite-b"></i>
-          <div class="boot-reactor">
-            <svg class="boot-gauge" viewBox="0 0 100 100">
-              <circle class="boot-gauge-track" cx="50" cy="50" r="47"></circle>
-              <circle class="boot-gauge-progress" id="bootGauge" cx="50" cy="50" r="47"></circle>
-            </svg>
-            <span class="boot-reactor-halo"></span>
-            <div class="boot-reactor-core">
-              <svg class="boot-sigil" viewBox="0 0 100 100">
-                <path d="M50 5 89 27v46L50 95 11 73V27Z" fill="none" stroke="currentColor" stroke-width="1.5"></path>
-                <path d="M67 29H44c-9 0-14 5-14 12s5 12 14 12h12c9 0 14 5 14 12s-5 12-14 12H31" fill="none" stroke="currentColor" stroke-width="7" stroke-linecap="round"></path>
-                <path d="M50 5v11M89 27l-10 6M89 73l-10-6M50 95V84M11 73l10-6M11 27l10 6" fill="none" stroke="currentColor" stroke-opacity=".45"></path>
-              </svg>
-              <small>CORE / 01</small>
-            </div>
-            <i class="boot-reactor-sweep"></i>
-            <b class="boot-reactor-word">S / 01</b>
-          </div>
-          <span class="boot-orbit-label label-top">LOCAL NODE</span>
-          <span class="boot-orbit-label label-bottom">SECURE RUNTIME</span>
+      <div class="boot-visual">
+        <div class="boot-reactor" aria-hidden="true"><svg class="boot-gauge" viewBox="0 0 100 100"><circle class="boot-gauge-track" cx="50" cy="50" r="47"/><circle class="boot-gauge-progress" id="bootGauge" cx="50" cy="50" r="47"/></svg><i class="reactor-orbit orbit-a"></i><i class="reactor-orbit orbit-b"></i><i class="reactor-orbit orbit-c"></i><i class="reactor-core"></i><span class="boot-crosshair"></span><b class="boot-reactor-word">S / 01</b></div>
+        <div class="boot-node-readout"><small>WINDOWS PROCESS FIELD</small><b id="bootProcessCount">SYNCING</b><span>LIVE SNAPSHOT</span></div>
+        <div class="boot-live-readouts" aria-label="Live system telemetry">
+          <div><small>CPU</small><b id="bootCpuValue">--</b><i data-boot-bar="cpu"></i></div>
+          <div><small>MEMORY</small><b id="bootRamValue">--</b><i data-boot-bar="ram"></i></div>
+          <div><small>GPU</small><b id="bootGpuValue">--</b><i data-boot-bar="gpu"></i></div>
+          <div><small>DPC</small><b id="bootDpcValue">--</b><i data-boot-bar="dpc"></i></div>
         </div>
-        <div class="boot-visual-foot">
-          <span><i></i> LOCAL SESSION</span>
-          <span>READY TO SYNCHRONIZE</span>
-        </div>
+        <div class="boot-visual-spectrum" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+        <div class="boot-signal-label"><i></i> COLLECTORS RUNNING IN BACKGROUND</div>
       </div>
       <div class="boot-content">
-        <div class="boot-eyebrow"><span>WINDOWS / LOCAL-FIRST</span><span>STARTUP SEQUENCE</span></div>
-        <h1 class="boot-title">SENTINEL<span class="boot-title-cursor"></span></h1>
-        <p class="boot-sub">Clarity for your entire system.</p>
-        <div class="boot-lane-wrap">
-          <div class="boot-lane-caption"><span>INITIALIZATION PATH</span><span>01 — 06</span></div>
-          <div class="boot-lanes" aria-hidden="true">
-            <div class="active"><i></i><span>01</span></div>
-            <div><i></i><span>02</span></div>
-            <div><i></i><span>03</span></div>
-            <div><i></i><span>04</span></div>
-            <div><i></i><span>05</span></div>
-            <div><i></i><span>06</span></div>
-          </div>
-        </div>
-        <div class="boot-progress-meta"><span id="bootDetail">Preparing your workspace</span><b id="bootPct">00%</b></div>
+        <div class="boot-eyebrow"><span>BOOT SEQUENCE / 1.2.20</span><span>LOCAL INTELLIGENCE</span></div>
+        <div class="boot-title">SENTINEL<span class="boot-title-cursor"></span></div>
+        <div class="boot-sub">SENSE THE SYSTEM. SHAPE THE RESPONSE.</div>
+        <div class="boot-lanes" aria-hidden="true"><div><i></i><span>SESSION</span></div><div><i></i><span>PROCESS</span></div><div><i></i><span>SYSTEM</span></div><div><i></i><span>NETWORK</span></div><div><i></i><span>THERMAL</span></div><div><i></i><span>LIVE LINK</span></div></div>
+        <div class="boot-progress-meta"><span id="bootDetail">Synchronizing the Windows node</span><b id="bootPct">00%</b></div>
         <div class="boot-track"><div class="boot-progress" id="bootProgress" role="progressbar" aria-label="Workspace initialization" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"></div></div>
-        <div class="boot-stage"><span id="bootStage">INITIALIZING CORE</span><span class="boot-stage-side"><i></i> FULL DATA SYNCHRONIZATION</span></div>
-        <div class="boot-assurance">
-          <span><i class="assurance-lock"></i> PRIVATE BY DESIGN</span>
-          <span><i class="assurance-pulse"></i> LIVE SYSTEM DATA</span>
-          <span><i class="assurance-node"></i> WINDOWS NATIVE</span>
-        </div>
-        <button class="boot-retry" id="bootRetry" type="button" hidden>RETRY CONNECTION <span aria-hidden="true">↻</span></button>
+        <div class="boot-stage"><span id="bootStage">POWERING SYSTEM</span><span>21 DATA MODULES</span></div>
+        <div class="boot-modules" id="bootModules" aria-label="Workspace initialization states"></div>
+        <div class="boot-log-wrap"><div class="boot-log-head"><span>INITIALIZATION FEED</span><span>REAL TIME</span></div><div class="boot-log" id="bootLog" aria-live="polite" aria-relevant="additions"></div></div>
+        <button class="boot-retry" id="bootRetry" type="button" hidden>RETRY LOCAL DATA SYNC <i>↻</i></button>
       </div>
     </div>
-    <div class="boot-bottomline"><span>BUILT FOR CONTROL. DESIGNED FOR CLARITY.</span><span>LOCAL RUNTIME <i></i></span></div>
-  </div>
-  <div class="boot-compat" hidden aria-hidden="true">
-    <span id="bootProcessCount">SYNCING</span>
-    <div class="boot-live-readouts">
-      <div><small>CPU</small><b id="bootCpuValue">--</b><i data-boot-bar="cpu"></i></div>
-      <div><small>MEMORY</small><b id="bootRamValue">--</b><i data-boot-bar="ram"></i></div>
-      <div><small>GPU</small><b id="bootGpuValue">--</b><i data-boot-bar="gpu"></i></div>
-      <div><small>DPC</small><b id="bootDpcValue">--</b><i data-boot-bar="dpc"></i></div>
-    </div>
-    <div class="boot-modules" id="bootModules"></div>
-    <div class="boot-log-wrap"><div class="boot-log" id="bootLog"></div></div>
   </div>
 </div>
 <div id="toasts" aria-live="polite"></div>
@@ -125,6 +75,7 @@
   <button data-v="int"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M16 16l5 5"/></svg><span class="lb">INTEL FEED</span></button>
   <button data-v="ai"><svg viewBox="0 0 24 24"><circle cx="6" cy="12" r="3"/><circle cx="18" cy="6" r="3"/><circle cx="18" cy="18" r="3"/><path d="M9 11l6-4M9 13l6 4"/></svg><span class="lb">AI CORE</span></button>
   <div class="ng">OPERATIONS</div>
+  <button data-v="maint"><svg viewBox="0 0 24 24"><path d="M14 7l3 3M4 20l7-7m-1-8a6 6 0 0 0 8 8l-8 8-5-5 8-8a6 6 0 0 0-10-3Z"/></svg><span class="lb">MAINTENANCE</span></button>
   <button data-v="eng"><svg viewBox="0 0 24 24"><path d="M12 2l2.2 3.2 3.8.4.4 3.8L22 12l-3.6 2.6-.4 3.8-3.8.4L12 22l-2.2-3.2-3.8-.4-.4-3.8L2 12l3.6-2.6.4-3.8 3.8-.4z"/><circle cx="12" cy="12" r="3"/></svg><span class="lb">ENGINE DECK</span></button>
   <button data-v="ctl"><svg viewBox="0 0 24 24"><path d="M5 3v18M12 3v18M19 3v18"/><rect x="3" y="7" width="4" height="4" fill="#080b0c"/><rect x="10" y="13" width="4" height="4" fill="#080b0c"/><rect x="17" y="5" width="4" height="4" fill="#080b0c"/></svg><span class="lb">CONTROL</span><span class="badge" id="b-act" hidden>0</span></button>
   <button data-v="fc"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2"/></svg><span class="lb">FEATURES</span></button>
@@ -529,8 +480,73 @@
   <div class="pb"><div class="msg"><small>latest triage</small><span id="ai-status">Waiting for the first fast-model triage...</span></div></div></div>
   <div class="panel" style="margin-top:14px"><div class="ph">Council transcript</div>
     <div class="feed" id="tr" style="max-height:calc(100vh - 460px);font-family:var(--mo)"></div>
-    <div class="chatbox"><select id="ai-mode"><option value="council">COUNCIL</option><option value="fast">FAST</option><option value="deep">DEEP</option><option value="frame_time">FRAME-TIME SPECIALIST</option><option value="driver_etw">DRIVER / ETW SPECIALIST</option><option value="thermal">THERMAL SPECIALIST</option><option value="network">NETWORK SPECIALIST</option><option value="memory_io">MEMORY / I/O SPECIALIST</option><option value="profile_tuner">PROFILE TUNER SPECIALIST</option></select><input id="ai-in" placeholder="ask Sentinel anything about your PC..."><button class="btn or" id="ai-go">SEND</button></div></div>
+    <div class="chatbox"><select id="ai-mode"><option value="council">COUNCIL</option><option value="fast">FAST</option><option value="deep">DEEP</option><option value="frame_time">FRAME-TIME SPECIALIST</option><option value="driver_etw">DRIVER / ETW SPECIALIST</option><option value="thermal">THERMAL SPECIALIST</option><option value="network">NETWORK SPECIALIST</option><option value="memory_io">MEMORY / I/O SPECIALIST</option><option value="profile_tuner">PROFILE TUNER SPECIALIST</option></select><input id="ai-in" placeholder="ask Sentinel anything about your PC..."><button class="btn" id="ai-voice" title="Click to use browser speech recognition; text is not auto-sent">VOICE</button><button class="btn or" id="ai-go">SEND</button></div></div>
   <div class="panel" style="margin-top:14px"><div class="ph">Agent runtime &amp; inference telemetry<em>live process state, not model claims</em></div><div class="pb kv" id="ai-runtime"><div class="empty">Waiting for runtime status and usage sample.</div></div></div>
+</section>
+
+
+<section class="view" id="v-maint">
+  <div class="maint-head"><div><span class="maint-kicker">SENTINEL / WINDOWS OPERATIONS</span><h2>MAINTENANCE CONTROL</h2><p>Observe the node. Preview the change. Keep control of every action.</p></div><button class="btn" id="maint-refresh">REFRESH DIAGNOSTICS</button></div>
+  <div class="metrics maint-metrics">
+    <div class="metric"><small>DIAGNOSTIC STATE</small><b id="maint-state">COLLECTING</b><span id="maint-state-note">Background inventory</span></div>
+    <div class="metric"><small>ADMIN SESSION</small><b id="maint-admin">--</b><span>Current Windows token</span></div>
+    <div class="metric"><small>ACTION BUDGET</small><b id="maint-budget">--</b><span id="maint-budget-note">Rolling limits</span></div>
+    <div class="metric"><small>VANGUARD SAFEGUARD</small><b id="maint-guard">--</b><span id="maint-guard-note">Fail-closed observer</span></div>
+  </div>
+  <div class="cols2 maint-top-grid">
+    <div class="panel"><div class="ph">Goal-driven diagnostics<em>local rule planner · no execution</em></div><div class="pb">
+      <div class="maint-goal-input"><input id="maint-goal" placeholder="e.g. My PC feels slow, diagnose why"><button class="btn or" id="maint-goal-run">ANALYZE</button></div>
+      <div id="maint-goal-result" class="maint-goal-result"><div class="empty">Describe the result you want: faster, cooler, quieter, longer battery life, network stability or more storage.</div></div>
+    </div></div>
+    <div class="panel"><div class="ph">Safety governor<em>maintenance-wide control gate</em></div><div class="pb">
+      <label class="tog"><span>Maintenance kill switch<small>ON blocks every system-changing maintenance action. Enabled by default.</small></span><input type="checkbox" class="sw" id="maint-kill-switch" checked></label>
+      <label class="tog"><span>Idle diagnostic scheduler<small>Read-only inventory and predictive alerts. Never runs repairs or cleanup.</small></span><input type="checkbox" class="sw" id="maint-scheduler"></label>
+      <label class="tog"><span>Weekly diagnostic summary<small>Read-only inventory review and capacity forecast.</small></span><input type="checkbox" class="sw" id="maint-weekly" checked></label>
+      <div class="maint-policy-row"><label>IDLE AFTER <input id="maint-idle-minutes" type="number" min="5" max="180" step="5" value="15"> MINUTES</label><button class="btn or" id="maint-policy-save">SAVE POLICY</button><span class="tag" id="maint-policy-state">ACTIONS BLOCKED</span></div>
+      <div class="msg maint-safety-note"><small>CONTROL BOUNDARY</small>Every operation requires a fresh preview and explicit confirmation. Restore-point preflight is required for deep repairs and disruptive resets. Security, Defender, VALORANT/Vanguard, BIOS and Secure Boot are never disabled or modified.</div>
+    </div></div>
+  </div>
+  <div class="panel maint-diagnostics-panel"><div class="ph">Windows intelligence map<em id="maint-diag-status">INVENTORY INITIALIZING</em><button class="btn sm" id="maint-inventory-refresh">SCAN INVENTORY</button></div><div class="pb"><div id="maint-diagnostics" class="maint-diagnostics"><div class="empty">Read-only inventory runs in the background. Driver/WMI scans back off during games and resource pressure.</div></div></div></div>
+  <div class="maint-action-grid">
+    <div class="panel"><div class="ph">Cleanup engine<em>manual · bounded · irreversible</em></div><div class="pb maint-form">
+      <label>Target<select id="maint-cleanup-scope"><option value="temp">User temporary files</option><option value="shader">DirectX / GPU shader cache</option><option value="all">Temporary + shader cache</option></select></label>
+      <div class="msg"><small>SAFETY LIMIT</small>Files older than 7 days · max 200 files / 250 MiB per run. Browser profiles, Windows Update data, Recycle Bin and system folders are excluded.</div>
+      <button class="btn or" id="maint-cleanup-run">PREVIEW CLEANUP</button>
+    </div></div>
+    <div class="panel"><div class="ph">Startup control<em>current-user registry only</em></div><div class="pb maint-form">
+      <label>Startup application<select id="maint-startup-entry"><option value="">Waiting for inventory</option></select></label>
+      <div class="msg"><small>REVERSIBLE RECORD</small>The exact command and registry type are journaled for restoration. Windows Security, SENTINEL, Riot/Vanguard and core shell entries are protected.</div>
+      <button class="btn" id="maint-startup-run">PREVIEW DISABLE</button>
+    </div></div>
+    <div class="panel maint-span"><div class="ph">Network diagnostics &amp; repair<em>physical adapters · administrator for changes</em></div><div class="pb">
+      <div class="maint-network-fields"><label>Adapter<select id="maint-adapter"><option value="">Waiting for adapters</option></select></label><label>Address family<select id="maint-dns-family"><option value="IPv4">IPv4</option><option value="IPv6">IPv6</option></select></label><label class="maint-dns-input">DNS resolver IPs<input id="maint-dns-servers" value="1.1.1.1, 1.0.0.1"></label></div>
+      <div class="maint-button-row"><button class="btn" id="maint-dns-test">TEST DNS SPEED</button><button class="btn or" id="maint-dns-run">PREVIEW DNS SWITCH</button><button class="btn" id="maint-adapter-run">PREVIEW ADAPTER RESET</button><button class="btn danger" id="maint-winsock-run">PREVIEW WINSOCK / IP RESET</button></div>
+      <div class="msg maint-dns-results" id="maint-dns-results"><small>RESOLVER BENCHMARK</small>Three read-only lookups per candidate resolver. SENTINEL does not change DNS during testing.</div>
+    </div></div>
+    <div class="panel maint-span"><div class="ph">Driver update &amp; recovery<em>exact Windows Update candidate · restore point</em></div><div class="pb">
+      <div class="maint-network-fields"><label>Hardware-matched update<select id="maint-driver-choice"><option value="">Waiting for driver scan</option></select></label><button class="btn or" id="maint-driver-run">PREVIEW INSTALL</button></div>
+      <div class="maint-network-fields maint-driver-rollback"><label>Exported previous driver<select id="maint-driver-rollback"><option value="">No rollback package available</option></select></label><button class="btn" id="maint-driver-rollback-run">PREVIEW ROLLBACK</button></div>
+      <div class="msg"><small>DRIVER CONTROL</small>Only an exact Windows Update package matched to a device hardware ID is eligible. SENTINEL exports the existing OEM driver before installation. Rollback is offered only when the export exists.</div>
+    </div></div>
+    <div class="panel"><div class="ph">Windows repair<em>restore point required</em></div><div class="pb maint-form">
+      <label>Repair plan<select id="maint-repair-target"><option value="sfc">SFC /scannow</option><option value="dism">DISM /RestoreHealth</option><option value="both">SFC then DISM</option></select></label><button class="btn danger" id="maint-repair-run">PREVIEW REPAIR</button>
+      <label>Allowlisted service<select id="maint-service"><option value="audiosrv">Windows Audio</option><option value="bthserv">Bluetooth Support</option><option value="wuauserv">Windows Update</option><option value="bits">Background Intelligent Transfer</option><option value="spooler">Print Spooler</option><option value="dhcp">DHCP Client</option><option value="dnscache">DNS Client</option></select></label><button class="btn" id="maint-service-run">PREVIEW RESTART</button>
+    </div></div>
+    <div class="panel"><div class="ph">Power &amp; storage<em>manual · conditional undo</em></div><div class="pb maint-form">
+      <label>Power profile<select id="maint-power-mode"><option value="balanced">Balanced</option><option value="performance">High Performance</option><option value="battery">Power Saver</option></select></label><button class="btn or" id="maint-power-run">PREVIEW POWER CHANGE</button>
+      <label>NTFS volume<select id="maint-trim-drive"><option value="">Waiting for volume inventory</option></select></label><button class="btn" id="maint-trim-run">PREVIEW SSD RETRIM</button>
+      <div class="msg"><small>LAUNCHER / FAN CONTROL</small>Move games through Steam, Epic or Xbox library tools so manifests remain correct. Use the signed OEM fan profile utility; undocumented EC/ACPI writes are disabled.</div>
+    </div></div>
+    <div class="panel maint-span"><div class="ph">Process tuning<em>exact identity · never high / realtime</em></div><div class="pb">
+      <div class="maint-network-fields"><label>Process<select id="maint-process"><option value="">Waiting for process inventory</option></select></label><label>Priority<select id="maint-priority"><option value="below_normal">Below normal</option><option value="normal">Normal</option><option value="above_normal">Above normal</option></select></label><label>CPU affinity (optional)<input id="maint-affinity" placeholder="e.g. 0,1,2"></label><button class="btn or" id="maint-process-run">PREVIEW PROCESS TUNE</button></div>
+      <div class="msg"><small>PROCESS SAFETY</small>PID, creation time and executable path are revalidated. Windows, security, Riot and Vanguard processes are excluded. High/realtime priorities and forced termination are never offered.</div>
+    </div></div>
+  </div>
+  <div class="cols2 maint-bottom-grid">
+    <div class="panel"><div class="ph">Maintenance jobs<em id="maint-last-job-state">IDLE</em></div><div class="pb list" id="maint-job-list"><div class="empty">No maintenance jobs yet.</div></div></div>
+    <div class="panel"><div class="ph">Daily maintenance digest<em>last 24 hours</em></div><div class="pb" id="maint-digest"><div class="empty">Digest not loaded.</div></div></div>
+    <div class="panel maint-span"><div class="ph">Action journal &amp; recovery<em>state-checked Undo</em><button class="btn sm danger" id="maint-revert-all">REVERT REVERSIBLE CHANGES</button></div><div class="pb list" id="maint-journal"><div class="empty">No maintenance changes recorded.</div></div></div>
+  </div>
 </section>
 
 <!-- CONTROL -->
@@ -710,4 +726,4 @@
   </div>
 </section>
 </main></div>
-<script src="app.js?v=1.2.13"></script></body></html>
+<script src="app.js?v=1.2.20"></script></body></html>
