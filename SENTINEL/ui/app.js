@@ -930,8 +930,38 @@ function renderMaintenance(){
       '<div class="maint-diag-card"><div class="maint-diag-title">GUIDED RECOVERY</div><p>'+esc(guided.game_relocation||"Use the Steam/Epic/Xbox library manager for game relocation.")+'</p><p>'+esc(guided.bios_secure_boot||"BIOS/Secure Boot remain read-only.")+'</p></div>'+
       (errors.length?'<div class="maint-diag-card maint-wide"><div class="maint-diag-title">DEFERRED SOURCES</div>'+errors.join("")+'</div>':"");
   }
+  renderMaintenanceIntelligence();
   renderMaintenanceJournal();renderMaintenanceDigest();
 }
+
+function renderMaintenanceIntelligence(){
+  if(!MNT)return;
+  const d=MNT,health=d.system_health||{};
+  const host=document.getElementById("maint-health-report");
+  if(host){
+    const findings=(health.findings||[]).map(item=>
+      '<div class="maint-health-row"><span class="maint-severity '+esc(item.severity)+'"></span><div>'+
+      '<b>'+esc(item.title)+'</b><small>'+esc(item.detail||"")+'</small>'+
+      '<small>Confidence '+Math.round(Number(item.confidence||0)*100)+'% · '+esc((item.allowed_actions||[]).join(", ")||"Guided / observation only")+'</small>'+
+      '</div></div>').join("");
+    const coverage=Object.entries(health.coverage||{}).filter(([,value])=>value).map(([key])=>key);
+    host.innerHTML='<div class="maint-health-head"><div><small>LOCAL EVIDENCE HEALTH</small>'+
+      '<b>'+esc(health.health_score==null?"--":health.health_score+"/100")+'</b>'+
+      '<span>'+esc(String(health.state||"collecting").replaceAll("_"," ").toUpperCase())+'</span></div>'+
+      '<div class="maint-health-coverage">'+coverage.length+' evidence domains · '+esc(coverage.join(" / ")||"waiting for telemetry")+'</div></div>'+
+      (findings||'<div class="empty">No monitored threshold is currently crossed, or more telemetry is needed.</div>')+
+      '<small class="maint-health-note">'+esc(health.note||"Local evidence summary. No system changes are made by this report.")+'</small>';
+  }
+  maintSetOptions("maint-game-choice",d.game_libraries||[],x=>x.game_id,
+    x=>x.launcher+" · "+x.name,"No Steam / Epic game manifests discovered");
+  const targets=(d.volumes||[]).filter(x=>String(x.filesystem||"").toLowerCase()==="ntfs");
+  maintSetOptions("maint-game-target",targets,x=>{
+    const value=String(x.device||x.mountpoint||"");
+    const match=value.match(/^([A-Z]):/i);
+    return match?match[1].toUpperCase():"";
+  },x=>x.device+" · "+x.free_gib+" GiB free","No NTFS target volumes detected");
+}
+
 function renderMaintenanceJournal(){
   const host=document.getElementById("maint-journal");if(!host)return;
   const rows=MNT_JOURNAL||[];
@@ -1080,6 +1110,27 @@ function initMaintenance(){
     const raw=document.getElementById("maint-affinity").value.trim();let affinity=null;
     if(raw){affinity=raw.split(",").map(x=>Number(x.trim()));if(affinity.some(x=>!Number.isInteger(x)))return toast("Affinity must be comma-separated logical CPU indexes","bad");}
     maintenancePreview("process_tune",{pid:process.pid,create_time:process.create_time,exe:process.exe,priority:document.getElementById("maint-priority").value,affinity},"Tune selected process");
+  });
+  bind("maint-game-plan",async()=>{
+    const gameId=document.getElementById("maint-game-choice").value;
+    const targetDrive=document.getElementById("maint-game-target").value;
+    const host=document.getElementById("maint-game-plan-result");
+    if(!gameId)return toast("Select an installed Steam/Epic game","warn");
+    if(!targetDrive)return toast("Select an NTFS target volume","warn");
+    try{
+      const result=await api("/api/maintenance/game-relocation/plan",{game_id:gameId,target_drive:targetDrive});
+      if(result.error)throw new Error(result.error);
+      const game=result.game||{};
+      const steps=(result.instructions||[]).map(step=>'<div class="maint-plan-item"><i></i><span>'+esc(step)+'</span></div>').join("");
+      const size=Number(result.size_bytes||0)/1073741824;
+      const free=Number(result.available_free_bytes||0)/1073741824;
+      host.innerHTML='<small>READ-ONLY RELOCATION PLAN · '+esc(game.launcher)+' · '+esc(game.name)+'</small>'+
+        '<div class="maint-data-row"><b>Source</b><span>'+esc(game.install_path||"")+'</span></div>'+
+        '<div class="maint-data-row"><b>Target volume</b><span>'+esc(result.target_drive)+':</span></div>'+
+        '<div class="maint-data-row"><b>Manifest size</b><span>'+size.toFixed(1)+' GiB</span></div>'+
+        '<div class="maint-data-row"><b>Free space</b><span>'+free.toFixed(1)+' GiB</span></div>'+
+        steps+'<div class="msg">'+esc(result.safety_note||"The launcher owns the actual move; SENTINEL will not modify its files or manifests.")+'</div>';
+    }catch(error){host.textContent=error.message||String(error);toast(error.message||String(error),"bad");}
   });
   bind("maint-revert-all",async()=>{
     if(!confirm("Revert all outstanding reversible SENTINEL changes? Irreversible actions and externally changed values will be skipped."))return;

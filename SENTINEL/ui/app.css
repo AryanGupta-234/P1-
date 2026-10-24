@@ -1938,3 +1938,23 @@ nav button:hover{transform:translateX(2px)}
   .maint-row-actions{justify-content:flex-start}
 }
 @media(prefers-reduced-motion:reduce){#v-maint .panel,#v-maint .maint-data-row{transition:none!important}}
+
+
+/* SENTINEL 1.2.21 · local evidence and launcher-safe game planning */
+.maint-health-report{display:grid;gap:8px;margin:0 0 12px;padding:12px;border:1px solid var(--line);border-radius:10px;background:rgba(0,0,0,.16)}
+.maint-health-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding-bottom:8px;border-bottom:1px solid var(--line)}
+.maint-health-head>div:first-child{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
+.maint-health-head small,.maint-health-head span,.maint-health-coverage{font:9px var(--mo);color:var(--mut)}
+.maint-health-head b{font:700 19px var(--mo);color:var(--cy)}
+.maint-health-row{display:grid;grid-template-columns:8px minmax(0,1fr);gap:9px;align-items:start;padding:7px 0;border-bottom:1px solid color-mix(in srgb,var(--line) 70%,transparent)}
+.maint-health-row:last-of-type{border-bottom:0}
+.maint-health-row b{display:block;font-size:10px}
+.maint-health-row small{display:block;margin-top:3px;color:var(--mut);font:9px/1.5 var(--mo);overflow-wrap:anywhere}
+.maint-severity{width:6px;height:6px;margin-top:4px;border-radius:50%;background:var(--cy)}
+.maint-severity.warning{background:#e8ad50}
+.maint-severity.high,.maint-severity.critical{background:var(--or)}
+.maint-severity.info{background:var(--mut)}
+.maint-health-note{font:9px/1.5 var(--mo);color:var(--mut)}
+#maint-game-plan-result{display:grid;gap:7px;line-height:1.55}
+#maint-game-plan-result .maint-data-row{align-items:flex-start;flex-wrap:wrap}
+@media(max-width:680px){.maint-health-head{align-items:flex-start;flex-direction:column}}
