@@ -901,7 +901,7 @@ function renderMaintenance(){
     const ids=Array.isArray(update.hardware_ids)?update.hardware_ids:[];
     const device=(d.drivers||[]).find(row=>{
       const id=String(row.DeviceID||"").toLowerCase();
-      return id&&ids.some(value=>{const hardware=String(value||"").toLowerCase();return hardware&&(id===hardware||id.includes(hardware)||hardware.includes(id));});
+      return id&&ids.some(value=>{const hardware=String(value||"").trim().toLowerCase();return hardware&&(id===hardware||id.startsWith(hardware+"\\"));});
     });
     if(device)choices.push({update,device});
   });

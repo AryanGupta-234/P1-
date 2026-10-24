@@ -64,3 +64,18 @@ def test_revert_all_skips_operations_without_safe_undo():
 def test_installer_checks_new_engines():
     assert "sentinel\\maintenance.py" in INSTALLER
     assert "sentinel\\approval_engine.py" in INSTALLER
+
+
+def test_driver_install_journal_has_a_real_guarded_undo_path():
+    undo_start = MAINTENANCE.index("def undo(")
+    undo_end = MAINTENANCE.index("def journal(", undo_start)
+    undo_source = MAINTENANCE[undo_start:undo_end]
+    assert 'detail.get("kind") == "driver_restore"' in undo_source
+    assert "_run_restore_point(\"driver rollback\")" in undo_source
+    assert '["pnputil.exe", "/add-driver", backup_inf, "/install"]' in undo_source
+
+
+def test_driver_candidate_requires_device_id_or_instance_prefix_match():
+    assert 'normalized_device == str(value).strip().casefold()' in MAINTENANCE
+    assert 'normalized_device.startswith(str(value).strip().casefold() + "\\\\")' in MAINTENANCE
+    assert "hardware.includes(id)" not in (ROOT / "ui" / "app.js").read_text(encoding="utf-8")

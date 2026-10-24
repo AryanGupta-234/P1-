@@ -411,9 +411,15 @@ def _snapshot_for(action: str, args: dict) -> dict:
         if not update:
             raise ValueError("The exact driver update is no longer offered. Scan Windows Update again.")
         hardware_ids = update.get("hardware_ids") or []
-        if not hardware_ids or not any(str(x).casefold() in device_id.casefold() or device_id.casefold() in str(x).casefold()
-                                       for x in hardware_ids):
-            raise ValueError("Windows did not expose a verified hardware-ID match for this driver update.")
+        normalized_device = device_id.strip().casefold()
+        matched_hardware_id = any(
+            normalized_device == str(value).strip().casefold()
+            or normalized_device.startswith(str(value).strip().casefold() + "\\")
+            for value in hardware_ids
+            if str(value).strip()
+        )
+        if not matched_hardware_id:
+            raise ValueError("Windows did not expose an exact hardware-ID or instance-prefix match for this driver update.")
         return {"update": update, "device": driver, "device_id": device_id}
     if action == "driver_rollback":
         journal_id = int(args.get("journal_id", 0))
@@ -759,8 +765,24 @@ def _apply_action(action: str, args: dict, before: dict) -> tuple[str, dict, dic
                           "normal": psutil.NORMAL_PRIORITY_CLASS,
                           "above_normal": psutil.ABOVE_NORMAL_PRIORITY_CLASS}[before["priority"]]
         process.nice(priority_value)
-        if before["affinity"] is not None:
-            process.cpu_affinity(before["affinity"])
+        try:
+            if before["affinity"] is not None:
+                process.cpu_affinity(before["affinity"])
+        except Exception as tune_error:
+            rollback_errors = []
+            try:
+                process.nice(current["priority"])
+            except Exception as rollback_error:
+                rollback_errors.append(f"priority restore: {rollback_error}")
+            try:
+                process.cpu_affinity(current["affinity"])
+            except Exception as rollback_error:
+                rollback_errors.append(f"affinity restore: {rollback_error}")
+            detail = f"Process affinity change failed: {tune_error}"
+            if rollback_errors:
+                detail += "; compensation incomplete: " + "; ".join(rollback_errors)
+                core.log("maintenance", detail[:500], "error")
+            raise RuntimeError(detail) from tune_error
         undo = {"kind": "process_restore", "pid": current["pid"], "create_time": current["create_time"],
                 "exe": current["exe"], "priority": current["priority"], "affinity": current["affinity"],
                 "applied_priority": priority_value, "applied_affinity": before["affinity"]}
@@ -814,6 +836,12 @@ def undo(journal_id: int, *, confirmed: bool = False) -> dict:
         if _active_scheme() != detail["applied"]:
             raise RuntimeError("Power scheme changed outside Sentinel; preserving that user change.")
         _run_command(["powercfg.exe", "/setactive", detail["before"]], 15)
+    elif detail.get("kind") == "driver_restore":
+        backup_inf = str(detail.get("backup_inf") or "")
+        if not backup_inf or not os.path.isfile(backup_inf):
+            raise FileNotFoundError("The exported prior driver INF is unavailable; SENTINEL cannot perform automatic driver Undo.")
+        _run_restore_point("driver rollback")
+        _run_command(["pnputil.exe", "/add-driver", backup_inf, "/install"], 180)
     elif detail.get("kind") == "process_restore":
         process, _ = _process_identity({"pid": detail["pid"], "create_time": detail["create_time"], "exe": detail["exe"]})
         if process.nice() != detail["applied_priority"]:
