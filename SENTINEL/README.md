@@ -300,3 +300,11 @@ The Intelligence workspace adds a source registry and local retrieval UI. Source
 The Windows Knowledge workspace now includes an advisory specialist endpoint. It combines a bounded set of current local telemetry with up to six locally indexed, build-aware documentation passages and asks the selected local Ollama FAST model for a structured diagnosis. Cloud inference is rejected for this workflow.
 
 The response is validated against a strict schema. Evidence references must exist in the supplied packet, and proposed action IDs must belong to a fixed maintenance vocabulary. Raw commands and scripts are not accepted. The specialist cannot execute actions, approve changes, or change safeguards. Maintenance remains manual-only with fresh preview and explicit confirmation.
+
+
+## UI refresh — Nocturne
+SENTINEL's interface now uses the charcoal / forest / oxblood palette (\`#171717\`, \`#06110C\`, \`#A31C1B\`). Typography uses Manrope and DM Sans for display and interface text, with IBM Plex Mono for telemetry and technical readouts. The refresh is limited to the presentation layer and does not change backend endpoints, telemetry collection, safety policy, or automation behavior. Google Fonts are an optional progressive enhancement; local system fallbacks remain configured.
+
+
+### UI refresh — Nocturne Deck / startup cockpit
+The 1.2.27 presentation pass adds a cinematic boot cockpit while retaining the existing live telemetry, module initialization, retry flow, and startup progress identifiers. The left navigation is now a structured command deck with a Quick Command launcher wired to the existing local command palette. Telemetry chart accents and older page-specific cyan/lime tones were normalized to the charcoal / forest / oxblood theme. This remains a presentation-layer update: no agent actions, endpoint contracts, telemetry providers, or safeguard policies were changed.
