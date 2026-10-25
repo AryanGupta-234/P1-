@@ -185,7 +185,7 @@ def diagnose(question: str) -> dict:
     )
     state = core.STATE.get("ai") if isinstance(core.STATE.get("ai"), dict) else {}
     model = str(state.get("fast") or "").strip()
-    if not model or model.startswith(getattr(ai, "CLOUD", "\u2601 ")):
+    if not model or model.startswith(ai.CLOUD):
         raise RuntimeError("No eligible local chat model is available. Install or select a local Ollama model.")
     raw = ai.gen(model, prompt, system, fmt=SCHEMA, timeout=90, slot="fast")
     result = _validate_response(raw, valid_refs=valid_refs, valid_evidence=valid_evidence)
