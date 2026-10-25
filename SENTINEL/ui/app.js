@@ -192,7 +192,7 @@ function starfield() {
     frame = 0;
     if (document.visibilityState !== "visible") return;
     if (timestamp - lastPaint >= 42) {
-      lastPaint = timestamp; x.clearRect(0, 0, w, h); x.fillStyle = "#cfe8a0";
+      lastPaint = timestamp; x.clearRect(0, 0, w, h); x.fillStyle = "#B9AEA2";
       for (const star of st) { star.y -= star.v; if (star.y < 0) { star.y = h; star.x = Math.random() * w; } x.globalAlpha = .25 + star.r / 2; x.beginPath(); x.arc(star.x, star.y, star.r, 0, 6.3); x.fill(); }
     }
     frame = requestAnimationFrame(draw);
@@ -316,28 +316,28 @@ function renderCommandVisuals() {
   if (uptime) uptime.textContent = dur(Number(S.uptime || 0));
   const canvas = document.getElementById("cmd-performance-chart");
   if (canvas) big(canvas, [
-    { k: "cpu", c: "#69d6bd", l: "CPU" },
-    { k: "mem", c: "#b8e65b", l: "MEMORY" },
-    { k: "gpu", c: "#62c7e8", l: "GPU" },
-    { k: "dpc", c: "#ffad75", l: "DPC" }
+    { k: "cpu", c: "#8B9B8E", l: "CPU" },
+    { k: "mem", c: "#8E9B89", l: "MEMORY" },
+    { k: "gpu", c: "#909B94", l: "GPU" },
+    { k: "dpc", c: "#B58D7D", l: "DPC" }
   ], { lo: 0, hi: 100 });
   return true;
 }
 
 /* ---------- tiles ---------- */
 const TILES = [
-  { k: "cpu", l: "CPU", u: "%", c: "#b8e65b", lo: 0, hi: 100, w: 75, b: 92 },
-  { k: "dpc", l: "DPC TIME", u: "%", c: "#a99bff", lo: 0, hi: null, w: 3, b: 8, d: 1 },
-  { k: "mem_free_mb", l: "FREE RAM", u: "MB", c: "#7cd59c", lo: 0, hi: null, w: 2500, b: 1200, inv: 1 },
-  { k: "pagesout", l: "PAGE EVICT", u: "/s", c: "#ff6b38", lo: 0, hi: null, w: 100, b: 400 },
-  { k: "dlat", l: "DISK LATENCY", u: "ms", c: "#ff6b38", lo: 0, hi: null, w: 12, b: 40, d: 1 },
-  { k: "gpu", l: "GPU 3D", u: "%", c: "#b8e65b", lo: 0, hi: 100, w: 999, b: 999 },
-  { k: "gputemp", l: "GPU TEMP", u: "°C", c: "#ff6b38", lo: 30, hi: 100, w: 80, b: 87 },
-  { k: "ping", l: "PING", u: "ms", c: "#7cd59c", lo: 0, hi: null, w: 40, b: 80, d: 1 },
-  { k: "jitter", l: "JITTER", u: "ms", c: "#ff6b38", lo: 0, hi: null, w: 8, b: 20, d: 1 },
-  { k: "cpuperf", l: "CPU CLOCK", u: "%", c: "#b8e65b", lo: 0, hi: 130, w: 80, b: 60, inv: 1 },
-  { k: "pagesin", l: "HARD FAULTS", u: "/s", c: "#a99bff", lo: 0, hi: null, w: 1500, b: 5000 },
-  { k: "netdown", l: "NET DOWN", u: "Mb/s", c: "#7cd59c", lo: 0, hi: null, w: 9e9, b: 9e9, d: 1 },
+  { k: "cpu", l: "CPU", u: "%", c: "#8E9B89", lo: 0, hi: 100, w: 75, b: 92 },
+  { k: "dpc", l: "DPC TIME", u: "%", c: "#B18D84", lo: 0, hi: null, w: 3, b: 8, d: 1 },
+  { k: "mem_free_mb", l: "FREE RAM", u: "MB", c: "#879889", lo: 0, hi: null, w: 2500, b: 1200, inv: 1 },
+  { k: "pagesout", l: "PAGE EVICT", u: "/s", c: "#A31C1B", lo: 0, hi: null, w: 100, b: 400 },
+  { k: "dlat", l: "DISK LATENCY", u: "ms", c: "#A31C1B", lo: 0, hi: null, w: 12, b: 40, d: 1 },
+  { k: "gpu", l: "GPU 3D", u: "%", c: "#8E9B89", lo: 0, hi: 100, w: 999, b: 999 },
+  { k: "gputemp", l: "GPU TEMP", u: "°C", c: "#A31C1B", lo: 30, hi: 100, w: 80, b: 87 },
+  { k: "ping", l: "PING", u: "ms", c: "#879889", lo: 0, hi: null, w: 40, b: 80, d: 1 },
+  { k: "jitter", l: "JITTER", u: "ms", c: "#A31C1B", lo: 0, hi: null, w: 8, b: 20, d: 1 },
+  { k: "cpuperf", l: "CPU CLOCK", u: "%", c: "#8E9B89", lo: 0, hi: 130, w: 80, b: 60, inv: 1 },
+  { k: "pagesin", l: "HARD FAULTS", u: "/s", c: "#B18D84", lo: 0, hi: null, w: 1500, b: 5000 },
+  { k: "netdown", l: "NET DOWN", u: "Mb/s", c: "#879889", lo: 0, hi: null, w: 9e9, b: 9e9, d: 1 },
 ];
 function buildTiles() { $("#tiles").innerHTML = TILES.map(t => `<div class="tile" id="t-${t.k}"><div class="k"><span>${t.l}</span><span id="tk-${t.k}"></span></div><div class="v"><span id="tv-${t.k}">--</span><small>${t.u}</small></div><canvas id="tc-${t.k}"></canvas></div>`).join(""); }
 function updTiles() {
@@ -346,13 +346,13 @@ function updTiles() {
     $("#tv-" + t.k).textContent = fmt(v, t.d || 0);
     const bad = t.inv ? v < t.b : v > t.b, warn = t.inv ? v < t.w : v > t.w;
     $("#t-" + t.k).className = "tile" + (bad ? " bad" : warn ? " warn" : "");
-    spark($("#tc-" + t.k), t.k, bad ? "#f05252" : warn ? "#ff6b38" : t.c, t.lo, t.hi);
+    spark($("#tc-" + t.k), t.k, bad ? "#C35A54" : warn ? "#A31C1B" : t.c, t.lo, t.hi);
   });
 }
 
 /* ---------- command view ---------- */
 function updHero() {
-  const v = S.live.lag_index ?? 0, col = v < 20 ? "#b8e65b" : v < 45 ? "#ff6b38" : "#f05252";
+  const v = S.live.lag_index ?? 0, col = v < 20 ? "#8E9B89" : v < 45 ? "#A31C1B" : "#C35A54";
   $("#arc").style.strokeDashoffset = 653.5 * (1 - v / 100); $("#arc").style.stroke = col;
   $("#c-num").textContent = fmt(v); $("#h-lag").textContent = fmt(v);
   const st = $("#c-st"); st.textContent = v < 12 ? "OPTIMAL" : v < 25 ? "NOMINAL" : v < 45 ? "ELEVATED" : v < 70 ? "DEGRADED" : "CRITICAL"; st.setAttribute("fill", col);
@@ -366,7 +366,7 @@ function updHero() {
   const cs = S.cores || []; $("#c-cores").textContent = cs.length + " logical";
   const box = $("#cores"); if (box.children.length !== cs.length) box.innerHTML = cs.map(() => "<i></i>").join("");
   cs.forEach((c, i) => { box.children[i].style.height = Math.max(3, c * .64) + "px"; box.children[i].className = c > 85 ? "h" : ""; });
-  $("#culp").innerHTML = (S.culprits || []).map(c => `<div class="act"><div class="d"><b>${esc(c.name)}</b><span>caused ${c.n} spike${c.n > 1 ? "s" : ""}</span></div><div class="bar" style="width:90px"><i style="width:${Math.min(100, c.n * 12)}%;background:linear-gradient(90deg,#ff6b38,#ff6b38)"></i></div></div>`).join("") || '<div class="empty">no culprits caught yet - background is clean</div>';
+  $("#culp").innerHTML = (S.culprits || []).map(c => `<div class="act"><div class="d"><b>${esc(c.name)}</b><span>caused ${c.n} spike${c.n > 1 ? "s" : ""}</span></div><div class="bar" style="width:90px"><i style="width:${Math.min(100, c.n * 12)}%;background:linear-gradient(90deg,#A31C1B,#A31C1B)"></i></div></div>`).join("") || '<div class="empty">no culprits caught yet - background is clean</div>';
 }
 
 /* ---------- activity ---------- */
@@ -378,7 +378,7 @@ function updHeart() {
   const now = S.now, rows = Object.entries(S.heart).sort();
   $("#heart").innerHTML = "<tr><th>Collector</th><th>Every</th><th>Runs</th><th>Last</th><th>Detail</th></tr>" + rows.map(([n, h]) => {
     const age = now - h.last, st = h.every === 0 ? "late" : age < h.every * 2.5 + 3 ? "" : age < h.every * 6 + 10 ? "late" : "dead";
-    return `<tr><td><span class="dot ${st}"></span>${esc(n)}</td><td>${h.every ? h.every + "s" : "-"}</td><td>${h.runs}</td><td>${fmt(age, 0)}s ago</td><td style="color:${h.err ? "#f05252" : "#829087"}">${esc(h.err || h.note)}</td></tr>`;
+    return `<tr><td><span class="dot ${st}"></span>${esc(n)}</td><td>${h.every ? h.every + "s" : "-"}</td><td>${h.runs}</td><td>${fmt(age, 0)}s ago</td><td style="color:${h.err ? "#C35A54" : "#829087"}">${esc(h.err || h.note)}</td></tr>`;
   }).join("");
 }
 
@@ -464,8 +464,8 @@ function maybeRefreshProcesses() { if (view === "proc" && Date.now() - procLastF
 function updNet() {
   renderNetworkSignals();
   $("#ntab").innerHTML = "<tr><th>Process</th><th>Remote</th><th>Port</th></tr>" + S.net.filter(c => { const q = ($("#n-q").value || "").toLowerCase(); return !q || (c.proc + " " + c.ip + " " + c.port).toLowerCase().includes(q); }).map(c => `<tr><td>${esc(c.proc)}</td><td>${esc(c.ip)}</td><td>${c.port}</td></tr>`).join(""); $("#n-n").textContent = S.net.length + " established";
-  big($("#nc-ping"), [{ k: "ping", c: "#7cd59c", l: "PING ms" }, { k: "jitter", c: "#ff6b38", l: "JITTER ms" }]);
-  big($("#nc-thr"), [{ k: "netdown", c: "#b8e65b", l: "DOWN Mb/s" }, { k: "netup", c: "#ff6b38", l: "UP Mb/s" }]);
+  big($("#nc-ping"), [{ k: "ping", c: "#879889", l: "PING ms" }, { k: "jitter", c: "#A31C1B", l: "JITTER ms" }]);
+  big($("#nc-thr"), [{ k: "netdown", c: "#8E9B89", l: "DOWN Mb/s" }, { k: "netup", c: "#A31C1B", l: "UP Mb/s" }]);
 }
 let kernelArchiveLast = 0;
 async function loadKernelArchive() {
@@ -488,8 +488,8 @@ async function loadKernelArchive() {
 }
 function updKer() {
   renderKernelSignals();
-  big($("#kc-dpc"), [{ k: "dpc", c: "#a99bff", l: "PDH DPC %" }, { k: "irq", c: "#ff6b38", l: "PDH IRQ %" }]);
-  big($("#kc-pg"), [{ k: "pagesin", c: "#b8e65b", l: "PAGES IN/s" }, { k: "pagesout", c: "#ff6b38", l: "PAGES OUT/s" }, { k: "pagefaults", c: "#a99bff", l: "PAGE FAULTS/s" }]);
+  big($("#kc-dpc"), [{ k: "dpc", c: "#B18D84", l: "PDH DPC %" }, { k: "irq", c: "#A31C1B", l: "PDH IRQ %" }]);
+  big($("#kc-pg"), [{ k: "pagesin", c: "#8E9B89", l: "PAGES IN/s" }, { k: "pagesout", c: "#A31C1B", l: "PAGES OUT/s" }, { k: "pagefaults", c: "#B18D84", l: "PAGE FAULTS/s" }]);
   const k = S.kernel || {}, pdh = k.pdh || {}, etw = k.etw || {};
   const age = pdh.last_sample ? `${Math.max(0, Math.round(Date.now()/1000-pdh.last_sample))}s ago` : "no samples yet";
   $("#kernel-health").innerHTML = `<div class="row"><b>PDH / typeperf counters</b><span class="tag ${pdh.available && pdh.state === "streaming" ? "ok" : "bad"}">${esc(pdh.state || "unknown")}</span></div><small>${esc(pdh.source || "No source reported")} · ${esc(pdh.samples || 0)} samples · ${esc(age)}</small><small>${esc(pdh.counters?.length || 0)} requested counter(s) · ${esc(pdh.unsupported?.length || 0)} unsupported · ${esc(pdh.error || "")}</small><div class="row"><b>WPR / ETW session</b><span class="tag ${etw.recording === true ? "ok" : etw.recording === false ? "mu" : "bad"}">${etw.recording === true ? "RECORDING" : etw.recording === false ? "IDLE" : "UNKNOWN"}</span></div><small>${esc(etw.source || "Windows Performance Recorder")} · checked ${etw.checked_at ? new Date(etw.checked_at*1000).toLocaleTimeString() : "never"}</small><small>${esc(etw.error || "")}</small><small class="proc-path">${esc(etw.status_text || "No WPR status output available")}</small><small>Live paging/DPC values are PDH counters. ETW event payloads are not decoded into a live paging timeline yet; approved WPR captures are retained as ETL for WPA/GPUView analysis.</small>`;
@@ -1534,7 +1534,7 @@ function advGauge(id, temp, threshold, valId, sourceId, source) {
     dial.style.setProperty("--heat", 0); dial.style.setProperty("--heat-color", "#526879");
     value.textContent = "--"; src.textContent = source || "Sensor unavailable"; return;
   }
-  const n = Number(temp), color = n >= threshold ? "#f05252" : n >= threshold - 10 ? "#f5a64a" : "#a7dc62";
+  const n = Number(temp), color = n >= threshold ? "#C35A54" : n >= threshold - 10 ? "#B58D7D" : "#9BAA98";
   dial.style.setProperty("--heat", Math.max(0, Math.min(100, n / 105 * 100)));
   dial.style.setProperty("--heat-color", color); value.textContent = n.toFixed(1) + "°";
   src.textContent = source || "Measured Windows sensor";
@@ -1572,8 +1572,8 @@ function advPowerClockWaterfall() {
     }).join("");
     return `<g><text x="8" y="${y + 29}" class="adv-waterfall-label">${label}</text><text x="8" y="${y + 43}" class="adv-waterfall-unit">${unit}</text><line x1="${left}" y1="${base}" x2="${left + width}" y2="${base}" class="adv-waterfall-axis"></line>${bars}<text x="${left}" y="${base + 12}" class="adv-waterfall-range">${lo.toFixed(0)}</text><text x="${left + width}" y="${base + 12}" text-anchor="end" class="adv-waterfall-range">${hi.toFixed(0)}</text></g>`;
   };
-  svg.innerHTML = renderLane(clocks, 0, "CLOCK", "MHz", "#b6e66a")
-    + renderLane(power, 72, "POWER", "W", "#62c7e8");
+  svg.innerHTML = renderLane(clocks, 0, "CLOCK", "MHz", "#82917D")
+    + renderLane(power, 72, "POWER", "W", "#909B94");
 }
 function advRows(rows, empty) {
   return rows.length ? rows.join("") : `<div class="empty">${esc(empty)}</div>`;
