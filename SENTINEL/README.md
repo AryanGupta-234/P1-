@@ -304,3 +304,7 @@ The response is validated against a strict schema. Evidence references must exis
 
 ## UI refresh — Nocturne
 SENTINEL's interface now uses the charcoal / forest / oxblood palette (\`#171717\`, \`#06110C\`, \`#A31C1B\`). Typography uses Manrope and DM Sans for display and interface text, with IBM Plex Mono for telemetry and technical readouts. The refresh is limited to the presentation layer and does not change backend endpoints, telemetry collection, safety policy, or automation behavior. Google Fonts are an optional progressive enhancement; local system fallbacks remain configured.
+
+
+### UI refresh — Nocturne Deck / startup cockpit
+The 1.2.27 presentation pass adds a cinematic boot cockpit while retaining the existing live telemetry, module initialization, retry flow, and startup progress identifiers. The left navigation is now a structured command deck with a Quick Command launcher wired to the existing local command palette. Telemetry chart accents and older page-specific cyan/lime tones were normalized to the charcoal / forest / oxblood theme. This remains a presentation-layer update: no agent actions, endpoint contracts, telemetry providers, or safeguard policies were changed.
