@@ -35,21 +35,21 @@ def test_specialist_rejects_fabricated_citation():
     payload = valid_payload()
     payload["evidence_used"] = ["sentinel-kb:made-up:0"]
     with pytest.raises(RuntimeError, match="cited evidence"):
-        specialist._validate_response(json.dumps(payload), valid_refs=set(), valid_evidence=set())
+        specialist._validate_response(json.dumps(payload), valid_refs={"sentinel-kb:doc:0"}, valid_evidence={"metric.cpu_pct"})
 
 
 def test_specialist_rejects_unknown_action_id():
     payload = valid_payload()
     payload["recommendations"][0]["action_id"] = "run_powershell"
     with pytest.raises(RuntimeError, match="fixed maintenance vocabulary"):
-        specialist._validate_response(json.dumps(payload), valid_refs=set(), valid_evidence=set())
+        specialist._validate_response(json.dumps(payload), valid_refs={"sentinel-kb:doc:0"}, valid_evidence={"metric.cpu_pct"})
 
 
 def test_specialist_rejects_extra_command_fields():
     payload = valid_payload()
     payload["command"] = "format C:"
     with pytest.raises(RuntimeError, match="schema"):
-        specialist._validate_response(json.dumps(payload), valid_refs=set(), valid_evidence=set())
+        specialist._validate_response(json.dumps(payload), valid_refs={"sentinel-kb:doc:0"}, valid_evidence={"metric.cpu_pct"})
 
 
 def test_specialist_question_is_bounded_and_requires_local_model(monkeypatch):
@@ -63,4 +63,4 @@ def test_specialist_rejects_non_string_action_identifier():
     payload = valid_payload()
     payload["recommendations"][0]["action_id"] = ["cleanup"]
     with pytest.raises(RuntimeError, match="fixed maintenance vocabulary"):
-        specialist._validate_response(json.dumps(payload), valid_refs=set(), valid_evidence=set())
+        specialist._validate_response(json.dumps(payload), valid_refs={"sentinel-kb:doc:0"}, valid_evidence={"metric.cpu_pct"})
