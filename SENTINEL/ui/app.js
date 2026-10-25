@@ -2679,7 +2679,7 @@ function palOpen() { $("#pal").classList.add("open"); $("#pal-q").value = ""; pa
 function palClose() { $("#pal").classList.remove("open"); }
 function palRun(n) { const i = palItems[n]; if (!i) return; palClose(); i.go(); }
 function initPalette() {
-  $("#palBtn").onclick = palOpen; $("#pal").onclick = e => { if (e.target.id === "pal") palClose(); }; $("#pal-q").oninput = () => { palSel = 0; palRender(); };
+  $("#palBtn").onclick = palOpen; const deckCommand = $("#deckCommand"); if (deckCommand) deckCommand.onclick = palOpen; $("#pal").onclick = e => { if (e.target.id === "pal") palClose(); }; $("#pal-q").oninput = () => { palSel = 0; palRender(); };
   addEventListener("keydown", e => {
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") { e.preventDefault(); $("#pal").classList.contains("open") ? palClose() : palOpen(); return; }
     if (!$("#pal").classList.contains("open")) return;
