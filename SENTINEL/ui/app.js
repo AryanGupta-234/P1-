@@ -806,7 +806,7 @@ function show(v) {
   $("#vtitle").textContent = TITLES[v];
   try { localStorage.setItem("sv", v); } catch (e) { }
   $$(".view").forEach(element => element.classList.toggle("on", element.id === "v-" + v));
-  $("#nav button[data-v]").forEach(button => {
+  $$("#nav button[data-v]").forEach(button => {
     const selected = button.dataset.v === v;
     button.classList.toggle("on", selected);
     if (selected) button.setAttribute("aria-current", "page");
@@ -1171,7 +1171,7 @@ async function boot() {
   bp(3, "POWERING SENTINEL", "Preparing the local command environment");
   buildTiles();
   buildChips();
-  $("#nav button[data-v]").forEach(button => {
+  $$("#nav button[data-v]").forEach(button => {
     const label = button.querySelector(".lb")?.textContent?.trim() || TITLES[button.dataset.v] || button.dataset.v;
     button.setAttribute("aria-label", label);
     button.title = label;
