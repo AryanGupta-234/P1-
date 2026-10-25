@@ -57,3 +57,10 @@ def test_specialist_question_is_bounded_and_requires_local_model(monkeypatch):
         specialist.diagnose(" ")
     with pytest.raises(ValueError):
         specialist.diagnose("x" * 501)
+
+
+def test_specialist_rejects_non_string_action_identifier():
+    payload = valid_payload()
+    payload["recommendations"][0]["action_id"] = ["cleanup"]
+    with pytest.raises(RuntimeError, match="fixed maintenance vocabulary"):
+        specialist._validate_response(json.dumps(payload), valid_refs=set(), valid_evidence=set())

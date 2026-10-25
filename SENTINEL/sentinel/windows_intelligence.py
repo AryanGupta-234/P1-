@@ -119,7 +119,9 @@ def _validate_response(raw: str, *, valid_refs: set[str], valid_evidence: set[st
         if not isinstance(item, dict) or set(item) != {"title", "rationale", "action_id"}:
             raise RuntimeError("Local model returned a malformed recommendation.")
         action_id = item["action_id"]
-        if action_id is not None and action_id not in ALLOWED_ACTION_IDS:
+        if action_id is not None and (
+            not isinstance(action_id, str) or action_id not in ALLOWED_ACTION_IDS
+        ):
             raise RuntimeError("Local model proposed an action outside the fixed maintenance vocabulary.")
         clean_recommendations.append({
             "title": _clean_text(item["title"], 160),
