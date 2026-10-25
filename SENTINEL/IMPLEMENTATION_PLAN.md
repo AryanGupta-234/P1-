@@ -1,7 +1,7 @@
 # SENTINEL Implementation Plan
 
 **Target:** Windows 11 x64 · local-first desktop runtime  
-**Plan revision:** 1.0 · **Release baseline:** 1.2.24  
+**Plan revision:** 1.1 · **Release baseline:** 1.2.25  
 **Status:** `[x]` existing capability · `[~]` integration/verification in progress · `[ ]` planned
 
 This is the single consolidated backlog for the next SENTINEL upgrade. It extends the existing collectors, SQLite store, maintenance executor, safeguard, adaptive runtime, AI council, memory engine, rollback journal and dashboard; it does not replace them.
@@ -105,12 +105,12 @@ Make SENTINEL a Windows-specialist, goal-driven performance and reliability assi
 
 ## P4 — Local Windows Specialist Model and training
 
-- [ ] Separate `windows_intelligence` package; never merge the reasoner into maintenance executor.
+- [x] Separate `windows_intelligence` package; never merge the reasoner into maintenance executor.
 - [ ] Start with installed small Qwen 3B candidate via loopback-only Ollama; use 7B only as optional quality comparison.
 - [ ] One inference worker initially, bounded context/output, lazy loading, RAM/CPU admission, cancellation and game-session suppression.
-- [ ] Strict response schema: diagnosis, evidence IDs, confidence category, uncertainty, extra probes, allowed action IDs and safety notes.
-- [ ] Deterministic schema/evidence/action/version validation. Reject raw commands and scripts.
-- [ ] Ground in current evidence and local Windows documentation, not model memory alone.
+- [x] Strict response schema: diagnosis, evidence IDs, confidence category, uncertainty, extra probes, allowed action IDs and safety notes.
+- [x] Deterministic schema/evidence/action/version validation. Reject raw commands and scripts.
+- [x] Ground in current evidence and local Windows documentation, not model memory alone.
 - [ ] Separate datasets: public technical knowledge, synthetic diagnostic scenarios and user-approved anonymised outcomes.
 - [ ] Cover CPU, memory, disk, network, thermal, driver, servicing, startup, power and device failures, including insufficient/conflicting evidence.
 - [ ] Provenance/licence, schema validation, deduplication, privacy scrub and held-out splits.
@@ -119,7 +119,7 @@ Make SENTINEL a Windows-specialist, goal-driven performance and reliability assi
 - [ ] Measure diagnosis accuracy, grounding, calibration, false positives, unsafe recommendations, build correctness, latency, RAM and forgetting.
 - [ ] Model remains optional; all normal functionality works without Ollama.
 
-## P5 — Windows action library
+## P4.1 — Local Windows specialist (implemented in 1.2.25)\n\n- [x] Dedicated advisory-only `windows_intelligence` module.\n- [x] Loopback Ollama inference through the existing AI resource-admission gate; cloud models are rejected.\n- [x] Context bounded to 9,000 characters and six local knowledge passages.\n- [x] Prompt-injection-resistant instruction hierarchy for retrieved documentation; sources are untrusted evidence.\n- [x] Strict JSON schema and deterministic citation, evidence-ID and action-ID validation.\n- [x] Unknown action IDs and unknown evidence citations are rejected; no raw command/script fields exist.\n- [x] GUI question/answer panel in the Windows Knowledge workspace.\n- [x] Recommendations are labelled advisory and never execute or create approvals.\n\n## P5 — Windows action library
 
 All new writes start manual-only and use shared preview, capability manifest, broker when elevated, Safeguard, snapshot, verification and undo. Never execute model-generated commands.
 
@@ -240,4 +240,4 @@ A feature is complete when its GUI state is visible, evidence/provenance exists,
 4. [x] Implement the least-privilege per-action UAC broker; validate it on the target Windows laptop next.
 5. [x] Implement the first local Windows Knowledge slice: approved-source registry, build metadata, ingestion and lexical retrieval.
 6. [ ] Expand read-only evidence before introducing new mutations.
-7. [ ] Implement and validate the dedicated WPR/ETW trace-request broker without elevating the observer.
+7. [ ] Implement and validate the dedicated WPR/ETW trace-request broker without elevating the observer.\n8. [x] Add the first local Windows specialist endpoint and GUI card: telemetry + cited local RAG + strict action vocabulary; no execution.

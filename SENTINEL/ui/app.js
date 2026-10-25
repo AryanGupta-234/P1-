@@ -2123,7 +2123,37 @@ async function searchWindowsKnowledge(){
   }catch(error){toast("Knowledge search: "+(error.message||String(error)),"bad");}
   finally{if(button){button.disabled=false;button.textContent="SEARCH LOCAL INDEX";}}
 }
+function renderWindowsSpecialist(result){
+  const host=document.getElementById("ix-win-result");if(!host)return;
+  const citations=Array.isArray(result.citations)?result.citations:[];
+  const recs=Array.isArray(result.recommendations)?result.recommendations:[];
+  const evidence=Array.isArray(result.telemetry_evidence?.metrics)?result.telemetry_evidence.metrics:[];
+  host.innerHTML='<div class="ix-specialist-diagnosis"><div><small>'+esc(String(result.confidence||"unknown").toUpperCase())+' CONFIDENCE · '+esc(result.model||"LOCAL MODEL")+'</small><b>'+esc(result.diagnosis||"No diagnosis returned")+'</b><p>'+esc(result.uncertainty||"")+'</p></div></div>'+
+    '<div class="ix-specialist-metrics">'+evidence.map(item=>'<span><small>'+esc(item.id.replace("metric.",""))+'</small><b>'+esc(String(item.value))+' '+esc(item.unit)+'</b></span>').join("")+'</div>'+
+    '<div class="ix-specialist-recs">'+recs.map(item=>'<article><b>'+esc(item.title)+'</b><p>'+esc(item.rationale)+'</p><small>'+(item.action_id?'PREVIEW + EXPLICIT CONFIRMATION REQUIRED':'ADVISORY / NO ACTION')+'</small></article>').join("")+'</div>'+
+    '<div class="ix-specialist-citations">'+citations.map(item=>'<a href="'+esc(item.url)+'" target="_blank" rel="noopener noreferrer"><b>'+esc(item.publisher)+' · '+esc(item.title)+'</b><small>'+esc(item.citation)+'</small></a>').join("")+'</div>'+
+    '<div class="msg"><small>SAFETY BOUNDARY</small>Suggestions are not executed. Maintenance remains manual-only; every change requires a fresh preview and explicit confirmation. Model output cannot grant permissions.</div>';
+}
 function initWindowsKnowledge(){
+  const diagnose=document.getElementById("ix-win-diagnose"),question=document.getElementById("ix-win-question");
+  const runDiagnosis=async()=>{
+    const value=question?.value.trim()||"";
+    if(!value)return toast("Describe the Windows issue first","warn");
+    if(diagnose){diagnose.disabled=true;diagnose.textContent="ANALYSING…";}
+    const host=document.getElementById("ix-win-result");
+    if(host)host.innerHTML='<div class="empty">Correlating local telemetry with version-matched documentation…</div>';
+    try{
+      const result=await api("/api/windows-intelligence/diagnose",{question:value});
+      if(result.error)throw new Error(result.error);
+      renderWindowsSpecialist(result);
+      toast("Local Windows specialist analysis complete","ok");
+    }catch(error){
+      if(host)host.innerHTML='<div class="empty">'+esc(error.message||String(error))+'</div>';
+      toast("Windows specialist: "+(error.message||String(error)),"warn");
+    }finally{if(diagnose){diagnose.disabled=false;diagnose.textContent="ANALYSE WITH LOCAL MODEL";}}
+  };
+  if(diagnose)diagnose.onclick=runDiagnosis;
+  if(question)question.addEventListener("keydown",event=>{if(event.key==="Enter")runDiagnosis();});
   const add=document.getElementById("ix-kb-add"),search=document.getElementById("ix-kb-search");
   if(search)search.onclick=searchWindowsKnowledge;
   const query=document.getElementById("ix-kb-query");

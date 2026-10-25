@@ -1,4 +1,4 @@
-# SENTINEL 1.2.24 — Per-action UAC & Windows Knowledge foundation
+# SENTINEL 1.2.25 — Local Windows Specialist foundation
 
 SENTINEL's observer, collectors and dashboard run as the signed-in user with a standard token. Administrator-only maintenance is handed to a narrowly scoped helper only after the operator confirms the exact preview and approves Windows UAC. The helper accepts one short-lived SQLite-backed job ID, binds it to the same Windows principal and interactive session, rechecks the kill switch, safeguard and original state, and can execute only a fixed allowlist of maintenance action IDs. It cannot accept arbitrary commands, scripts or paths.
 
@@ -293,3 +293,10 @@ The Intelligence workspace adds a source registry and local retrieval UI. Source
 
 
 **Current trace privilege boundary:** WPR/ETW capture still has an Administrator requirement and is not yet connected to the per-action maintenance broker. It remains fail-closed in the standard-user task for this release; a dedicated trace-ticket broker is a tracked follow-up. Do not run the entire observer/dashboard elevated just to enable trace capture.
+
+
+## 1.2.25 — Local Windows Specialist
+
+The Windows Knowledge workspace now includes an advisory specialist endpoint. It combines a bounded set of current local telemetry with up to six locally indexed, build-aware documentation passages and asks the selected local Ollama FAST model for a structured diagnosis. Cloud inference is rejected for this workflow.
+
+The response is validated against a strict schema. Evidence references must exist in the supplied packet, and proposed action IDs must belong to a fixed maintenance vocabulary. Raw commands and scripts are not accepted. The specialist cannot execute actions, approve changes, or change safeguards. Maintenance remains manual-only with fresh preview and explicit confirmation.

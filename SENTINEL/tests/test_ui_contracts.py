@@ -172,3 +172,18 @@ def test_windows_knowledge_workspace_and_admin_broker_are_connected():
     assert "/api/knowledge/status" in server and "/api/knowledge/search" in server
     assert "/api/knowledge/sources" in server
     assert "/api/knowledge/source/ingest" in server
+
+
+def test_windows_specialist_is_local_rag_advisory_and_visible():
+    html = (ROOT / "ui" / "index.html").read_text(encoding="utf-8")
+    app = (ROOT / "ui" / "app.js").read_text(encoding="utf-8")
+    server = (ROOT / "sentinel" / "server.py").read_text(encoding="utf-8")
+    specialist = (ROOT / "sentinel" / "windows_intelligence.py").read_text(encoding="utf-8")
+    assert 'id="ix-win-question"' in html and 'id="ix-win-diagnose"' in html
+    assert 'id="ix-win-result"' in html
+    assert 'api("/api/windows-intelligence/diagnose"' in app
+    assert '"/api/windows-intelligence/diagnose"' in server
+    assert "automatic_execution" in specialist
+    assert "ALLOWED_ACTION_IDS" in specialist
+    assert "ai.CLOUD" in specialist
+    assert "STORE.search(question, limit=6)" in specialist

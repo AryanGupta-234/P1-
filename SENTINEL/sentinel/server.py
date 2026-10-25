@@ -1,7 +1,7 @@
 """HTTP + Server-Sent-Events API. Binds 127.0.0.1 only; every /api call needs the install token."""
 import ctypes, json, os, threading, time, urllib.parse, psutil, platform, sys, hmac
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from . import core, actions, ai, intel, inventory, intelligence, advanced, activity_engine
+from . import core, actions, ai, intel, inventory, intelligence, advanced, activity_engine, windows_intelligence
 from . import safeguard, runtime_engine, memory_engine, ai_engine, security_engine, hardware_provider, maintenance, privilege_broker, windows_knowledge
 from .core import CFG, STATE, LIVE, HIST, HEART, START, db, log, save_cfg
 
@@ -505,6 +505,16 @@ class H(BaseHTTPRequestHandler):
             return self._json({"error": "request body must be valid JSON"}, 400)
         if not isinstance(body, dict):
             return self._json({"error": "request body must be a JSON object"}, 400)
+        if p == "/api/windows-intelligence/diagnose":
+            try:
+                result = windows_intelligence.diagnose(str(body.get("question") or ""))
+                log("windows-intelligence", "local Windows specialist diagnosis completed", "ok",
+                    model=result.get("model"), citations=len(result.get("citations", [])))
+                return self._json(result)
+            except (ValueError, TypeError) as exc:
+                return self._json({"error": str(exc)}, 400)
+            except RuntimeError as exc:
+                return self._json({"error": str(exc)[:240]}, 503)
         if p == "/api/knowledge/source/register":
             try:
                 return self._json(windows_knowledge.STORE.register_source(

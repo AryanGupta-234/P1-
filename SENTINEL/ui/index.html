@@ -1,8 +1,8 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>SENTINEL &middot; 1.2.24</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cpath d='M32 4l24 14v28L32 60 8 46V18z' fill='none' stroke='%23b8e65b' stroke-width='4'/%3E%3Ccircle cx='32' cy='32' r='8' fill='%23ff6b38'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="app.css?v=1.2.24"></head>
+<title>SENTINEL &middot; 1.2.25</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cpath d='M32 4l24 14v28L32 60 8 46V18z' fill='none' stroke='%238fd69d' stroke-width='4'/%3E%3Ccircle cx='32' cy='32' r='8' fill='%23a31c1b'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="app.css?v=1.2.25"></head>
 <body><div class="ambient"></div><canvas id="starfield"></canvas>
 <div class="boot" id="boot" role="status" aria-live="polite" aria-label="SENTINEL Windows node initialization">
   <div class="boot-grid" aria-hidden="true"></div><div class="boot-scanline" aria-hidden="true"></div>
@@ -22,7 +22,7 @@
         <div class="boot-signal-label"><i></i> COLLECTORS RUNNING IN BACKGROUND</div>
       </div>
       <div class="boot-content">
-        <div class="boot-eyebrow"><span>BOOT SEQUENCE / 1.2.24</span><span>LOCAL INTELLIGENCE</span></div>
+        <div class="boot-eyebrow"><span>BOOT SEQUENCE / 1.2.25</span><span>LOCAL INTELLIGENCE</span></div>
         <div class="boot-title">SENTINEL<span class="boot-title-cursor"></span></div>
         <div class="boot-sub">SENSE THE SYSTEM. SHAPE THE RESPONSE.</div>
         <div class="boot-lanes" aria-hidden="true"><div><i></i><span>SESSION</span></div><div><i></i><span>PROCESS</span></div><div><i></i><span>SYSTEM</span></div><div><i></i><span>NETWORK</span></div><div><i></i><span>THERMAL</span></div><div><i></i><span>LIVE LINK</span></div></div>
@@ -44,7 +44,7 @@
 <div id="app">
 <header>
   <div class="brand">
-    <svg viewBox="0 0 64 64"><path d="M32 3l25 14.5v29L32 61 7 46.5v-29z" fill="#0b1110" stroke="#8fd69d" stroke-width="2.5"/><path d="M32 13l16 9.3v18.6L32 50 16 40.900V22.300z" fill="none" stroke="#8fd69d" stroke-opacity=".5" stroke-width="1.5"/><circle cx="32" cy="32" r="7" fill="#a31c1b"><animate attributeName="r" values="6;8;6" dur="2.4s" repeatCount="indefinite"/></circle></svg>
+    <svg viewBox="0 0 64 64"><path d="M32 3l25 14.5v29L32 61 7 46.5v-29z" fill="#06110c" stroke="#8fd69d" stroke-width="2.5"/><path d="M32 13l16 9.3v18.6L32 50 16 40.900V22.300z" fill="none" stroke="#8fd69d" stroke-opacity=".5" stroke-width="1.5"/><circle cx="32" cy="32" r="7" fill="#a31c1b"><animate attributeName="r" values="6;8;6" dur="2.4s" repeatCount="indefinite"/></circle></svg>
     <div><b>SENTINEL</b><small>PERFORMANCE GUARDIAN</small></div>
   </div>
   <div class="vtitle"><small>SENTINEL / WINDOWS NODE</small><b id="vtitle">COMMAND</b></div>
@@ -747,6 +747,11 @@
           </select>
           <button class="btn or" id="ix-kb-add">ADD + INDEX OFFICIAL SOURCE</button>
         </div>
+        <div class="ix-specialist">
+          <div class="ix-specialist-head"><div><b>WINDOWS SPECIALIST</b><small>LOCAL MODEL · RAG GROUNDED · ADVISORY ONLY</small></div><span>NO AUTO-EXECUTION</span></div>
+          <div class="row"><input id="ix-win-question" maxlength="500" placeholder="Describe the Windows issue — e.g. Wi-Fi adapter Code 10 after boot..." style="flex:1"><button class="btn or" id="ix-win-diagnose">ANALYSE WITH LOCAL MODEL</button></div>
+          <div class="ix-specialist-result" id="ix-win-result"><div class="empty">The specialist combines current telemetry with matching, build-aware local documentation. It cannot execute actions.</div></div>
+        </div>
         <div class="row" style="margin-top:12px">
           <input id="ix-kb-query" placeholder="Search Windows knowledge with citations..." style="flex:1">
           <button class="btn" id="ix-kb-search">SEARCH LOCAL INDEX</button>
@@ -775,4 +780,4 @@
   </div>
 </section>
 </main></div>
-<script src="app.js?v=1.2.24"></script></body></html>
+<script src="app.js?v=1.2.25"></script></body></html>
