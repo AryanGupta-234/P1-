@@ -5,12 +5,26 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet"><link rel="stylesheet" href="app.css?v=1.2.26"></head>
 <body><div class="ambient"></div><canvas id="starfield"></canvas>
 <div class="boot" id="boot" role="status" aria-live="polite" aria-label="SENTINEL Windows node initialization">
-  <div class="boot-grid" aria-hidden="true"></div><div class="boot-scanline" aria-hidden="true"></div>
+  <div class="boot-grid" aria-hidden="true"></div>
+  <div class="boot-scanline" aria-hidden="true"></div>
   <div class="boot-console">
-    <div class="boot-topline"><span>SENTINEL <i>LOCAL RUNTIME</i></span><span id="bootNodeState">SYSTEMS INITIALIZING</span><span>NODE / 01</span></div>
+    <div class="boot-topline">
+      <div class="boot-brandmark">
+        <svg viewBox="0 0 48 48" aria-hidden="true"><path d="M24 3.5 42 14v20L24 44.5 6 34V14z" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M24 10 36 17v14L24 38 12 31V17z" fill="none" stroke="currentColor" stroke-opacity=".55"/><circle cx="24" cy="24" r="4.4" fill="#A31C1B"/></svg>
+        <span><b>SENTINEL</b><small>LOCAL INTELLIGENCE</small></span>
+      </div>
+      <span class="boot-top-state" id="bootNodeState">SYSTEMS INITIALIZING</span>
+      <span class="boot-node-id">WINDOWS NODE <b>01</b></span>
+    </div>
     <div class="boot-body">
-      <div class="boot-visual">
-        <div class="boot-reactor" aria-hidden="true"><svg class="boot-gauge" viewBox="0 0 100 100"><circle class="boot-gauge-track" cx="50" cy="50" r="47"/><circle class="boot-gauge-progress" id="bootGauge" cx="50" cy="50" r="47"/></svg><i class="reactor-orbit orbit-a"></i><i class="reactor-orbit orbit-b"></i><i class="reactor-orbit orbit-c"></i><i class="reactor-core"></i><span class="boot-crosshair"></span><b class="boot-reactor-word">S / 01</b></div>
+      <section class="boot-visual" aria-label="Live system telemetry">
+        <div class="boot-visual-topline"><span>NODE SIGNATURE</span><b>WIN / LOCAL</b></div>
+        <div class="boot-reactor" aria-hidden="true">
+          <svg class="boot-gauge" viewBox="0 0 100 100"><circle class="boot-gauge-track" cx="50" cy="50" r="47"/><circle class="boot-gauge-progress" id="bootGauge" cx="50" cy="50" r="47"/></svg>
+          <i class="reactor-orbit orbit-a"></i><i class="reactor-orbit orbit-b"></i><i class="reactor-orbit orbit-c"></i>
+          <i class="reactor-core"></i><span class="boot-crosshair"></span><b class="boot-reactor-word">S / 01</b>
+        </div>
+        <div class="boot-visual-label"><span>PERFORMANCE</span><b>FIELD ONLINE</b></div>
         <div class="boot-node-readout"><small>WINDOWS PROCESS FIELD</small><b id="bootProcessCount">SYNCING</b><span>LIVE SNAPSHOT</span></div>
         <div class="boot-live-readouts" aria-label="Live system telemetry">
           <div><small>CPU</small><b id="bootCpuValue">--</b><i data-boot-bar="cpu"></i></div>
@@ -18,21 +32,30 @@
           <div><small>GPU</small><b id="bootGpuValue">--</b><i data-boot-bar="gpu"></i></div>
           <div><small>DPC</small><b id="bootDpcValue">--</b><i data-boot-bar="dpc"></i></div>
         </div>
-        <div class="boot-visual-spectrum" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
-        <div class="boot-signal-label"><i></i> COLLECTORS RUNNING IN BACKGROUND</div>
-      </div>
-      <div class="boot-content">
-        <div class="boot-eyebrow"><span>BOOT SEQUENCE / 1.2.25</span><span>LOCAL INTELLIGENCE</span></div>
+        <div class="boot-visual-spectrum" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+        <div class="boot-signal-label"><i></i><span>COLLECTORS RUNNING IN BACKGROUND</span><b>LOCAL</b></div>
+        <div class="boot-visual-foot"><span>PRIVATE BY DEFAULT</span><span>NO CLOUD TELEMETRY</span></div>
+      </section>
+      <section class="boot-content">
+        <div class="boot-eyebrow"><span>STARTUP SEQUENCE / 1.2.27</span><span>SECURE LOCAL RUNTIME</span></div>
         <div class="boot-title">SENTINEL<span class="boot-title-cursor"></span></div>
         <div class="boot-sub">SENSE THE SYSTEM. SHAPE THE RESPONSE.</div>
-        <div class="boot-lanes" aria-hidden="true"><div><i></i><span>SESSION</span></div><div><i></i><span>PROCESS</span></div><div><i></i><span>SYSTEM</span></div><div><i></i><span>NETWORK</span></div><div><i></i><span>THERMAL</span></div><div><i></i><span>LIVE LINK</span></div></div>
+        <div class="boot-intro">
+          <p>Preparing your performance command deck. Local collectors, safeguards and intelligence modules are warming up in parallel.</p>
+          <span class="boot-intro-state"><i></i> INITIALIZING WINDOWS NODE</span>
+        </div>
+        <div class="boot-lanes" aria-label="Startup stages">
+          <div><i></i><span>SESSION</span></div><div><i></i><span>PROCESS</span></div><div><i></i><span>SYSTEM</span></div>
+          <div><i></i><span>NETWORK</span></div><div><i></i><span>THERMAL</span></div><div><i></i><span>LIVE LINK</span></div>
+        </div>
         <div class="boot-progress-meta"><span id="bootDetail">Synchronizing the Windows node</span><b id="bootPct">00%</b></div>
         <div class="boot-track"><div class="boot-progress" id="bootProgress" role="progressbar" aria-label="Workspace initialization" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"></div></div>
         <div class="boot-stage"><span id="bootStage">POWERING SYSTEM</span><span>21 DATA MODULES</span></div>
+        <div class="boot-modules-head"><span>RUNTIME COMPONENTS</span><small>LIVE INITIALIZATION MAP</small></div>
         <div class="boot-modules" id="bootModules" aria-label="Workspace initialization states"></div>
-        <div class="boot-log-wrap"><div class="boot-log-head"><span>INITIALIZATION FEED</span><span>REAL TIME</span></div><div class="boot-log" id="bootLog" aria-live="polite" aria-relevant="additions"></div></div>
+        <div class="boot-log-wrap"><div class="boot-log-head"><span>INITIALIZATION FEED</span><span>REAL TIME / LOCAL</span></div><div class="boot-log" id="bootLog" aria-live="polite" aria-relevant="additions"></div></div>
         <button class="boot-retry" id="bootRetry" type="button" hidden>RETRY LOCAL DATA SYNC <i>↻</i></button>
-      </div>
+      </section>
     </div>
   </div>
 </div>
@@ -59,6 +82,16 @@
 </header>
 
 <nav id="nav">
+  <div class="deck-head">
+    <span class="deck-mark"><svg viewBox="0 0 40 40" aria-hidden="true"><path d="M20 2.5 36 11.5v17L20 37.5 4 28.5v-17z" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M20 9 30 14.8v10.4L20 31 10 25.2V14.8z" fill="none" stroke="currentColor" stroke-opacity=".52"/><circle cx="20" cy="20" r="3.5" fill="#A31C1B"/></svg></span>
+    <span class="deck-brand-copy"><b>COMMAND DECK</b><small>LOCAL NODE / 01</small></span>
+    <span class="deck-live-dot" title="Local deck"></span>
+  </div>
+  <button class="deck-command" id="deckCommand" type="button" aria-label="Open command palette">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.8"/><path d="m16 16 5 5M8 10.8h5.6M10.8 8v5.6"/></svg>
+    <span class="deck-command-copy"><b>Quick command</b><small>Find a screen or action</small></span>
+    <kbd>CTRL K</kbd>
+  </button>
   <div class="ng">MONITOR</div>
   <button data-v="cmd" class="on"><svg viewBox="0 0 24 24"><path d="M12 2l9 5v10l-9 5-9-5V7z"/><circle cx="12" cy="12" r="3"/></svg><span class="lb">COMMAND</span></button>
   <button data-v="agent"><svg viewBox="0 0 24 24"><path d="M4 12h3l2-6 4 12 2-6h5"/><circle cx="12" cy="12" r="10"/></svg><span class="lb">AGENT</span></button>
@@ -81,7 +114,12 @@
   <button data-v="fc"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2"/></svg><span class="lb">FEATURES</span></button>
   <button data-v="tsk"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/><path d="M17 16l2 2 3-4"/></svg><span class="lb">TASKS</span></button>
 
-  <div class="side-note"><b>&#9679; LOCAL-FIRST</b>Telemetry, traces and AI stay on this PC. Actions are allowlisted and reversible.<br><span style="color:var(--mut)">Keys 1-9 switch screens</span></div>
+  <div class="side-note">
+    <div class="deck-foot-head"><i></i><b>LOCAL-FIRST MODE</b><span>ON</span></div>
+    <p>Telemetry, traces and AI stay on this PC. Actions are allowlisted and reversible.</p>
+    <div class="deck-foot-meta"><span>WINDOWS NODE</span><b>01 / PRIVATE</b></div>
+    <small>KEYS 1-9 · SWITCH SCREENS</small>
+  </div>
 </nav>
 
 <main>
