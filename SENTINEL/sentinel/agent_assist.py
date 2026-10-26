@@ -279,7 +279,10 @@ def create_notification(source: str, message: str, severity: str = "warn",
     diagnosis = _classify(source_text, message_text, severity)
     stable_message = re.sub(r"\b\d+(?:\.\d+)?\b", "#", message_text.casefold())
     stable_message = re.sub(r"\[(?:HIGH|WARN|ERROR|CRITICAL)\]\s*", "", stable_message, flags=re.IGNORECASE)
-    normalized = " ".join((diagnosis["category"] + " " + stable_message).split())[:180]
+    # Core insights also emit a corresponding activity-log row. A short title
+    # signature lets those two records collapse into one durable finding.
+    title_signature = " ".join(stable_message.split()[:12])
+    normalized = " ".join((diagnosis["category"] + " " + title_signature).split())[:180]
     dedupe_key = hashlib.sha256(normalized.encode("utf-8")).hexdigest()
     cooldown = max(600, int(config.get("dedupe_cooldown_minutes", 60)) * 60)
     previous = core.db(
