@@ -2198,7 +2198,11 @@ function renderStorageIntelligence(){
       '<div>'+packages+'</div></div>';
   }).join("");
   const extensions=(report.extensions||[]).slice(0,14).map(x=>'<div class="maint-data-row"><b>'+esc(x.extension)+'</b><span>'+agentBytes(x.bytes)+'</span></div>').join("");
-  const candidates=(report.review_candidates||[]).slice(0,12).map(x=>'<div class="msg"><small>'+esc(x.review_type)+' · '+esc(x.confidence)+' confidence · '+agentBytes(x.bytes)+'</small><b>'+esc(x.name)+'</b><div>'+esc(x.reason)+'</div><div>'+esc(x.suggestion)+'</div></div>').join("");
+  const candidates=(report.review_candidates||[]).slice(0,12).map(x=>{
+    const access=x.last_access_age_days==null?"access signal unavailable":
+      "last access "+x.last_access_age_days+"d · "+String(x.usage_signal||"weak");
+    return '<div class="msg"><small>'+esc(x.review_type)+' · '+esc(x.confidence)+' confidence · '+agentBytes(x.bytes)+' · '+esc(access)+'</small><b>'+esc(x.name)+'</b><div>'+esc(x.reason)+'</div><div>'+esc(x.suggestion)+'</div></div>';
+  }).join("");
   const scan=STORAGE_INTELLIGENCE.scan||{};
   host.innerHTML='<div class="maint-digest-grid"><div><small>FILES / ENTRIES</small><b>'+esc(scan.entries_visited||report.coverage?.entries_visited||0)+'</b></div>'+
     '<div><small>ROOTS MEASURED</small><b>'+esc(report.coverage?.roots_measured||0)+'</b></div>'+
