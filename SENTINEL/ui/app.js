@@ -2188,8 +2188,13 @@ function renderStorageIntelligence(){
   const drives=(report.drives||[]).map(d=>'<div class="maint-data-row"><b>'+esc(d.mountpoint)+' · '+esc(d.filesystem||"volume")+'</b><span>'+agentBytes(d.free_bytes)+' free / '+agentBytes(d.total_bytes)+' · '+esc(d.used_percent)+'% used</span></div>').join("");
   const languages=(report.language_footprints||[]).map(x=>'<div class="maint-data-row"><b>'+esc(x.name)+'</b><span>'+agentBytes(x.bytes)+'</span></div>').join("");
   const roots=(report.roots||[]).map(root=>{
-    const packages=(root.top_level||[]).slice(0,8).map(pkg=>'<span class="tag">'+esc(pkg.name)+' · '+agentBytes(pkg.bytes)+'</span>').join(" ");
-    return '<div class="msg"><small>'+esc(root.category_label||root.category)+' · '+esc(root.label)+' · '+agentBytes(root.bytes)+'</small><div>'+esc(root.path||"")+'</div>'+
+    const packages=(root.top_level||[]).slice(0,8).map(pkg=>{
+      const accessed=pkg.last_access_age_days==null?"access unknown":"last access "+pkg.last_access_age_days+"d";
+      return '<span class="tag">'+esc(pkg.name)+' · '+agentBytes(pkg.bytes)+' · '+esc(accessed)+'</span>';
+    }).join(" ");
+    const rootUsage=root.last_access_age_days==null?"access signal unavailable":
+      "last access "+root.last_access_age_days+"d · "+String(root.usage_signal||"weak");
+    return '<div class="msg"><small>'+esc(root.category_label||root.category)+' · '+esc(root.label)+' · '+agentBytes(root.bytes)+' · '+esc(rootUsage)+'</small><div>'+esc(root.path||"")+'</div>'+
       '<div>'+packages+'</div></div>';
   }).join("");
   const extensions=(report.extensions||[]).slice(0,14).map(x=>'<div class="maint-data-row"><b>'+esc(x.extension)+'</b><span>'+agentBytes(x.bytes)+'</span></div>').join("");
