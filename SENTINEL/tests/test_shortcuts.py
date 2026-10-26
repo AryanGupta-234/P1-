@@ -77,7 +77,7 @@ def test_observer_launch_uses_the_immutable_release_virtual_environment():
     assert "def _release_runtime():" in source
     assert "interpreter, script, workdir = _release_runtime()" in source
     assert '"SENTINEL_WORKDIR": release_workdir' in source
-    assert 'expected_executable=os.path.join(APP_VERSION_DIR, ".venv", "Scripts", "pythonw.exe")' in source
+    assert 'expected_executable=os.path.join(APP_VERSION_DIR, ".venv", "Scripts", "python.exe")' in source
 
 
 def test_release_runtime_fails_closed_instead_of_falling_back_to_global_python():
