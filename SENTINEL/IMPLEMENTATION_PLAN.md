@@ -1,7 +1,7 @@
 # SENTINEL Implementation Plan
 
 **Target:** Windows 11 x64 · local-first desktop runtime  
-**Plan revision:** 1.1 · **Release baseline:** 1.2.25  
+**Plan revision:** 1.1 · **Release baseline:** 1.2.26  
 **Status:** `[x]` existing capability · `[~]` integration/verification in progress · `[ ]` planned
 
 This is the single consolidated backlog for the next SENTINEL upgrade. It extends the existing collectors, SQLite store, maintenance executor, safeguard, adaptive runtime, AI council, memory engine, rollback journal and dashboard; it does not replace them.
@@ -234,7 +234,7 @@ A feature is complete when its GUI state is visible, evidence/provenance exists,
 
 ## Immediate next actions
 
-1. [ ] Confirm 1.2.24 Windows CI on Python 3.11/3.12 and validate per-action UAC on the target Windows laptop.
+1. [x] Correct installer verification to expect the standard-user interactive observer; 1.2.26 CI and target-machine reinstallation still require validation.
 2. [ ] Visually check graphite/forest/red across Command, Maintenance, Intelligence, Engine Deck and splash.
 3. [ ] Instrument boot phases before changing complete hydration.
 4. [x] Implement the least-privilege per-action UAC broker; validate it on the target Windows laptop next.

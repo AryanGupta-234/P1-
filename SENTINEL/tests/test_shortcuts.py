@@ -41,4 +41,30 @@ def test_installer_reports_top_level_start_menu_entry():
 
 
 def test_release_version_was_bumped_for_immutable_installer_layout():
-    assert (ROOT / "VERSION").read_text(encoding="utf-8").strip() == "1.2.25"
+    assert (ROOT / "VERSION").read_text(encoding="utf-8").strip() == "1.2.26"
+
+
+
+def test_installer_verifies_standard_user_interactive_agent_instead_of_admin_observer():
+    source = (ROOT / "agent.py").read_text(encoding="utf-8")
+    assert "def _running_agent_runtime()" in source
+    assert "def _runtime_validation_problem(" in source
+    assert 'runtime.get("is_elevated") is not False' in source
+    assert 'runtime.get("desktop_access_expected") is not True' in source
+    assert "expected_session_id" in source
+    assert "expected_username=logged_on" in source
+    assert "expected_executable=pythonw" in source
+    assert "standard-user interactive agent failed identity verification" in source
+    assert "_running_agent_is_elevated() is not True" not in source
+    assert "administrator elevation could not be verified" not in source
+
+
+def test_normal_opener_never_restarts_standard_user_agent_to_elevate_it():
+    source = (ROOT / "agent.py").read_text(encoding="utf-8")
+    start = source.index("def open_app():")
+    end = source.index("\\ndef install():", start)
+    opener = source[start:end]
+    assert "_runtime_validation_problem(" in opener
+    assert "Replacing it with the standard-user interactive task" in opener
+    assert "restarting it with administrator permissions" not in opener
+    assert "standard-user runtime verification" in opener

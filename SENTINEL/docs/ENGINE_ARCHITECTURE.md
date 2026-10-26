@@ -227,3 +227,10 @@ This release slice does not yet provide vector retrieval, continuous crawling, r
 ## Trace elevation follow-up
 
 WPR/ETW capture currently remains blocked when the observer runs as a standard user. Before re-enabling capture, add a dedicated trace request type to the same privilege-broker model: one-use ticket, explicit user preview/confirmation, current user/session binding, exact provider/profile allowlist, WPR ownership check, bounded duration/output, process/game-state revalidation, and safe stop/finalization. Do not route this through arbitrary command execution or elevate the observer.
+
+
+## Installer/runtime privilege verification correction (1.2.26)
+
+The scheduled observer is expected to report `is_elevated=false`, `desktop_access_expected=true`, a non-zero Windows session ID, the signed-in interactive username, the installed release version and expected `pythonw.exe` path. Installer completion validates this runtime identity; it must not require the observer itself to be an Administrator. Installation and removal remain elevated, while each privileged maintenance helper still receives a separate one-use UAC consent request bound to the user/session and approved action ID.
+
+The normal shortcut opener accepts the validated standard-user process. It never elevates the long-running observer because its token is standard-user. If an explicit runtime mismatch is found, it attempts a graceful stop and restarts the registered Limited interactive task; if identity cannot be read, it fails closed without terminating an unknown process.
