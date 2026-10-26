@@ -317,6 +317,7 @@ def _category_label(category: str) -> str:
         "dotnet-cache": ".NET/NuGet packages",
         "java-cache": "Java/Gradle/Maven cache",
         "build-output": "Build outputs",
+        "drive-directory": "Other drive folders",
     }.get(category, category)
 
 
@@ -384,6 +385,15 @@ def scan_once(roots: list[tuple[str, str, str]] | None = None,
                     "confidence": "medium",
                     "suggestion": "Review whether this cache/build output is still needed. Close related tools first and use the owning package manager or build tool to clean it; do not delete it while a build or installer is active.",
                 })
+            if category == "drive-directory" and size >= 1024 * 1024 * 1024:
+                candidates.append({
+                    "path": path[:320], "name": label, "bytes": size,
+                    "reason": "Large top-level folder on a secondary data drive",
+                    "review_type": "large-drive-folder",
+                    "confidence": "medium" if measured.get("last_access_age_days") is not None else "low",
+                    "usage_signal": usage_signal,
+                    "suggestion": "Inspect its largest subfolders and package/file types. Confirm the owning application or game before moving anything; folder size or old timestamps alone do not make the contents safe to delete.",
+                })
             if name == "downloads" and age_days is not None and age_days >= 60 and size >= 300 * 1024 * 1024:
                 candidates.append({
                     "path": path[:320], "name": label, "bytes": size,
@@ -417,6 +427,8 @@ def scan_once(roots: list[tuple[str, str, str]] | None = None,
             "language_footprints": [
                 {"name": _category_label(key), "bytes": value, "category": key}
                 for key, value in sorted(category_totals.items(), key=lambda item: item[1], reverse=True)
+                if key in {"python-cache", "python-packages", "python-environments", "node-cache",
+                           "node-dependencies", "rust-cache", "dotnet-cache", "java-cache", "build-output"}
             ],
             "extensions": [{"extension": key, "bytes": value} for key, value in top_extensions],
             "review_candidates": candidates[:30],
