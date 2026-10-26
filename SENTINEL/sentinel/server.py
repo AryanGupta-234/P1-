@@ -6,7 +6,7 @@ from . import safeguard, runtime_engine, memory_engine, ai_engine, security_engi
 from .core import CFG, STATE, LIVE, HIST, HEART, START, db, log, save_cfg
 
 UI = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "ui")
-MIME = {".html": "text/html; charset=utf-8", ".css": "text/css", ".js": "application/javascript", ".svg": "image/svg+xml"}
+MIME = {".woff2": "font/woff2", ".json": "application/json", ".html": "text/html; charset=utf-8", ".css": "text/css", ".js": "application/javascript", ".svg": "image/svg+xml"}
 _AGENT_PROCESS = psutil.Process(os.getpid())
 _HTTP_SERVER = None
 _HTTP_SERVER_LOCK = threading.Lock()
@@ -249,7 +249,20 @@ class H(BaseHTTPRequestHandler):
     def do_GET(self):
         u = urllib.parse.urlparse(self.path); qs = urllib.parse.parse_qs(u.query)
         if not u.path.startswith("/api/"):
+            # Nocturne UI (React + Vite build in ui/next) is the default front door.
+            # "/?classic=1" keeps the original dashboard reachable for screens not yet ported.
+            next_index = os.path.join(UI, "next", "index.html")
+            if u.path in ("/", "") and not (qs.get("classic") or [""])[0] and os.path.isfile(next_index):
+                loc = "/next/" + ("?" + u.query if u.query else "")
+                self.send_response(302); self.send_header("Location", loc)
+                self.send_header("Content-Length", "0"); self.send_header("Cache-Control", "no-store"); self.end_headers(); return
+            if u.path == "/next":
+                loc = "/next/" + ("?" + u.query if u.query else "")
+                self.send_response(302); self.send_header("Location", loc)
+                self.send_header("Content-Length", "0"); self.end_headers(); return
             name = "index.html" if u.path in ("/", "") else u.path.lstrip("/")
+            if name.endswith("/"):
+                name += "index.html"
             f = os.path.normpath(os.path.join(UI, name))
             try:
                 inside_ui = os.path.commonpath([os.path.abspath(UI), os.path.abspath(f)]) == os.path.abspath(UI)
@@ -259,7 +272,9 @@ class H(BaseHTTPRequestHandler):
                 self.send_response(404); self.send_header("Content-Length", "0"); self.end_headers(); return
             b = open(f, "rb").read()
             self.send_response(200); self.send_header("Content-Type", MIME.get(os.path.splitext(f)[1], "application/octet-stream"))
-            self.send_header("Content-Length", str(len(b))); self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", str(len(b)))
+            # Vite emits content-hashed filenames, so built assets can be cached forever (faster relaunch).
+            self.send_header("Cache-Control", "public, max-age=31536000, immutable" if name.replace("\\", "/").startswith("next/assets/") else "no-store")
             self.send_header("X-Content-Type-Options", "nosniff"); self.send_header("X-Frame-Options", "DENY")
             self.send_header("Referrer-Policy", "same-origin")
             self.send_header("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'")

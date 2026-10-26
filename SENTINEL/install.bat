@@ -127,7 +127,7 @@ if exist "%VERSION_DIR%" (
     echo ERROR: Could not create the version staging folder.
     goto :fail
   )
-  robocopy "%SRC%" "%STAGING_DIR%" /E /R:2 /W:2 /COPY:DAT /DCOPY:DAT /NP /NFL /NDL /NJH /NJS /XD ".git" ".venv" "__pycache__" ".pytest_cache" /XF "*.pyc"
+  robocopy "%SRC%" "%STAGING_DIR%" /E /R:2 /W:2 /COPY:DAT /DCOPY:DAT /NP /NFL /NDL /NJH /NJS /XD ".git" "node_modules" ".venv" "__pycache__" ".pytest_cache" /XF "*.pyc"
   rem Robocopy codes 0-7 mean success; 8 or above means failure.
   if errorlevel 8 (
     echo ERROR: Release file copy failed. The incomplete staging folder will be removed.

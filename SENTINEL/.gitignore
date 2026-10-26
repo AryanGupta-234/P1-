@@ -25,3 +25,4 @@ traces/
 .DS_Store
 Thumbs.db
 Desktop.ini
+ui-next/node_modules/
