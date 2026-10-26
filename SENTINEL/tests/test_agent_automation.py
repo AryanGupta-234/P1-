@@ -182,3 +182,40 @@ def test_shared_runtime_admission_defers_optional_work_under_cpu_pressure(monkey
     )
     assert allowed is False
     assert "CPU at 75%" in reason
+
+
+
+def test_pending_desktop_alerts_are_delivered_by_the_agent_when_idle(monkeypatch):
+    delivered = []
+    monkeypatch.setattr(agent_assist, "settings", lambda: {
+        **agent_assist.DEFAULTS, "enabled": True, "agent_notifications": True,
+        "max_notifications_per_hour": 4,
+    })
+    monkeypatch.setattr(agent_assist, "_runtime_suppressed", lambda _settings: False)
+
+    def fake_db(sql, params=()):
+        if "SELECT COUNT(*) FROM agent_notifications WHERE delivered_at" in sql:
+            return [(0,)]
+        if "SELECT id,title,question,suggested_fix FROM agent_notifications" in sql:
+            return [(77, "Device failed", "Which device?", "Check the signed driver.")]
+        return []
+
+    monkeypatch.setattr(agent_assist.core, "db", fake_db)
+    monkeypatch.setattr(
+        agent_assist, "_agent_toast",
+        lambda title, body: delivered.append((title, body)) or True,
+    )
+
+    assert agent_assist._deliver_pending_notifications() == 1
+    assert delivered == [("Device failed", "Which device?")]
+
+
+def test_pending_desktop_alerts_stay_queued_during_game_or_resource_pressure(monkeypatch):
+    monkeypatch.setattr(agent_assist, "settings", lambda: {
+        **agent_assist.DEFAULTS, "enabled": True, "agent_notifications": True,
+    })
+    monkeypatch.setattr(agent_assist, "_runtime_suppressed", lambda _settings: True)
+    monkeypatch.setattr(agent_assist.core, "db", lambda *_args, **_kwargs: pytest.fail("queue must not be consumed"))
+    monkeypatch.setattr(agent_assist, "_agent_toast", lambda *_args: pytest.fail("toast must be deferred"))
+
+    assert agent_assist._deliver_pending_notifications() == 0
