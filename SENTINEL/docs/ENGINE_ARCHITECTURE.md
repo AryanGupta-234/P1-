@@ -249,3 +249,44 @@ The scheduled task, Desktop/Start Menu shortcuts, installer identity check, norm
 Windows venv launchers can expose the base Python executable image through the operating-system process API while the running interpreter remains bound to the release venv. Runtime identity therefore distinguishes three values: `sys.executable` (the interpreter runtime path), `sys.prefix` (the active environment), and the OS process image returned by psutil. The API reports all three. Installer and opener validation require both the release-scoped `sys.executable` and the exact release `.venv` prefix; the OS process image is diagnostic and is not used as a substitute for Python environment identity.
 
 This preserves fail-closed validation: missing or mismatched interpreter/environment identity still blocks installation completion. It does not relax user, session, elevation, version, or desktop-session checks, and it does not change prior release directories or ProgramData state.
+
+
+## Agent-owned proactive assistant (1.2.29)
+
+**Module:** sentinel/agent_assist.py
+
+The agent assistant consumes new warning/error events and high/warning insights from the existing SQLite event stream. It does not create a second telemetry collector or run from the dashboard. It creates durable findings containing the detected category, short explanation, one contextual question, a conservative first fix and bounded evidence metadata.
+
+- Detection runs in an agent-owned worker; its cursor is persisted so restarts do not replay the entire event history.
+- Repeated events are deduplicated and notification delivery is rate-limited.
+- Native Windows tray notifications are emitted by the signed-in agent process. The dashboard only reads the persistent queue, saves preferences and records the operator's answer or dismissal.
+- The default category map covers device/driver failures, network/DNS, CPU, memory/pagefile, disk latency, thermal/GPU throttling, Windows services, process review signals, local AI runtime, storage pressure, application crashes and persistence errors. Unknown signals remain explicitly uncertain.
+- A high-severity finding may enter the local-AI queue. The worker reuses sentinel/windows_intelligence.py, the installed local FAST model and local documentation retrieval. It runs one diagnosis at a time only when runtime mode is balanced, no game is active, available memory is at least 5 GiB and CPU use is below 40%. If those conditions do not hold, work waits. If local inference is unavailable, the deterministic finding remains usable.
+- Model output is advisory and stored separately from the deterministic event. Commands and execution are not part of the accepted specialist schema; any action ID remains tied to the fixed preview-gated maintenance vocabulary.
+
+Persistent settings and records are stored in the existing sentinel.db: agent_assist_settings, agent_notifications, agent_assist_cursors, agent_assist_feedback, agent_assist_ai_jobs and agent_assist_ai_results. Answered/dismissed notifications are retained for 90 days; feedback is retained for one year. Open notifications remain available until answered or dismissed.
+
+## Storage Intelligence (1.2.29)
+
+**Module:** sentinel/storage_intelligence.py
+
+Storage Intelligence is a separate read-only agent service. It measures whole-volume capacity and bounded metadata footprints in common user folders, Python package caches/environments, Node/npm/pnpm/Yarn caches and node_modules, Cargo, NuGet, Gradle/Maven, known build outputs and top-level folders on secondary data volumes.
+
+The report includes:
+- Volume capacity, free/used bytes and a low-capacity state.
+- File-extension mix and hidden-file count/bytes.
+- Directory-level size, file/directory counts, recent-write age and weak last-access signals.
+- Package-level size buckets under Python site-packages, virtual environments and Node node_modules (including @scope/package).
+- Ranked review candidates for large caches/build outputs, large Downloads content, hidden-heavy folders and large secondary-drive folders.
+
+**Resource policy:** one bounded storage worker; default budget 15,000 metadata entries and 18 seconds per scan, with a 1.5-second per-root cap. Scans are deferred unless the runtime governor reports balanced, at least 4 GiB available memory and CPU below 45%. The default repeat interval is 72 hours. Manual scan requests are queued by the agent and still wait for a safe resource window. This work is deliberately serialized: storage metadata enumeration is I/O-bound, and parallel crawling would compete with foreground applications.
+
+**Coverage limit:** this is not yet a full recursive crawl of every directory on the Windows system volume. On the OS volume it uses curated personal/developer/cache roots to avoid sweeping Windows and Program Files; secondary data volumes contribute bounded top-level folder scans. A partial flag and entry/root counters are returned rather than implying complete coverage.
+
+**Usage limit:** Windows last-access timestamps may be disabled, coarse or updated by background services. Age is a weak review signal, not proof of disuse. Hidden status is also not evidence that a file is junk. The module never opens file contents, follows directory symlinks, deletes files or uninstalls packages. It has no cleanup API. Recommendations instruct the operator to review the candidate and use the owning package manager/build tool where appropriate.
+
+Settings are persisted in storage_intelligence_settings; the latest scan and metadata-only report are held in storage_scan_history and the bounded storage_intelligence runtime snapshot. The history keeps the latest 12 reports.
+
+## HUD boundary for the new services
+
+The Maintenance view is a client for the authenticated local API. It can display stored findings/reports, change SQLite-backed feature settings, queue a scan, and submit a response to an agent-generated question. It does not scan directories, classify events, perform AI inference, generate desktop notifications or execute cleanup. Opening the HUD causes read requests only.
