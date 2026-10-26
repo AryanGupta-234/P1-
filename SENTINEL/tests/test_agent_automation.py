@@ -153,3 +153,32 @@ def test_agent_assistant_covers_common_system_fault_classes(message, category):
     assert result["title"]
     assert result["question"]
     assert result["fix"]
+
+
+
+def test_shared_runtime_admission_yields_to_healthy_idle_work(monkeypatch):
+    monkeypatch.setattr(runtime_engine, "snapshot", lambda: {
+        "mode": "balanced",
+        "game_active": False,
+        "available_memory_gib": 8.0,
+        "cpu_percent": 0.0,
+    })
+    allowed, reason = runtime_engine.admit_optional_work(
+        "test job", min_available_gib=4.0, max_cpu_percent=45.0,
+    )
+    assert allowed is True
+    assert "admitted" in reason
+
+
+def test_shared_runtime_admission_defers_optional_work_under_cpu_pressure(monkeypatch):
+    monkeypatch.setattr(runtime_engine, "snapshot", lambda: {
+        "mode": "balanced",
+        "game_active": False,
+        "available_memory_gib": 8.0,
+        "cpu_percent": 75.0,
+    })
+    allowed, reason = runtime_engine.admit_optional_work(
+        "test job", min_available_gib=4.0, max_cpu_percent=45.0,
+    )
+    assert allowed is False
+    assert "CPU at 75%" in reason
