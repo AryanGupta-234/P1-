@@ -129,7 +129,7 @@ def test_maintenance_workspace_is_in_full_boot_queue_and_preview_gated():
     assert 'await loadMaintenance(false)' in app
     assert "function maintenancePreview(" in app
     assert 'api("/api/maintenance/execute"' in app
-    assert "initMaintenance(); initWindowsKnowledge(); initVoice();" in app
+    assert "initMaintenance(); initAgentAutomation(); initWindowsKnowledge(); initVoice();" in app
     assert "await runPool(jobs)" in app and "await runPool(secondaryJobs)" in app
 
 
@@ -187,3 +187,36 @@ def test_windows_specialist_is_local_rag_advisory_and_visible():
     assert "ALLOWED_ACTION_IDS" in specialist
     assert "ai.CLOUD" in specialist
     assert "STORE.search(question, limit=6)" in specialist
+
+
+
+def test_proactive_assistant_and_storage_controls_are_agent_backed():
+    html = (ROOT / "ui" / "index.html").read_text(encoding="utf-8")
+    app = (ROOT / "ui" / "app.js").read_text(encoding="utf-8")
+    server = (ROOT / "sentinel" / "server.py").read_text(encoding="utf-8")
+    assistant = (ROOT / "sentinel" / "agent_assist.py").read_text(encoding="utf-8")
+    storage = (ROOT / "sentinel" / "storage_intelligence.py").read_text(encoding="utf-8")
+    for element_id in (
+        "agent-assist-enabled", "agent-assist-questions", "agent-assist-notifications",
+        "agent-assist-ai", "agent-assist-save", "agent-assist-notifications-list",
+        "storage-scan-enabled", "storage-scan-interval", "storage-scan-now",
+        "storage-scan-results",
+    ):
+        assert f'id="{element_id}"' in html
+    assert 'api("/api/agent-assist/settings"' in app
+    assert 'api("/api/agent-assist/notification/respond"' in app
+    assert 'api("/api/storage/settings"' in app
+    assert 'api("/api/storage/scan"' in app
+    for endpoint in (
+        "/api/agent-assist/status", "/api/agent-assist/notifications",
+        "/api/storage/status", "/api/agent-assist/settings",
+        "/api/agent-assist/notification/respond", "/api/storage/settings",
+        "/api/storage/scan",
+    ):
+        assert endpoint in server
+    assert "agent_assist.start()" in (ROOT / "agent.py").read_text(encoding="utf-8")
+    assert "storage_intelligence.start()" in (ROOT / "agent.py").read_text(encoding="utf-8")
+    assert "CREATE TABLE IF NOT EXISTS agent_notifications" in assistant
+    assert "CREATE TABLE IF NOT EXISTS storage_scan_history" in storage
+    assert "def _agent_toast(" in assistant
+    assert "Notification.requestPermission" not in assistant

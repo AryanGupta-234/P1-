@@ -68,6 +68,39 @@ def snapshot() -> dict[str, Any]:
     return {**evaluate(), "updated_at": time.time()}
 
 
+def admit_optional_work(
+    workload: str,
+    *,
+    min_available_gib: float = 2.0,
+    max_cpu_percent: float = 70.0,
+    allow_game: bool = False,
+) -> tuple[bool, str]:
+    """Central admission gate for non-urgent agent work.
+
+    The scheduler protects the foreground workload first. Optional jobs are admitted
+    only in balanced mode, with explicit CPU and memory headroom, and outside game
+    sessions unless a caller deliberately declares otherwise.
+    """
+    name = " ".join(str(workload or "optional-work").split())[:64]
+    state = snapshot()
+    mode = str(state.get("mode") or "unknown")
+    if mode != "balanced":
+        return False, f"{name} deferred while runtime mode is {mode}"
+    if state.get("game_active") and not allow_game:
+        return False, f"{name} deferred during a foreground game session"
+    try:
+        available = float(state.get("available_memory_gib") or 0.0)
+        raw_cpu = state.get("cpu_percent")
+        cpu = float(raw_cpu) if raw_cpu is not None else 100.0
+    except (TypeError, ValueError):
+        return False, f"{name} deferred because runtime telemetry is invalid"
+    if available < max(0.5, float(min_available_gib)):
+        return False, f"{name} deferred: {available:.1f} GiB available; requires {min_available_gib:.1f} GiB"
+    if cpu >= min(99.0, max(5.0, float(max_cpu_percent))):
+        return False, f"{name} deferred: CPU at {cpu:.0f}%"
+    return True, f"{name} admitted with {available:.1f} GiB memory headroom and {cpu:.0f}% CPU"
+
+
 def process_scan_interval() -> float:
     return float(snapshot().get("process_scan_interval_s") or 1.0)
 

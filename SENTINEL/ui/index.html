@@ -507,6 +507,23 @@
       <div class="msg maint-safety-note"><small>CONTROL BOUNDARY</small>Every operation requires a fresh preview and explicit confirmation. Restore-point preflight is required for deep repairs and disruptive resets. Security, Defender, VALORANT/Vanguard, BIOS and Secure Boot are never disabled or modified.</div>
     </div></div>
   </div>
+  <div class="cols2 maint-top-grid">
+    <div class="panel"><div class="ph">Proactive agent assistant<em id="agent-assist-state">AGENT-OWNED · PERSISTENT</em></div><div class="pb">
+      <label class="tog"><span>Automatic issue detection<small>Correlate new warnings and errors in the background; create a persistent finding with evidence.</small></span><input type="checkbox" class="sw" id="agent-assist-enabled" checked></label>
+      <label class="tog"><span>Ask contextual follow-up questions<small>Request the missing detail needed to narrow the cause.</small></span><input type="checkbox" class="sw" id="agent-assist-questions" checked></label>
+      <label class="tog"><span>Agent-triggered desktop alerts<small>Delivered by the running Windows agent; no dashboard polling is required to trigger them.</small></span><input type="checkbox" class="sw" id="agent-assist-notifications" checked></label>
+      <label class="tog"><span>AI deep diagnosis for serious issues<small>Run the existing local-only Windows specialist for high-severity findings when CPU, memory and game-state safeguards allow it.</small></span><input type="checkbox" class="sw" id="agent-assist-ai" checked></label>
+      <div class="maint-policy-row"><button class="btn or" id="agent-assist-save">SAVE ASSISTANT SETTINGS</button><button class="btn" id="agent-assist-refresh">REFRESH FINDINGS</button><span class="tag" id="agent-assist-count">-- OPEN</span></div>
+      <div id="agent-assist-notifications-list" class="maint-diagnostics" aria-live="polite"><div class="empty">Agent findings will appear here when a new issue is detected.</div></div>
+      <div class="msg"><small>CONTROL BOUNDARY</small>Questions and fixes are advisory. System changes still go through Sentinel's existing preview, approval, safeguard and rollback engines.</div>
+    </div></div>
+    <div class="panel"><div class="ph">Storage intelligence<em id="storage-scan-state">READ-ONLY · RESOURCE-AWARE</em></div><div class="pb">
+      <label class="tog"><span>Background storage intelligence<small>Audit selected user and developer-cache locations during safe idle windows.</small></span><input type="checkbox" class="sw" id="storage-scan-enabled" checked></label>
+      <label class="maint-form">DEEP SCAN INTERVAL <select id="storage-scan-interval"><option value="24">Daily</option><option value="72" selected>Every 3 days</option><option value="168">Weekly</option><option value="336">Every 2 weeks</option><option value="720">Monthly</option></select></label>
+      <div class="maint-policy-row"><button class="btn or" id="storage-scan-save">SAVE STORAGE SETTINGS</button><button class="btn" id="storage-scan-now">SCAN WHEN IDLE</button><button class="btn" id="storage-scan-refresh">REFRESH REPORT</button></div>
+      <div id="storage-scan-results" class="maint-diagnostics"><div class="empty">The agent measures drive capacity, extension mix, hidden-file footprint, Python/.NET/Node/Rust/Java caches and common build outputs. It does not open file contents.</div></div>
+    </div></div>
+  </div>
   <div class="panel maint-diagnostics-panel"><div class="ph">Windows intelligence map<em id="maint-diag-status">INVENTORY INITIALIZING</em><button class="btn sm" id="maint-inventory-refresh">SCAN INVENTORY</button></div><div class="pb"><div id="maint-health-report" class="maint-health-report"></div><div id="maint-diagnostics" class="maint-diagnostics"><div class="empty">Read-only inventory runs in the background. Driver/WMI scans back off during games and resource pressure.</div></div></div></div>
   <div class="maint-action-grid">
     <div class="panel"><div class="ph">Cleanup engine<em>manual · bounded · irreversible</em></div><div class="pb maint-form">

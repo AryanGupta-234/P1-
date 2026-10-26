@@ -1,4 +1,4 @@
-# SENTINEL 1.2.26 — Local Windows Specialist foundation
+# SENTINEL 1.2.29 — Agent-owned proactive diagnostics and Storage Intelligence
 
 SENTINEL's observer, collectors and dashboard run as the signed-in user with a standard token. Administrator-only maintenance is handed to a narrowly scoped helper only after the operator confirms the exact preview and approves Windows UAC. The helper accepts one short-lived SQLite-backed job ID, binds it to the same Windows principal and interactive session, rechecks the kill switch, safeguard and original state, and can execute only a fixed allowlist of maintenance action IDs. It cannot accept arbitrary commands, scripts or paths.
 
@@ -307,3 +307,12 @@ The response is validated against a strict schema. Evidence references must exis
 The installer verifies the intended runtime: a non-elevated standard-user process in the signed-in interactive session, matching the installed version and expected Python executable. The previous post-install check incorrectly required the observer/dashboard to be elevated even though Task Scheduler deliberately registered it with `RunLevel Limited`.
 
 The normal opener accepts a verified standard-user observer and no longer restarts it merely because it is not elevated. It replaces an explicitly mismatched runtime using the Limited interactive task and verifies the result. Unknown runtime identity fails closed. Administrator elevation remains required for installation/uninstallation and is requested separately for an explicitly approved privileged helper job.
+
+
+## 1.2.29 — Agent-owned automation and Storage Intelligence
+
+The running Windows agent now watches new warning/error events and high-priority insights, creates evidence-linked questions and suggested first fixes, and delivers native desktop alerts without depending on the dashboard being open. High-severity findings can receive an additional local FAST-model diagnosis when the adaptive runtime reports safe idle headroom. All AI output is advisory; existing manual preview, approval, Safeguard and rollback controls remain authoritative.
+
+The new Storage Intelligence worker reports drive capacity, selected personal/developer folders, file extensions, hidden-file footprint, Python/Node/.NET/Rust/Java cache and package sizes, build outputs and secondary-drive top-level folders. It uses bounded metadata-only scans, defers during gaming/resource pressure, and offers review candidates rather than deleting files or uninstalling packages. Usage timestamps are treated as weak heuristics.
+
+Assistant preferences, answers, notification history and scan settings persist in the existing local SQLite database. The Maintenance HUD only displays results and changes configuration; the agent owns detection, scanning, local AI analysis and notification delivery.

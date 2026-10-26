@@ -441,7 +441,9 @@ def open_app():
         problem = _runtime_validation_problem(
             runtime, expected_username=expected_user,
             expected_session_id=expected_session, expected_version=APP_VERSION,
-            expected_executable=os.path.join(APP_VERSION_DIR, ".venv", "Scripts", "pythonw.exe"),
+            # sys.executable reports the console interpreter inside the venv,
+            # even when Task Scheduler launched the pythonw.exe entry point.
+            expected_executable=os.path.join(APP_VERSION_DIR, ".venv", "Scripts", "python.exe"),
             expected_python_prefix=os.path.join(APP_VERSION_DIR, ".venv")
         )
         if problem:
@@ -832,7 +834,7 @@ def main():
         return 1
 
     from sentinel import collectors, brain, ai, intel, server, advanced, activity_engine, hardware_provider
-    from sentinel import runtime_engine, memory_engine, security_engine, maintenance
+    from sentinel import runtime_engine, memory_engine, security_engine, maintenance, agent_assist, storage_intelligence
     try:
         core.STATE["traces"] = [
             {"file": row[0], "ts": row[1], "mb": round(row[2] / 1048576, 1), "source": row[3], "exists": os.path.isfile(row[0])}
@@ -890,6 +892,10 @@ def main():
     security_engine.start()
     maintenance.start()
     atexit.register(maintenance.shutdown)
+    agent_assist.start()
+    atexit.register(agent_assist.shutdown)
+    storage_intelligence.start()
+    atexit.register(storage_intelligence.shutdown)
     collectors.start_all(demo="--demo" in arguments)
     core.thread(brain.brain_loop, "brain")
     core.thread(ai.ai_loop, "ai")
@@ -901,6 +907,8 @@ def main():
     finally:
         activity_engine.shutdown()
         maintenance.shutdown()
+        agent_assist.shutdown()
+        storage_intelligence.shutdown()
         advanced.shutdown
         close_run()
     return 0
