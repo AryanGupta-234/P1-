@@ -632,6 +632,9 @@ def test_install_integration_verifies_desktop_and_all_users_shortcuts(monkeypatc
     (release_dir / "ui").mkdir()
     (release_dir / "ui" / "index.html").write_text("", encoding="utf-8")
     monkeypatch.setattr(agent, "APP_VERSION_DIR", str(release_dir))
+    for key in ("SENTINEL_TASK", "SENTINEL_PYTHONW", "SENTINEL_SCRIPT",
+                "SENTINEL_WORKDIR", "SENTINEL_STORE", "SENTINEL_VERSION"):
+        monkeypatch.setenv(key, "")
     monkeypatch.setattr(agent, "IS_WIN", True)
     monkeypatch.setattr(agent.sys, "executable", str(python_exe))
     captured = {}
