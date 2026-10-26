@@ -41,7 +41,7 @@ def test_installer_reports_top_level_start_menu_entry():
 
 
 def test_release_version_was_bumped_for_immutable_installer_layout():
-    assert (ROOT / "VERSION").read_text(encoding="utf-8").strip() == "1.2.26"
+    assert (ROOT / "VERSION").read_text(encoding="utf-8").strip() == "1.2.27"
 
 
 
@@ -68,3 +68,24 @@ def test_normal_opener_never_restarts_standard_user_agent_to_elevate_it():
     assert "Replacing it with the standard-user interactive task" in opener
     assert "restarting it with administrator permissions" not in opener
     assert "standard-user runtime verification" in opener
+
+
+def test_observer_launch_uses_the_immutable_release_virtual_environment():
+    source = (ROOT / "agent.py").read_text(encoding="utf-8")
+    assert 'os.path.join(release_dir, ".venv", "Scripts", "pythonw.exe")' in source
+    assert 'os.path.join(release_dir, "agent.py")' in source
+    assert "def _release_runtime():" in source
+    assert "interpreter, script, workdir = _release_runtime()" in source
+    assert '"SENTINEL_WORKDIR": release_workdir' in source
+    assert 'expected_executable=os.path.join(APP_VERSION_DIR, ".venv", "Scripts", "pythonw.exe")' in source
+
+
+def test_release_runtime_fails_closed_instead_of_falling_back_to_global_python():
+    source = (ROOT / "agent.py").read_text(encoding="utf-8")
+    start = source.index("def _release_runtime():")
+    end = source.index("\n\nNO_WIN", start)
+    resolver = source[start:end]
+    assert 'if not os.path.isfile(pythonw):' in resolver
+    assert 'if not os.path.isfile(script):' in resolver
+    assert "raise RuntimeError" in resolver
+    assert "sys.executable" not in resolver
