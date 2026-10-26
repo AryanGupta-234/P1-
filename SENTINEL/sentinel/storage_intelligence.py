@@ -396,6 +396,21 @@ def scan_once(roots: list[tuple[str, str, str]] | None = None,
             root_results.append(result)
             name = os.path.basename(path).casefold()
             size = int(measured["bytes"])
+            if category in ("python-environments", "python-packages", "node-dependencies", "dotnet-cache"):
+                for component in measured.get("top_level", []):
+                    component_age = component.get("last_access_age_days")
+                    component_size = int(component.get("bytes") or 0)
+                    if component_size >= 100 * 1024 * 1024 and component_age is not None and component_age >= 60:
+                        candidates.append({
+                            "path": path[:320], "name": f"{label} / {component.get('name', 'package')}",
+                            "bytes": component_size,
+                            "reason": "Large dependency/package component with an old last-access signal",
+                            "review_type": "package-usage-review",
+                            "confidence": "low",
+                            "usage_signal": "possibly-cold-weak-signal",
+                            "last_access_age_days": int(component_age),
+                            "suggestion": "Check project manifests, lockfiles and active imports before removing this package. A file timestamp is only a weak hint; use the owning package manager and keep a recovery path.",
+                        })
             if size >= 150 * 1024 * 1024 and category in (
                 "temporary", "python-cache", "node-cache", "rust-cache",
                 "dotnet-cache", "java-cache", "build-output", "node-dependencies",
