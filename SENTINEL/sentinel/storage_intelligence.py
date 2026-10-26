@@ -182,6 +182,8 @@ def _measure(path: str, max_entries: int, deadline: float) -> dict[str, Any]:
     extension_bytes: dict[str, int] = defaultdict(int)
     newest_mtime = 0.0
     oldest_atime = time.time()
+    newest_atime = 0.0
+    top_level_access: dict[str, float] = defaultdict(float)
     partial = False
     stack: list[tuple[str, int, str]] = [(path, 0, "")]
     top_level_bytes: dict[str, int] = defaultdict(int)
@@ -228,7 +230,11 @@ def _measure(path: str, max_entries: int, deadline: float) -> dict[str, Any]:
                     top_level_bytes[package_name] += size
                 newest_mtime = max(newest_mtime, float(stat_result.st_mtime or 0))
                 if stat_result.st_atime:
-                    oldest_atime = min(oldest_atime, float(stat_result.st_atime))
+                    access_time = float(stat_result.st_atime)
+                    oldest_atime = min(oldest_atime, access_time)
+                    newest_atime = max(newest_atime, access_time)
+                    if package_name:
+                        top_level_access[package_name] = max(top_level_access[package_name], access_time)
                 if _hidden(entry, stat_result):
                     hidden_files += 1
                     hidden_bytes += size
@@ -239,9 +245,13 @@ def _measure(path: str, max_entries: int, deadline: float) -> dict[str, Any]:
         "hidden_files": hidden_files, "hidden_bytes": hidden_bytes,
         "newest_write_at": newest_mtime or None,
         "oldest_access_at": oldest_atime if oldest_atime < time.time() else None,
+        "newest_access_at": newest_atime or None,
         "extensions": dict(extension_bytes),
         "top_level": [
-            {"name": name, "bytes": size}
+            {"name": name, "bytes": size,
+             "newest_access_at": top_level_access.get(name) or None,
+             "last_access_age_days": max(0, int((time.time() - top_level_access[name]) / 86400))
+                 if top_level_access.get(name) else None}
             for name, size in sorted(top_level_bytes.items(), key=lambda item: item[1], reverse=True)[:30]
         ],
         "entries_visited": visited, "partial": partial,
@@ -325,14 +335,20 @@ def scan_once(roots: list[tuple[str, str, str]] | None = None,
             for extension, size in measured["extensions"].items():
                 extension_totals[extension] += int(size)
             newest = measured.get("newest_write_at")
+            newest_access = measured.get("newest_access_at")
             age_days = max(0, int((now - newest) / 86400)) if newest else None
+            access_age_days = max(0, int((now - newest_access) / 86400)) if newest_access else None
+            usage_signal = (
+                "possibly-cold-weak-signal" if access_age_days is not None and access_age_days >= 60
+                else "recent-access-seen" if access_age_days is not None and access_age_days <= 7
+                else "unknown-or-weak"
+            )
             result = {
                 "label": _clean_label(label), "category": category,
                 "category_label": _category_label(category), **measured,
                 "last_write_age_days": age_days,
-                # NTFS last-access updates may be disabled or coarse; this is a weak
-                # hint, never enough to declare a file unused or authorize deletion.
-                "usage_signal": "timestamp-heuristic-only",
+                "last_access_age_days": access_age_days,
+                "usage_signal": usage_signal,
             }
             root_results.append(result)
             name = os.path.basename(path).casefold()
