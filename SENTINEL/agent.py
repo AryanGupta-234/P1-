@@ -905,6 +905,8 @@ def main():
     finally:
         activity_engine.shutdown()
         maintenance.shutdown()
+        agent_assist.shutdown()
+        storage_intelligence.shutdown()
         advanced.shutdown
         close_run()
     return 0
