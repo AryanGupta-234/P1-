@@ -145,6 +145,14 @@ def _local_roots() -> list[tuple[str, str, str]]:
                         category = "python-environments" if artifact in (".venv", "venv") else (
                             "node-dependencies" if artifact == "node_modules" else "build-output")
                         candidates.append((f"{project.name} / {artifact}", str(target), category))
+                        if artifact in (".venv", "venv"):
+                            for site_packages in (target / "Lib" / "site-packages", target / "lib"):
+                                try:
+                                    if site_packages.is_dir() and not site_packages.is_symlink():
+                                        candidates.append((f"{project.name} / {artifact} packages",
+                                                           str(site_packages), "python-packages"))
+                                except OSError:
+                                    pass
                 except OSError:
                     continue
     found: list[tuple[str, str, str]] = []
@@ -164,6 +172,10 @@ def _hidden(entry: os.DirEntry[str], stat_result: os.stat_result) -> bool:
     return bool(attrs & 0x2) or entry.name.startswith(".")
 
 
+def category_is_node_dependencies(path: str) -> bool:
+    return os.path.basename(os.path.normpath(path)).casefold() == "node_modules"
+
+
 def _measure(path: str, max_entries: int, deadline: float) -> dict[str, Any]:
     """Count directory metadata only, with one shared time/entry budget."""
     total_bytes = files = dirs = hidden_files = hidden_bytes = 0
@@ -171,13 +183,14 @@ def _measure(path: str, max_entries: int, deadline: float) -> dict[str, Any]:
     newest_mtime = 0.0
     oldest_atime = time.time()
     partial = False
-    stack: list[tuple[str, int]] = [(path, 0)]
+    stack: list[tuple[str, int, str]] = [(path, 0, "")]
+    top_level_bytes: dict[str, int] = defaultdict(int)
     visited = 0
     while stack:
         if visited >= max_entries or time.monotonic() >= deadline:
             partial = True
             break
-        folder, depth = stack.pop()
+        folder, depth, package_name = stack.pop()
         try:
             entries = os.scandir(folder)
         except (OSError, PermissionError):
@@ -197,13 +210,31 @@ def _measure(path: str, max_entries: int, deadline: float) -> dict[str, Any]:
                 if entry.is_dir(follow_symlinks=False):
                     dirs += 1
                     if depth < 5 and entry.name.casefold() not in SKIP_NAMES:
-                        stack.append((entry.path, depth + 1))
+                        child_group = entry.name if depth == 0 else package_name
+                        # Scoped npm packages use @scope/package; retain the package
+                        # name one level below the scope folder.
+                        if category_is_node_dependencies(path) and depth == 1 and entry.name.startswith("@"):
+                            try:
+                                scoped_children = list(os.scandir(entry.path))
+                            except OSError:
+                                scoped_children = []
+                            for child in scoped_children[:100]:
+                                try:
+                                    if child.is_dir(follow_symlinks=False) and not child.is_symlink():
+                                        stack.append((child.path, depth + 2, child.name))
+                                except OSError:
+                                    continue
+                            stack.append((entry.path, depth + 1, child_group))
+                        else:
+                            stack.append((entry.path, depth + 1, child_group))
                     continue
                 if not entry.is_file(follow_symlinks=False):
                     continue
                 size = max(0, int(stat_result.st_size))
                 files += 1
                 total_bytes += size
+                if package_name:
+                    top_level_bytes[package_name] += size
                 newest_mtime = max(newest_mtime, float(stat_result.st_mtime or 0))
                 if stat_result.st_atime:
                     oldest_atime = min(oldest_atime, float(stat_result.st_atime))
@@ -217,7 +248,12 @@ def _measure(path: str, max_entries: int, deadline: float) -> dict[str, Any]:
         "hidden_files": hidden_files, "hidden_bytes": hidden_bytes,
         "newest_write_at": newest_mtime or None,
         "oldest_access_at": oldest_atime if oldest_atime < time.time() else None,
-        "extensions": dict(extension_bytes), "entries_visited": visited, "partial": partial,
+        "extensions": dict(extension_bytes),
+        "top_level": [
+            {"name": name, "bytes": size}
+            for name, size in sorted(top_level_bytes.items(), key=lambda item: item[1], reverse=True)[:30]
+        ],
+        "entries_visited": visited, "partial": partial,
     }
 
 
