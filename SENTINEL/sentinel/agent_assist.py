@@ -230,13 +230,16 @@ def _classify(source: str, message: str, severity: str) -> dict[str, str]:
 
 
 def _runtime_suppressed(config: dict[str, Any]) -> bool:
-    if not config.get("suppress_during_games", True):
-        return False
+    # Toast creation is optional work. Under games, pressure or stale safety state,
+    # keep the durable finding but defer the desktop alert.
     try:
         from . import runtime_engine
-        return runtime_engine.snapshot().get("mode") in ("game_optimized", "valorant_guarded")
+        runtime = runtime_engine.snapshot()
+        if not config.get("suppress_during_games", True):
+            return runtime.get("mode") in ("resource_pressure", "safety_degraded")
+        return runtime.get("mode") != "balanced"
     except Exception:
-        return False
+        return True
 
 
 def _agent_toast(title: str, body: str) -> bool:
@@ -275,7 +278,8 @@ def create_notification(source: str, message: str, severity: str = "warn",
     source_text, message_text = _clean(source, 80), _clean(message, 360)
     diagnosis = _classify(source_text, message_text, severity)
     stable_message = re.sub(r"\b\d+(?:\.\d+)?\b", "#", message_text.casefold())
-    normalized = " ".join((source_text.casefold() + " " + diagnosis["category"] + " " + stable_message).split())[:180]
+    stable_message = re.sub(r"\\[(?:HIGH|WARN|ERROR|CRITICAL)\\]\\s*", "", stable_message, flags=re.IGNORECASE)
+    normalized = " ".join((diagnosis["category"] + " " + stable_message).split())[:180]
     dedupe_key = hashlib.sha256(normalized.encode("utf-8")).hexdigest()
     cooldown = max(600, int(config.get("dedupe_cooldown_minutes", 60)) * 60)
     previous = core.db(
@@ -305,8 +309,12 @@ def create_notification(source: str, message: str, severity: str = "warn",
            "question": question, "evidence": safe_evidence}
     core.publish("agent_notification", row)
     if str(severity).casefold() in ("error", "critical", "high") and config.get("ai_deep_diagnosis"):
-        core.db("INSERT OR IGNORE INTO agent_assist_ai_jobs(notification_id,created_at,updated_at,status) VALUES(?,?,?,'queued')",
-                (notification_id, now, now))
+        completed = core.db("SELECT COUNT(*) FROM agent_assist_ai_results WHERE completed_at>=?",
+                            (now - 3600,))[0][0]
+        pending = core.db("SELECT COUNT(*) FROM agent_assist_ai_jobs WHERE status IN ('queued','running')")[0][0]
+        if int(completed) + int(pending) < 2:
+            core.db("INSERT OR IGNORE INTO agent_assist_ai_jobs(notification_id,created_at,updated_at,status) VALUES(?,?,?,'queued')",
+                    (notification_id, now, now))
     alerts_last_hour = core.db(
         "SELECT COUNT(*) FROM agent_notifications WHERE delivered_at>=?",
         (time.time() - 3600,),
@@ -383,9 +391,11 @@ def _process_new_events() -> None:
     config = settings()
     if not config.get("enabled"):
         return
+    # Insights are consumed first so a HIGH/Critical insight is not downgraded
+    # by the matching warning log row emitted for the same observation.
     for key, table, fields in (
-        ("events", "events", "id,ts,level,src,msg,data"),
         ("insights", "insights", "id,ts,sev,key,title,detail,culprit"),
+        ("events", "events", "id,ts,level,src,msg,data"),
     ):
         cursor_rows = core.db("SELECT last_id FROM agent_assist_cursors WHERE cursor_key=?", (key,))
         if not cursor_rows:
@@ -518,6 +528,8 @@ def start() -> None:
     if _STARTED:
         return
     ensure_schema()
+    core.db("UPDATE agent_assist_ai_jobs SET status='queued',updated_at=? WHERE status='running'",
+            (time.time(),))
     _STOP.clear()
     _STARTED = True
     core.thread(_loop, "proactive-agent-assistant")
