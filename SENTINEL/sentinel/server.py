@@ -2,7 +2,7 @@
 import ctypes, json, os, threading, time, urllib.parse, psutil, platform, sys, hmac
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from . import core, actions, ai, intel, inventory, intelligence, advanced, activity_engine, windows_intelligence
-from . import safeguard, runtime_engine, memory_engine, ai_engine, security_engine, hardware_provider, maintenance, privilege_broker, windows_knowledge
+from . import safeguard, runtime_engine, memory_engine, ai_engine, security_engine, hardware_provider, maintenance, privilege_broker, windows_knowledge, agent_assist, storage_intelligence
 from .core import CFG, STATE, LIVE, HIST, HEART, START, db, log, save_cfg
 
 UI = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "ui")
@@ -284,6 +284,12 @@ class H(BaseHTTPRequestHandler):
                     components=components, limit=min(20, int((qs.get("limit") or ["8"])[0]))))
             except (ValueError, TypeError) as exc:
                 return self._json({"error": str(exc)}, 400)
+        if p == "/api/agent-assist/status":
+            return self._json(agent_assist.status())
+        if p == "/api/agent-assist/notifications":
+            return self._json(agent_assist.notifications(min(100, int((qs.get("limit") or ["20"])[0]))))
+        if p == "/api/storage/status":
+            return self._json(storage_intelligence.status())
         if p == "/api/maintenance/status":
             try: return self._json(maintenance.status(refresh=(qs.get("refresh") or ["0"])[0] == "1"))
             except Exception as exc: return self._json({"error": f"{type(exc).__name__}: {str(exc)[:240]}"}, 503)
@@ -515,6 +521,25 @@ class H(BaseHTTPRequestHandler):
             return self._json({"error": "request body must be valid JSON"}, 400)
         if not isinstance(body, dict):
             return self._json({"error": "request body must be a JSON object"}, 400)
+        if p == "/api/agent-assist/settings":
+            try:
+                return self._json(agent_assist.update_settings(body))
+            except (ValueError, TypeError) as exc:
+                return self._json({"error": str(exc)}, 400)
+        if p == "/api/agent-assist/notification/respond":
+            try:
+                return self._json(agent_assist.respond(
+                    int(body.get("id", 0)), str(body.get("answer") or ""),
+                    dismiss=body.get("dismiss") is True))
+            except (ValueError, TypeError) as exc:
+                return self._json({"error": str(exc)}, 400)
+        if p == "/api/storage/settings":
+            try:
+                return self._json(storage_intelligence.update_settings(body))
+            except (ValueError, TypeError) as exc:
+                return self._json({"error": str(exc)}, 400)
+        if p == "/api/storage/scan":
+            return self._json(storage_intelligence.request_scan(), 202)
         if p == "/api/windows-intelligence/diagnose":
             try:
                 result = windows_intelligence.diagnose(str(body.get("question") or ""))
