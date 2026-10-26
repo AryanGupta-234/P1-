@@ -510,17 +510,9 @@ def request_scan() -> dict[str, Any]:
 
 def _resources_allow_scan() -> tuple[bool, str]:
     try:
-        runtime = runtime_engine.snapshot()
-        mode = str(runtime.get("mode") or "unknown")
-        available = float(runtime.get("available_memory_gib") or 0)
-        cpu = float(psutil.cpu_percent(interval=0.0))
-        if mode != "balanced":
-            return False, f"deferred while runtime mode is {mode}"
-        if available < 4.0:
-            return False, "deferred because available memory is below 4 GiB"
-        if cpu >= 45.0:
-            return False, "deferred while CPU utilization is elevated"
-        return True, "idle resource window"
+        return runtime_engine.admit_optional_work(
+            "storage intelligence", min_available_gib=4.0, max_cpu_percent=45.0,
+        )
     except Exception as exc:
         return False, f"resource state unavailable: {type(exc).__name__}"
 
