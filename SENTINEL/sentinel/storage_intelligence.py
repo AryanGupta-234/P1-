@@ -95,6 +95,14 @@ def update_settings(payload: dict[str, Any]) -> dict[str, Any]:
                 "ON CONFLICT(setting_key) DO UPDATE SET value_json=excluded.value_json,updated_at=excluded.updated_at",
                 (key, json.dumps(value, separators=(",", ":")), now),
             )
+    global _NEXT_SCAN
+    if "deep_scan_interval_hours" in payload:
+        previous_scan = core.db("SELECT MAX(scanned_at) FROM storage_scan_history")[0][0] or 0
+        _NEXT_SCAN = max(time.time() + 60, float(previous_scan) + int(updated["deep_scan_interval_hours"]) * 3600
+                         if previous_scan else time.time() + 90)
+    if payload.get("enabled") is False:
+        _SCAN_REQUESTED = False
+    _WAKE.set()
     core.log("storage-intelligence", "persistent storage intelligence settings updated", "info",
              changed_keys=sorted(payload.keys()))
     return settings()
@@ -244,6 +252,8 @@ def _measure(path: str, max_entries: int, deadline: float, category: str = "") -
                             child_group = package_name + "/" + entry.name
                         elif category == "python-environments" and depth == 2 and os.path.basename(folder).casefold() == "site-packages":
                             child_group = entry.name
+                        elif category == "python-packages" and depth == 0 and os.path.basename(path).casefold() == "site-packages":
+                            child_group = entry.name
                         else:
                             child_group = entry.name if depth == 0 else package_name
                         stack.append((entry.path, depth + 1, child_group,
@@ -355,7 +365,7 @@ def scan_once(roots: list[tuple[str, str, str]] | None = None,
                 break
             if not os.path.isdir(path) or os.path.islink(path):
                 continue
-            remaining = max(100, entry_budget - used_entries)
+            remaining = max(1, entry_budget - used_entries)
             root_deadline = min(deadline, time.monotonic() + 1.5)
             measured = _measure(path, remaining, root_deadline, category=category)
             used_entries += measured["entries_visited"]
