@@ -123,6 +123,54 @@ def _classify(source: str, message: str, severity: str) -> dict[str, str]:
             "question": "Is the network missing entirely, connected with no internet, or failing only in one application?",
             "fix": "Compare adapter state, IP configuration, default gateway and DNS resolution first. Keep the adapter and network stack unchanged until the failing layer is identified.",
         }
+    if any(word in text for word in ("process-review", "process review", "process intelligence")):
+        return {
+            "category": "process-review",
+            "title": "Process behavior needs a closer look",
+            "explanation": "SENTINEL recorded a process-context review signal. A writable launch path or unusual parent process is not, by itself, proof of malware.",
+            "question": "Did you intentionally install or launch this application, and does its location match where you expect it to be?",
+            "fix": "Verify the executable publisher/signature and installation path, then compare the PID and creation time with the current process list. Do not terminate or quarantine it based only on this score.",
+        }
+    if any(word in text for word in ("dpc", "interrupt latency", "driver latency", "isr")):
+        return {
+            "category": "driver-latency",
+            "title": "Driver latency may be causing stutter",
+            "explanation": "The evidence indicates elevated DPC/interrupt time. A network, audio, GPU, USB or chipset driver can contribute, but the responsible module still needs attribution.",
+            "question": "Does the lag happen during gaming, audio playback, video calls or all the time?",
+            "fix": "Correlate the spike with a bounded WPR trace and current driver inventory. Update only the exact device driver implicated by evidence; Sentinel will not stop drivers or Vanguard.",
+        }
+    if any(word in text for word in ("memory pressure", "pagesout", "pagefile", "out of memory", "ram pressure", "low memory")):
+        return {
+            "category": "memory",
+            "title": "System memory pressure detected",
+            "explanation": "The telemetry suggests available RAM is low or Windows is evicting pages. Large file-backed reads alone are not necessarily memory pressure.",
+            "question": "Did the slowdown begin after opening a particular application, project, browser tab set or game?",
+            "fix": "Compare per-process working sets, available memory and page-out rate over the same interval. Identify a leak or unusually large workload before closing applications; do not force-trim processes.",
+        }
+    if any(word in text for word in ("cpu spike", "cpu saturated", "cpu saturation", "high cpu", "cpu throttle", "cpu running at")):
+        return {
+            "category": "cpu",
+            "title": "CPU saturation or throttling detected",
+            "explanation": "The issue may be caused by a competing process, a single-thread bottleneck or reduced CPU frequency under load.",
+            "question": "Does this happen only while gaming, or also when the machine is idle?",
+            "fix": "Correlate CPU utilization with the top non-game process, effective clock and temperature. Check cooling and power-adapter state before changing performance profiles or process priority.",
+        }
+    if any(word in text for word in ("disk latency", "disk stall", "disk busy", "storage stall", "i/o stall")):
+        return {
+            "category": "disk-performance",
+            "title": "Storage latency spike detected",
+            "explanation": "A disk response-time spike can stall applications while they read assets or write data. The process and target volume need to be identified before maintenance.",
+            "question": "Does the stall affect one application or the entire PC, and which drive contains its files?",
+            "fix": "Compare disk latency, queue depth and per-process I/O for the same timestamp. Check free space and drive health; do not run cleanup, defragmentation or retrim as a blind response.",
+        }
+    if any(word in text for word in ("gpu thrott", "thermal", "overheat", "temperature high", "cpu temp", "gpu temp")):
+        return {
+            "category": "thermal",
+            "title": "Thermal or GPU throttling signal detected",
+            "explanation": "Temperature or throttle telemetry suggests the device may be limiting performance. Sensor readings can be incomplete or platform-specific.",
+            "question": "Does performance recover after the laptop cools, and are the fans or air vents obstructed?",
+            "fix": "Check sustained temperature, power and clock readings plus the exact sensor source. Keep vents clear and use the OEM cooling profile; Sentinel will not write fan registers, EC controls or firmware settings.",
+        }
     if any(word in text for word in ("disk full", "low disk", "storage pressure", "space available", "free space")):
         return {
             "category": "storage",
