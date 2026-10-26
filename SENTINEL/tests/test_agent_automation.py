@@ -69,6 +69,22 @@ def test_storage_measurement_reports_package_sizes_extensions_and_hidden_files(t
     assert report["extensions"][".dat"] == 11
 
 
+def test_python_environment_report_breaks_out_individual_site_packages(tmp_path):
+    site_packages = tmp_path / ".venv" / "Lib" / "site-packages"
+    (site_packages / "requests").mkdir(parents=True)
+    (site_packages / "numpy").mkdir()
+    (site_packages / "requests" / "metadata.py").write_bytes(b"r" * 47)
+    (site_packages / "numpy" / "core.pyd").write_bytes(b"n" * 89)
+
+    report = storage_intelligence._measure(
+        str(tmp_path / ".venv"), max_entries=100,
+        deadline=time.monotonic() + 5, category="python-environments",
+    )
+    packages = {item["name"]: item["bytes"] for item in report["top_level"]}
+    assert packages["requests"] == 47
+    assert packages["numpy"] == 89
+
+
 def test_storage_scan_is_bounded_and_marks_budget_exhaustion(tmp_path):
     root = tmp_path / "large"
     root.mkdir()
