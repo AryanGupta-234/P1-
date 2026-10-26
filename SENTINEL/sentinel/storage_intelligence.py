@@ -48,6 +48,10 @@ def ensure_schema() -> None:
         payload_json TEXT NOT NULL, bytes_scanned INTEGER NOT NULL DEFAULT 0,
         files_scanned INTEGER NOT NULL DEFAULT 0, partial INTEGER NOT NULL DEFAULT 0)""")
     core.db("CREATE INDEX IF NOT EXISTS ix_storage_scan_history_ts ON storage_scan_history(scanned_at)")
+    now = time.time()
+    for key, value in DEFAULTS.items():
+        core.db("INSERT OR IGNORE INTO storage_intelligence_settings(setting_key,value_json,updated_at) VALUES(?,?,?)",
+                (key, json.dumps(value, separators=(",", ":")), now))
 
 
 ensure_schema()
@@ -65,6 +69,7 @@ def settings() -> dict[str, Any]:
 
 
 def update_settings(payload: dict[str, Any]) -> dict[str, Any]:
+    global _NEXT_SCAN, _SCAN_REQUESTED
     if not isinstance(payload, dict):
         raise ValueError("storage settings payload must be an object")
     current = settings()
@@ -95,7 +100,6 @@ def update_settings(payload: dict[str, Any]) -> dict[str, Any]:
                 "ON CONFLICT(setting_key) DO UPDATE SET value_json=excluded.value_json,updated_at=excluded.updated_at",
                 (key, json.dumps(value, separators=(",", ":")), now),
             )
-    global _NEXT_SCAN
     if "deep_scan_interval_hours" in payload:
         previous_scan = core.db("SELECT MAX(scanned_at) FROM storage_scan_history")[0][0] or 0
         _NEXT_SCAN = max(time.time() + 60, float(previous_scan) + int(updated["deep_scan_interval_hours"]) * 3600
@@ -165,16 +169,15 @@ def _local_roots() -> list[tuple[str, str, str]]:
     # For secondary data volumes, inspect top-level data folders as bounded roots.
     # The OS volume is represented by the curated user/cache roots above to avoid a
     # broad recursive walk through Windows and Program Files.
-    system_drive = os.environ.get("SystemDrive", "C:").strip().rstrip("\\\\/")
-    system_drive = os.path.normcase(system_drive + os.sep)
+    system_drive = os.path.splitdrive(os.environ.get("SystemDrive", "C:").strip())[0].casefold()
     if os.name == "nt":
         partitions = psutil.disk_partitions(all=False)
     else:
         partitions = []
     for part in partitions:
         mount = os.path.abspath(str(part.mountpoint or ""))
-        mount_key = os.path.normcase(mount.rstrip("\\\\/") + os.sep)
-        if not mount or mount_key == system_drive:
+        mount_drive = os.path.splitdrive(mount)[0].casefold()
+        if not mount or (system_drive and mount_drive == system_drive):
             continue
         try:
             children = sorted(os.scandir(mount), key=lambda item: item.name.casefold())
