@@ -191,7 +191,7 @@ def _agent_toast(title: str, body: str) -> bool:
     if os.name != "nt":
         return False
     script = (
-        "Add-Type -AssemblyName System.Windows.Forms; "
+        "Add-Type -AssemblyName System.Windows.Forms; Add-Type -AssemblyName System.Drawing; "
         "$n=New-Object System.Windows.Forms.NotifyIcon; "
         "$n.Icon=[System.Drawing.SystemIcons]::Information; $n.Visible=$true; "
         f"$n.BalloonTipTitle='{title.replace(chr(39), chr(39)*2)}'; "
