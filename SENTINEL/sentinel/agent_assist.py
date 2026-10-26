@@ -430,7 +430,9 @@ def _process_new_events() -> None:
                 level = "error" if insight_level in ("high", "critical", "error") else "warn"
                 evidence = {"insight_id": row_id, "timestamp": ts, "insight_key": key_name,
                             "culprit": culprit, "detail": _clean(detail, 180)}
-                create_notification(str(key_name or "insight"), str(title or "") + " " + str(detail or ""), level, evidence)
+                # Match the concise mirrored activity-log title. The detailed
+                # insight remains in the evidence field, avoiding duplicate cards.
+                create_notification(str(key_name or "insight"), str(title or ""), level, evidence)
         _advance_cursor(key, max_id)
 
 
