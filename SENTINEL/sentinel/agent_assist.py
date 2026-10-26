@@ -9,6 +9,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import subprocess
 import time
 from typing import Any
@@ -269,11 +270,12 @@ def _agent_toast(title: str, body: str) -> bool:
 def create_notification(source: str, message: str, severity: str = "warn",
                         evidence: dict[str, Any] | None = None) -> int | None:
     config = settings()
-    if not config.get("enabled") or not config.get("agent_notifications"):
+    if not config.get("enabled"):
         return None
     source_text, message_text = _clean(source, 80), _clean(message, 360)
     diagnosis = _classify(source_text, message_text, severity)
-    normalized = " ".join((diagnosis["category"] + " " + message_text).casefold().split())[:180]
+    stable_message = re.sub(r"\b\d+(?:\.\d+)?\b", "#", message_text.casefold())
+    normalized = " ".join((source_text.casefold() + " " + diagnosis["category"] + " " + stable_message).split())[:180]
     dedupe_key = hashlib.sha256(normalized.encode("utf-8")).hexdigest()
     cooldown = max(600, int(config.get("dedupe_cooldown_minutes", 60)) * 60)
     previous = core.db(
@@ -282,9 +284,10 @@ def create_notification(source: str, message: str, severity: str = "warn",
     )
     if previous:
         return None
-    sent = core.db("SELECT COUNT(*) FROM agent_notifications WHERE created_at>=?",
-                   (time.time() - 3600,))[0][0]
-    if int(sent) >= int(config.get("max_notifications_per_hour", 4)):
+    findings_last_hour = core.db("SELECT COUNT(*) FROM agent_notifications WHERE created_at>=?",
+                                (time.time() - 3600,))[0][0]
+    # Bound queue growth separately from the much lower desktop-alert budget.
+    if int(findings_last_hour) >= 60:
         return None
     question = diagnosis["question"] if config.get("ask_follow_up_questions") else ""
     safe_evidence = evidence if isinstance(evidence, dict) else {}
@@ -304,7 +307,11 @@ def create_notification(source: str, message: str, severity: str = "warn",
     if str(severity).casefold() in ("error", "critical", "high") and config.get("ai_deep_diagnosis"):
         core.db("INSERT OR IGNORE INTO agent_assist_ai_jobs(notification_id,created_at,updated_at,status) VALUES(?,?,?,'queued')",
                 (notification_id, now, now))
-    if not _runtime_suppressed(config):
+    alerts_last_hour = core.db(
+        "SELECT COUNT(*) FROM agent_notifications WHERE delivered_at>=?",
+        (time.time() - 3600,),
+    )[0][0]
+    if config.get("agent_notifications") and int(alerts_last_hour) < int(config.get("max_notifications_per_hour", 4)) and not _runtime_suppressed(config):
         delivered = _agent_toast(row["title"], row["question"] or row["suggested_fix"][:180])
         if delivered:
             core.db("UPDATE agent_notifications SET delivered_at=? WHERE id=?", (time.time(), notification_id))
