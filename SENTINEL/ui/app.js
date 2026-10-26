@@ -821,7 +821,7 @@ function show(v) {
     else if (v === "net" && S) updNet();
     else if (v === "ai" && S) updAI();
     else if (v === "tsk" && S) updTasks();
-    else if (v === "maint") loadMaintenance(false);
+    else if (v === "maint") { loadMaintenance(false); loadAgentAutomation(); }
     return;
   }
 
@@ -840,7 +840,7 @@ function show(v) {
     else if (v === "tsk") loadHist();
     else if (v === "act") renderFeed();
     else if (v === "ctl") { buildCtl(); loadActions(); ctlInitialized = true; }
-    else if (v === "maint") loadMaintenance(false);
+    else if (v === "maint") { loadMaintenance(false); loadAgentAutomation(); }
     return;
   }
   ({
@@ -1322,7 +1322,7 @@ async function boot() {
     toast("Exported " + LOGS.length + " events", "ok");
   };
   initPalette(); initNotify(); initFC(); initIntelligence(); initActivityIntelligence();
-  initAdvanced(); initAgent(); initEngines(); initMaintenance(); initWindowsKnowledge(); initVoice(); bindJ("#metrics");
+  initAdvanced(); initAgent(); initEngines(); initMaintenance(); initAgentAutomation(); initWindowsKnowledge(); initVoice(); bindJ("#metrics");
   $("#e-go").onclick = loadEvi;
   $("#e-csv").onclick = csvExport;
   $("#e-q").onkeydown = event => event.key === "Enter" && loadEvi();
@@ -2134,6 +2134,158 @@ function renderWindowsSpecialist(result){
     '<div class="ix-specialist-citations">'+citations.map(item=>'<a href="'+esc(item.url)+'" target="_blank" rel="noopener noreferrer"><b>'+esc(item.publisher)+' · '+esc(item.title)+'</b><small>'+esc(item.citation)+'</small></a>').join("")+'</div>'+
     '<div class="msg"><small>SAFETY BOUNDARY</small>Suggestions are not executed. Maintenance remains manual-only; every change requires a fresh preview and explicit confirmation. Model output cannot grant permissions.</div>';
 }
+
+let AGENT_ASSIST = null;
+let AGENT_NOTIFICATIONS = [];
+let STORAGE_INTELLIGENCE = null;
+
+function agentBytes(value){
+  let bytes=Math.max(0,Number(value)||0);
+  if(bytes<1024)return bytes.toFixed(0)+" B";
+  const units=["KiB","MiB","GiB","TiB"];let index=-1;
+  do{bytes/=1024;index++;}while(bytes>=1024&&index<units.length-1);
+  return bytes.toFixed(1)+" "+units[index];
+}
+function renderAgentNotifications(){
+  const host=document.getElementById("agent-assist-notifications-list");
+  if(!host)return;
+  const rows=Array.isArray(AGENT_NOTIFICATIONS)?AGENT_NOTIFICATIONS:[];
+  const count=document.getElementById("agent-assist-count");
+  if(count)count.textContent=rows.length+" OPEN";
+  if(!rows.length){host.innerHTML='<div class="empty">No unresolved findings. The agent continues observing in the background.</div>';return;}
+  host.innerHTML=rows.map(item=>{
+    const evidence=Object.entries(item.evidence||{}).map(([key,value])=>'<span class="tag">'+esc(key.replaceAll("_"," "))+' · '+esc(value)+'</span>').join(" ");
+    const question=item.question?'<div class="msg"><small>FOLLOW-UP QUESTION</small>'+esc(item.question)+'</div>':"";
+    return '<article class="panel" style="margin:8px 0"><div class="pb">'+
+      '<div class="maint-data-row"><b>'+esc(item.title||"System finding")+'</b><span class="tag">'+esc(String(item.severity||"normal").toUpperCase())+'</span></div>'+
+      '<div class="msg"><small>'+esc(item.category||"system")+' · '+esc(new Date(Number(item.created_at||0)*1000).toLocaleString())+'</small>'+esc(item.explanation||"")+'</div>'+
+      '<div class="msg"><small>SUGGESTED FIX</small>'+esc(item.suggested_fix||"")+'</div>'+
+      question+'<div class="maint-data-row">'+evidence+'</div>'+
+      '<div class="maint-button-row"><button class="btn or" data-agent-answer="'+Number(item.id)+'">ANSWER</button><button class="btn" data-agent-dismiss="'+Number(item.id)+'">DISMISS</button></div>'+
+      '</div></article>';
+  }).join("");
+}
+function renderStorageIntelligence(){
+  const host=document.getElementById("storage-scan-results");
+  const state=document.getElementById("storage-scan-state");
+  if(!host)return;
+  const report=STORAGE_INTELLIGENCE?.snapshot;
+  if(!report){
+    if(state)state.textContent="WAITING FOR FIRST SCAN";
+    host.innerHTML='<div class="empty">No completed scan yet. A scan starts only when resource headroom and the runtime safety mode permit it.</div>';
+    return;
+  }
+  if(state)state.textContent=(report.coverage?.partial?"PARTIAL":"COMPLETE")+" · READ-ONLY";
+  const drives=(report.drives||[]).map(d=>'<div class="maint-data-row"><b>'+esc(d.mountpoint)+' · '+esc(d.filesystem||"volume")+'</b><span>'+agentBytes(d.free_bytes)+' free / '+agentBytes(d.total_bytes)+' · '+esc(d.used_percent)+'% used</span></div>').join("");
+  const languages=(report.language_footprints||[]).map(x=>'<div class="maint-data-row"><b>'+esc(x.name)+'</b><span>'+agentBytes(x.bytes)+'</span></div>').join("");
+  const roots=(report.roots||[]).map(root=>{
+    const packages=(root.top_level||[]).slice(0,8).map(pkg=>'<span class="tag">'+esc(pkg.name)+' · '+agentBytes(pkg.bytes)+'</span>').join(" ");
+    return '<div class="msg"><small>'+esc(root.category_label||root.category)+' · '+esc(root.label)+' · '+agentBytes(root.bytes)+'</small><div>'+esc(root.path||"")+'</div>'+
+      '<div>'+packages+'</div></div>';
+  }).join("");
+  const extensions=(report.extensions||[]).slice(0,14).map(x=>'<div class="maint-data-row"><b>'+esc(x.extension)+'</b><span>'+agentBytes(x.bytes)+'</span></div>').join("");
+  const candidates=(report.review_candidates||[]).slice(0,12).map(x=>'<div class="msg"><small>'+esc(x.review_type)+' · '+esc(x.confidence)+' confidence · '+agentBytes(x.bytes)+'</small><b>'+esc(x.name)+'</b><div>'+esc(x.reason)+'</div><div>'+esc(x.suggestion)+'</div></div>').join("");
+  const scan=STORAGE_INTELLIGENCE.scan||{};
+  host.innerHTML='<div class="maint-digest-grid"><div><small>FILES / ENTRIES</small><b>'+esc(scan.entries_visited||report.coverage?.entries_visited||0)+'</b></div>'+
+    '<div><small>ROOTS MEASURED</small><b>'+esc(report.coverage?.roots_measured||0)+'</b></div>'+
+    '<div><small>DATA FOOTPRINT</small><b>'+agentBytes(report.coverage?.bytes_metadata_total||0)+'</b></div>'+
+    '<div><small>REVIEW CANDIDATES</small><b>'+esc((report.review_candidates||[]).length)+'</b></div></div>'+
+    '<div class="msg"><small>DRIVE CAPACITY</small>'+drives+'</div>'+
+    '<div class="msg"><small>LANGUAGE / TOOLCHAIN FOOTPRINTS</small>'+languages+'</div>'+
+    '<div class="msg"><small>LARGEST ROOTS AND PACKAGE BREAKDOWN</small>'+roots+'</div>'+
+    '<div class="msg"><small>FILE EXTENSIONS</small>'+extensions+'</div>'+
+    '<div class="msg"><small>REVIEW QUEUE · NO AUTOMATIC DELETION</small>'+candidates+'</div>'+
+    '<div class="msg"><small>LAST SCAN</small>'+esc(scan.scanned_at?new Date(Number(scan.scanned_at)*1000).toLocaleString():"unknown")+
+    ' · '+esc(report.scan_mode||"read-only")+'</div>'+
+    '<div class="msg"><small>USAGE ACCURACY</small>'+esc(report.usage_caveat||"Last-access timestamps may be disabled or coarse on Windows. They do not prove that a file is unused.")+'</div>';
+}
+async function loadAgentAutomation(){
+  try{
+    const values=await Promise.all([
+      api("/api/agent-assist/status"),
+      api("/api/agent-assist/notifications?limit=20"),
+      api("/api/storage/status")
+    ]);
+    if(values[0].error)throw new Error(values[0].error);
+    AGENT_ASSIST=values[0];
+    AGENT_NOTIFICATIONS=Array.isArray(values[1])?values[1]:[];
+    STORAGE_INTELLIGENCE=values[2]||null;
+    const a=AGENT_ASSIST.settings||{};
+    const set=(id,value)=>{const node=document.getElementById(id);if(node)node.checked=!!value;};
+    set("agent-assist-enabled",a.enabled);
+    set("agent-assist-questions",a.ask_follow_up_questions);
+    set("agent-assist-notifications",a.agent_notifications);
+    const agentState=document.getElementById("agent-assist-state");
+    if(agentState)agentState.textContent=AGENT_ASSIST.engine==="agent-owned"?"AGENT-OWNED · "+(AGENT_ASSIST.open_notifications||0)+" OPEN":"AGENT STATUS";
+    renderAgentNotifications();
+    const storageSettings=STORAGE_INTELLIGENCE?.settings||{};
+    set("storage-scan-enabled",storageSettings.enabled);
+    const interval=document.getElementById("storage-scan-interval");
+    if(interval)interval.value=String(storageSettings.deep_scan_interval_hours||72);
+    renderStorageIntelligence();
+  }catch(error){
+    const host=document.getElementById("agent-assist-notifications-list");
+    if(host)host.innerHTML='<div class="empty">'+esc(error.message||String(error))+'</div>';
+  }
+}
+function initAgentAutomation(){
+  const bind=(id,fn)=>{const node=document.getElementById(id);if(node)node.onclick=fn;};
+  bind("agent-assist-refresh",loadAgentAutomation);
+  bind("storage-scan-refresh",loadAgentAutomation);
+  bind("agent-assist-save",async()=>{
+    const result=await api("/api/agent-assist/settings",{
+      enabled:!!document.getElementById("agent-assist-enabled")?.checked,
+      ask_follow_up_questions:!!document.getElementById("agent-assist-questions")?.checked,
+      agent_notifications:!!document.getElementById("agent-assist-notifications")?.checked
+    });
+    if(result.error)return toast(result.error,"bad");
+    toast("Agent assistant settings saved to the local database","ok");
+    await loadAgentAutomation();
+  });
+  bind("storage-scan-save",async()=>{
+    const result=await api("/api/storage/settings",{
+      enabled:!!document.getElementById("storage-scan-enabled")?.checked,
+      deep_scan_interval_hours:Number(document.getElementById("storage-scan-interval")?.value||72)
+    });
+    if(result.error)return toast(result.error,"bad");
+    toast("Storage intelligence settings saved to the local database","ok");
+    await loadAgentAutomation();
+  });
+  bind("storage-scan-now",async()=>{
+    const button=document.getElementById("storage-scan-now");
+    if(button)button.disabled=true;
+    try{
+      const result=await api("/api/storage/scan",{});
+      if(result.error)throw new Error(result.error);
+      toast(result.message||"Scan queued; the agent will wait for a safe resource window","ok");
+    }catch(error){toast(error.message||String(error),"bad");}
+    finally{if(button)button.disabled=false;}
+  });
+  const host=document.getElementById("agent-assist-notifications-list");
+  if(host)host.addEventListener("click",async event=>{
+    const answerButton=event.target.closest("[data-agent-answer]");
+    const dismissButton=event.target.closest("[data-agent-dismiss]");
+    const target=answerButton||dismissButton;
+    if(!target)return;
+    const id=Number(target.dataset.agentAnswer||target.dataset.agentDismiss||0);
+    if(!id)return;
+    const answer=dismissButton?"":window.prompt("Answer the agent's follow-up question:","");
+    if(answer===null)return;
+    try{
+      const result=await api("/api/agent-assist/notification/respond",{
+        id,answer,dismiss:!!dismissButton
+      });
+      if(result.error)throw new Error(result.error);
+      toast(dismissButton?"Finding dismissed":"Answer saved to agent history","ok");
+      await loadAgentAutomation();
+    }catch(error){toast(error.message||String(error),"bad");}
+  });
+  // Fetch display state once when the dashboard starts. Future refreshes happen
+  // when the operator opens Maintenance or explicitly requests a refresh; the
+  // background agent, not this UI, owns scanning, event detection and alerts.
+  void loadAgentAutomation();
+}
+
 function initWindowsKnowledge(){
   const diagnose=document.getElementById("ix-win-diagnose"),question=document.getElementById("ix-win-question");
   const runDiagnosis=async()=>{
