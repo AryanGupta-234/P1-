@@ -121,6 +121,22 @@ def _read_app_version():
 APP_VERSION = _read_app_version()
 APP_VERSION_DIR = os.path.join(VERSIONS_DIR, APP_VERSION)
 os.environ.setdefault("SENTINEL_VERSION", APP_VERSION)
+
+def _release_runtime():
+    """Resolve the immutable release's private Windows runtime and entrypoint.
+
+    Installation may be invoked by a system Python interpreter. That interpreter
+    is never the observer runtime; launch integration targets this release's venv.
+    """
+    release_dir = os.path.abspath(APP_VERSION_DIR)
+    pythonw = os.path.join(release_dir, ".venv", "Scripts", "pythonw.exe")
+    script = os.path.join(release_dir, "agent.py")
+    if not os.path.isfile(pythonw):
+        raise RuntimeError(f"Release runtime is missing: {pythonw}")
+    if not os.path.isfile(script):
+        raise RuntimeError(f"Release entrypoint is missing: {script}")
+    return pythonw, script, release_dir
+
 NO_WIN = 0x08000000 if IS_WIN else 0
 
 
@@ -308,18 +324,17 @@ def _launch_hud():
 
 
 def _start_agent_background():
-    """Start one detached agent process when neither the logon task nor server is up."""
-    interpreter = sys.executable
+    """Start the exact release runtime, detached from the desktop launcher."""
     if IS_WIN:
-        candidate = os.path.join(os.path.dirname(sys.executable), "pythonw.exe")
-        if os.path.isfile(candidate):
-            interpreter = candidate
+        interpreter, script, workdir = _release_runtime()
+    else:
+        interpreter, script, workdir = sys.executable, os.path.join(HERE, "agent.py"), HERE
     flags = 0
     if IS_WIN:
         flags = getattr(subprocess, "DETACHED_PROCESS", 0) | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
     subprocess.Popen(
-        [interpreter, os.path.join(HERE, "agent.py")],
-        cwd=HERE,
+        [interpreter, script],
+        cwd=workdir,
         stdin=subprocess.DEVNULL,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
@@ -417,7 +432,8 @@ def open_app():
             return 1
         problem = _runtime_validation_problem(
             runtime, expected_username=expected_user,
-            expected_session_id=expected_session, expected_version=APP_VERSION
+            expected_session_id=expected_session, expected_version=APP_VERSION,
+            expected_executable=os.path.join(APP_VERSION_DIR, ".venv", "Scripts", "pythonw.exe")
         )
         if problem:
             print(f"Existing SENTINEL runtime does not match this release ({problem}). Replacing it with the standard-user interactive task.")
@@ -470,18 +486,18 @@ def install():
         print("install is Windows-only")
         return 1
 
-    pythonw = os.path.join(os.path.dirname(sys.executable), "pythonw.exe")
-    if not os.path.isfile(pythonw):
-        print(f"pythonw.exe was not found next to {sys.executable}")
+    try:
+        pythonw, script, release_workdir = _release_runtime()
+    except RuntimeError as exc:
+        print(f"SENTINEL release runtime validation failed: {exc}")
         return 1
 
-    script = os.path.abspath(__file__)
-    store = os.path.join(os.environ.get("ProgramData", r"C:\ProgramData"), "Sentinel")
+    store = os.path.join(os.environ.get("ProgramData", r"C:\\ProgramData"), "Sentinel")
     values = {
         "SENTINEL_TASK": TASK,
         "SENTINEL_PYTHONW": pythonw,
         "SENTINEL_SCRIPT": script,
-        "SENTINEL_WORKDIR": HERE,
+        "SENTINEL_WORKDIR": release_workdir,
         "SENTINEL_STORE": store,
         "SENTINEL_VERSION": APP_VERSION,
     }
