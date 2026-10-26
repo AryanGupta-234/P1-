@@ -241,3 +241,11 @@ The normal shortcut opener accepts the validated standard-user process. It never
 The installer process may be invoked by the machine's bootstrap Python, but that interpreter must never be registered as the observer. `_release_runtime()` is the single resolver for the immutable release and returns only `versions/<APP_VERSION>/.venv/Scripts/pythonw.exe`, that release's `agent.py`, and the release directory. A missing runtime or entrypoint is a hard failure; there is no fallback to `sys.executable` or another globally installed Python.
 
 The scheduled task, Desktop/Start Menu shortcuts, installer identity check, normal opener validation, and detached fallback launcher all use this release-scoped path. The observer remains a Limited, standard-user process in the signed-in interactive session. This change does not modify previous version folders or ProgramData settings, SQLite history, and traces.
+
+
+
+## Windows virtual-environment identity correction (1.2.28)
+
+Windows venv launchers can expose the base Python executable image through the operating-system process API while the running interpreter remains bound to the release venv. Runtime identity therefore distinguishes three values: `sys.executable` (the interpreter runtime path), `sys.prefix` (the active environment), and the OS process image returned by psutil. The API reports all three. Installer and opener validation require both the release-scoped `sys.executable` and the exact release `.venv` prefix; the OS process image is diagnostic and is not used as a substitute for Python environment identity.
+
+This preserves fail-closed validation: missing or mismatched interpreter/environment identity still blocks installation completion. It does not relax user, session, elevation, version, or desktop-session checks, and it does not change prior release directories or ProgramData state.
