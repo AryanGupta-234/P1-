@@ -308,7 +308,7 @@ def create_notification(source: str, message: str, severity: str = "warn",
          json.dumps(safe_evidence, ensure_ascii=False), dedupe_key),
     )
     row = {"id": notification_id, "created_at": now, **diagnosis,
-           "severity": "high" if str(severity).casefold() == "error" else "normal",
+           "severity": "high" if str(severity).casefold() in ("error", "critical", "high") else "normal",
            "question": question, "evidence": safe_evidence}
     core.publish("agent_notification", row)
     if str(severity).casefold() in ("error", "critical", "high") and config.get("ai_deep_diagnosis"):
