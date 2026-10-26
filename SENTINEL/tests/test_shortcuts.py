@@ -41,7 +41,7 @@ def test_installer_reports_top_level_start_menu_entry():
 
 
 def test_release_version_was_bumped_for_immutable_installer_layout():
-    assert (ROOT / "VERSION").read_text(encoding="utf-8").strip() == "1.2.27"
+    assert (ROOT / "VERSION").read_text(encoding="utf-8").strip() == "1.2.28"
 
 
 
@@ -89,3 +89,14 @@ def test_release_runtime_fails_closed_instead_of_falling_back_to_global_python()
     assert 'if not os.path.isfile(script):' in resolver
     assert "raise RuntimeError" in resolver
     assert "sys.executable" not in resolver
+
+
+
+def test_runtime_identity_uses_python_venv_identity_not_windows_process_image():
+    server = (ROOT / "sentinel" / "server.py").read_text(encoding="utf-8")
+    agent = (ROOT / "agent.py").read_text(encoding="utf-8")
+    assert "executable = sys.executable" in server
+    assert "python_prefix = sys.prefix" in server
+    assert '"process_image": process_image' in server
+    assert "expected_python_prefix" in agent
+    assert 'runtime.get("python_prefix")' in agent
