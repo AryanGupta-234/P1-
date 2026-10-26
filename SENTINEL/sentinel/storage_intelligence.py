@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 import threading
 import time
 from collections import defaultdict
@@ -117,6 +118,7 @@ def _local_roots() -> list[tuple[str, str, str]]:
         ("Python package cache", str(home / ".cache" / "pip"), "python-cache"),
         ("Python user packages", str(roaming / "Python"), "python-packages"),
         ("Python environments", str(home / ".virtualenvs"), "python-environments"),
+        ("SENTINEL runtime Python packages", str(Path(sys.prefix) / "Lib" / "site-packages"), "python-packages"),
         ("npm cache", str(local / "npm-cache"), "node-cache"),
         ("npm cache", str(home / ".npm"), "node-cache"),
         ("pnpm store", str(local / "pnpm" / "store"), "node-cache"),
@@ -155,10 +157,16 @@ def _local_roots() -> list[tuple[str, str, str]]:
     # For secondary data volumes, inspect top-level data folders as bounded roots.
     # The OS volume is represented by the curated user/cache roots above to avoid a
     # broad recursive walk through Windows and Program Files.
-    system_drive = os.path.normcase(os.path.abspath(os.environ.get("SystemDrive", "C:\\")))
-    for part in psutil.disk_partitions(all=False):
+    system_drive = os.environ.get("SystemDrive", "C:").strip().rstrip("\\\\/")
+    system_drive = os.path.normcase(system_drive + os.sep)
+    if os.name == "nt":
+        partitions = psutil.disk_partitions(all=False)
+    else:
+        partitions = []
+    for part in partitions:
         mount = os.path.abspath(str(part.mountpoint or ""))
-        if not mount or os.path.normcase(mount.rstrip("\\\\") + "\\\\") == os.path.normcase(system_drive.rstrip("\\\\") + "\\\\"):
+        mount_key = os.path.normcase(mount.rstrip("\\\\/") + os.sep)
+        if not mount or mount_key == system_drive:
             continue
         try:
             children = sorted(os.scandir(mount), key=lambda item: item.name.casefold())
@@ -202,14 +210,14 @@ def _measure(path: str, max_entries: int, deadline: float, category: str = "") -
     newest_atime = 0.0
     top_level_access: dict[str, float] = defaultdict(float)
     partial = False
-    stack: list[tuple[str, int, str]] = [(path, 0, "")]
+    stack: list[tuple[str, int, str, bool]] = [(path, 0, "", False)]
     top_level_bytes: dict[str, int] = defaultdict(int)
     visited = 0
     while stack:
         if visited >= max_entries or time.monotonic() >= deadline:
             partial = True
             break
-        folder, depth, package_name = stack.pop()
+        folder, depth, package_name, in_hidden_dir = stack.pop()
         try:
             entries = os.scandir(folder)
         except (OSError, PermissionError):
@@ -238,7 +246,8 @@ def _measure(path: str, max_entries: int, deadline: float, category: str = "") -
                             child_group = entry.name
                         else:
                             child_group = entry.name if depth == 0 else package_name
-                        stack.append((entry.path, depth + 1, child_group))
+                        stack.append((entry.path, depth + 1, child_group,
+                                      in_hidden_dir or _hidden(entry, stat_result)))
                     continue
                 if not entry.is_file(follow_symlinks=False):
                     continue
@@ -254,7 +263,7 @@ def _measure(path: str, max_entries: int, deadline: float, category: str = "") -
                     newest_atime = max(newest_atime, access_time)
                     if package_name:
                         top_level_access[package_name] = max(top_level_access[package_name], access_time)
-                if _hidden(entry, stat_result):
+                if in_hidden_dir or _hidden(entry, stat_result):
                     hidden_files += 1
                     hidden_bytes += size
                 suffix = Path(entry.name).suffix.casefold() or "[no extension]"
