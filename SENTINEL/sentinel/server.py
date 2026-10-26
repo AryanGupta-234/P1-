@@ -72,8 +72,15 @@ def agent_runtime(*, include_threads=True, include_io=True, include_run=True):
     is psutil's conventional per-core figure and can exceed 100 on multi-core hosts.
     """
     process = _AGENT_PROCESS
-    try: executable = process.exe()
-    except Exception: executable = sys.executable
+    # On Windows, a venv launcher may create the interpreter process from the
+    # base Python image. process.exe() can therefore resolve to base Python even
+    # though sys.executable/sys.prefix correctly identify the active venv.
+    # Report both identities; release validation uses the Python runtime paths.
+    try: process_image = process.exe()
+    except Exception: process_image = None
+    executable = sys.executable
+    python_prefix = sys.prefix
+    python_base_prefix = sys.base_prefix
     try: username = process.username()
     except Exception: username = "unavailable"
     try:
@@ -150,6 +157,9 @@ def agent_runtime(*, include_threads=True, include_io=True, include_run=True):
         "pid": os.getpid(),
         "parent_pid": os.getppid(),
         "executable": executable,
+        "python_prefix": python_prefix,
+        "python_base_prefix": python_base_prefix,
+        "process_image": process_image,
         "username": username,
         "version": os.environ.get("SENTINEL_VERSION", "unknown"),
         "is_elevated": is_elevated,
