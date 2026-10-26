@@ -492,7 +492,7 @@ def install():
         print(f"SENTINEL release runtime validation failed: {exc}")
         return 1
 
-    store = os.path.join(os.environ.get("ProgramData", r"C:\\ProgramData"), "Sentinel")
+    store = os.path.join(os.environ.get("ProgramData", r"C:\ProgramData"), "Sentinel")
     values = {
         "SENTINEL_TASK": TASK,
         "SENTINEL_PYTHONW": pythonw,
