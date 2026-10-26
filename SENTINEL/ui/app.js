@@ -2156,9 +2156,18 @@ function renderAgentNotifications(){
   host.innerHTML=rows.map(item=>{
     const evidence=Object.entries(item.evidence||{}).map(([key,value])=>'<span class="tag">'+esc(key.replaceAll("_"," "))+' · '+esc(value)+'</span>').join(" ");
     const question=item.question?'<div class="msg"><small>FOLLOW-UP QUESTION</small>'+esc(item.question)+'</div>':"";
+    const ai=item.ai_diagnosis;
+    const aiPanel=ai?'<div class="msg"><small>LOCAL AI DIAGNOSIS · '+esc(String(ai.confidence||"unknown").toUpperCase())+' CONFIDENCE · '+esc(ai.model||"local model")+'</small>'+
+      esc(ai.diagnosis||"")+'<div>'+esc(ai.uncertainty||"")+'</div>'+
+      (ai.recommendations||[]).map(x=>'<div class="maint-plan-item"><i></i><span><b>'+esc(x.title||"Recommendation")+'</b> · '+esc(x.rationale||"")+'</span></div>').join("")+
+      (ai.extra_probes||[]).map(x=>'<div class="maint-data-row"><b>CHECK</b><span>'+esc(x)+'</span></div>').join("")+
+      '<div class="msg"><small>SAFETY</small>AI output is advisory only; no action was executed.</div></div>':
+      (item.ai_status==="queued"||item.ai_status==="running")?'<div class="msg"><small>LOCAL AI DIAGNOSIS</small>Queued for an idle resource window. The agent pauses this task during games or resource pressure.</div>':
+      (item.ai_status==="unavailable")?'<div class="msg"><small>LOCAL AI UNAVAILABLE</small>'+esc(item.ai_error||"Deterministic findings remain available.")+'</div>':"";
     return '<article class="panel" style="margin:8px 0"><div class="pb">'+
       '<div class="maint-data-row"><b>'+esc(item.title||"System finding")+'</b><span class="tag">'+esc(String(item.severity||"normal").toUpperCase())+'</span></div>'+
       '<div class="msg"><small>'+esc(item.category||"system")+' · '+esc(new Date(Number(item.created_at||0)*1000).toLocaleString())+'</small>'+esc(item.explanation||"")+'</div>'+
+      aiPanel+
       '<div class="msg"><small>SUGGESTED FIX</small>'+esc(item.suggested_fix||"")+'</div>'+
       question+'<div class="maint-data-row">'+evidence+'</div>'+
       '<div class="maint-button-row"><button class="btn or" data-agent-answer="'+Number(item.id)+'">ANSWER</button><button class="btn" data-agent-dismiss="'+Number(item.id)+'">DISMISS</button></div>'+
@@ -2215,6 +2224,7 @@ async function loadAgentAutomation(){
     set("agent-assist-enabled",a.enabled);
     set("agent-assist-questions",a.ask_follow_up_questions);
     set("agent-assist-notifications",a.agent_notifications);
+    set("agent-assist-ai",a.ai_deep_diagnosis);
     const agentState=document.getElementById("agent-assist-state");
     if(agentState)agentState.textContent=AGENT_ASSIST.engine==="agent-owned"?"AGENT-OWNED · "+(AGENT_ASSIST.open_notifications||0)+" OPEN":"AGENT STATUS";
     renderAgentNotifications();
@@ -2236,7 +2246,8 @@ function initAgentAutomation(){
     const result=await api("/api/agent-assist/settings",{
       enabled:!!document.getElementById("agent-assist-enabled")?.checked,
       ask_follow_up_questions:!!document.getElementById("agent-assist-questions")?.checked,
-      agent_notifications:!!document.getElementById("agent-assist-notifications")?.checked
+      agent_notifications:!!document.getElementById("agent-assist-notifications")?.checked,
+      ai_deep_diagnosis:!!document.getElementById("agent-assist-ai")?.checked
     });
     if(result.error)return toast(result.error,"bad");
     toast("Agent assistant settings saved to the local database","ok");
