@@ -28,7 +28,7 @@ def test_agent_assistant_classifies_network_layers_without_mutating_them():
 def test_agent_assistant_generic_finding_is_explicit_about_uncertainty():
     result = agent_assist._classify("unknown", "Unusual warning occurred", "warn")
     assert result["category"] == "system"
-    assert "not enough evidence" in result["explanation"].lower()
+    assert "without enough evidence" in result["explanation"].lower()
     assert "until the symptom is narrowed down" in result["fix"]
 
 
