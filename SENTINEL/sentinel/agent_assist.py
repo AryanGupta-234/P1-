@@ -52,6 +52,10 @@ def ensure_schema() -> None:
     core.db("""CREATE TABLE IF NOT EXISTS agent_assist_feedback(
         id INTEGER PRIMARY KEY AUTOINCREMENT, notification_id INTEGER NOT NULL,
         created_at REAL NOT NULL, response TEXT NOT NULL)""")
+    now = time.time()
+    for key, value in DEFAULTS.items():
+        core.db("INSERT OR IGNORE INTO agent_assist_settings(setting_key,value_json,updated_at) VALUES(?,?,?)",
+                (key, json.dumps(value, separators=(",", ":")), now))
 
 
 ensure_schema()
