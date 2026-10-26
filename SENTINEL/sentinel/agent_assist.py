@@ -303,7 +303,7 @@ def create_notification(source: str, message: str, severity: str = "warn",
     notification_id = core.insert_id(
         "INSERT INTO agent_notifications(created_at,category,severity,title,explanation,question,suggested_fix,"
         "evidence_json,dedupe_key,state) VALUES(?,?,?,?,?,?,?,?,?,'open')",
-        (now, diagnosis["category"], "high" if str(severity).casefold() == "error" else "normal",
+        (now, diagnosis["category"], "high" if str(severity).casefold() in ("error", "critical", "high") else "normal",
          diagnosis["title"], diagnosis["explanation"], question, diagnosis["fix"],
          json.dumps(safe_evidence, ensure_ascii=False), dedupe_key),
     )
@@ -424,7 +424,10 @@ def _process_new_events() -> None:
                 create_notification(str(source or "system"), str(message or ""), severity, evidence)
             else:
                 _, ts, severity, key_name, title, detail, culprit = row
-                level = "error" if str(severity).casefold() in ("high", "critical", "error") else "warn"
+                insight_level = str(severity or "").casefold()
+                if insight_level not in ("warn", "warning", "high", "critical", "error"):
+                    continue
+                level = "error" if insight_level in ("high", "critical", "error") else "warn"
                 evidence = {"insight_id": row_id, "timestamp": ts, "insight_key": key_name,
                             "culprit": culprit, "detail": _clean(detail, 180)}
                 create_notification(str(key_name or "insight"), str(title or "") + " " + str(detail or ""), level, evidence)
