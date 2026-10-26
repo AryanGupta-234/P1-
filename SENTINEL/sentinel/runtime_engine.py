@@ -90,7 +90,8 @@ def admit_optional_work(
         return False, f"{name} deferred during a foreground game session"
     try:
         available = float(state.get("available_memory_gib") or 0.0)
-        cpu = float(state.get("cpu_percent") or 100.0)
+        raw_cpu = state.get("cpu_percent")
+        cpu = float(raw_cpu) if raw_cpu is not None else 100.0
     except (TypeError, ValueError):
         return False, f"{name} deferred because runtime telemetry is invalid"
     if available < max(0.5, float(min_available_gib)):
