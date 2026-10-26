@@ -107,6 +107,11 @@ def _local_roots() -> list[tuple[str, str, str]]:
     candidates: list[tuple[str, str, str]] = [
         ("Downloads", str(home / "Downloads"), "user-files"),
         ("Desktop", str(home / "Desktop"), "user-files"),
+        ("Documents", str(home / "Documents"), "user-files"),
+        ("Pictures", str(home / "Pictures"), "user-files"),
+        ("Videos", str(home / "Videos"), "user-files"),
+        ("Music", str(home / "Music"), "user-files"),
+        ("Saved Games", str(home / "Saved Games"), "user-files"),
         ("Windows temporary files", str(local / "Temp"), "temporary"),
         ("Python package cache", str(local / "pip" / "Cache"), "python-cache"),
         ("Python package cache", str(home / ".cache" / "pip"), "python-cache"),
@@ -145,16 +150,28 @@ def _local_roots() -> list[tuple[str, str, str]]:
                         category = "python-environments" if artifact in (".venv", "venv") else (
                             "node-dependencies" if artifact == "node_modules" else "build-output")
                         candidates.append((f"{project.name} / {artifact}", str(target), category))
-                        if artifact in (".venv", "venv"):
-                            for site_packages in (target / "Lib" / "site-packages", target / "lib"):
-                                try:
-                                    if site_packages.is_dir() and not site_packages.is_symlink():
-                                        candidates.append((f"{project.name} / {artifact} packages",
-                                                           str(site_packages), "python-packages"))
-                                except OSError:
-                                    pass
                 except OSError:
                     continue
+    # For secondary data volumes, inspect top-level data folders as bounded roots.
+    # The OS volume is represented by the curated user/cache roots above to avoid a
+    # broad recursive walk through Windows and Program Files.
+    system_drive = os.path.normcase(os.path.abspath(os.environ.get("SystemDrive", "C:\\")))
+    for part in psutil.disk_partitions(all=False):
+        mount = os.path.abspath(str(part.mountpoint or ""))
+        if not mount or os.path.normcase(mount.rstrip("\\\\") + "\\\\") == os.path.normcase(system_drive.rstrip("\\\\") + "\\\\"):
+            continue
+        try:
+            children = sorted(os.scandir(mount), key=lambda item: item.name.casefold())
+        except OSError:
+            continue
+        for entry in children[:20]:
+            try:
+                if not entry.is_dir(follow_symlinks=False) or entry.is_symlink() or entry.name.casefold() in SKIP_NAMES:
+                    continue
+                candidates.append((f"{os.path.basename(mount.rstrip(os.sep)) or mount} / {entry.name}",
+                                   entry.path, "drive-directory"))
+            except OSError:
+                continue
     found: list[tuple[str, str, str]] = []
     seen: set[str] = set()
     for label, raw_path, category in candidates:
@@ -176,7 +193,7 @@ def category_is_node_dependencies(path: str) -> bool:
     return os.path.basename(os.path.normpath(path)).casefold() == "node_modules"
 
 
-def _measure(path: str, max_entries: int, deadline: float) -> dict[str, Any]:
+def _measure(path: str, max_entries: int, deadline: float, category: str = "") -> dict[str, Any]:
     """Count directory metadata only, with one shared time/entry budget."""
     total_bytes = files = dirs = hidden_files = hidden_bytes = 0
     extension_bytes: dict[str, int] = defaultdict(int)
@@ -217,6 +234,8 @@ def _measure(path: str, max_entries: int, deadline: float) -> dict[str, Any]:
                         # collapsed into one @scope aggregate.
                         if category_is_node_dependencies(path) and depth == 1 and package_name.startswith("@"):
                             child_group = package_name + "/" + entry.name
+                        elif category == "python-environments" and depth == 2 and os.path.basename(folder).casefold() == "site-packages":
+                            child_group = entry.name
                         else:
                             child_group = entry.name if depth == 0 else package_name
                         stack.append((entry.path, depth + 1, child_group))
@@ -327,7 +346,8 @@ def scan_once(roots: list[tuple[str, str, str]] | None = None,
             if not os.path.isdir(path) or os.path.islink(path):
                 continue
             remaining = max(100, entry_budget - used_entries)
-            measured = _measure(path, remaining, deadline)
+            root_deadline = min(deadline, time.monotonic() + 1.5)
+            measured = _measure(path, remaining, root_deadline, category=category)
             used_entries += measured["entries_visited"]
             used_bytes += measured["bytes"]
             partial = partial or bool(measured["partial"])
