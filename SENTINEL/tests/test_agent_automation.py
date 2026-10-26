@@ -115,3 +115,23 @@ def test_storage_metadata_only_module_has_no_delete_or_uninstall_surface():
     assert "packages_uninstalled" in source
     assert "os.remove(" not in source
     assert "shutil.rmtree(" not in source
+
+
+
+@pytest.mark.parametrize(
+    ("message", "category"),
+    [
+        ("Driver latency: DPC time 16% avg / 40% peak", "driver-latency"),
+        ("Real memory pressure: 600 MB free, pagefile", "memory"),
+        ("CPU spike caused by app.exe", "cpu"),
+        ("Disk latency spike: 80 ms", "disk-performance"),
+        ("GPU throttling detected", "thermal"),
+        ("process-review score requires attention", "process-review"),
+    ],
+)
+def test_agent_assistant_covers_common_system_fault_classes(message, category):
+    result = agent_assist._classify("diagnostic", message, "error")
+    assert result["category"] == category
+    assert result["title"]
+    assert result["question"]
+    assert result["fix"]
