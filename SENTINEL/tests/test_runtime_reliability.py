@@ -650,9 +650,16 @@ def test_install_integration_verifies_desktop_and_all_users_shortcuts(monkeypatc
     assert "INSTALL_DESKTOP=" in script
     assert "INSTALL_START_MENU=" in script
 
-def test_desktop_opener_uses_running_agent_without_spawning_another(monkeypatch):
+def test_desktop_opener_uses_verified_standard_user_agent_without_spawning_another(monkeypatch):
     called = {"launch": 0, "start": 0}
-    monkeypatch.setattr(agent, "_running_agent_is_elevated", lambda: True)
+    runtime = {
+        "is_elevated": False, "desktop_access_expected": True, "session_id": 7,
+        "username": r"TEST-PC\tester", "version": agent.APP_VERSION,
+    }
+    monkeypatch.setattr(agent, "IS_WIN", True)
+    monkeypatch.setattr(agent, "_current_windows_session_id", lambda: 7)
+    monkeypatch.setattr(agent, "_current_windows_username", lambda: r"TEST-PC\tester")
+    monkeypatch.setattr(agent, "_running_agent_runtime", lambda: runtime)
     monkeypatch.setattr(agent, "_wait_for_agent", lambda _timeout: True)
     monkeypatch.setattr(agent, "_launch_hud", lambda: called.__setitem__("launch", called["launch"] + 1) or True)
     monkeypatch.setattr(agent, "_start_agent_background", lambda: called.__setitem__("start", called["start"] + 1))
@@ -737,12 +744,24 @@ def test_admin_guard_fails_closed_when_uac_is_cancelled(monkeypatch):
     assert "requires administrator permissions" in message_boxes[0][1]
 
 
-def test_desktop_opener_restarts_an_existing_non_elevated_agent(monkeypatch):
+def test_desktop_opener_replaces_elevated_agent_with_standard_user_runtime(monkeypatch):
     readiness = iter([True, True])
+    runtimes = iter([
+        {
+            "is_elevated": True, "desktop_access_expected": True, "session_id": 7,
+            "username": r"TEST-PC\tester", "version": agent.APP_VERSION,
+        },
+        {
+            "is_elevated": False, "desktop_access_expected": True, "session_id": 7,
+            "username": r"TEST-PC\tester", "version": agent.APP_VERSION,
+        },
+    ])
     calls = {"stop": 0, "start": 0, "launch": 0}
     monkeypatch.setattr(agent, "IS_WIN", True)
+    monkeypatch.setattr(agent, "_current_windows_session_id", lambda: 7)
+    monkeypatch.setattr(agent, "_current_windows_username", lambda: r"TEST-PC\tester")
     monkeypatch.setattr(agent, "_wait_for_agent", lambda _timeout: next(readiness))
-    monkeypatch.setattr(agent, "_running_agent_is_elevated", lambda: False)
+    monkeypatch.setattr(agent, "_running_agent_runtime", lambda: next(runtimes))
     monkeypatch.setattr(agent, "stop_agent", lambda: calls.__setitem__("stop", calls["stop"] + 1) or 0)
     monkeypatch.setattr(agent, "pw", lambda _command: SimpleNamespace(returncode=1, stdout="", stderr=""))
     monkeypatch.setattr(agent, "_start_agent_background", lambda: calls.__setitem__("start", calls["start"] + 1))

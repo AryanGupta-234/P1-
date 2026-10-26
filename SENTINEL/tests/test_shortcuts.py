@@ -62,7 +62,7 @@ def test_installer_verifies_standard_user_interactive_agent_instead_of_admin_obs
 def test_normal_opener_never_restarts_standard_user_agent_to_elevate_it():
     source = (ROOT / "agent.py").read_text(encoding="utf-8")
     start = source.index("def open_app():")
-    end = source.index("\\ndef install():", start)
+    end = source.index("def install():", start)
     opener = source[start:end]
     assert "_runtime_validation_problem(" in opener
     assert "Replacing it with the standard-user interactive task" in opener
