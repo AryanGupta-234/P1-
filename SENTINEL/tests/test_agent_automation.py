@@ -51,6 +51,7 @@ def test_storage_measurement_reports_package_sizes_extensions_and_hidden_files(t
     (node_modules / "react" / "index.js").write_bytes(b"r" * 101)
     (node_modules / "@scope" / "library" / "index.js").write_bytes(b"s" * 203)
     (node_modules / ".hidden-cache" / ".artifact").write_bytes(b"h" * 17)
+    (node_modules / ".hidden-cache" / "ordinary.dat").write_bytes(b"o" * 11)
 
     report = storage_intelligence._measure(
         str(node_modules), max_entries=100,
@@ -58,13 +59,14 @@ def test_storage_measurement_reports_package_sizes_extensions_and_hidden_files(t
     )
     packages = {item["name"]: item["bytes"] for item in report["top_level"]}
 
-    assert report["bytes"] == 321
+    assert report["bytes"] == 332
     assert packages["react"] == 101
     assert packages["@scope/library"] == 203
-    assert report["hidden_files"] == 1
-    assert report["hidden_bytes"] == 17
+    assert report["hidden_files"] == 2
+    assert report["hidden_bytes"] == 28
     assert report["extensions"][".js"] == 304
     assert report["extensions"][".artifact"] == 17
+    assert report["extensions"][".dat"] == 11
 
 
 def test_storage_scan_is_bounded_and_marks_budget_exhaustion(tmp_path):
