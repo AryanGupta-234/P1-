@@ -441,7 +441,9 @@ def open_app():
         problem = _runtime_validation_problem(
             runtime, expected_username=expected_user,
             expected_session_id=expected_session, expected_version=APP_VERSION,
-            expected_executable=os.path.join(APP_VERSION_DIR, ".venv", "Scripts", "pythonw.exe"),
+            # sys.executable reports the console interpreter inside the venv,
+            # even when Task Scheduler launched the pythonw.exe entry point.
+            expected_executable=os.path.join(APP_VERSION_DIR, ".venv", "Scripts", "python.exe"),
             expected_python_prefix=os.path.join(APP_VERSION_DIR, ".venv")
         )
         if problem:
