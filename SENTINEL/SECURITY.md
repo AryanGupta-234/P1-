@@ -41,3 +41,16 @@ Learned auto-launch is disabled by default and has its own explicit switch. Cand
 ## Automatic ETW sampling
 
 Automatic WPR sampling requires both the Performance ETW engine toggle and the separate ETW automatic-sampling opt-in. Its 12-second WPR GeneralProfile.Light captures are rate-limited and use the same VALORANT and WPR session ownership safeguards as manual trace capture. WPR (`wpr.exe`) is required; Xperf is optional for supplemental driver-module decoding. The ETW opt-in does not grant permission to unrelated state-changing actions.
+
+
+## Proactive agent assistant and local AI diagnosis
+
+The proactive assistant consumes the existing local event/insight stream and stores bounded evidence, questions, suggestions and user responses in the existing SQLite database. Agent notifications are rate-limited and deduplicated; desktop delivery originates from the signed-in agent process, not from JavaScript in the dashboard. The HUD is a read/configuration surface.
+
+High-severity findings can be enriched by the existing local Windows specialist. This path uses only the local Ollama FAST model and local indexed documentation; it is deferred while games are active or CPU/memory headroom is insufficient. AI output is schema-validated, may cite only supplied evidence, and cannot execute commands, approve a maintenance operation or bypass the fixed action vocabulary and user-confirmed preview gate. The diagnosis switch is persistent and can be disabled.
+
+## Storage intelligence and deletion review
+
+Storage Intelligence reads file-system metadata only. It does not open file contents, follow symlinks, delete files, uninstall packages, alter package-manager state, or scan Windows/Program Files recursively. Its scope is a bounded list of personal folders, developer/package caches, known build/dependency directories and top-level data-drive folders. It reports partial coverage explicitly.
+
+File access times on Windows are not treated as reliable proof of use or disuse. Recommendations are review candidates only. Hidden files may contain settings, state, credentials or active caches and are never treated as safe-to-delete merely because they are hidden. Every cleanup still uses the existing preview/confirmation/undo boundary.
