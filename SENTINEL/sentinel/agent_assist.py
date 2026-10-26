@@ -38,7 +38,7 @@ def ensure_schema() -> None:
         category TEXT NOT NULL, severity TEXT NOT NULL, title TEXT NOT NULL,
         explanation TEXT NOT NULL, question TEXT NOT NULL, suggested_fix TEXT NOT NULL,
         evidence_json TEXT NOT NULL, dedupe_key TEXT NOT NULL, state TEXT NOT NULL DEFAULT 'open',
-        user_response TEXT NOT NULL DEFAULT '', delivered_at REAL, resolved_at REAL)""")
+        user_response TEXT NOT NULL DEFAULT '', delivered_at REAL, delivery_attempted_at REAL, resolved_at REAL)""")
     core.db("CREATE INDEX IF NOT EXISTS ix_agent_notifications_created ON agent_notifications(created_at)")
     core.db("CREATE INDEX IF NOT EXISTS ix_agent_notifications_dedupe ON agent_notifications(dedupe_key,created_at)")
     core.db("""CREATE TABLE IF NOT EXISTS agent_assist_ai_jobs(
@@ -327,10 +327,44 @@ def create_notification(source: str, message: str, severity: str = "warn",
         (time.time() - 3600,),
     )[0][0]
     if config.get("agent_notifications") and int(alerts_last_hour) < int(config.get("max_notifications_per_hour", 4)) and not _runtime_suppressed(config):
+        attempted_at = time.time()
+        core.db("UPDATE agent_notifications SET delivery_attempted_at=? WHERE id=?", (attempted_at, notification_id))
         delivered = _agent_toast(row["title"], row["question"] or row["suggested_fix"][:180])
         if delivered:
             core.db("UPDATE agent_notifications SET delivered_at=? WHERE id=?", (time.time(), notification_id))
     return notification_id
+
+
+def _deliver_pending_notifications() -> int:
+    """Deliver persisted findings when the runtime returns to a safe idle window."""
+    config = settings()
+    if not config.get("enabled") or not config.get("agent_notifications") or _runtime_suppressed(config):
+        return 0
+    maximum = max(1, min(12, int(config.get("max_notifications_per_hour", 4))))
+    delivered_count = int(core.db(
+        "SELECT COUNT(*) FROM agent_notifications WHERE delivered_at>=?",
+        (time.time() - 3600,),
+    )[0][0])
+    remaining = maximum - delivered_count
+    if remaining <= 0:
+        return 0
+    rows = core.db(
+        "SELECT id,title,question,suggested_fix FROM agent_notifications "
+        "WHERE state='open' AND delivered_at IS NULL "
+        "AND (delivery_attempted_at IS NULL OR delivery_attempted_at<?) "
+        "ORDER BY id ASC LIMIT ?",
+        (time.time() - 900, remaining),
+    )
+    delivered = 0
+    for notification_id, title, question, suggested_fix in rows:
+        attempted_at = time.time()
+        core.db("UPDATE agent_notifications SET delivery_attempted_at=? WHERE id=?",
+                (attempted_at, notification_id))
+        if _agent_toast(str(title), str(question or suggested_fix or "")[:180]):
+            core.db("UPDATE agent_notifications SET delivered_at=? WHERE id=?",
+                    (time.time(), notification_id))
+            delivered += 1
+    return delivered
 
 
 def notifications(limit: int = 20) -> list[dict[str, Any]]:
@@ -525,10 +559,16 @@ def _loop() -> None:
     while not _STOP.is_set():
         try:
             _process_new_events()
+            _deliver_pending_notifications()
             core.heartbeat("proactive agent assistant", 15, f"{status()['open_notifications']} open review item(s)")
             # Keep SQLite history bounded without discarding unresolved or answered context.
+            retention_cutoff = time.time() - 90 * 86400
             core.db("DELETE FROM agent_notifications WHERE state IN ('dismissed','answered') AND created_at<?",
-                    (time.time() - 90 * 86400,))
+                    (retention_cutoff,))
+            core.db("DELETE FROM agent_assist_ai_jobs WHERE created_at<? AND notification_id NOT IN "
+                    "(SELECT id FROM agent_notifications WHERE state='open')", (retention_cutoff,))
+            core.db("DELETE FROM agent_assist_ai_results WHERE completed_at<? AND notification_id NOT IN "
+                    "(SELECT id FROM agent_notifications WHERE state='open')", (retention_cutoff,))
             core.db("DELETE FROM agent_assist_feedback WHERE created_at<?", (time.time() - 365 * 86400,))
         except Exception as exc:
             core.log("agent-assist", f"proactive diagnosis cycle failed: {type(exc).__name__}: {_clean(exc,160)}", "warn")
