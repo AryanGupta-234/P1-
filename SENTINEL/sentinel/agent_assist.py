@@ -454,11 +454,11 @@ def _ai_worker() -> None:
             if not config.get("enabled") or not config.get("ai_deep_diagnosis") or not job_rows:
                 _STOP.wait(30)
                 continue
-            runtime = runtime_engine.snapshot()
-            available = float(runtime.get("available_memory_gib") or 0)
-            cpu = float(runtime.get("cpu_percent") or 100)
-            if runtime.get("mode") != "balanced" or runtime.get("game_active") or available < 5.0 or cpu >= 40.0:
-                core.heartbeat("agent AI diagnosis", 30, "queued until a safe local inference window")
+            permitted, reason = runtime_engine.admit_optional_work(
+                "local AI diagnosis", min_available_gib=5.0, max_cpu_percent=40.0,
+            )
+            if not permitted:
+                core.heartbeat("agent AI diagnosis", 30, reason)
                 _STOP.wait(45)
                 continue
             if not str(core.STATE.get("ai", {}).get("fast") or "").strip():
