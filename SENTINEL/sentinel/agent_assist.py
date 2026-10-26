@@ -39,6 +39,10 @@ def ensure_schema() -> None:
         explanation TEXT NOT NULL, question TEXT NOT NULL, suggested_fix TEXT NOT NULL,
         evidence_json TEXT NOT NULL, dedupe_key TEXT NOT NULL, state TEXT NOT NULL DEFAULT 'open',
         user_response TEXT NOT NULL DEFAULT '', delivered_at REAL, delivery_attempted_at REAL, resolved_at REAL)""")
+    # Additive migration for a database created by an earlier development build.
+    schema_rows = core.db("SELECT sql FROM sqlite_master WHERE type='table' AND name='agent_notifications'")
+    if schema_rows and "delivery_attempted_at" not in str(schema_rows[0][0]):
+        core.db("ALTER TABLE agent_notifications ADD COLUMN delivery_attempted_at REAL")
     core.db("CREATE INDEX IF NOT EXISTS ix_agent_notifications_created ON agent_notifications(created_at)")
     core.db("CREATE INDEX IF NOT EXISTS ix_agent_notifications_dedupe ON agent_notifications(dedupe_key,created_at)")
     core.db("""CREATE TABLE IF NOT EXISTS agent_assist_ai_jobs(
