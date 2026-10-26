@@ -381,7 +381,7 @@ def _current_windows_username():
 
 def _runtime_validation_problem(
     runtime, *, expected_username=None, expected_session_id=None,
-    expected_version=None, expected_executable=None
+    expected_version=None, expected_executable=None, expected_python_prefix=None
 ):
     """Validate that the agent is the expected standard-user interactive runtime."""
     if not isinstance(runtime, dict):
@@ -409,11 +409,19 @@ def _runtime_validation_problem(
     executable = str(runtime.get("executable") or "").strip()
     if expected_executable:
         if not executable:
-            return "observer executable path is unavailable"
+            return "observer Python runtime executable path is unavailable"
         actual_path = os.path.normcase(os.path.abspath(executable))
         expected_path = os.path.normcase(os.path.abspath(str(expected_executable)))
         if actual_path != expected_path:
-            return f"observer executable {executable!r} does not match installed runtime {expected_executable!r}"
+            return f"observer Python runtime executable {executable!r} does not match installed runtime {expected_executable!r}"
+    python_prefix = str(runtime.get("python_prefix") or "").strip()
+    if expected_python_prefix:
+        if not python_prefix:
+            return "observer Python environment prefix is unavailable"
+        actual_prefix = os.path.normcase(os.path.abspath(python_prefix))
+        expected_prefix = os.path.normcase(os.path.abspath(str(expected_python_prefix)))
+        if actual_prefix != expected_prefix:
+            return f"observer Python environment {python_prefix!r} does not match installed release environment {expected_python_prefix!r}"
     return None
 
 def open_app():
@@ -433,7 +441,8 @@ def open_app():
         problem = _runtime_validation_problem(
             runtime, expected_username=expected_user,
             expected_session_id=expected_session, expected_version=APP_VERSION,
-            expected_executable=os.path.join(APP_VERSION_DIR, ".venv", "Scripts", "pythonw.exe")
+            expected_executable=os.path.join(APP_VERSION_DIR, ".venv", "Scripts", "pythonw.exe"),
+            expected_python_prefix=os.path.join(APP_VERSION_DIR, ".venv")
         )
         if problem:
             print(f"Existing SENTINEL runtime does not match this release ({problem}). Replacing it with the standard-user interactive task.")
@@ -469,7 +478,8 @@ def open_app():
         runtime = _running_agent_runtime()
         problem = _runtime_validation_problem(
             runtime, expected_username=expected_user,
-            expected_session_id=expected_session, expected_version=APP_VERSION
+            expected_session_id=expected_session, expected_version=APP_VERSION,
+            expected_python_prefix=os.path.join(APP_VERSION_DIR, ".venv")
         )
         if problem:
             print(f"SENTINEL started but failed standard-user runtime verification: {problem}.")
@@ -684,7 +694,8 @@ try {
         return 1
     problem = _runtime_validation_problem(
         runtime, expected_username=logged_on, expected_session_id=current_session,
-        expected_version=APP_VERSION, expected_executable=pythonw
+        expected_version=APP_VERSION, expected_executable=pythonw,
+        expected_python_prefix=os.path.join(APP_VERSION_DIR, ".venv")
     )
     if problem:
         print("The API is responding, but the standard-user interactive agent failed identity verification:")
