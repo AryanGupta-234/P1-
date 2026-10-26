@@ -234,3 +234,10 @@ WPR/ETW capture currently remains blocked when the observer runs as a standard u
 The scheduled observer is expected to report `is_elevated=false`, `desktop_access_expected=true`, a non-zero Windows session ID, the signed-in interactive username, the installed release version and expected `pythonw.exe` path. Installer completion validates this runtime identity; it must not require the observer itself to be an Administrator. Installation and removal remain elevated, while each privileged maintenance helper still receives a separate one-use UAC consent request bound to the user/session and approved action ID.
 
 The normal shortcut opener accepts the validated standard-user process. It never elevates the long-running observer because its token is standard-user. If an explicit runtime mismatch is found, it attempts a graceful stop and restarts the registered Limited interactive task; if identity cannot be read, it fails closed without terminating an unknown process.
+
+
+## Release-scoped observer runtime correction (1.2.27)
+
+The installer process may be invoked by the machine's bootstrap Python, but that interpreter must never be registered as the observer. `_release_runtime()` is the single resolver for the immutable release and returns only `versions/<APP_VERSION>/.venv/Scripts/pythonw.exe`, that release's `agent.py`, and the release directory. A missing runtime or entrypoint is a hard failure; there is no fallback to `sys.executable` or another globally installed Python.
+
+The scheduled task, Desktop/Start Menu shortcuts, installer identity check, normal opener validation, and detached fallback launcher all use this release-scoped path. The observer remains a Limited, standard-user process in the signed-in interactive session. This change does not modify previous version folders or ProgramData settings, SQLite history, and traces.
