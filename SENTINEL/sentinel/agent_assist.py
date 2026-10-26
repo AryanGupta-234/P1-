@@ -278,7 +278,7 @@ def create_notification(source: str, message: str, severity: str = "warn",
     source_text, message_text = _clean(source, 80), _clean(message, 360)
     diagnosis = _classify(source_text, message_text, severity)
     stable_message = re.sub(r"\b\d+(?:\.\d+)?\b", "#", message_text.casefold())
-    stable_message = re.sub(r"\\[(?:HIGH|WARN|ERROR|CRITICAL)\\]\\s*", "", stable_message, flags=re.IGNORECASE)
+    stable_message = re.sub(r"\[(?:HIGH|WARN|ERROR|CRITICAL)\]\s*", "", stable_message, flags=re.IGNORECASE)
     normalized = " ".join((diagnosis["category"] + " " + stable_message).split())[:180]
     dedupe_key = hashlib.sha256(normalized.encode("utf-8")).hexdigest()
     cooldown = max(600, int(config.get("dedupe_cooldown_minutes", 60)) * 60)
