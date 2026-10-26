@@ -210,23 +210,14 @@ def _measure(path: str, max_entries: int, deadline: float) -> dict[str, Any]:
                 if entry.is_dir(follow_symlinks=False):
                     dirs += 1
                     if depth < 5 and entry.name.casefold() not in SKIP_NAMES:
-                        child_group = entry.name if depth == 0 else package_name
-                        # Scoped npm packages use @scope/package; retain the package
-                        # name one level below the scope folder.
-                        if category_is_node_dependencies(path) and depth == 1 and entry.name.startswith("@"):
-                            try:
-                                scoped_children = list(os.scandir(entry.path))
-                            except OSError:
-                                scoped_children = []
-                            for child in scoped_children[:100]:
-                                try:
-                                    if child.is_dir(follow_symlinks=False) and not child.is_symlink():
-                                        stack.append((child.path, depth + 2, child.name))
-                                except OSError:
-                                    continue
-                            stack.append((entry.path, depth + 1, child_group))
+                        # Direct package folders become individual buckets.
+                        # Scoped npm packages are named @scope/package rather than
+                        # collapsed into one @scope aggregate.
+                        if category_is_node_dependencies(path) and depth == 1 and package_name.startswith("@"):
+                            child_group = package_name + "/" + entry.name
                         else:
-                            stack.append((entry.path, depth + 1, child_group))
+                            child_group = entry.name if depth == 0 else package_name
+                        stack.append((entry.path, depth + 1, child_group))
                     continue
                 if not entry.is_file(follow_symlinks=False):
                     continue
