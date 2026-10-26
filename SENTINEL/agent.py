@@ -121,6 +121,22 @@ def _read_app_version():
 APP_VERSION = _read_app_version()
 APP_VERSION_DIR = os.path.join(VERSIONS_DIR, APP_VERSION)
 os.environ.setdefault("SENTINEL_VERSION", APP_VERSION)
+
+def _release_runtime():
+    """Resolve the immutable release's private Windows runtime and entrypoint.
+
+    Installation may be invoked by a system Python interpreter. That interpreter
+    is never the observer runtime; launch integration targets this release's venv.
+    """
+    release_dir = os.path.abspath(APP_VERSION_DIR)
+    pythonw = os.path.join(release_dir, ".venv", "Scripts", "pythonw.exe")
+    script = os.path.join(release_dir, "agent.py")
+    if not os.path.isfile(pythonw):
+        raise RuntimeError(f"Release runtime is missing: {pythonw}")
+    if not os.path.isfile(script):
+        raise RuntimeError(f"Release entrypoint is missing: {script}")
+    return pythonw, script, release_dir
+
 NO_WIN = 0x08000000 if IS_WIN else 0
 
 
@@ -308,18 +324,17 @@ def _launch_hud():
 
 
 def _start_agent_background():
-    """Start one detached agent process when neither the logon task nor server is up."""
-    interpreter = sys.executable
+    """Start the exact release runtime, detached from the desktop launcher."""
     if IS_WIN:
-        candidate = os.path.join(os.path.dirname(sys.executable), "pythonw.exe")
-        if os.path.isfile(candidate):
-            interpreter = candidate
+        interpreter, script, workdir = _release_runtime()
+    else:
+        interpreter, script, workdir = sys.executable, os.path.join(HERE, "agent.py"), HERE
     flags = 0
     if IS_WIN:
         flags = getattr(subprocess, "DETACHED_PROCESS", 0) | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
     subprocess.Popen(
-        [interpreter, os.path.join(HERE, "agent.py")],
-        cwd=HERE,
+        [interpreter, script],
+        cwd=workdir,
         stdin=subprocess.DEVNULL,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
@@ -328,30 +343,113 @@ def _start_agent_background():
     )
 
 
-def _running_agent_is_elevated():
-    """Read the authenticated runtime integrity flag for an already-running agent."""
+def _running_agent_runtime():
+    """Read the authenticated runtime identity for the already-running agent."""
     endpoint = f"{base_url()}/api/agent?{urllib.parse.urlencode({'t': CFG['token']})}"
     try:
         request = urllib.request.Request(endpoint, headers={"Cache-Control": "no-cache"})
         with urllib.request.urlopen(request, timeout=2) as response:
             payload = json.loads(response.read(1024 * 1024).decode("utf-8"))
         runtime = payload.get("runtime") if isinstance(payload, dict) else None
-        if isinstance(runtime, dict):
-            return runtime.get("is_elevated")
+        return runtime if isinstance(runtime, dict) else None
     except (OSError, ValueError, urllib.error.URLError, TimeoutError):
-        pass
+        return None
+
+
+def _current_windows_session_id():
+    """Return this process' Windows Terminal Services session, or None if unknown."""
+    if not IS_WIN:
+        return None
+    try:
+        value = ctypes.c_ulong()
+        ok = ctypes.windll.kernel32.ProcessIdToSessionId(
+            int(os.getpid()), ctypes.byref(value)
+        )
+        return int(value.value) if ok else None
+    except Exception:
+        return None
+
+
+def _current_windows_username():
+    """Return the current Windows logon as DOMAIN\\user when available."""
+    username = str(os.environ.get("USERNAME") or "").strip()
+    domain = str(os.environ.get("USERDOMAIN") or "").strip()
+    if not username:
+        return None
+    return f"{domain}\\{username}" if domain else username
+
+
+def _runtime_validation_problem(
+    runtime, *, expected_username=None, expected_session_id=None,
+    expected_version=None, expected_executable=None, expected_python_prefix=None
+):
+    """Validate that the agent is the expected standard-user interactive runtime."""
+    if not isinstance(runtime, dict):
+        return "authenticated runtime identity is unavailable"
+    if runtime.get("is_elevated") is not False:
+        return "observer is elevated or its integrity level is unknown; expected a standard-user token"
+    if runtime.get("desktop_access_expected") is not True:
+        return "observer is not confirmed in an interactive desktop session"
+    try:
+        session_id = int(runtime.get("session_id"))
+    except (TypeError, ValueError):
+        return "observer session ID is unavailable"
+    if session_id <= 0:
+        return "observer is running in Session 0, not the signed-in desktop session"
+    if expected_session_id is not None and session_id != int(expected_session_id):
+        return f"observer session {session_id} does not match installer/launcher session {expected_session_id}"
+    username = str(runtime.get("username") or "").strip()
+    if not username:
+        return "observer Windows username is unavailable"
+    if expected_username and username.casefold() != str(expected_username).strip().casefold():
+        return f"observer user {username!r} does not match signed-in user {expected_username!r}"
+    version = str(runtime.get("version") or "").strip()
+    if expected_version and version != str(expected_version):
+        return f"observer version {version or 'unknown'} does not match expected version {expected_version}"
+    executable = str(runtime.get("executable") or "").strip()
+    if expected_executable:
+        if not executable:
+            return "observer Python runtime executable path is unavailable"
+        actual_path = os.path.normcase(os.path.abspath(executable))
+        expected_path = os.path.normcase(os.path.abspath(str(expected_executable)))
+        if actual_path != expected_path:
+            return f"observer Python runtime executable {executable!r} does not match installed runtime {expected_executable!r}"
+    python_prefix = str(runtime.get("python_prefix") or "").strip()
+    if expected_python_prefix:
+        if not python_prefix:
+            return "observer Python environment prefix is unavailable"
+        actual_prefix = os.path.normcase(os.path.abspath(python_prefix))
+        expected_prefix = os.path.normcase(os.path.abspath(str(expected_python_prefix)))
+        if actual_prefix != expected_prefix:
+            return f"observer Python environment {python_prefix!r} does not match installed release environment {expected_python_prefix!r}"
     return None
 
-
 def open_app():
-    """Normal user-facing opener: ensure the agent is up, then launch the HUD."""
+    """Open the HUD only after verifying the standard-user interactive agent."""
+    expected_session = _current_windows_session_id() if IS_WIN else None
+    expected_user = _current_windows_username() if IS_WIN else None
+    if IS_WIN and (expected_session is None or expected_session <= 0):
+        print("SENTINEL must be opened from the signed-in interactive Windows desktop.")
+        return 1
+
     agent_ready = _wait_for_agent(1.5)
-    if IS_WIN and agent_ready and _running_agent_is_elevated() is not True:
-        print("The existing SENTINEL agent is not confirmed elevated; restarting it with administrator permissions.")
-        if stop_agent() != 0:
-            print("The previous agent could not be stopped safely; refusing to open a non-elevated session.")
+    if IS_WIN and agent_ready:
+        runtime = _running_agent_runtime()
+        if runtime is None:
+            print("SENTINEL API responds, but its authenticated runtime identity is unavailable; refusing to replace an unknown process.")
             return 1
-        agent_ready = False
+        problem = _runtime_validation_problem(
+            runtime, expected_username=expected_user,
+            expected_session_id=expected_session, expected_version=APP_VERSION,
+            expected_executable=os.path.join(APP_VERSION_DIR, ".venv", "Scripts", "pythonw.exe"),
+            expected_python_prefix=os.path.join(APP_VERSION_DIR, ".venv")
+        )
+        if problem:
+            print(f"Existing SENTINEL runtime does not match this release ({problem}). Replacing it with the standard-user interactive task.")
+            if stop_agent() != 0:
+                print("The previous agent could not be stopped safely; refusing to start a second instance.")
+                return 1
+            agent_ready = False
 
     if not agent_ready:
         started_by_task = False
@@ -362,14 +460,29 @@ def open_app():
                 f"if ($?) {{ 'TASK_START_REQUESTED' }}"
             )
             started_by_task = bool(result.returncode == 0)
-        if not started_by_task or not _wait_for_agent(3):
+        if started_by_task:
+            if not _wait_for_agent(30):
+                print("The SENTINEL logon task did not become ready. Check Task Scheduler and %ProgramData%\\Sentinel logs.")
+                return 1
+        else:
             try:
                 _start_agent_background()
             except Exception as exc:
                 print(f"Could not launch the SENTINEL agent: {type(exc).__name__}: {exc}")
                 return 1
-        if not _wait_for_agent(30):
-            print("SENTINEL did not become ready. Check the Windows task and %ProgramData%\\Sentinel logs.")
+            if not _wait_for_agent(30):
+                print("SENTINEL did not become ready. Check %ProgramData%\\Sentinel logs.")
+                return 1
+
+    if IS_WIN:
+        runtime = _running_agent_runtime()
+        problem = _runtime_validation_problem(
+            runtime, expected_username=expected_user,
+            expected_session_id=expected_session, expected_version=APP_VERSION,
+            expected_python_prefix=os.path.join(APP_VERSION_DIR, ".venv")
+        )
+        if problem:
+            print(f"SENTINEL started but failed standard-user runtime verification: {problem}.")
             return 1
     if not _launch_hud():
         print("SENTINEL is running, but no browser window could be opened.")
@@ -383,18 +496,18 @@ def install():
         print("install is Windows-only")
         return 1
 
-    pythonw = os.path.join(os.path.dirname(sys.executable), "pythonw.exe")
-    if not os.path.isfile(pythonw):
-        print(f"pythonw.exe was not found next to {sys.executable}")
+    try:
+        pythonw, script, release_workdir = _release_runtime()
+    except RuntimeError as exc:
+        print(f"SENTINEL release runtime validation failed: {exc}")
         return 1
 
-    script = os.path.abspath(__file__)
     store = os.path.join(os.environ.get("ProgramData", r"C:\ProgramData"), "Sentinel")
     values = {
         "SENTINEL_TASK": TASK,
         "SENTINEL_PYTHONW": pythonw,
         "SENTINEL_SCRIPT": script,
-        "SENTINEL_WORKDIR": HERE,
+        "SENTINEL_WORKDIR": release_workdir,
         "SENTINEL_STORE": store,
         "SENTINEL_VERSION": APP_VERSION,
     }
@@ -563,12 +676,35 @@ try {
         print(diagnostic.stdout or diagnostic.stderr or "No Task Scheduler diagnostics were returned.")
         return 1
 
-    if _running_agent_is_elevated() is not True:
-        print("The agent API is responding, but administrator elevation could not be verified. Installation is not marked complete.")
+    install_metadata = {}
+    for line in (result.stdout or "").splitlines():
+        key, separator, value = line.partition("=")
+        if separator and key.startswith("INSTALL_"):
+            install_metadata[key] = value.strip()
+    logged_on = install_metadata.get("INSTALL_USER")
+    reported_version = install_metadata.get("INSTALL_VERSION")
+    if reported_version != APP_VERSION or not logged_on:
+        print("The installer did not return a verifiable interactive user/release identity. Installation is not marked complete.")
+        return 1
+
+    runtime = _running_agent_runtime()
+    current_session = _current_windows_session_id()
+    if current_session is None or current_session <= 0:
+        print("The installer could not verify its interactive Windows session. Installation is not marked complete.")
+        return 1
+    problem = _runtime_validation_problem(
+        runtime, expected_username=logged_on, expected_session_id=current_session,
+        expected_version=APP_VERSION, expected_executable=pythonw,
+        expected_python_prefix=os.path.join(APP_VERSION_DIR, ".venv")
+    )
+    if problem:
+        print("The API is responding, but the standard-user interactive agent failed identity verification:")
+        print(f"  {problem}")
+        print("The observer must run unelevated in the signed-in user's desktop session. Administrator rights are reserved for installation and approved privileged helper jobs.")
         return 1
 
     print(f"SENTINEL {APP_VERSION} installed and verified at {HERE}.")
-    print("Desktop and Start Menu shortcuts were checked on disk; the elevated agent is running.")
+    print("Desktop and Start Menu shortcuts were verified; the standard-user interactive agent is running.")
     if not _launch_hud():
         print("WARNING: The agent is running, but Windows could not open the dashboard window. Use the SENTINEL shortcut to open it.")
     return 0
