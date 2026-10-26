@@ -260,6 +260,7 @@ The agent assistant consumes new warning/error events and high/warning insights 
 - Detection runs in an agent-owned worker; its cursor is persisted so restarts do not replay the entire event history.
 - Repeated events are deduplicated and notification delivery is rate-limited.
 - Native Windows tray notifications are emitted by the signed-in agent process. The dashboard only reads the persistent queue, saves preferences and records the operator's answer or dismissal.
+- Alerts suppressed during game/resource pressure stay queued with a retry timestamp and are delivered once the Adaptive Runtime returns to a safe idle mode, subject to the hourly alert cap.
 - The default category map covers device/driver failures, network/DNS, CPU, memory/pagefile, disk latency, thermal/GPU throttling, Windows services, process review signals, local AI runtime, storage pressure, application crashes and persistence errors. Unknown signals remain explicitly uncertain.
 - A high-severity finding may enter the local-AI queue. The worker reuses sentinel/windows_intelligence.py, the installed local FAST model and local documentation retrieval. It runs one diagnosis at a time only when runtime mode is balanced, no game is active, available memory is at least 5 GiB and CPU use is below 40%. If those conditions do not hold, work waits. If local inference is unavailable, the deterministic finding remains usable.
 - Model output is advisory and stored separately from the deterministic event. Commands and execution are not part of the accepted specialist schema; any action ID remains tied to the fixed preview-gated maintenance vocabulary.
@@ -277,7 +278,7 @@ The report includes:
 - File-extension mix and hidden-file count/bytes.
 - Directory-level size, file/directory counts, recent-write age and weak last-access signals.
 - Package-level size buckets under Python site-packages, virtual environments and Node node_modules (including @scope/package).
-- Ranked review candidates for large caches/build outputs, large Downloads content, hidden-heavy folders and large secondary-drive folders.
+- Ranked review candidates for large caches/build outputs, large Downloads content, hidden-heavy folders, large secondary-drive folders, and oversized dependency components with weak old-access signals. Package candidates require manifest/lockfile review; a timestamp is never treated as proof that a dependency is unused.
 
 **Resource policy:** one bounded storage worker; default budget 15,000 metadata entries and 18 seconds per scan, with a 1.5-second per-root cap. Scans are deferred unless the runtime governor reports balanced, at least 4 GiB available memory and CPU below 45%. The default repeat interval is 72 hours. Manual scan requests are queued by the agent and still wait for a safe resource window. This work is deliberately serialized: storage metadata enumeration is I/O-bound, and parallel crawling would compete with foreground applications.
 
