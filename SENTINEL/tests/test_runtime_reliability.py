@@ -623,6 +623,15 @@ def test_install_integration_verifies_desktop_and_all_users_shortcuts(monkeypatc
     pythonw_exe = scripts / "pythonw.exe"
     python_exe.write_text("", encoding="utf-8")
     pythonw_exe.write_text("", encoding="utf-8")
+    release_dir = tmp_path / "versions" / agent.APP_VERSION
+    release_scripts = release_dir / ".venv" / "Scripts"
+    release_scripts.mkdir(parents=True)
+    (release_scripts / "python.exe").write_text("", encoding="utf-8")
+    (release_scripts / "pythonw.exe").write_text("", encoding="utf-8")
+    (release_dir / "agent.py").write_text("", encoding="utf-8")
+    (release_dir / "ui").mkdir()
+    (release_dir / "ui" / "index.html").write_text("", encoding="utf-8")
+    monkeypatch.setattr(agent, "APP_VERSION_DIR", str(release_dir))
     monkeypatch.setattr(agent, "IS_WIN", True)
     monkeypatch.setattr(agent.sys, "executable", str(python_exe))
     captured = {}
@@ -655,6 +664,8 @@ def test_desktop_opener_uses_verified_standard_user_agent_without_spawning_anoth
     runtime = {
         "is_elevated": False, "desktop_access_expected": True, "session_id": 7,
         "username": r"TEST-PC\tester", "version": agent.APP_VERSION,
+        "executable": os.path.join(agent.APP_VERSION_DIR, ".venv", "Scripts", "python.exe"),
+        "python_prefix": os.path.join(agent.APP_VERSION_DIR, ".venv"),
     }
     monkeypatch.setattr(agent, "IS_WIN", True)
     monkeypatch.setattr(agent, "_current_windows_session_id", lambda: 7)
@@ -754,6 +765,7 @@ def test_desktop_opener_replaces_elevated_agent_with_standard_user_runtime(monke
         {
             "is_elevated": False, "desktop_access_expected": True, "session_id": 7,
             "username": r"TEST-PC\tester", "version": agent.APP_VERSION,
+            "python_prefix": os.path.join(agent.APP_VERSION_DIR, ".venv"),
         },
     ])
     calls = {"stop": 0, "start": 0, "launch": 0}
