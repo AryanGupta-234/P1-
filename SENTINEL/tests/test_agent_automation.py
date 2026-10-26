@@ -50,7 +50,7 @@ def test_storage_measurement_reports_package_sizes_extensions_and_hidden_files(t
 
     (node_modules / "react" / "index.js").write_bytes(b"r" * 101)
     (node_modules / "@scope" / "library" / "index.js").write_bytes(b"s" * 203)
-    (node_modules / ".hidden-cache" / ".artifact").write_bytes(b"h" * 17)
+    (node_modules / ".hidden-cache" / "cache.artifact").write_bytes(b"h" * 17)
     (node_modules / ".hidden-cache" / "ordinary.dat").write_bytes(b"o" * 11)
 
     report = storage_intelligence._measure(
@@ -118,7 +118,7 @@ def test_storage_scheduler_defers_when_memory_headroom_is_low(monkeypatch):
     })
     allowed, reason = storage_intelligence._resources_allow_scan()
     assert allowed is False
-    assert "4 GiB" in reason
+    assert "4.0 GiB" in reason
 
 
 def test_storage_settings_reject_full_volume_unbounded_scan():
