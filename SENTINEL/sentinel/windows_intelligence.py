@@ -70,6 +70,7 @@ def _evidence_packet() -> dict[str, Any]:
         text = " ".join(str(value or "").replace("\x00", " ").split())
         text = re.sub(r"(?i)(password|token|secret|api[_ -]?key)\s*[:=]\s*\S+", r"\1=[REDACTED]", text)
         text = re.sub(r"(?i)[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}", "[EMAIL]", text)
+        text = re.sub(r"(?i)([A-Z]:\\Users\\)[^\\\\\s]+", r"\\1[USER]", text)
         return text[:limit]
 
     def numeric(row: dict, *keys: str):
@@ -126,20 +127,23 @@ def _evidence_packet() -> dict[str, Any]:
         item: dict[str, Any] = {"id": "process." + str(raw.get("pid", len(processes) + 1)),
                                 "name": name}
         for target, choices in (
-            ("cpu_pct", ("cpu_percent", "cpu_pct", "cpu")),
-            ("memory_mb", ("rss_mb", "memory_mb", "mem_mb")),
-            ("read_mb", ("io_read_mb", "read_mb")),
-            ("write_mb", ("io_write_mb", "write_mb")),
+            ("cpu_pct", ("cpu", "cpu_percent", "cpu_pct")),
+            ("memory_mb", ("mem", "rss_mb", "memory_mb", "mem_mb")),
+            ("io_mb_s", ("io", "io_mb_s", "io_rate_mb_s")),
         ):
             value = numeric(raw, *choices)
             if value is not None:
                 item[target] = value
-        for field in ("pid", "session_id", "visible_windows", "onscreen_windows"):
+        for field in ("pid", "session_id", "visible_windows", "onscreen_windows", "foreground", "bg", "thr", "handles"):
             value = raw.get(field)
             if isinstance(value, (int, float)) and not isinstance(value, bool):
                 item[field] = int(value)
         if isinstance(raw.get("app_kind"), str):
             item["kind"] = clean(raw["app_kind"], 40)
+        if isinstance(raw.get("parent_name"), str):
+            item["parent"] = clean(raw["parent_name"], 80)
+        if isinstance(raw.get("path_state"), str):
+            item["path_state"] = clean(raw["path_state"], 30)
         processes.append(item)
     processes.sort(key=lambda row: (row.get("cpu_pct") or 0, row.get("memory_mb") or 0), reverse=True)
     processes = processes[:15]
@@ -156,28 +160,28 @@ def _evidence_packet() -> dict[str, Any]:
     if not isinstance(services_raw, list):
         services_raw = inventory_data.get("services") or []
     services = project(services_raw, ("name", "display", "state", "start", "pid", "description"),
-                       "service", 30, "name")
+                       "service", 22, "name")
     startup = project(core.STATE.get("startup") or inventory_data.get("startup") or [],
-                      ("name", "where"), "startup", 24, "name")
+                      ("name", "where"), "startup", 16, "name")
     tasks = project(inventory_data.get("tasks") or [],
-                    ("name", "state", "path", "author"), "task", 24, "name")
+                    ("name", "state", "path"), "task", 16, "name")
     apps = project(inventory_data.get("apps") or [],
-                   ("name", "version", "publisher"), "app", 30, "name")
+                   ("name", "version", "publisher"), "app", 20, "name")
 
     drivers = project(maintenance.get("drivers") or [],
                       ("DeviceName", "DriverVersion", "DriverDate", "Manufacturer", "DeviceClass"),
-                      "driver", 30, "DeviceName")
+                      "driver", 20, "DeviceName")
     if not drivers:
         drivers = project(inventory_data.get("drivers") or [],
-                          ("name", "display", "state", "start"), "driver", 30, "name")
+                          ("name", "display", "state", "start"), "driver", 20, "name")
     driver_updates = project(maintenance.get("driver_updates") or [],
-                             ("title", "reboot_required"), "driver-update", 12, "title")
+                             ("title", "reboot_required"), "driver-update", 10, "title")
 
     now = time.time()
     recent_events = []
     try:
         rows = core.db(
-            "SELECT id,ts,level,src,msg FROM events WHERE ts>=? ORDER BY id DESC LIMIT 35",
+            "SELECT id,ts,level,src,msg FROM events WHERE ts>=? ORDER BY id DESC LIMIT 20",
             (now - 7 * 86400,),
         )
         for row in rows:
@@ -192,7 +196,7 @@ def _evidence_packet() -> dict[str, Any]:
 
     recent_insights = []
     try:
-        rows = core.db("SELECT id,sev,key,title,detail FROM insights ORDER BY id DESC LIMIT 18")
+        rows = core.db("SELECT id,sev,key,title,detail FROM insights ORDER BY id DESC LIMIT 12")
         for row in rows:
             recent_insights.append({
                 "id": "insight." + str(row[0]), "severity": clean(row[1], 16),
@@ -207,7 +211,7 @@ def _evidence_packet() -> dict[str, Any]:
         rows = core.db(
             "SELECT a.app_name,COUNT(s.id),COALESCE(SUM(s.foreground_seconds),0),MAX(s.started_at) "
             "FROM activity_apps a LEFT JOIN activity_sessions s ON s.app_key=a.app_key AND s.started_at>=? "
-            "GROUP BY a.app_key ORDER BY SUM(s.foreground_seconds) DESC LIMIT 12",
+            "GROUP BY a.app_key ORDER BY SUM(s.foreground_seconds) DESC LIMIT 10",
             (now - 30 * 86400,),
         )
         for index, row in enumerate(rows):
@@ -222,7 +226,7 @@ def _evidence_packet() -> dict[str, Any]:
 
     health_map = inventory_data.get("health") if isinstance(inventory_data.get("health"), dict) else {}
     source_health = []
-    for name, value in sorted(health_map.items()):
+    for name, value in sorted(health_map.items())[:18]:
         if isinstance(value, dict):
             source_health.append({
                 "id": "source." + clean(name, 40), "source": clean(name, 40),
@@ -232,7 +236,7 @@ def _evidence_packet() -> dict[str, Any]:
 
     health_report = maintenance.get("system_health") if isinstance(maintenance.get("system_health"), dict) else {}
     findings = []
-    for index, row in enumerate((health_report.get("findings") or [])[:12]):
+    for index, row in enumerate((health_report.get("findings") or [])[:10]):
         if isinstance(row, dict):
             findings.append({
                 "id": "maintenance-finding." + str(index + 1),
