@@ -3,6 +3,7 @@ Sources: psutil (process/CPU/RAM/net/disk), typeperf (PDH perf counters: DPC, in
 paging, disk latency), nvidia-smi, wevtutil (event logs), registry autoruns, service control
 manager, ping, powercfg."""
 import csv, io, os, re, subprocess, time, random, math, shutil, ctypes, json
+import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 import psutil
 from . import core
@@ -896,48 +897,200 @@ def autorun_loop():
 _seen_evt = set()
 
 
+def _parse_event_xml(fragment: str) -> dict:
+    """Extract a small, allowlisted Event Viewer record; discard raw XML."""
+    root = ET.fromstring(fragment)
+    system = next((node for node in root.iter() if node.tag.endswith("System")), None)
+    if system is None:
+        return {}
+    children = {node.tag.rsplit("}", 1)[-1]: node for node in list(system)}
+    provider_node = children.get("Provider")
+    provider = str((provider_node.attrib or {}).get("Name") or "?") if provider_node is not None else "?"
+    record_node = children.get("EventRecordID")
+    event_node = children.get("EventID")
+    level_node = children.get("Level")
+    time_node = children.get("TimeCreated")
+    event_id = (event_node.text or "").strip() if event_node is not None else ""
+    record_id = (record_node.text or "").strip() if record_node is not None else ""
+    level = (level_node.text or "").strip() if level_node is not None else "2"
+    occurred_at = None
+    if time_node is not None:
+        raw_time = str((time_node.attrib or {}).get("SystemTime") or "")
+        try:
+            occurred_at = datetime.fromisoformat(raw_time.replace("Z", "+00:00")).timestamp()
+        except (TypeError, ValueError, OverflowError):
+            occurred_at = None
+
+    allowed = {
+        "appname", "applicationname", "faultingapplicationname", "faultingprocessname",
+        "modulename", "faultingmodulename", "exceptioncode", "faultingprocessid",
+        "processid", "bugcheckcode", "bugcheckparameter1", "bugcheckparameter2",
+        "bugcheckparameter3", "bugcheckparameter4", "reportid", "updatetitle",
+        "updateguid", "deviceinstanceid", "devicename", "deviceid", "drivername",
+        "servicename", "taskname", "taskpath", "failurecode",
+    }
+    data = {}
+    for node in root.iter():
+        if not node.tag.endswith("Data"):
+            continue
+        name = str(node.attrib.get("Name") or "").strip()
+        normalized = re.sub(r"[^a-z0-9]", "", name.casefold())
+        if normalized not in allowed or len(data) >= 8:
+            continue
+        value = " ".join(str(node.text or "").split())
+        if not value:
+            continue
+        if any(token in normalized for token in ("appname", "applicationname", "processname", "modulename", "drivername")):
+            value = os.path.basename(value.replace("/", "\\"))
+        if re.search(r"(?i)(password|token|secret|credential|cookie|authorization|api.?key)", value):
+            continue
+        data[name[:40]] = value[:140]
+
+    return {
+        "provider": provider[:100], "event_id": event_id[:20], "record_id": record_id[:40],
+        "level": level[:4], "occurred_at": occurred_at, "data": data,
+    }
+
+
+def _event_is_review_worthy(channel: str, event: dict) -> bool:
+    provider = str(event.get("provider") or "").casefold()
+    event_id = str(event.get("event_id") or "")
+    return (
+        (channel.casefold() == "application" and event_id in {"1000", "1001", "1002", "1026"})
+        or "whea" in provider
+        or "bugcheck" in provider
+        or "wer-systemerrorreporting" in provider
+        or "kernel-power" in provider and event_id in {"41", "6008"}
+        or any(token in provider for token in ("disk", "ntfs", "storahci", "stornvme", "display", "nvlddmkm", "amdkmdag"))
+        or "kernel-pnp" in provider and event.get("level") in {"1", "2"}
+        or "windowsupdateclient" in provider and event.get("level") in {"1", "2"}
+    )
+
+
+def _event_summary(channel: str, event: dict, historical: bool) -> str:
+    provider = str(event.get("provider") or "Unknown provider")
+    event_id = str(event.get("event_id") or "?")
+    label = {
+        "1000": "Application Error",
+        "1001": "Windows Error Reporting / BugCheck report",
+        "1002": "Application Hang",
+        "1026": ".NET Runtime failure",
+        "41": "Kernel-Power unexpected restart",
+        "6008": "Unexpected shutdown",
+    }.get(event_id, "Windows event")
+    parts = [label, f"Event ID {event_id}", f"Provider {provider}", f"Channel {channel}"]
+    details = event.get("data") if isinstance(event.get("data"), dict) else {}
+    for key in ("AppName", "ApplicationName", "FaultingApplicationName", "ModuleName",
+                "FaultingModuleName", "ExceptionCode", "BugcheckCode", "DeviceName", "DriverName",
+                "UpdateTitle", "ServiceName", "TaskName"):
+        value = details.get(key)
+        if value:
+            parts.append(f"{key}={value}")
+    if historical:
+        parts.append("found in existing Event Viewer history at agent startup")
+    return " · ".join(parts)[:900]
+
+
 def evtlog_loop():
     if not IS_WIN:
         return
-    queries = [("System", "*[System[(Level=1 or Level=2)]]"),
-               ("Application", "*[System[(Level=1 or Level=2) and Provider[@Name='Application Error' or @Name='Application Hang']]]"),
-               ("Microsoft-Windows-Diagnostics-Performance/Operational", "*[System[(EventID>=100 and EventID<=110)]]")]
-    first = True
+    queries = [
+        ("System", "*[System[(Level=1 or Level=2)]]", 30),
+        ("Application", "*[System[(EventID=1000 or EventID=1001 or EventID=1002 or EventID=1026)]]", 30),
+        ("Microsoft-Windows-Diagnostics-Performance/Operational", "*[System[(EventID>=100 and EventID<=110)]]", 20),
+        ("Microsoft-Windows-WindowsUpdateClient/Operational", "*[System[(Level=1 or Level=2)]]", 12),
+        ("Microsoft-Windows-Kernel-PnP/Configuration", "*[System[(Level=1 or Level=2)]]", 12),
+        ("Microsoft-Windows-TaskScheduler/Operational", "*[System[(Level=1 or Level=2)]]", 12),
+    ]
+    core.db("""CREATE TABLE IF NOT EXISTS windows_event_seen(
+        channel TEXT NOT NULL, record_id TEXT NOT NULL, occurred_at REAL,
+        seen_at REAL NOT NULL, PRIMARY KEY(channel,record_id))""")
+    core.db("""CREATE TABLE IF NOT EXISTS windows_event_state(
+        state_key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_at REAL NOT NULL)""")
+    baseline = bool(core.db("SELECT 1 FROM windows_event_state WHERE state_key='baseline_complete' LIMIT 1"))
     while True:
         t0 = time.time()
         if core.off("eventlog"):
-            heartbeat("event logs (wevtutil)", 30, "disabled in Feature Control"); time.sleep(5); continue
-        n_new = 0
-        for chan, q in queries:
-            xml = run(["wevtutil", "qe", chan, f"/q:{q}", "/c:20", "/rd:true", "/f:xml"], 20)
-            for ev in re.findall(r"<Event .*?</Event>", xml, re.S):
-                rid = re.search(r"<EventRecordID>(\d+)", ev)
-                if not rid:
+            heartbeat("event logs (wevtutil)", 60, "disabled in Feature Control"); time.sleep(5); continue
+        n_new, n_historical, n_errors = 0, 0, 0
+        channels_ok = 0
+        for channel, xpath, cap in queries:
+            output = run(["wevtutil", "qe", channel, f"/q:{xpath}", f"/c:{cap}",
+                          "/rd:true", "/f:xml"], 18)
+            if output.startswith("[SENTINEL_COMMAND_ERROR:") or "No events were found" in output:
+                if output.startswith("[SENTINEL_COMMAND_ERROR:"):
+                    n_errors += 1
+                else:
+                    channels_ok += 1
+                continue
+            fragments = re.findall(r"<Event(?:\s[^>]*)?>.*?</Event>", output, re.S)
+            if fragments:
+                channels_ok += 1
+            for fragment in fragments:
+                try:
+                    event = _parse_event_xml(fragment)
+                except (ET.ParseError, TypeError, ValueError):
                     continue
-                key = (chan, rid.group(1))
+                record_id = event.get("record_id")
+                event_id = event.get("event_id")
+                if not record_id or not event_id:
+                    continue
+                key = (channel, record_id)
                 if key in _seen_evt:
                     continue
-                _seen_evt.add(key)
-                if first:
+                if core.db("SELECT 1 FROM windows_event_seen WHERE channel=? AND record_id=? LIMIT 1", key):
+                    _seen_evt.add(key)
                     continue
-                prov = (re.search(r'Provider Name=.([^\'"]+)', ev) or [0, "?"])[1]
-                eid = (re.search(r"<EventID[^>]*>(\d+)", ev) or [0, "?"])[1]
-                lvl = (re.search(r"<Level>(\d)", ev) or [0, "2"])[1]
+                now = time.time()
+                core.db("INSERT OR IGNORE INTO windows_event_seen(channel,record_id,occurred_at,seen_at) VALUES(?,?,?,?)",
+                        (channel, record_id, event.get("occurred_at"), now))
+                _seen_evt.add(key)
+
+                historical = not baseline
+                important = _event_is_review_worthy(channel, event)
+                # Initial import examines existing crash/hardware/update faults without
+                # replaying every old informational or generic service warning.
+                if historical and not important:
+                    n_historical += 1
+                    continue
+
+                provider = str(event.get("provider") or "?")
+                summary = _event_summary(channel, event, historical)
+                severity = "error" if event.get("level") in {"1", "2"} and important else (
+                    "warn" if event.get("level") in {"1", "2", "3"} else "info"
+                )
+                payload = {
+                    "provider": provider, "event_id": event_id, "channel": channel,
+                    "record_id": record_id, "occurred_at": event.get("occurred_at"),
+                    "historical_backfill": historical, "event_data": event.get("data") or {},
+                }
+                log("eventlog", summary, severity, **payload)
+                if "whea" in provider.casefold():
+                    insight("high", "whea", "Windows hardware error reported (WHEA)", summary, provider,
+                            event_id=event_id, channel=channel)
+                elif any(token in provider.casefold() for token in ("nvlddmkm", "amdkmdag", "display")):
+                    insight("high", "gpu-tdr", "GPU driver reset/error (TDR)", summary, provider,
+                            event_id=event_id, channel=channel)
+                elif any(token in provider.casefold() for token in ("disk", "ntfs", "storahci", "stornvme")):
+                    insight("high", "disk-err", "Disk/storage error", summary, provider,
+                            event_id=event_id, channel=channel)
                 n_new += 1
-                msg = f"Windows event {eid} from {prov} ({chan.split('/')[0]})"
-                if re.search(r"nvlddmkm|amdkmdag|Display", prov):
-                    insight("high", "gpu-tdr", "GPU driver reset/error (TDR)", msg, prov)
-                elif "WHEA" in prov:
-                    insight("high", "whea", "Hardware error reported (WHEA)", msg, prov)
-                elif prov.lower() in ("disk", "ntfs") or "stor" in prov.lower():
-                    insight("high", "disk-err", "Disk/storage error", msg, prov)
-                else:
-                    log("eventlog", msg, "warn" if lvl in "12" else "info", provider=prov, id=eid)
-        first = False
+        if not baseline:
+            core.db("INSERT INTO windows_event_state(state_key,value,updated_at) VALUES('baseline_complete','1',?) "
+                    "ON CONFLICT(state_key) DO UPDATE SET value='1',updated_at=excluded.updated_at",
+                    (time.time(),))
+            baseline = True
+        core.db("DELETE FROM windows_event_seen WHERE seen_at<?", (time.time() - 30 * 86400,))
         if len(_seen_evt) > 5000:
             _seen_evt.clear()
-        heartbeat("event logs (wevtutil)", 30, f"{n_new} new this pass")
-        sleep_to(t0, 30.0)
+        STATE["eventlog"] = {
+            "channels_configured": len(queries), "channels_responding": channels_ok,
+            "new_records": n_new, "historical_noncritical_skipped": n_historical,
+            "source_errors": n_errors, "last_scan_at": time.time(),
+        }
+        heartbeat("event logs (wevtutil)", 60,
+                  f"{n_new} records · {channels_ok}/{len(queries)} channels responded · {n_errors} source errors")
+        sleep_to(t0, 60.0)
 
 
 def config_loop():
