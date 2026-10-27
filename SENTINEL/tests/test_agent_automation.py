@@ -207,7 +207,7 @@ def test_pending_desktop_alerts_are_delivered_by_the_agent_when_idle(monkeypatch
     )
 
     assert agent_assist._deliver_pending_notifications() == 1
-    assert delivered == [("Device failed", "Which device?")]
+    assert delivered == [("Device failed", "Which device? Next check: Check the signed driver.")]
 
 
 def test_pending_desktop_alerts_stay_queued_during_game_or_resource_pressure(monkeypatch):
@@ -219,3 +219,192 @@ def test_pending_desktop_alerts_stay_queued_during_game_or_resource_pressure(mon
     monkeypatch.setattr(agent_assist, "_agent_toast", lambda *_args: pytest.fail("toast must be deferred"))
 
     assert agent_assist._deliver_pending_notifications() == 0
+
+
+def test_agent_assistant_classifies_common_windows_faults():
+    cases = [
+        ("Kernel-Power 41 after unexpected reboot", "blue-screen"),
+        ("WindowsUpdateClient installation failed with 0x8024", "windows-update"),
+        ("Startup Repair failed to load bootmgr", "boot-startup"),
+        ("Windows Audio service audiosrv failed", "audio"),
+        ("Unknown USB device descriptor request failed", "peripheral"),
+        ("Application Hang: app.exe is not responding", "application-hang"),
+        ("Battery power state transition failed", "power-battery"),
+    ]
+    for message, category in cases:
+        assert agent_assist._classify("Windows Event Log", message, "warn")["category"] == category
+
+
+def test_structured_event_evidence_enriches_classification_without_secrets():
+    evidence = agent_assist._event_data_evidence(
+        '{"problem":"CM_PROB_FAILED_START","device":"Realtek Wi-Fi","code":10,"api_key":"do-not-store"}'
+    )
+    assert evidence["problem"] == "CM_PROB_FAILED_START"
+    assert evidence["device"] == "Realtek Wi-Fi"
+    assert "api_key" not in evidence
+    context = " ".join(f"{key}: {value}" for key, value in evidence.items())
+    assert agent_assist._classify("device-event", context, "warn")["category"] == "driver"
+
+
+def test_storage_review_findings_get_a_review_only_assistant_prompt():
+    result = agent_assist._classify(
+        "storage-intelligence",
+        "Storage review candidate: old archive uses 900 MB",
+        "warn",
+    )
+    assert result["category"] == "storage-review"
+    assert "will not delete" in result["fix"]
+
+
+def test_ai_diagnosis_quota_counts_unavailable_jobs_too(monkeypatch):
+    monkeypatch.setattr(
+        agent_assist.core, "db",
+        lambda *_args, **_kwargs: [(2,)],
+    )
+    assert agent_assist._ai_diagnosis_budget_available(now=10000) is False
+    monkeypatch.setattr(
+        agent_assist.core, "db",
+        lambda *_args, **_kwargs: [(1,)],
+    )
+    assert agent_assist._ai_diagnosis_budget_available(now=10000) is True
+
+
+def test_storage_measurement_exposes_largest_files_and_extension_counts(tmp_path):
+    (tmp_path / "small.json").write_bytes(b"j" * 11)
+    (tmp_path / "large.bin").write_bytes(b"b" * 100)
+    report = storage_intelligence._measure(
+        str(tmp_path), max_entries=100, deadline=time.monotonic() + 5,
+    )
+    assert report["top_files"][0]["name"] == "large.bin"
+    assert report["extension_counts"][".bin"] == 1
+    assert report["extension_counts"][".json"] == 1
+
+
+def test_storage_measurement_yields_when_foreground_priority_changes(tmp_path):
+    for index in range(100):
+        (tmp_path / f"item-{index:03}.dat").write_bytes(b"x")
+    report = storage_intelligence._measure(
+        str(tmp_path), max_entries=1000, deadline=time.monotonic() + 5,
+        should_yield=lambda: True,
+    )
+    assert report["yielded"] is True
+    assert report["partial"] is True
+    assert report["entries_visited"] == 64
+
+
+def test_runtime_fails_closed_when_cpu_telemetry_is_unknown(monkeypatch):
+    monkeypatch.setattr(runtime_engine.core, "LIVE", {"cpu": None})
+    monkeypatch.setattr(runtime_engine.core, "STATE", {})
+    monkeypatch.setattr(runtime_engine.safeguard, "snapshot", lambda: {
+        "valorant_active": False,
+        "process_detection_complete": True,
+        "kernel_trace_allowed": False,
+    })
+    state = runtime_engine.evaluate()
+    assert state["mode"] == "telemetry_degraded"
+    assert state["telemetry_ready"] is False
+    assert state["cpu_percent"] is None
+    allowed, reason = runtime_engine.admit_optional_work("unknown telemetry")
+    assert allowed is False
+    assert "telemetry_degraded" in reason
+
+
+
+def test_kernel_power_41_message_without_literal_event_id_still_maps_to_restart():
+    diagnosis = agent_assist._classify(
+        "Microsoft-Windows-Kernel-Power",
+        "The system has rebooted without cleanly shutting down first.",
+        "critical",
+    )
+    assert diagnosis["category"] == "blue-screen"
+
+
+def test_agent_assistant_classifies_common_windows_telemetry_events():
+    cases = [
+        ("Display driver nvlddmkm stopped responding", "gpu-driver"),
+        ("DHCP Client failed to obtain an IP address", "network"),
+        ("NTFS event reports a bad block on the disk", "disk-health"),
+        ("Application Error: Faulting application name: app.exe", "application"),
+    ]
+    for message, category in cases:
+        assert agent_assist._classify("Windows Event Log", message, "error")["category"] == category
+
+
+def test_agent_assistant_covers_whea_and_defender_without_unsafe_remediation():
+    whea = agent_assist._classify("WHEA-Logger", "WHEA_UNCORRECTABLE_ERROR", "critical")
+    assert whea["category"] == "hardware-error"
+    assert "voltage" in whea["fix"].lower()
+
+    defender = agent_assist._classify(
+        "Microsoft Defender", "Windows Defender threat detected", "high",
+    )
+    assert defender["category"] == "windows-security"
+    assert "disable Defender" in defender["fix"]
+
+
+def test_storage_intelligence_excludes_known_game_library_roots():
+    protected = {"steam", "steamapps", "steamlibrary", "epic games", "riot games", "valorant"}
+    assert protected <= storage_intelligence.GAME_ROOT_NAMES
+    assert protected <= storage_intelligence.SKIP_NAMES
+
+
+def test_runtime_keeps_valorant_guard_when_cpu_sample_is_missing(monkeypatch):
+    monkeypatch.setattr(runtime_engine.core, "LIVE", {"cpu": None})
+    monkeypatch.setattr(runtime_engine.core, "STATE", {"game": {"name": "VALORANT"}})
+    monkeypatch.setattr(runtime_engine.safeguard, "snapshot", lambda: {
+        "valorant_active": True,
+        "process_detection_complete": True,
+        "kernel_trace_allowed": False,
+    })
+    state = runtime_engine.evaluate()
+    assert state["mode"] == "valorant_guarded"
+    assert state["game_active"] is True
+    assert state["telemetry_ready"] is False
+    allowed, reason = runtime_engine.admit_optional_work("foreground priority")
+    assert allowed is False
+    assert "valorant_guarded" in reason
+
+
+
+def test_agent_native_toast_contains_question_and_safe_next_check():
+    body = agent_assist._toast_body(
+        "Which device is affected?",
+        "Verify the signed driver and exact Device Manager problem code.",
+    )
+    assert "Which device is affected?" in body
+    assert "Next check:" in body
+    assert "signed driver" in body
+    assert len(body) <= 240
+
+
+
+def test_ai_diagnosis_quota_caps_pending_backlog_even_after_hour_rollover(monkeypatch):
+    def fake_db(sql, params=()):
+        if "created_at>=?" in sql:
+            return [(0,)]
+        if "status IN ('queued','running')" in sql:
+            return [(2,)]
+        raise AssertionError(sql)
+    monkeypatch.setattr(agent_assist.core, "db", fake_db)
+    assert agent_assist._ai_diagnosis_budget_available(now=20000) is False
+
+
+
+def test_broad_storage_roots_skip_generated_trees_but_explicit_package_roots_scan_them(tmp_path):
+    project = tmp_path / "Project"
+    generated = project / "node_modules" / "sample-package"
+    generated.mkdir(parents=True)
+    (generated / "index.js").write_bytes(b"x" * 31)
+    (project / "notes.txt").write_bytes(b"n" * 7)
+
+    broad = storage_intelligence._measure(
+        str(project), max_entries=100, deadline=time.monotonic() + 5,
+        category="user-files",
+    )
+    explicit = storage_intelligence._measure(
+        str(project / "node_modules"), max_entries=100,
+        deadline=time.monotonic() + 5, category="node-dependencies",
+    )
+    assert broad["bytes"] == 7
+    assert explicit["bytes"] == 31
+    assert explicit["top_level"][0]["name"] == "sample-package"

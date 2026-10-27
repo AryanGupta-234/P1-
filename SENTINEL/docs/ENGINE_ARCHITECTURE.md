@@ -86,7 +86,8 @@ The Runtime engine controls SENTINEL's own sampling cadence and optional compute
 | balanced | Normal telemetry cadence; AI admission subject to memory/CPU headroom |
 | game_optimized | Slower detailed process scans; inventory, GPU and network polling back off; periodic AI triage is paused |
 | valorant_guarded | Strict read-only policy; slower SENTINEL polling; model inference and deep trace capture are blocked |
-| resource_pressure | Slower detailed polling and inventory; DEEP inference is deferred |
+| resource_pressure | Slower detailed polling and inventory; optional storage and AI work defer |
+| telemetry_degraded | CPU telemetry is missing or invalid; optional work is not admitted until a valid sample returns |
 | safety_degraded | The process observer is not trustworthy; mutation and model admission fail closed |
 
 System-wide CPU/RAM telemetry remains available at its normal lightweight cadence. Expensive per-process sampling and optional diagnostics are reduced first.
@@ -151,6 +152,34 @@ WPR is the primary recorder when Windows provides wpr.exe. A capture is bounded 
 7. uses Xperf only as an optional additional DPC/ISR decoder.
 
 If WPR stop/finalization fails, its current session ownership can no longer be proven. SENTINEL records the unknown state and deliberately does **not** issue a global stop or cancel during exception cleanup or shutdown. This may leave a trace session for the operator to inspect, but avoids disrupting another recorder. A missing Xperf installation does not require an ADK download to record with WPR. Existing or unknown WPR sessions are never stopped, cancelled, or replaced by SENTINEL.
+
+
+## 7. Proactive Agent Assistant and Storage Intelligence (1.2.30)
+
+**Modules:** `sentinel/agent_assist.py`, `sentinel/storage_intelligence.py`
+
+These are agent-owned background workers. The HUD is a renderer and configuration client; it is not required to remain open for detection, diagnosis, storage measurement or notification delivery.
+
+### Proactive diagnosis
+- The assistant consumes new warning/error/critical events and high-severity insights from the local SQLite event stream using durable cursors.
+- Structured event fields are bounded and filtered before they are used as diagnostic evidence. Secret-like keys are excluded; per-device, service, process and volume identity participates in deduplication.
+- Deterministic Windows fault classes include device/driver, network, storage and disk latency, memory, CPU, DPC/ISR, thermal/GPU, application crashes/hangs, boot/startup, Windows Update, audio, Bluetooth/USB, power/sleep, WHEA and Defender/security events.
+- Each finding retains evidence, a contextual question and a conservative first check. Unknown events remain explicit review items rather than being labeled as a confirmed cause.
+- Native Windows notifications include both the next question and the first safe check. The agent delivers them while the HUD is closed; suppressed alerts remain in SQLite for later delivery.
+- Optional local-specialist diagnosis is advisory-only, with a two-attempt/hour budget and a two-job pending cap. It is admitted only with valid runtime telemetry and idle CPU/RAM headroom. Failed local inference does not erase the deterministic finding.
+- User answers, dismissals, AI results, notification state and worker cursors are stored in SQLite.
+
+### Storage intelligence
+- The scanner inventories all mounted-volume capacity and performs bounded metadata walks of curated user/cache/project roots. Secondary data drives contribute top-level data folders and shallow project artifact discovery; the Windows OS volume is not recursively swept.
+- It reports file extensions and counts, largest files, hidden-file footprint, directory sizes, and package/environment footprints for Python, Node.js/Bun/Deno, Rust, .NET/NuGet, Java, Go, PHP/Composer and Ruby ecosystems.
+- Common project workspaces include Downloads, Documents, Desktop, OneDrive Documents and developer directories. Common generated/dependency trees are scanned through dedicated roots so broad parent walks do not double-count them.
+- Root selection rotates through SQLite-backed state. The worker checks the shared Runtime gate during a scan and yields when game, CPU, memory, safety or telemetry conditions change; the next pass resumes at the interrupted root.
+- Last-access timestamps are weak usage hints on Windows and are never treated as proof of disuse. Large/old/hidden items and package footprints are review candidates only. The scanner does not open file contents, delete files, uninstall packages, or move game libraries.
+
+### Runtime and persistence contract
+- Storage and optional local AI work share `runtime_engine.admit_optional_work`. Unknown CPU telemetry is not represented as zero load.
+- Game and VALORANT guard modes have priority over optional work. SENTINEL slows or defers its own workers instead of changing another process's priority/affinity, Windows power plan, services or security configuration.
+- Assistant settings, storage settings, findings, feedback, cursors, scan snapshots and scan history are persisted in the existing local SQLite database. UI settings changes are written by the agent API and survive restarts.
 
 ## Action lifecycle
 

@@ -1,4 +1,4 @@
-# SENTINEL 1.2.29 — Agent-owned proactive diagnostics and Storage Intelligence
+# SENTINEL 1.2.30 — Adaptive Agent Assist and deeper Storage Intelligence
 
 SENTINEL's observer, collectors and dashboard run as the signed-in user with a standard token. Administrator-only maintenance is handed to a narrowly scoped helper only after the operator confirms the exact preview and approves Windows UAC. The helper accepts one short-lived SQLite-backed job ID, binds it to the same Windows principal and interactive session, rechecks the kill switch, safeguard and original state, and can execute only a fixed allowlist of maintenance action IDs. It cannot accept arbitrary commands, scripts or paths.
 
@@ -29,6 +29,14 @@ SENTINEL's splash screen is now a real workspace data-loading phase, not an anim
 The loader uses a shared four-request asynchronous I/O limit and bounded request timeouts. This avoids flooding the local agent with dozens of concurrent requests and avoids starting duplicate Windows collectors in the browser; it reads the agent's existing collectors and caches. Each workspace exposes a real data-ready or degraded status. Missing or unsupported sources are not reported as successfully loaded. The first view is shown only after the preload batches finish; the splash has a short minimum display time so very fast machines still show the startup feedback.
 
 The command workspace is a visual control surface: circular live CPU, RAM, GPU and DPC gauges, a recent multi-signal performance chart, a radar-style node summary and icon-led shortcuts to the main workspaces. Evidence, activity feeds, culprits and secondary telemetry remain available as expandable detail panels. The rest of the UI retains the current glass visual language, with animated page entry, panel highlights, orbital instrumentation and responsive layouts. Reduced-motion preferences are respected.
+
+## Agent-first diagnostics and storage review (v1.2.30)
+
+The background agent consumes structured Windows events and diagnostic insights, then persists contextual questions and conservative next-check suggestions in SQLite. It can deliver native Windows notifications while the HUD is closed. The local specialist model is advisory-only, bounded to two queued diagnosis attempts per hour, and admitted only when runtime telemetry is valid and CPU/memory headroom is available. Event evidence is filtered to omit credential-like fields before it is attached to a finding.
+
+Storage Intelligence adds largest-file evidence, per-extension file counts, versioned Python site-packages, uv/Poetry/PDM/pipx, Go, Composer, Ruby, Conda and environment-overridden package caches. Bounded scan roots rotate through the selected folders so the same early directories do not consume every pass. A scan yields when game/foreground priority changes and resumes from the interrupted root later. Large/old files and package/cache footprints are review candidates only; NTFS last-access metadata is a weak signal, and the agent never deletes files or uninstalls packages.
+
+The Adaptive Runtime treats missing CPU telemetry as unknown rather than idle, and optional diagnosis/storage work remains deferred until telemetry is healthy. These changes shed SENTINEL-owned work; they do not change other applications' priorities, affinity, services, power plan, or anti-cheat state.
 
 # SENTINEL
 

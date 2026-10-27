@@ -116,6 +116,94 @@ def _clean(value: Any, limit: int = 360) -> str:
 
 def _classify(source: str, message: str, severity: str) -> dict[str, str]:
     text = (source + " " + message).casefold()
+    if any(word in text for word in ("whea-logger", "whea_uncorrectable_error", "machine check exception", "hardware error", "uncorrectable hardware error")):
+        return {
+            "category": "hardware-error",
+            "title": "Windows hardware error reported",
+            "explanation": "Windows recorded a hardware error (WHEA). The source may be CPU, memory, PCIe, storage or firmware; an event name alone cannot isolate the component.",
+            "question": "Did the error happen at idle, under gaming/load, or during sleep/wake, and did the PC freeze or restart?",
+            "fix": "Preserve the full WHEA event details and correlate its APIC/bus/device identifiers with temperature, power and driver telemetry. Do not change voltage, BIOS or firmware settings based on a single event.",
+        }
+    if any(word in text for word in ("windows defender", "microsoft defender", "defender threat", "antimalware service", "security intelligence update", "threat detected")):
+        return {
+            "category": "windows-security",
+            "title": "Windows security event needs review",
+            "explanation": "A Defender or Windows security event was recorded. It may be a detection, an update problem or a service-health warning; preserve the exact event and threat identity.",
+            "question": "Does Windows Security show a threat detection, a protection-history action, or an update/service error?",
+            "fix": "Open Windows Security protection history and verify the exact detection, affected path and action. Do not disable Defender, Tamper Protection or firewall protections, and do not restore a detected file unless its publisher and hash are independently verified.",
+        }
+    kernel_power_restart = (
+        ("kernel-power" in text or "kernel power" in text)
+        and any(word in text for word in ("41", "reboot", "shutdown"))
+    )
+    if kernel_power_restart or any(word in text for word in (
+        "blue screen", "bugcheck", "bug check", "stop code", "unexpected reboot",
+        "system rebooted unexpectedly", "unexpected shutdown",
+        "the previous system shutdown was unexpected", "event id 6008",
+    )):
+        return {
+            "category": "blue-screen",
+            "title": "Windows crash or unexpected restart detected",
+            "explanation": "A stop-code, bug-check or unexpected-restart signal was observed. A Kernel-Power event alone does not identify the root cause.",
+            "question": "Did Windows show a blue-screen stop code, restart without warning, or simply lose power?",
+            "fix": "Capture the exact stop code, dump timestamp and matching WER/bug-check event. Correlate the faulting module and recent driver changes before replacing drivers or changing firmware.",
+        }
+    if any(word in text for word in ("windows update", "wuaueng", "windowsupdateclient", "update installation failed", "0x8024", "servicing stack", "component store")):
+        return {
+            "category": "windows-update",
+            "title": "Windows Update or servicing failure",
+            "explanation": "Windows Update or component servicing reported an error. The update code and servicing stage are needed before selecting a repair.",
+            "question": "Is the update stuck downloading, failing to install, rolling back, or repeatedly asking for a restart?",
+            "fix": "Record the exact update KB and error code, then inspect Windows Update and CBS events around the same time. Avoid resetting update components or deleting SoftwareDistribution data before collecting the failure details.",
+        }
+    if any(word in text for word in ("boot failure", "boot configuration", "startup repair", "bootmgr", "winload", "startup failed", "logon failed")):
+        return {
+            "category": "boot-startup",
+            "title": "Windows boot or startup issue",
+            "explanation": "A boot, logon or startup component reported a failure. The last successful boot and the exact failing component are important for safe recovery.",
+            "question": "Does Windows fail before sign-in, after sign-in, or only when one application starts?",
+            "fix": "Record the exact startup error and recovery screen, then check the matching boot, Service Control Manager and reliability events. Do not edit BCD or disable startup services without a verified recovery path.",
+        }
+    if any(word in text for word in ("audio endpoint", "audiosrv", "no audio", "sound device", "audio service", "microphone not", "speaker not")):
+        return {
+            "category": "audio",
+            "title": "Audio device or service problem",
+            "explanation": "An audio endpoint, driver or Windows audio service may not be operating correctly. The selected output/input device and service state need to be separated.",
+            "question": "Is sound missing from every application, only one application, or is the microphone affected?",
+            "fix": "Check the selected playback/recording endpoint, device status and Windows Audio service dependencies. Verify the exact signed audio driver before reinstalling it; do not stop unrelated audio services.",
+        }
+    if any(word in text for word in ("bluetooth", "bthserv", "bthusb", "usb device", "usb controller", "device descriptor", "unknown usb device")):
+        return {
+            "category": "peripheral",
+            "title": "Bluetooth or USB peripheral issue",
+            "explanation": "Windows reported a Bluetooth or USB device problem. Port, power management, device enumeration and driver state are possible causes.",
+            "question": "Is this a Bluetooth device, a USB peripheral, or a built-in adapter, and does it fail on every port?",
+            "fix": "Check the device instance/problem code, connection path and matching Kernel-PnP events. Test a known-good port or cable first; do not uninstall host controllers or remove paired devices before collecting the device identity.",
+        }
+    if any(word in text for word in ("application hang", "apphang", "not responding", "window is not responding", "hung application")):
+        return {
+            "category": "application-hang",
+            "title": "Application hang or unresponsive window",
+            "explanation": "A process appears to be stuck rather than cleanly crashing. The blocked thread, disk/network wait or resource contention may be responsible.",
+            "question": "Which application stopped responding, and did it recover by itself or require you to close it?",
+            "fix": "Compare the hang timestamp with per-process CPU, memory and I/O plus Windows Error Reporting hang events. Save work before ending the process; do not force-close background services based only on a timeout.",
+        }
+    if any(word in text for word in ("battery", "ac adapter", "power state", "modern standby", "sleep transition", "hibernate", "critical battery", "powercfg")):
+        return {
+            "category": "power-battery",
+            "title": "Power, battery or sleep-state issue",
+            "explanation": "A power transition, battery or adapter warning was detected. Battery health, charger state and sleep/Modern Standby behavior are distinct causes.",
+            "question": "Does this happen on battery, while plugged in, during sleep/wake, or during shutdown?",
+            "fix": "Correlate the event with AC/battery state, charge level and sleep-transition timestamps. Check the OEM adapter and battery diagnostics before changing power plans or disabling devices.",
+        }
+    if any(word in text for word in ("display driver stopped responding", "display driver reset", "nvlddmkm", "amdkmdag", "igdkmd64", "gpu driver reset", "graphics driver")):
+        return {
+            "category": "gpu-driver",
+            "title": "Graphics driver recovery or reset detected",
+            "explanation": "Windows reported a graphics-driver timeout, reset or recovery. The event may relate to a driver fault, device power state, thermal condition or an unstable workload.",
+            "question": "Did the screen flicker, go black, recover after a few seconds, or did the application/game close?",
+            "fix": "Capture the display event ID, driver version and GPU temperature/power state at the same timestamp. Compare with recent driver changes; do not uninstall the active graphics driver or change voltage/firmware settings as a first step.",
+        }
     if any(word in text for word in ("code 10", "cm_prob_failed_start", "device cannot start", "driver failed", "driver error", "driver start")):
         return {
             "category": "driver",
@@ -124,7 +212,7 @@ def _classify(source: str, message: str, severity: str) -> dict[str, str]:
             "question": "Which device is affected, and did this begin after a Windows or driver update?",
             "fix": "Check the exact Device Manager problem code, device instance, driver provider and version. Prefer the device manufacturer's signed driver; do not remove the current driver until a recovery path is available.",
         }
-    if any(word in text for word in ("no internet", "network disconnected", "wifi", "wi-fi", "dns", "winsock", "network adapter", "network interface")):
+    if any(word in text for word in ("no internet", "network disconnected", "wifi", "wi-fi", "dns", "dhcp", "winsock", "tcpip", "ndis", "network adapter", "network interface")):
         return {
             "category": "network",
             "title": "Network connectivity needs diagnosis",
@@ -164,6 +252,14 @@ def _classify(source: str, message: str, severity: str) -> dict[str, str]:
             "question": "Does this happen only while gaming, or also when the machine is idle?",
             "fix": "Correlate CPU utilization with the top non-game process, effective clock and temperature. Check cooling and power-adapter state before changing performance profiles or process priority.",
         }
+    if any(word in text for word in ("bad block", "disk error", "disk has a bad block", "ntfs", "storahci", "stornvme", "nvme reset", "device was surprise removed", "disk controller error", "uncorrectable disk")):
+        return {
+            "category": "disk-health",
+            "title": "Disk, NTFS or storage-controller integrity warning",
+            "explanation": "Windows recorded a disk, filesystem or storage-controller health event. It can indicate a transient link/reset, filesystem issue or failing device; the exact event and drive identity matter.",
+            "question": "Which drive was affected, and did you notice freezes, clicking/noise, disconnects or a file read/write error?",
+            "fix": "Back up important data first if the device may be failing, then correlate the disk number/serial, event ID and SMART/health evidence. Do not run repair, format or destructive surface scans until data is protected.",
+        }
     if any(word in text for word in ("disk latency", "disk stall", "disk busy", "storage stall", "i/o stall")):
         return {
             "category": "disk-performance",
@@ -179,6 +275,14 @@ def _classify(source: str, message: str, severity: str) -> dict[str, str]:
             "explanation": "Temperature or throttle telemetry suggests the device may be limiting performance. Sensor readings can be incomplete or platform-specific.",
             "question": "Does performance recover after the laptop cools, and are the fans or air vents obstructed?",
             "fix": "Check sustained temperature, power and clock readings plus the exact sensor source. Keep vents clear and use the OEM cooling profile; Sentinel will not write fan registers, EC controls or firmware settings.",
+        }
+    if any(word in text for word in ("storage review candidate", "package usage review", "hidden file review", "large old file")):
+        return {
+            "category": "storage-review",
+            "title": "Large or possibly cold storage item found",
+            "explanation": "The bounded storage scan found a large cache, package component or file with weak age/usage signals. The scan does not prove that the item is unused.",
+            "question": "Do you still use the application, project or environment that owns this path, and should I keep it on the review list?",
+            "fix": "Check the owning project, package manifest, active processes and backup status before removing anything. Use the matching package manager or application's own cleanup workflow; SENTINEL will not delete files or uninstall packages.",
         }
     if any(word in text for word in ("disk full", "low disk", "storage pressure", "space available", "free space")):
         return {
@@ -220,7 +324,7 @@ def _classify(source: str, message: str, severity: str) -> dict[str, str]:
             "question": "Is the sensor provider application open, and does its local endpoint respond?",
             "fix": "Check the provider process, configured loopback port and sensor permissions. Keep core telemetry active; the agent will not install drivers or alter firmware to recover sensors.",
         }
-    if any(word in text for word in ("crash", "unhandled exception", "access violation", "application fault", "terminated unexpectedly")):
+    if any(word in text for word in ("crash", "unhandled exception", "access violation", "application fault", "faulting application", "faulting module", "appcrash", "event id 1000", "event id 1001", "terminated unexpectedly")):
         return {
             "category": "application",
             "title": "Application failure signal observed",
@@ -244,10 +348,19 @@ def _runtime_suppressed(config: dict[str, Any]) -> bool:
         from . import runtime_engine
         runtime = runtime_engine.snapshot()
         if not config.get("suppress_during_games", True):
-            return runtime.get("mode") in ("resource_pressure", "safety_degraded")
+            return runtime.get("mode") in ("resource_pressure", "safety_degraded", "telemetry_degraded")
         return runtime.get("mode") != "balanced"
     except Exception:
         return True
+
+
+def _toast_body(question: str, suggested_fix: str) -> str:
+    """Fit both the next question and first safe check into a native toast."""
+    question_text = _clean(question, 128)
+    fix_text = _clean(suggested_fix, 120)
+    if question_text and fix_text:
+        return f"{question_text} Next check: {fix_text}"[:240]
+    return (question_text or fix_text)[:240]
 
 
 def _agent_toast(title: str, body: str) -> bool:
@@ -284,13 +397,27 @@ def create_notification(source: str, message: str, severity: str = "warn",
     if not config.get("enabled"):
         return None
     source_text, message_text = _clean(source, 80), _clean(message, 360)
-    diagnosis = _classify(source_text, message_text, severity)
+    safe_evidence = evidence if isinstance(evidence, dict) else {}
+    safe_evidence = {str(k)[:40]: _clean(v, 180) for k, v in list(safe_evidence.items())[:8]}
+    evidence_context = " ".join(f"{key}: {value}" for key, value in safe_evidence.items())
+    diagnosis = _classify(source_text, _clean(f"{message_text} {evidence_context}", 700), severity)
     stable_message = re.sub(r"\b\d+(?:\.\d+)?\b", "#", message_text.casefold())
     stable_message = re.sub(r"\[(?:HIGH|WARN|ERROR|CRITICAL)\]\s*", "", stable_message, flags=re.IGNORECASE)
     # Core insights also emit a corresponding activity-log row. A short title
     # signature lets those two records collapse into one durable finding.
     title_signature = " ".join(stable_message.split()[:12])
-    normalized = " ".join((diagnosis["category"] + " " + title_signature).split())[:180]
+    identity_keys = {
+        "device", "device_name", "instance", "instance_id", "interface", "adapter",
+        "service", "process", "process_name", "application", "package", "mountpoint",
+        "path", "volume", "driver",
+    }
+    identity = " ".join(
+        f"{str(key).casefold()}={_clean(value, 100).casefold()}"
+        for key, value in sorted(safe_evidence.items())
+        if str(key).casefold() in identity_keys and value
+    )
+    identity = re.sub(r"\b\d+(?:\.\d+)?\b", "#", identity)
+    normalized = " ".join((diagnosis["category"] + " " + title_signature + " " + identity).split())[:300]
     dedupe_key = hashlib.sha256(normalized.encode("utf-8")).hexdigest()
     cooldown = max(600, int(config.get("dedupe_cooldown_minutes", 60)) * 60)
     previous = core.db(
@@ -305,8 +432,6 @@ def create_notification(source: str, message: str, severity: str = "warn",
     if int(findings_last_hour) >= 60:
         return None
     question = diagnosis["question"] if config.get("ask_follow_up_questions") else ""
-    safe_evidence = evidence if isinstance(evidence, dict) else {}
-    safe_evidence = {str(k)[:40]: _clean(v, 180) for k, v in list(safe_evidence.items())[:8]}
     now = time.time()
     notification_id = core.insert_id(
         "INSERT INTO agent_notifications(created_at,category,severity,title,explanation,question,suggested_fix,"
@@ -320,10 +445,9 @@ def create_notification(source: str, message: str, severity: str = "warn",
            "question": question, "evidence": safe_evidence}
     core.publish("agent_notification", row)
     if str(severity).casefold() in ("error", "critical", "high") and config.get("ai_deep_diagnosis"):
-        completed = core.db("SELECT COUNT(*) FROM agent_assist_ai_results WHERE completed_at>=?",
-                            (now - 3600,))[0][0]
-        pending = core.db("SELECT COUNT(*) FROM agent_assist_ai_jobs WHERE status IN ('queued','running')")[0][0]
-        if int(completed) + int(pending) < 2:
+        # Count every queued attempt, including failed/unavailable jobs. Counting
+        # only successful results lets a broken local model be hammered repeatedly.
+        if _ai_diagnosis_budget_available(now):
             core.db("INSERT OR IGNORE INTO agent_assist_ai_jobs(notification_id,created_at,updated_at,status) VALUES(?,?,?,'queued')",
                     (notification_id, now, now))
     alerts_last_hour = core.db(
@@ -333,7 +457,7 @@ def create_notification(source: str, message: str, severity: str = "warn",
     if config.get("agent_notifications") and int(alerts_last_hour) < int(config.get("max_notifications_per_hour", 4)) and not _runtime_suppressed(config):
         attempted_at = time.time()
         core.db("UPDATE agent_notifications SET delivery_attempted_at=? WHERE id=?", (attempted_at, notification_id))
-        delivered = _agent_toast(row["title"], row["question"] or row["suggested_fix"][:180])
+        delivered = _agent_toast(row["title"], _toast_body(row["question"], row["suggested_fix"]))
         if delivered:
             core.db("UPDATE agent_notifications SET delivered_at=? WHERE id=?", (time.time(), notification_id))
     return notification_id
@@ -364,7 +488,7 @@ def _deliver_pending_notifications() -> int:
         attempted_at = time.time()
         core.db("UPDATE agent_notifications SET delivery_attempted_at=? WHERE id=?",
                 (attempted_at, notification_id))
-        if _agent_toast(str(title), str(question or suggested_fix or "")[:180]):
+        if _agent_toast(str(title), _toast_body(str(question or ""), str(suggested_fix or ""))):
             core.db("UPDATE agent_notifications SET delivered_at=? WHERE id=?",
                     (time.time(), notification_id))
             delivered += 1
@@ -432,6 +556,47 @@ def _advance_cursor(key: str, value: int) -> None:
             (key, int(value)))
 
 
+def _event_data_evidence(raw_data: Any) -> dict[str, str]:
+    """Extract small, non-secret diagnostic fields from an event's structured payload."""
+    if not raw_data:
+        return {}
+    try:
+        parsed = json.loads(raw_data) if isinstance(raw_data, str) else raw_data
+    except (TypeError, ValueError):
+        return {}
+    if not isinstance(parsed, dict):
+        return {}
+    result: dict[str, str] = {}
+    for key, value in list(parsed.items())[:12]:
+        name = _clean(key, 40)
+        if not name or re.search(r"secret|token|password|credential|cookie|authorization|api.?key", name, re.I):
+            continue
+        try:
+            encoded = json.dumps(value, ensure_ascii=False, separators=(",", ":"), default=str) if isinstance(value, (dict, list)) else str(value)
+        except (TypeError, ValueError):
+            continue
+        cleaned = _clean(encoded, 140)
+        if cleaned:
+            result[name] = cleaned
+        if len(result) >= 8:
+            break
+    return result
+
+
+def _ai_diagnosis_budget_available(now: float | None = None) -> bool:
+    """Limit all queued local diagnoses, including failures and unavailable models."""
+    moment = time.time() if now is None else float(now)
+    count = core.db(
+        "SELECT COUNT(*) FROM agent_assist_ai_jobs WHERE created_at>=?", (moment - 3600,)
+    )[0][0]
+    if int(count) >= 2:
+        return False
+    pending = core.db(
+        "SELECT COUNT(*) FROM agent_assist_ai_jobs WHERE status IN ('queued','running')"
+    )[0][0]
+    return int(pending) < 2
+
+
 def _process_new_events() -> None:
     config = settings()
     if not config.get("enabled"):
@@ -459,7 +624,8 @@ def _process_new_events() -> None:
                 _, ts, level, source, message, raw_data = row
                 severity = str(level or "info").casefold()
                 evidence = {"event_id": row_id, "timestamp": ts, "source": source, "level": severity}
-                if severity not in ("warn", "warning", "error", "critical"):
+                evidence.update(_event_data_evidence(raw_data))
+                if severity not in ("warn", "warning", "error", "critical", "high", "fatal", "alert"):
                     continue
                 if str(source or "").casefold() in ("agent-assist", "storage-intelligence"):
                     continue

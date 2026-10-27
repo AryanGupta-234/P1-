@@ -7,7 +7,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from sentinel import core, collectors, inventory, ai, server, winutil
+from sentinel import core, collectors, inventory, ai, ai_engine, server, winutil
 
 import agent
 
@@ -182,6 +182,8 @@ def test_latest_runtime_snapshots_are_keyed_and_integrity_stamped(monkeypatch):
 
 def test_ai_inference_usage_is_written_to_sqlite(monkeypatch):
     connection = isolated_core_db(monkeypatch)
+    # This test covers usage persistence, not the runner's live host-load policy.
+    monkeypatch.setattr(ai_engine, "inference_allowed", lambda *a, **k: (True, "isolated test"))
     monkeypatch.setattr(ai, "local_ok", lambda model: True)
     monkeypatch.setattr(ai, "_http", lambda *a, **k: {"response": "triage complete", "prompt_eval_count": 11,
         "eval_count": 4, "total_duration": 2_000_000_000})
