@@ -65,6 +65,8 @@ def test_new_event_flow_starts_at_current_event_cursor(monkeypatch):
     def fake_db(sql, args=(), many=False):
         if "SELECT COALESCE(MAX(id),0) FROM events" in sql:
             return [(900,)]
+        if "SELECT COUNT(*) FROM automation_flows" in sql:
+            return [(0,)]
         if "FROM automation_flows WHERE id=?" in sql:
             return [row]
         if "FROM automation_runs WHERE flow_id=?" in sql:
