@@ -533,6 +533,14 @@ class H(BaseHTTPRequestHandler):
                 return self._json(agent_assist.update_settings(body))
             except (ValueError, TypeError) as exc:
                 return self._json({"error": str(exc)}, 400)
+        if p == "/api/agent-assist/system-review":
+            try:
+                result = agent_assist.request_system_review()
+                return self._json(result, 202 if result.get("queued") else 409)
+            except (ValueError, TypeError) as exc:
+                return self._json({"error": str(exc)}, 400)
+            except RuntimeError as exc:
+                return self._json({"error": str(exc)}, 409)
         if p == "/api/agent-assist/notification/respond":
             try:
                 return self._json(agent_assist.respond(
