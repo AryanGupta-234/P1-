@@ -193,8 +193,10 @@ def _evidence_packet() -> dict[str, Any]:
             continue
         hardware_ids = []
         for identifier in (raw.get("hardware_ids") or [])[:5]:
-            value = clean(identifier, 100)
-            if value:
+            # PnP identifiers legitimately contain vendor\device separators (for
+            # example PCI\VEN_10EC); they are device metadata, not account names.
+            value = " ".join(str(identifier or "").split())[:100]
+            if value and not re.search(r"(?i)(password|token|secret|credential|api.?key)", value):
                 hardware_ids.append(value)
         update = {
             "id": "driver-update." + str(index + 1),
