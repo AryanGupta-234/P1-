@@ -1377,11 +1377,28 @@ async function boot() {
     toast("Exported " + LOGS.length + " events", "ok");
   };
   initPalette(); initNotify(); initUiPreferences(); initFC(); initIntelligence(); initActivityIntelligence();
-  initAdvanced(); initAgent(); initEngines(); initMaintenance(); initAgentAutomation(); initWindowsKnowledge(); initVoice(); bindJ("#metrics");
+  initAdvanced(); initAgent(); initEngines(); initMaintenance(); initAgentAutomation(); initLocalAutomation(); initWindowsKnowledge(); initVoice(); bindJ("#metrics");
   const commandRefresh = document.getElementById("cmd-agent-refresh");
   if (commandRefresh) commandRefresh.onclick = loadCommandAssistantBrief;
   const commandAgentHost = document.getElementById("cmd-agent-list");
   if (commandAgentHost) commandAgentHost.addEventListener("click", handleCommandAgentAction);
+  const fullReviewButton = document.getElementById("cmd-system-review");
+  if (fullReviewButton) fullReviewButton.onclick = async () => {
+    fullReviewButton.disabled = true;
+    const oldLabel = fullReviewButton.textContent;
+    fullReviewButton.textContent = "QUEUING REVIEW…";
+    try {
+      const result = await api("/api/agent-assist/system-review", {});
+      if (result.error) throw new Error(result.error);
+      if (!result.queued) {
+        toast(result.reason || "Full review deferred by the safety/resource governor", "warn");
+      } else {
+        toast("Full Windows evidence review queued for local AI analysis", "ok");
+        await loadCommandAssistantBrief();
+      }
+    } catch (error) { toast(error.message || String(error), "bad"); }
+    finally { fullReviewButton.disabled = false; fullReviewButton.textContent = oldLabel; }
+  };
   const storageScanButton = document.getElementById("cmd-storage-scan");
   if (storageScanButton) storageScanButton.onclick = async () => {
     storageScanButton.disabled = true;
@@ -2366,6 +2383,9 @@ async function loadAgentAutomation(){
     set("agent-assist-questions",a.ask_follow_up_questions);
     set("agent-assist-notifications",a.agent_notifications);
     set("agent-assist-ai",a.ai_deep_diagnosis);
+    set("agent-assist-reviews",a.system_reviews_enabled);
+    const reviewInterval=document.getElementById("agent-assist-review-interval");
+    if(reviewInterval)reviewInterval.value=String(a.system_review_interval_hours||12);
     const agentState=document.getElementById("agent-assist-state");
     if(agentState)agentState.textContent=AGENT_ASSIST.engine==="agent-owned"?"AGENT-OWNED · "+(AGENT_ASSIST.open_notifications||0)+" OPEN":"AGENT STATUS";
     renderAgentNotifications();
@@ -2389,7 +2409,9 @@ function initAgentAutomation(){
       enabled:!!document.getElementById("agent-assist-enabled")?.checked,
       ask_follow_up_questions:!!document.getElementById("agent-assist-questions")?.checked,
       agent_notifications:!!document.getElementById("agent-assist-notifications")?.checked,
-      ai_deep_diagnosis:!!document.getElementById("agent-assist-ai")?.checked
+      ai_deep_diagnosis:!!document.getElementById("agent-assist-ai")?.checked,
+      system_reviews_enabled:!!document.getElementById("agent-assist-reviews")?.checked,
+      system_review_interval_hours:Number(document.getElementById("agent-assist-review-interval")?.value||12)
     });
     if(result.error)return toast(result.error,"bad");
     toast("Agent assistant settings saved to the local database","ok");
@@ -2437,6 +2459,139 @@ function initAgentAutomation(){
   // when the operator opens Maintenance or explicitly requests a refresh; the
   // background agent, not this UI, owns scanning, event detection and alerts.
   void loadAgentAutomation();
+}
+
+async function loadLocalAutomation(){
+  const host=document.getElementById("local-automation-flows");
+  try{
+    const data=await api("/api/automation/flows");
+    if(data.error)throw new Error(data.error);
+    const flows=Array.isArray(data.flows)?data.flows:[];
+    const count=document.getElementById("flow-count");
+    if(count)count.textContent=flows.length+" FLOWS · "+(data.runs_7d||0)+" RUNS / 7D";
+    const state=document.getElementById("local-automation-state");
+    if(state)state.textContent="LOCAL AGENT · "+flows.filter(item=>item.enabled).length+" ACTIVE";
+    if(!host)return;
+    const actionLabels={
+      local_ai_review:"LOCAL WINDOWS AI REVIEW",
+      read_only_diagnostics:"READ-ONLY DIAGNOSTICS",
+      storage_scan:"STORAGE SCAN",
+      notify_user:"WINDOWS NOTIFICATION"
+    };
+    host.innerHTML=flows.map(flow=>{
+      const t=flow.trigger||{};
+      let triggerLabel="";
+      if(flow.trigger_type==="event")triggerLabel="EVENT · "+String(t.category||"").replaceAll("_"," ").toUpperCase();
+      else if(flow.trigger_type==="schedule")triggerLabel="SCHEDULE · EVERY "+t.interval_hours+"H";
+      else triggerLabel="RESOURCE · "+String(t.metric||"").toUpperCase()+" ABOVE "+t.threshold+" × "+t.consecutive_samples;
+      const run=flow.latest_run;
+      const status=run?String(run.state||"unknown").toUpperCase():"NOT RUN YET";
+      const when=run?.completed_at?new Date(run.completed_at*1000).toLocaleString():"Waiting for trigger";
+      const result=run?.result?.reason||run?.result?.message||run?.result?.error||"";
+      return '<div class="row" data-flow-row="'+flow.id+'"><div class="maint-flow-copy">'+
+        "<b>"+esc(flow.name)+"</b><small>"+esc(triggerLabel)+"</small><small>"+
+        esc(actionLabels[flow.action_type]||flow.action_type)+" · "+flow.cooldown_minutes+
+        "m cooldown</small><small>LAST RUN · "+esc(status)+" · "+esc(when)+
+        (result?" · "+esc(result):"")+"</small></div><span class=\"tag "+
+        (flow.enabled?"ok":"mu")+"\">"+(flow.enabled?"ACTIVE":"PAUSED")+
+        '</span><button class="btn sm" data-flow-toggle="'+flow.id+'" data-enabled="'+
+        (flow.enabled?"1":"0")+'">'+(flow.enabled?"PAUSE":"ENABLE")+
+        '</button><button class="btn sm danger" data-flow-delete="'+flow.id+'">DELETE</button></div>';
+    }).join("")||'<div class="empty">No workflows created yet. Choose a trigger and action above.</div>';
+  }catch(error){
+    if(host)host.innerHTML='<div class="empty">'+esc(error.message||String(error))+'</div>';
+    const state=document.getElementById("local-automation-state");
+    if(state)state.textContent="AUTOMATION STATUS UNAVAILABLE";
+  }
+}
+
+function initLocalAutomation(){
+  const trigger=document.getElementById("flow-trigger");
+  const action=document.getElementById("flow-action");
+  const metric=document.getElementById("flow-metric");
+  const threshold=document.getElementById("flow-threshold");
+  const eventFields=document.getElementById("flow-event-fields");
+  const scheduleFields=document.getElementById("flow-schedule-fields");
+  const metricFields=document.getElementById("flow-metric-fields");
+  const notifyFields=document.getElementById("flow-notify-fields");
+  const updateFields=()=>{
+    if(eventFields)eventFields.hidden=trigger?.value!=="event";
+    if(scheduleFields)scheduleFields.hidden=trigger?.value!=="schedule";
+    if(metricFields)metricFields.hidden=trigger?.value!=="metric";
+    if(notifyFields)notifyFields.hidden=action?.value!=="notify_user";
+    const specs={
+      cpu:{max:100,step:1,value:90},mem:{max:100,step:1,value:90},
+      dlat:{max:10000,step:1,value:50},ping:{max:2000,step:5,value:100},
+      gputemp:{max:120,step:1,value:85},loss:{max:100,step:1,value:5}
+    };
+    const spec=specs[metric?.value||"cpu"];
+    if(threshold&&spec&&Number(threshold.max)!==spec.max){
+      threshold.max=String(spec.max);threshold.step=String(spec.step);threshold.value=String(spec.value);
+    }
+  };
+  if(trigger)trigger.onchange=updateFields;
+  if(action)action.onchange=updateFields;
+  if(metric)metric.onchange=updateFields;
+  updateFields();
+
+  const create=document.getElementById("flow-create");
+  if(create)create.onclick=async()=>{
+    const name=document.getElementById("flow-name")?.value.trim()||"";
+    const triggerType=trigger?.value||"event";
+    const actionType=action?.value||"local_ai_review";
+    let triggerConfig={};
+    if(triggerType==="event"){
+      triggerConfig={category:document.getElementById("flow-event-category")?.value||"application_crash"};
+    }else if(triggerType==="schedule"){
+      triggerConfig={interval_hours:Number(document.getElementById("flow-schedule-hours")?.value||12)};
+    }else{
+      triggerConfig={metric:metric?.value||"cpu",operator:"above",
+        threshold:Number(threshold?.value||90),
+        consecutive_samples:Number(document.getElementById("flow-samples")?.value||3)};
+    }
+    const actionConfig=actionType==="notify_user"?
+      {message:document.getElementById("flow-message")?.value.trim()||""}:{};
+    const payload={
+      name,enabled:!!document.getElementById("flow-enabled")?.checked,
+      trigger_type:triggerType,trigger:triggerConfig,action_type:actionType,
+      action:actionConfig,cooldown_minutes:Number(document.getElementById("flow-cooldown")?.value||30)
+    };
+    create.disabled=true;
+    const idle=create.textContent;
+    create.textContent="SAVING FLOW…";
+    try{
+      const result=await api("/api/automation/flows",payload);
+      if(result.error)throw new Error(result.error);
+      toast("Local workflow created and saved in SQLite","ok");
+      await loadLocalAutomation();
+    }catch(error){toast(error.message||String(error),"bad");}
+    finally{create.disabled=false;create.textContent=idle;}
+  };
+  const refresh=document.getElementById("flow-refresh");
+  if(refresh)refresh.onclick=loadLocalAutomation;
+  const host=document.getElementById("local-automation-flows");
+  if(host)host.addEventListener("click",async event=>{
+    const toggle=event.target.closest("[data-flow-toggle]");
+    const remove=event.target.closest("[data-flow-delete]");
+    if(!toggle&&!remove)return;
+    const target=toggle||remove;
+    const id=Number(target.dataset.flowToggle||target.dataset.flowDelete||0);
+    if(!id)return;
+    try{
+      if(toggle){
+        const result=await api("/api/automation/flows/enabled",{id,enabled:toggle.dataset.enabled!=="1"});
+        if(result.error)throw new Error(result.error);
+        toast(toggle.dataset.enabled==="1"?"Workflow paused":"Workflow enabled","ok");
+      }else{
+        if(!confirm("Delete this local workflow and its retained run history?"))return;
+        const result=await api("/api/automation/flows/delete",{id});
+        if(result.error)throw new Error(result.error);
+        toast("Workflow deleted","ok");
+      }
+      await loadLocalAutomation();
+    }catch(error){toast(error.message||String(error),"bad");}
+  });
+  void loadLocalAutomation();
 }
 
 async function runWindowsDiagnosis(questionId,buttonId,resultId){

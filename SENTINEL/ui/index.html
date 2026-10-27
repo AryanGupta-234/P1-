@@ -1,8 +1,8 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>SENTINEL &middot; 1.2.31</title>
+<title>SENTINEL &middot; 1.2.32</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cpath d='M32 4l24 14v28L32 60 8 46V18z' fill='none' stroke='%238fd69d' stroke-width='4'/%3E%3Ccircle cx='32' cy='32' r='8' fill='%23a31c1b'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="app.css?v=1.2.31"></head>
+<link rel="stylesheet" href="app.css?v=1.2.32"></head>
 <body class="ui-simple"><div class="ambient"></div><canvas id="starfield"></canvas>
 <div class="boot" id="boot" role="status" aria-live="polite" aria-label="SENTINEL Windows node initialization">
   <div class="boot-grid" aria-hidden="true"></div><div class="boot-scanline" aria-hidden="true"></div>
@@ -22,7 +22,7 @@
         <div class="boot-signal-label"><i></i> COLLECTORS RUNNING IN BACKGROUND</div>
       </div>
       <div class="boot-content">
-        <div class="boot-eyebrow"><span>BOOT SEQUENCE / 1.2.26</span><span>LOCAL INTELLIGENCE</span></div>
+        <div class="boot-eyebrow"><span>BOOT SEQUENCE / 1.2.32</span><span>LOCAL INTELLIGENCE</span></div>
         <div class="boot-title">SENTINEL<span class="boot-title-cursor"></span></div>
         <div class="boot-sub">SENSE THE SYSTEM. SHAPE THE RESPONSE.</div>
         <div class="boot-lanes" aria-hidden="true"><div><i></i><span>SESSION</span></div><div><i></i><span>PROCESS</span></div><div><i></i><span>SYSTEM</span></div><div><i></i><span>NETWORK</span></div><div><i></i><span>THERMAL</span></div><div><i></i><span>LIVE LINK</span></div></div>
@@ -131,6 +131,7 @@
           <div class="command-diagnose-actions">
             <small>Uses local telemetry and the installed specialist model when available.</small>
             <button class="btn or" type="button" id="cmd-diagnose-run">DIAGNOSE</button>
+            <button class="btn sm" type="button" id="cmd-system-review">FULL WINDOWS AI REVIEW</button>
           </div>
           <div id="cmd-diagnose-result" class="command-diagnose-result" aria-live="polite">
             <div class="empty">SENTINEL will show likely causes, uncertainty and safe next checks here.</div>
@@ -553,6 +554,8 @@
       <label class="tog"><span>Ask contextual follow-up questions<small>Request the missing detail needed to narrow the cause.</small></span><input type="checkbox" class="sw" id="agent-assist-questions" checked></label>
       <label class="tog"><span>Agent-triggered desktop alerts<small>Delivered by the running Windows agent; no dashboard polling is required to trigger them.</small></span><input type="checkbox" class="sw" id="agent-assist-notifications" checked></label>
       <label class="tog"><span>AI deep diagnosis for serious issues<small>Run the existing local-only Windows specialist for high-severity findings when CPU, memory and game-state safeguards allow it.</small></span><input type="checkbox" class="sw" id="agent-assist-ai" checked></label>
+      <label class="tog"><span>Periodic whole-PC AI review<small>Correlate process/resource, service, startup, task, app, driver, Event Viewer and usage evidence using the local model. Runs only when the runtime governor admits the work.</small></span><input type="checkbox" class="sw" id="agent-assist-reviews" checked></label>
+      <label class="maint-form">FULL REVIEW INTERVAL <select id="agent-assist-review-interval"><option value="6">Every 6 hours</option><option value="12" selected>Every 12 hours</option><option value="24">Daily</option><option value="48">Every 2 days</option><option value="168">Weekly</option></select></label>
       <div class="maint-policy-row"><button class="btn or" id="agent-assist-save">SAVE ASSISTANT SETTINGS</button><button class="btn" id="agent-assist-refresh">REFRESH FINDINGS</button><span class="tag" id="agent-assist-count">-- OPEN</span></div>
       <div id="agent-assist-notifications-list" class="maint-diagnostics" aria-live="polite"><div class="empty">Agent findings will appear here when a new issue is detected.</div></div>
       <div class="msg"><small>CONTROL BOUNDARY</small>Questions and fixes are advisory. System changes still go through Sentinel's existing preview, approval, safeguard and rollback engines.</div>
@@ -563,6 +566,38 @@
       <div class="maint-policy-row"><button class="btn or" id="storage-scan-save">SAVE STORAGE SETTINGS</button><button class="btn" id="storage-scan-now">SCAN WHEN IDLE</button><button class="btn" id="storage-scan-refresh">REFRESH REPORT</button></div>
       <div id="storage-scan-results" class="maint-diagnostics"><div class="empty">The agent measures drive capacity, extension mix, hidden-file footprint, Python/.NET/Node/Rust/Java caches and common build outputs. It does not open file contents.</div></div>
     </div></div>
+  </div>
+  <div class="panel maint-diagnostics-panel">
+    <div class="ph">Local automation flows<em id="local-automation-state">POWER AUTOMATE-STYLE · LOCAL ONLY</em></div>
+    <div class="pb">
+      <div class="msg"><small>WORKFLOW BUILDER</small>Choose a Windows event, time schedule or sustained resource condition. SENTINEL will run only the selected fixed local action. No cloud account or arbitrary PowerShell is involved.</div>
+      <div class="maint-network-fields">
+        <label>FLOW NAME<input id="flow-name" maxlength="80" value="Crash → AI review"></label>
+        <label>WHEN<select id="flow-trigger"><option value="event">Windows event occurs</option><option value="schedule">Time interval elapses</option><option value="metric">Resource stays above limit</option></select></label>
+        <label>THEN<select id="flow-action"><option value="local_ai_review">Run local Windows AI review</option><option value="read_only_diagnostics">Refresh read-only diagnostics</option><option value="storage_scan">Queue read-only storage scan</option><option value="notify_user">Show Windows notification</option></select></label>
+      </div>
+      <div class="maint-network-fields" id="flow-event-fields">
+        <label>EVENT CATEGORY<select id="flow-event-category"><option value="application_crash">Application crash / hang</option><option value="hardware_error">WHEA / hardware error</option><option value="driver_error">Driver / device failure</option><option value="disk_error">Disk / file-system error</option><option value="windows_update">Windows Update failure</option></select></label>
+      </div>
+      <div class="maint-network-fields" id="flow-schedule-fields" hidden>
+        <label>INTERVAL<select id="flow-schedule-hours"><option value="6">Every 6 hours</option><option value="12" selected>Every 12 hours</option><option value="24">Daily</option><option value="48">Every 2 days</option><option value="168">Weekly</option></select></label>
+      </div>
+      <div class="maint-network-fields" id="flow-metric-fields" hidden>
+        <label>RESOURCE<select id="flow-metric"><option value="cpu">CPU usage</option><option value="mem">Memory usage</option><option value="dlat">Disk latency</option><option value="ping">Network ping</option><option value="gputemp">GPU temperature</option><option value="loss">Packet loss</option></select></label>
+        <label>ABOVE<input id="flow-threshold" type="number" min="1" max="100" step="1" value="90"></label>
+        <label>FOR CONSECUTIVE SAMPLES<select id="flow-samples"><option value="2">2 samples</option><option value="3" selected>3 samples</option><option value="5">5 samples</option><option value="10">10 samples</option></select></label>
+      </div>
+      <div class="maint-network-fields" id="flow-notify-fields" hidden>
+        <label>NOTIFICATION MESSAGE<input id="flow-message" maxlength="180" value="SENTINEL automation condition detected"></label>
+      </div>
+      <div class="maint-network-fields">
+        <label>COOLDOWN<select id="flow-cooldown"><option value="5">5 minutes</option><option value="15">15 minutes</option><option value="30" selected>30 minutes</option><option value="60">1 hour</option><option value="360">6 hours</option><option value="1440">24 hours</option></select></label>
+        <label class="tog"><span>ENABLE AFTER SAVE<small>Flow starts running in background immediately.</small></span><input type="checkbox" class="sw" id="flow-enabled" checked></label>
+      </div>
+      <div class="maint-policy-row"><button class="btn or" id="flow-create">CREATE WORKFLOW</button><button class="btn" id="flow-refresh">REFRESH FLOWS</button><span class="tag" id="flow-count">0 FLOWS</span></div>
+      <div id="local-automation-flows" class="maint-diagnostics"><div class="empty">No workflows created yet. Choose a trigger and action above.</div></div>
+      <div class="msg"><small>EXECUTION BOUNDARY</small>Flows can request AI analysis, notifications and read-only scans. They cannot approve repairs, change drivers, disable services, terminate processes or bypass the Safeguard. Those actions still require a separate preview and explicit operator approval.</div>
+    </div>
   </div>
   <div class="panel maint-diagnostics-panel"><div class="ph">Windows intelligence map<em id="maint-diag-status">INVENTORY INITIALIZING</em><button class="btn sm" id="maint-inventory-refresh">SCAN INVENTORY</button></div><div class="pb"><div id="maint-health-report" class="maint-health-report"></div><div id="maint-diagnostics" class="maint-diagnostics"><div class="empty">Read-only inventory runs in the background. Driver/WMI scans back off during games and resource pressure.</div></div></div></div>
   <div class="maint-action-grid">

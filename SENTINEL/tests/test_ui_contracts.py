@@ -129,7 +129,7 @@ def test_maintenance_workspace_is_in_full_boot_queue_and_preview_gated():
     assert 'await loadMaintenance(false)' in app
     assert "function maintenancePreview(" in app
     assert 'api("/api/maintenance/execute"' in app
-    assert "initMaintenance(); initAgentAutomation(); initWindowsKnowledge(); initVoice();" in app
+    assert "initMaintenance(); initAgentAutomation(); initLocalAutomation(); initWindowsKnowledge(); initVoice();" in app
     assert "await runPool(jobs)" in app and "await runPool(secondaryJobs)" in app
 
 
@@ -260,3 +260,77 @@ def test_simple_command_home_keeps_advanced_tools_available_and_agent_backed():
     assert "ui_preferences.update(body)" in server
     assert 'CREATE TABLE IF NOT EXISTS ui_preferences' in preferences
     assert '"navigation_mode": "simple"' in preferences
+
+
+
+def test_full_windows_review_is_agent_owned_local_and_exposed_from_command_deck():
+    html = (ROOT / "ui" / "index.html").read_text(encoding="utf-8")
+    app = (ROOT / "ui" / "app.js").read_text(encoding="utf-8")
+    server = (ROOT / "sentinel" / "server.py").read_text(encoding="utf-8")
+    assistant = (ROOT / "sentinel" / "agent_assist.py").read_text(encoding="utf-8")
+    specialist = (ROOT / "sentinel" / "windows_intelligence.py").read_text(encoding="utf-8")
+    collectors = (ROOT / "sentinel" / "collectors.py").read_text(encoding="utf-8")
+
+    assert 'id="cmd-system-review"' in html
+    assert 'id="agent-assist-reviews"' in html
+    assert 'id="agent-assist-review-interval"' in html
+    assert 'system_reviews_enabled:!!document.getElementById("agent-assist-reviews")?.checked' in app
+    assert 'system_review_interval_hours:Number(document.getElementById("agent-assist-review-interval")?.value||12)' in app
+    assert 'api("/api/agent-assist/system-review"' in app
+    assert 'if p == "/api/agent-assist/system-review":' in server
+    assert "agent_assist.request_system_review()" in server
+    assert "def _maybe_system_review()" in assistant
+    assert "_maybe_system_review()" in assistant
+    assert "request_ai=True" in assistant
+    assert "system_review_interval_hours" in assistant
+    assert "runtime_engine.admit_optional_work(" in assistant
+
+    for evidence_field in (
+        "top_processes_by_resource", '"services"', '"scheduled_tasks"', '"installed_apps"',
+        '"drivers"', '"driver_updates"', '"recent_events_7d"', '"application_usage_30d"',
+        '"source_health"', '"prior_user_answers"', '"evidence_ids"',
+    ):
+        assert evidence_field in specialist
+    for private_field in ("command_lines", "window_titles", "browser_content", "remote_ip_addresses"):
+        assert private_field in specialist
+
+    assert "windows_event_seen" in collectors
+    assert "baseline_complete" in collectors
+    assert "Microsoft-Windows-WindowsUpdateClient/Operational" in collectors
+    assert "Microsoft-Windows-Kernel-PnP/Configuration" in collectors
+    assert "Application Error" in collectors
+
+
+
+def test_local_automation_builder_uses_typed_allowlisted_windows_flows():
+    html = (ROOT / "ui" / "index.html").read_text(encoding="utf-8")
+    app = (ROOT / "ui" / "app.js").read_text(encoding="utf-8")
+    server = (ROOT / "sentinel" / "server.py").read_text(encoding="utf-8")
+    agent = (ROOT / "agent.py").read_text(encoding="utf-8")
+    engine = (ROOT / "sentinel" / "workflow_engine.py").read_text(encoding="utf-8")
+
+    for control in (
+        'id="flow-name"', 'id="flow-trigger"', 'id="flow-action"',
+        'id="flow-event-category"', 'id="flow-schedule-hours"',
+        'id="flow-metric"', 'id="flow-threshold"', 'id="flow-samples"',
+        'id="flow-create"', 'id="local-automation-flows"',
+    ):
+        assert control in html
+
+    assert 'if p == "/api/automation/flows":' in server
+    assert "workflow_engine.create_flow(body)" in server
+    assert "workflow_engine.set_enabled(" in server
+    assert "workflow_engine.delete_flow(" in server
+    assert "workflow_engine.list_flows()" in server
+    assert "workflow_engine.start()" in agent
+    assert "workflow_engine.shutdown()" in agent
+    assert 'api("/api/automation/flows",payload)' in app
+    assert "initLocalAutomation();" in app
+
+    assert 'TRIGGERS = frozenset({"event", "schedule", "metric"})' in engine
+    assert '"local_ai_review"' in engine and '"read_only_diagnostics"' in engine
+    assert '"storage_scan"' in engine and '"notify_user"' in engine
+    assert "at most 20 local workflows" in engine
+    assert "last_event_id" in engine and "cooldown_seconds" in engine
+    assert "arbitrary commands and scripts are not accepted" in engine
+    assert "subprocess" not in engine and "Popen(" not in engine

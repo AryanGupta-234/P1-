@@ -1,7 +1,7 @@
 # SENTINEL Implementation Plan
 
 **Target:** Windows 11 x64 · local-first desktop runtime  
-**Plan revision:** 1.1 · **Release baseline:** 1.2.26  
+**Plan revision:** 1.2 · **Release baseline:** 1.2.32  
 **Status:** `[x]` existing capability · `[~]` integration/verification in progress · `[ ]` planned
 
 This is the single consolidated backlog for the next SENTINEL upgrade. It extends the existing collectors, SQLite store, maintenance executor, safeguard, adaptive runtime, AI council, memory engine, rollback journal and dashboard; it does not replace them.
@@ -93,7 +93,7 @@ Make SENTINEL a Windows-specialist, goal-driven performance and reliability assi
 - [ ] Bounded low-overhead CPU, memory, disk, network and process counters.
 - [ ] ETW provider/session registry with ownership, bounded capture, loss counters, timestamps and schema/version metadata.
 - [ ] Targeted WPR/ETW for scheduler, DPC/ISR, storage, network and process lifecycle; never stop another recorder's session.
-- [ ] Event Log correlation with channel allowlists, bounded windows, persisted cursors and redaction.
+- [x] Event Log correlation with channel allowlists, bounded windows, persisted cursors and redaction (Application/System, Diagnostics-Performance, Windows Update, Kernel-PnP and Task Scheduler).
 - [ ] PnP/driver inventory with exact instance/hardware IDs, package/provider/version/date, signature and OS matching context.
 - [ ] Power/battery/Modern Standby diagnostics via supported APIs and `powercfg`.
 - [ ] Disk capacity/latency, filesystem and SSD TRIM diagnostics with capability checks.
@@ -119,7 +119,19 @@ Make SENTINEL a Windows-specialist, goal-driven performance and reliability assi
 - [ ] Measure diagnosis accuracy, grounding, calibration, false positives, unsafe recommendations, build correctness, latency, RAM and forgetting.
 - [ ] Model remains optional; all normal functionality works without Ollama.
 
-## P4.1 — Local Windows specialist (implemented in 1.2.25)\n\n- [x] Dedicated advisory-only `windows_intelligence` module.\n- [x] Loopback Ollama inference through the existing AI resource-admission gate; cloud models are rejected.\n- [x] Context bounded to 9,000 characters and six local knowledge passages.\n- [x] Prompt-injection-resistant instruction hierarchy for retrieved documentation; sources are untrusted evidence.\n- [x] Strict JSON schema and deterministic citation, evidence-ID and action-ID validation.\n- [x] Unknown action IDs and unknown evidence citations are rejected; no raw command/script fields exist.\n- [x] GUI question/answer panel in the Windows Knowledge workspace.\n- [x] Recommendations are labelled advisory and never execute or create approvals.\n\n## P5 — Windows action library
+## P4.1 — Local Windows specialist (implemented in 1.2.25)\n\n- [x] Dedicated advisory-only `windows_intelligence` module.\n- [x] Loopback Ollama inference through the existing AI resource-admission gate; cloud models are rejected.\n- [x] Context bounded to 24,000 characters and six local knowledge passages.\n- [x] Prompt-injection-resistant instruction hierarchy for retrieved documentation; sources are untrusted evidence.\n- [x] Strict JSON schema and deterministic citation, evidence-ID and action-ID validation.\n- [x] Unknown action IDs and unknown evidence citations are rejected; no raw command/script fields exist.\n- [x] GUI question/answer panel in the Windows Knowledge workspace.\n- [x] Recommendations are labelled advisory and never execute or create approvals.\n\n## P4.2 — Windows Intelligence Fusion (implemented in 1.2.32)
+
+- [x] Cross-subsystem, privacy-filtered evidence packet for process/resource, service, startup, task, app, driver/update, event, maintenance, app-usage and prior-answer data.
+- [x] Per-record evidence IDs and validation; context bounded to 24,000 characters.
+- [x] SQLite Event Viewer cursors/bookmarks across restarts; 30-day retention and selective historical crash/hardware-fault backfill.
+- [x] Event Viewer coverage for System, Application crashes, Diagnostics-Performance, Windows Update, Kernel-PnP and Task Scheduler.
+- [x] Local AI system review on a 12-hour default cadence, configurable 6–168 hours, plus an operator-triggered review endpoint and Command control.
+- [x] Review requires hydrated inventory/maintenance evidence, CPU/RAM admission and protected-game suppression; no mutations are executed.
+- [x] User answers are reused as bounded local context; stopped/manual/rarely observed services are not assumed useless.
+- [x] Privacy exclusions for command lines, window titles, browser content, credentials, file contents, accounts and remote addresses.
+- [~] Expand service-dependency, publisher/signature and per-app user-intent evidence before any ranking of background-service changes.
+
+## P5 — Windows action library
 
 All new writes start manual-only and use shared preview, capability manifest, broker when elevated, Safeguard, snapshot, verification and undo. Never execute model-generated commands.
 
@@ -182,6 +194,19 @@ All new writes start manual-only and use shared preview, capability manifest, br
 - [ ] Package-manager-supported move only for eligible Windows packaged applications.
 - [ ] Never use `shutil.move`, `os.rename` or manual manifest edits on launcher-owned game folders.
 - [ ] Verify destination capacity/filesystem without starting a migration.
+
+## P5.1 — Local workflow automation (implemented in 1.2.32)
+
+- [x] Power Automate-style flow builder in Maintenance with persisted definitions and run history.
+- [x] Event triggers for application crashes, hardware faults, driver/device failures, disk faults and Windows Update errors.
+- [x] Schedule triggers at 6, 12, 24, 48 and 168 hours; sustained CPU/RAM/disk-latency/ping/GPU-temperature/packet-loss thresholds.
+- [x] Fixed actions: local AI review, read-only diagnostics, read-only storage scan and Windows notification.
+- [x] Typed schema validation, event cursor-at-create, 5–1440 minute cooldown, bounded 20-flow execution and run-history retention.
+- [x] Enable/pause/delete controls and local-only authenticated APIs.
+- [x] No shell/script/path input, arbitrary PowerShell, maintenance approval or direct mutation surface.
+- [ ] Add optional user-approved Microsoft Power Automate cloud connector as a separate opt-in integration; local-only remains default.
+- [ ] Extend triggers with device/app lifecycle and driver-offer matching, and add formal retry/idempotency state transitions.
+- [ ] Add preview-creating workflow steps for supported maintenance actions; actual execution must still require the normal independent user approval.
 
 ## P6 — Goal loop and learning memory
 

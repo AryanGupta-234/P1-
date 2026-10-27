@@ -2,7 +2,7 @@
 import ctypes, json, os, threading, time, urllib.parse, psutil, platform, sys, hmac
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from . import core, actions, ai, intel, inventory, intelligence, advanced, activity_engine, windows_intelligence
-from . import safeguard, runtime_engine, memory_engine, ai_engine, security_engine, hardware_provider, maintenance, privilege_broker, windows_knowledge, agent_assist, storage_intelligence, ui_preferences
+from . import safeguard, runtime_engine, memory_engine, ai_engine, security_engine, hardware_provider, maintenance, privilege_broker, windows_knowledge, agent_assist, storage_intelligence, ui_preferences, workflow_engine
 from .core import CFG, STATE, LIVE, HIST, HEART, START, db, log, save_cfg
 
 UI = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "ui")
@@ -292,6 +292,8 @@ class H(BaseHTTPRequestHandler):
             return self._json(agent_assist.notifications(min(100, int((qs.get("limit") or ["20"])[0]))))
         if p == "/api/storage/status":
             return self._json(storage_intelligence.status())
+        if p == "/api/automation/flows":
+            return self._json(workflow_engine.list_flows())
         if p == "/api/maintenance/status":
             try: return self._json(maintenance.status(refresh=(qs.get("refresh") or ["0"])[0] == "1"))
             except Exception as exc: return self._json({"error": f"{type(exc).__name__}: {str(exc)[:240]}"}, 503)
@@ -531,6 +533,29 @@ class H(BaseHTTPRequestHandler):
         if p == "/api/agent-assist/settings":
             try:
                 return self._json(agent_assist.update_settings(body))
+            except (ValueError, TypeError) as exc:
+                return self._json({"error": str(exc)}, 400)
+        if p == "/api/agent-assist/system-review":
+            try:
+                result = agent_assist.request_system_review()
+                return self._json(result, 202 if result.get("queued") else 200)
+            except (ValueError, TypeError) as exc:
+                return self._json({"error": str(exc)}, 400)
+            except RuntimeError as exc:
+                return self._json({"error": str(exc)}, 409)
+        if p == "/api/automation/flows":
+            try:
+                return self._json(workflow_engine.create_flow(body), 201)
+            except (ValueError, TypeError) as exc:
+                return self._json({"error": str(exc)}, 400)
+        if p == "/api/automation/flows/enabled":
+            try:
+                return self._json(workflow_engine.set_enabled(int(body.get("id", 0)), body.get("enabled")))
+            except (ValueError, TypeError) as exc:
+                return self._json({"error": str(exc)}, 400)
+        if p == "/api/automation/flows/delete":
+            try:
+                return self._json(workflow_engine.delete_flow(int(body.get("id", 0))))
             except (ValueError, TypeError) as exc:
                 return self._json({"error": str(exc)}, 400)
         if p == "/api/agent-assist/notification/respond":

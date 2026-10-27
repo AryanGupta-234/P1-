@@ -64,3 +64,98 @@ def test_specialist_rejects_non_string_action_identifier():
     payload["recommendations"][0]["action_id"] = ["cleanup"]
     with pytest.raises(RuntimeError, match="fixed maintenance vocabulary"):
         specialist._validate_response(json.dumps(payload), valid_refs={"sentinel-kb:doc:0"}, valid_evidence={"metric.cpu_pct"})
+
+
+
+def test_evidence_packet_fuses_windows_sources_without_private_process_content(monkeypatch):
+    from sentinel import core, inventory
+
+    monkeypatch.setattr(core, "LIVE", {
+        "cpu": 42.5, "mem": 67.0, "mem_free_mb": 4096.0, "swap": 12.0,
+        "diskr": 8.5, "diskw": 2.5, "netdown": 40.0, "netup": 5.0,
+        "dpc": 1.2, "loss": 0.0,
+    })
+    monkeypatch.setattr(core, "STATE", {
+        "system": {"os": "Windows 11", "windows_build": "26300", "cpu_name": "Core i5"},
+        "game": False,
+        "proc_total": 25,
+        "proc_inaccessible": 1,
+        "proc_recommendations": [{"pid": 202, "name": "editor.exe"}],
+        "procs": [{
+            "pid": 101, "name": "helper.exe", "exe": r"C:\Users\private-user\helper.exe",
+            "cmdline": "--password=super-secret", "window_title": "Private document title",
+            "cpu_percent": 12.5, "rss_mb": 250, "session_id": 1,
+            "visible_windows": 1, "onscreen_windows": 1,
+        }],
+        "services": {"running": 80, "total": 125, "vanguard": {"vgc": "running", "vgk": "running"}},
+        "services_catalog": [{
+            "name": "VendorHelper", "display": "Vendor Helper", "state": "stopped",
+            "start": "manual", "pid": 0, "description": "Optional helper",
+            "binpath": r"C:\Users\private-user\vendor.exe", "username": "DOMAIN\\user",
+        }],
+        "startup": [{"name": "VendorTray", "where": r"HKCU\Run",
+                     "cmd": r"C:\Users\private-user\vendor.exe --token=private"}],
+        "maintenance": {
+            "drivers": [{"DeviceName": "Realtek Network Adapter", "DriverVersion": "1.2.3",
+                         "DriverDate": "2026-01-01", "Manufacturer": "Realtek", "DeviceClass": "NET"}],
+            "driver_updates": [{"title": "Realtek - Net - update available", "update_id": "update-guid",
+                                "revision": 2, "reboot_required": False,
+                                "hardware_ids": ["PCI\\VEN_10EC&DEV_8821"]}],
+            "system_health": {"findings": [{"code": "memory_pressure", "severity": "medium",
+                                             "title": "Memory pressure", "detail": "Working set increased"}]},
+        },
+    })
+    monkeypatch.setattr(inventory, "INV", {
+        "ts": 1000.0,
+        "health": {"apps": {"ok": True}, "drivers": {"ok": False, "error": "provider unavailable"}},
+        "apps": [{"name": "Brave Browser", "version": "1.0", "publisher": "Brave"}],
+        "tasks": [{"name": "VendorUpdater", "state": "Ready", "path": r"\Vendor\Updater"}],
+    })
+
+    def fake_db(sql, args=(), many=False):
+        if "SELECT id,ts,level,src,msg FROM events" in sql:
+            return [(77, 990.0, "error", "eventlog", "Application Error event")]
+        if "SELECT id,sev,key,title,detail FROM insights" in sql:
+            return [(12, "warn", "memory", "Memory pressure", "Available memory decreased")]
+        if "FROM activity_apps" in sql:
+            return [("Brave Browser", 5, 7200.0, 995.0)]
+        if "FROM agent_assist_feedback" in sql:
+            return [("process-review", "Background application review", "Keep my audio and touchpad utilities enabled")]
+        return []
+
+    monkeypatch.setattr(core, "db", fake_db)
+    packet = specialist._evidence_packet()
+    serialized = json.dumps(packet, ensure_ascii=False)
+
+    assert packet["process_summary"]["observed"] == 25
+    metrics = {item["id"]: item for item in packet["metrics"]}
+    assert metrics["metric.available_memory_mb"] == {"id": "metric.available_memory_mb", "value": 4096.0, "unit": "MB"}
+    assert metrics["metric.pagefile_pct"]["value"] == 12.0
+    assert metrics["metric.disk_read_mbps"]["unit"] == "MB/s"
+    assert metrics["metric.network_down_mbps"]["unit"] == "Mbps"
+    assert packet["top_processes_by_resource"][0]["id"] == "process.101"
+    assert packet["services"]["rows"][0]["state"] == "stopped"
+    assert packet["driver_updates"][0]["id"].startswith("driver-update.")
+    assert packet["driver_updates"][0]["update_id"] == "update-guid"
+    assert packet["driver_updates"][0]["revision"] == 2
+    assert packet["driver_updates"][0]["hardware_id_samples"] == ["PCI\\VEN_10EC&DEV_8821"]
+    assert packet["recent_events_7d"][0]["id"] == "event.77"
+    assert packet["application_usage_30d"][0]["foreground_hours_30d"] == 2.0
+    assert packet["prior_user_answers"][0]["preference"].startswith("Keep my audio")
+    assert "service.VendorHelper" in packet["evidence_ids"]
+    assert "event.77" in packet["evidence_ids"]
+    assert "Private document title" not in serialized
+    assert "super-secret" not in serialized
+    assert "vendor.exe --token" not in serialized
+    assert "DOMAIN" not in serialized
+
+
+def test_specialist_accepts_cross_subsystem_evidence_ids():
+    payload = valid_payload()
+    payload["evidence_used"] = ["process.101", "service.VendorHelper", "event.77"]
+    result = specialist._validate_response(
+        json.dumps(payload),
+        valid_refs=set(),
+        valid_evidence={"process.101", "service.VendorHelper", "event.77"},
+    )
+    assert result["evidence_used"] == payload["evidence_used"]

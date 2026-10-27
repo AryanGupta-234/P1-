@@ -408,3 +408,24 @@ def test_broad_storage_roots_skip_generated_trees_but_explicit_package_roots_sca
     assert broad["bytes"] == 7
     assert explicit["bytes"] == 31
     assert explicit["top_level"][0]["name"] == "sample-package"
+
+
+
+def test_agent_assistant_classifies_cross_subsystem_system_review():
+    result = agent_assist._classify(
+        "system-review",
+        "Periodic evidence review across Windows process, service, driver and Event Viewer telemetry",
+        "normal",
+    )
+    assert result["category"] == "system-review"
+    assert "intentionally rely on" in result["question"]
+    assert "stopped/manual" in result["fix"]
+
+
+def test_system_review_settings_are_bounded_and_explicit():
+    assert agent_assist.DEFAULTS["system_reviews_enabled"] is True
+    assert agent_assist.DEFAULTS["system_review_interval_hours"] == 12
+    with pytest.raises(ValueError, match="boolean"):
+        agent_assist.update_settings({"system_reviews_enabled": "true"})
+    with pytest.raises(ValueError, match="6 to 168"):
+        agent_assist.update_settings({"system_review_interval_hours": 2})
