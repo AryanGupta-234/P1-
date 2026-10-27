@@ -89,7 +89,7 @@ def test_evidence_packet_fuses_windows_sources_without_private_process_content(m
         "services_catalog": [{
             "name": "VendorHelper", "display": "Vendor Helper", "state": "stopped",
             "start": "manual", "pid": 0, "description": "Optional helper",
-            "binpath": r"C:\Users\private-user\vendor.exe", "username": "DOMAIN\user",
+            "binpath": r"C:\Users\private-user\vendor.exe", "username": "DOMAIN\\user",
         }],
         "startup": [{"name": "VendorTray", "where": "HKCU\Run",
                      "cmd": r"C:\Users\private-user\vendor.exe --token=private"}],
