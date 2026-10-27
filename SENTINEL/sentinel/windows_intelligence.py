@@ -111,7 +111,7 @@ def _evidence_packet() -> dict[str, Any]:
         "disk_read_mbps": "MB/s", "disk_write_mbps": "MB/s",
         "available_memory_mb": "MB", "pagefile_pct": "%",
         "pages_in_sec": "pages/s", "pages_out_sec": "pages/s",
-        "network_down_mbps": "MB/s", "network_up_mbps": "MB/s",
+        "network_down_mbps": "Mbps", "network_up_mbps": "Mbps",
         "active_connections": "count", "ping_ms": "ms", "jitter_ms": "ms",
         "packet_loss_pct": "%", "lag_index": "index",
     }
