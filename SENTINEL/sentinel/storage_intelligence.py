@@ -37,7 +37,8 @@ SKIP_NAMES = {
     "program files (x86)", "programdata", ".git", ".hg", ".svn",
     "node_cache", "lost+found", "steam", "steamapps", "steamlibrary",
     "epic games", "riot games", "valorant", "xboxgames", "gog galaxy",
-    "battle.net games",
+    "battle.net games", ".venv", "venv", "node_modules", "target", "build",
+    "dist", "bin", "obj",
 }
 GAME_ROOT_NAMES = {"steam", "steamapps", "steamlibrary", "epic games", "riot games",
                    "valorant", "xboxgames", "gog galaxy", "battle.net games"}
@@ -198,7 +199,9 @@ def _local_roots() -> list[tuple[str, str, str]]:
             pass
     # Discover common project folders one level below known workspaces. Only known
     # generated/dependency directories are measured; project source is not read.
-    for workspace in ("source/repos", "Projects", "projects", "workspace", "dev", "Development", "Code"):
+    for workspace in ("Downloads", "Documents", "Desktop", "OneDrive/Documents",
+                      "source/repos", "Projects", "projects", "workspace", "dev",
+                      "Development", "Code"):
         base = home / workspace
         try:
             children = sorted(base.iterdir(), key=lambda item: item.name.casefold())[:30]
@@ -237,8 +240,30 @@ def _local_roots() -> list[tuple[str, str, str]]:
             try:
                 if not entry.is_dir(follow_symlinks=False) or entry.is_symlink() or entry.name.casefold() in SKIP_NAMES:
                     continue
-                candidates.append((f"{os.path.basename(mount.rstrip(os.sep)) or mount} / {entry.name}",
-                                   entry.path, "drive-directory"))
+                drive_label = os.path.basename(mount.rstrip(os.sep)) or mount
+                candidates.append((f"{drive_label} / {entry.name}", entry.path, "drive-directory"))
+                # Discover dependency/build directories inside the first level
+                # of data-drive workspaces, without traversing game libraries.
+                try:
+                    projects = sorted(os.scandir(entry.path), key=lambda item: item.name.casefold())[:30]
+                except OSError:
+                    continue
+                for project in projects:
+                    try:
+                        if (not project.is_dir(follow_symlinks=False) or project.is_symlink()
+                                or project.name.casefold() in SKIP_NAMES):
+                            continue
+                        for artifact in ARTIFACT_NAMES:
+                            target = os.path.join(project.path, artifact)
+                            if os.path.isdir(target) and not os.path.islink(target):
+                                category = "python-environments" if artifact in (".venv", "venv") else (
+                                    "node-dependencies" if artifact == "node_modules" else "build-output")
+                                candidates.append((
+                                    f"{drive_label} / {entry.name} / {project.name} / {artifact}",
+                                    target, category,
+                                ))
+                    except OSError:
+                        continue
             except OSError:
                 continue
     found: list[tuple[str, str, str]] = []
