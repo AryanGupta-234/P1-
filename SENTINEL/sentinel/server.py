@@ -536,7 +536,7 @@ class H(BaseHTTPRequestHandler):
         if p == "/api/agent-assist/system-review":
             try:
                 result = agent_assist.request_system_review()
-                return self._json(result, 202 if result.get("queued") else 409)
+                return self._json(result, 202 if result.get("queued") else 200)
             except (ValueError, TypeError) as exc:
                 return self._json({"error": str(exc)}, 400)
             except RuntimeError as exc:
