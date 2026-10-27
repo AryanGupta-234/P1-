@@ -70,7 +70,7 @@ def _evidence_packet() -> dict[str, Any]:
         text = " ".join(str(value or "").replace("\x00", " ").split())
         text = re.sub(r"(?i)(password|token|secret|api[_ -]?key)\s*[:=]\s*\S+", r"\1=[REDACTED]", text)
         text = re.sub(r"(?i)[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}", "[EMAIL]", text)
-        text = re.sub(r"(?i)([A-Z]:\\Users\\)[^\\\\\s]+", r"\\1[USER]", text)
+        text = re.sub(r"(?i)([A-Z]:\\Users\\)[^\\\s]+", r"\1[USER]", text)
         return text[:limit]
 
     def numeric(row: dict, *keys: str):
@@ -123,7 +123,7 @@ def _evidence_packet() -> dict[str, Any]:
     for raw in raw_processes:
         if not isinstance(raw, dict):
             continue
-        name = clean(raw.get("name") or os.path.basename(str(raw.get("exe") or "")) or "unknown", 90)
+        name = clean(raw.get("name") or str(raw.get("exe") or "").replace("\\\\", "/").rsplit("/", 1)[-1] or "unknown", 90)
         item: dict[str, Any] = {"id": "process." + str(raw.get("pid", len(processes) + 1)),
                                 "name": name}
         for target, choices in (
