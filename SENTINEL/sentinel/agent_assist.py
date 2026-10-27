@@ -330,6 +330,15 @@ def _runtime_suppressed(config: dict[str, Any]) -> bool:
         return True
 
 
+def _toast_body(question: str, suggested_fix: str) -> str:
+    """Fit both the next question and first safe check into a native toast."""
+    question_text = _clean(question, 128)
+    fix_text = _clean(suggested_fix, 120)
+    if question_text and fix_text:
+        return f"{question_text} Next check: {fix_text}"[:240]
+    return (question_text or fix_text)[:240]
+
+
 def _agent_toast(title: str, body: str) -> bool:
     """Deliver a lightweight native tray balloon from the agent on Windows.
 
@@ -424,7 +433,7 @@ def create_notification(source: str, message: str, severity: str = "warn",
     if config.get("agent_notifications") and int(alerts_last_hour) < int(config.get("max_notifications_per_hour", 4)) and not _runtime_suppressed(config):
         attempted_at = time.time()
         core.db("UPDATE agent_notifications SET delivery_attempted_at=? WHERE id=?", (attempted_at, notification_id))
-        delivered = _agent_toast(row["title"], row["question"] or row["suggested_fix"][:180])
+        delivered = _agent_toast(row["title"], _toast_body(row["question"], row["suggested_fix"]))
         if delivered:
             core.db("UPDATE agent_notifications SET delivered_at=? WHERE id=?", (time.time(), notification_id))
     return notification_id
@@ -455,7 +464,7 @@ def _deliver_pending_notifications() -> int:
         attempted_at = time.time()
         core.db("UPDATE agent_notifications SET delivery_attempted_at=? WHERE id=?",
                 (attempted_at, notification_id))
-        if _agent_toast(str(title), str(question or suggested_fix or "")[:180]):
+        if _agent_toast(str(title), _toast_body(str(question or ""), str(suggested_fix or ""))):
             core.db("UPDATE agent_notifications SET delivered_at=? WHERE id=?",
                     (time.time(), notification_id))
             delivered += 1
