@@ -219,3 +219,91 @@ def test_pending_desktop_alerts_stay_queued_during_game_or_resource_pressure(mon
     monkeypatch.setattr(agent_assist, "_agent_toast", lambda *_args: pytest.fail("toast must be deferred"))
 
     assert agent_assist._deliver_pending_notifications() == 0
+
+
+def test_agent_assistant_classifies_common_windows_faults():
+    cases = [
+        ("Kernel-Power 41 after unexpected reboot", "blue-screen"),
+        ("WindowsUpdateClient installation failed with 0x8024", "windows-update"),
+        ("Startup Repair failed to load bootmgr", "boot-startup"),
+        ("Windows Audio service audiosrv failed", "audio"),
+        ("Unknown USB device descriptor request failed", "peripheral"),
+        ("Application Hang: app.exe is not responding", "application-hang"),
+        ("Battery power state transition failed", "power-battery"),
+    ]
+    for message, category in cases:
+        assert agent_assist._classify("Windows Event Log", message, "warn")["category"] == category
+
+
+def test_structured_event_evidence_enriches_classification_without_secrets():
+    evidence = agent_assist._event_data_evidence(
+        '{"problem":"CM_PROB_FAILED_START","device":"Realtek Wi-Fi","code":10,"api_key":"do-not-store"}'
+    )
+    assert evidence["problem"] == "CM_PROB_FAILED_START"
+    assert evidence["device"] == "Realtek Wi-Fi"
+    assert "api_key" not in evidence
+    context = " ".join(f"{key}: {value}" for key, value in evidence.items())
+    assert agent_assist._classify("device-event", context, "warn")["category"] == "driver"
+
+
+def test_storage_review_findings_get_a_review_only_assistant_prompt():
+    result = agent_assist._classify(
+        "storage-intelligence",
+        "Storage review candidate: old archive uses 900 MB",
+        "warn",
+    )
+    assert result["category"] == "storage-review"
+    assert "will not delete" in result["fix"]
+
+
+def test_ai_diagnosis_quota_counts_unavailable_jobs_too(monkeypatch):
+    monkeypatch.setattr(
+        agent_assist.core, "db",
+        lambda *_args, **_kwargs: [(2,)],
+    )
+    assert agent_assist._ai_diagnosis_budget_available(now=10000) is False
+    monkeypatch.setattr(
+        agent_assist.core, "db",
+        lambda *_args, **_kwargs: [(1,)],
+    )
+    assert agent_assist._ai_diagnosis_budget_available(now=10000) is True
+
+
+def test_storage_measurement_exposes_largest_files_and_extension_counts(tmp_path):
+    (tmp_path / "small.json").write_bytes(b"j" * 11)
+    (tmp_path / "large.bin").write_bytes(b"b" * 100)
+    report = storage_intelligence._measure(
+        str(tmp_path), max_entries=100, deadline=time.monotonic() + 5,
+    )
+    assert report["top_files"][0]["name"] == "large.bin"
+    assert report["extension_counts"][".bin"] == 1
+    assert report["extension_counts"][".json"] == 1
+
+
+def test_storage_measurement_yields_when_foreground_priority_changes(tmp_path):
+    for index in range(100):
+        (tmp_path / f"item-{index:03}.dat").write_bytes(b"x")
+    report = storage_intelligence._measure(
+        str(tmp_path), max_entries=1000, deadline=time.monotonic() + 5,
+        should_yield=lambda: True,
+    )
+    assert report["yielded"] is True
+    assert report["partial"] is True
+    assert report["entries_visited"] == 64
+
+
+def test_runtime_fails_closed_when_cpu_telemetry_is_unknown(monkeypatch):
+    monkeypatch.setattr(runtime_engine.core, "LIVE", {"cpu": None})
+    monkeypatch.setattr(runtime_engine.core, "STATE", {})
+    monkeypatch.setattr(runtime_engine.safeguard, "snapshot", lambda: {
+        "valorant_active": False,
+        "process_detection_complete": True,
+        "kernel_trace_allowed": False,
+    })
+    state = runtime_engine.evaluate()
+    assert state["mode"] == "telemetry_degraded"
+    assert state["telemetry_ready"] is False
+    assert state["cpu_percent"] is None
+    allowed, reason = runtime_engine.admit_optional_work("unknown telemetry")
+    assert allowed is False
+    assert "telemetry_degraded" in reason
