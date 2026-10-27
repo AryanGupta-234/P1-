@@ -98,3 +98,55 @@ def test_workflow_has_no_direct_windows_mutation_action_surface():
     assert "arbitrary commands and scripts are not accepted" in source
     assert "maintenance mutations require separate preview and approval" in source
     assert "core.thread(_loop" not in source
+
+
+
+def test_model_context_is_valid_json_and_only_accepts_visible_evidence_ids():
+    import json
+    from sentinel import windows_intelligence
+
+    evidence = {
+        "metrics": [{"id": "metric.cpu_pct", "value": 42.0, "unit": "%"}],
+        "system": {"os": "Windows 11"},
+        "process_summary": {"observed": 200, "visible_gui": 35},
+        "top_processes_by_resource": [
+            {"id": "process." + str(index), "name": "app-" + str(index), "cpu_pct": index}
+            for index in range(30)
+        ],
+        "services": {"running": 90, "total": 130, "rows": [
+            {"id": "service.Service" + str(index), "name": "Service" + str(index),
+             "display": "Windows component " + str(index), "state": "running", "start": "auto"}
+            for index in range(60)
+        ]},
+        "startup": [{"id": "startup.shell", "name": "shell"}],
+        "scheduled_tasks": [{"id": "task.update", "name": "Updater"}],
+        "installed_apps": [{"id": "app.browser", "name": "Browser"}],
+        "drivers": [{"id": "driver.gpu", "DeviceName": "GPU"}],
+        "driver_updates": [{"id": "driver-update.gpu", "title": "GPU update"}],
+        "recent_events_7d": [{"id": "event.77", "summary": "Application Error"}],
+        "recent_insights": [{"id": "insight.5", "title": "GPU reset"}],
+        "application_usage_30d": [{"id": "app-usage.1", "application": "Browser"}],
+        "source_health": [{"id": "source.wmi", "source": "WMI"}],
+        "maintenance_findings": [{"id": "maintenance-finding.1", "title": "Memory pressure"}],
+        "prior_user_answers": [{"id": "user-context.1", "preference": "Keep audio helper"}],
+        "coverage": {"services": 130},
+        "game_active": False,
+        "vanguard": {},
+        "privacy_exclusions": ["command_lines", "window_titles"],
+    }
+    compact = windows_intelligence._model_evidence_packet(evidence)
+    packet = {
+        "question": "Investigate recurring crashes",
+        "windows": {},
+        "telemetry": compact,
+        "allowed_action_ids": ["driver_install"],
+        "documentation": [{"citation": "doc:1", "content": "Official diagnostic guidance"}],
+    }
+    raw = windows_intelligence._fit_prompt_packet(packet)
+    parsed = json.loads(raw)
+    supplied = windows_intelligence._packet_evidence_ids(parsed["telemetry"])
+    assert "metric.cpu_pct" in supplied
+    assert "event.77" in supplied
+    assert "service.Service0" in supplied
+    assert supplied.issubset(windows_intelligence._packet_evidence_ids(compact))
+    assert raw.startswith("{") and raw.endswith("}")
