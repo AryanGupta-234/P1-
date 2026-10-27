@@ -62,6 +62,7 @@ async function apiRetry(path, attempts = 2) {
 }
 
 const H = {}, MAXH = 300; let S = null, view = "cmd";
+let UI_PREFERENCES = { navigation_mode: "simple" };
 const LOGS = []; let paused = false, lastLogId = 0;
 const lv = { info: 1, ok: 1, warn: 1, error: 1, debug: 1 };
 const fmt = (v, d = 0) => v == null || isNaN(v) ? "--" : (+v).toFixed(d);
@@ -800,6 +801,54 @@ function onTick(d) {
   if (view === "sys") maybeRefreshSystem();
   if (view === "ctl" && !ctlInitialized) { buildCtl(); loadActions(); ctlInitialized = true; }
 }
+function simpleNavigationViews() {
+  return new Set(["cmd", "agent", "sys", "maint"]);
+}
+function applyUiPreferences(preferences) {
+  const mode = preferences?.navigation_mode === "full" ? "full" : "simple";
+  UI_PREFERENCES = { navigation_mode: mode };
+  document.body.classList.toggle("ui-simple", mode === "simple");
+  document.body.classList.toggle("ui-full", mode === "full");
+  const button = document.getElementById("ui-mode-toggle");
+  if (button) {
+    button.textContent = mode === "simple" ? "ALL TOOLS ↗" : "SIMPLE VIEW";
+    button.setAttribute("aria-pressed", mode === "full" ? "true" : "false");
+    button.title = mode === "simple" ? "Show all advanced workspaces" : "Return to the simple everyday interface";
+  }
+}
+async function setUiNavigationMode(mode) {
+  const next = mode === "full" ? "full" : "simple";
+  const button = document.getElementById("ui-mode-toggle");
+  if (button) button.disabled = true;
+  try {
+    const result = await api("/api/ui/preferences", { navigation_mode: next });
+    if (result.error) throw new Error(result.error);
+    applyUiPreferences(result);
+    if (next === "simple" && !simpleNavigationViews().has(view)) show("cmd");
+    toast(next === "simple" ? "Simple navigation enabled · advanced tools remain available" : "All technical workspaces are now visible", "ok");
+  } catch (error) {
+    toast("UI preference could not be saved: " + (error.message || String(error)), "bad");
+  } finally {
+    if (button) button.disabled = false;
+  }
+}
+async function loadUiPreferences() {
+  try {
+    const result = await apiRetry("/api/ui/preferences", 1);
+    if (result.error) throw new Error(result.error);
+    applyUiPreferences(result);
+  } catch (error) {
+    applyUiPreferences(UI_PREFERENCES);
+    console.warn("SENTINEL UI preferences unavailable; using simple navigation", error);
+  }
+}
+function initUiPreferences() {
+  const button = document.getElementById("ui-mode-toggle");
+  if (button) button.onclick = () => setUiNavigationMode(
+    UI_PREFERENCES.navigation_mode === "simple" ? "full" : "simple"
+  );
+}
+
 function show(v) {
   if (!TITLES[v]) return;
   view = v;
@@ -1212,6 +1261,7 @@ async function boot() {
     return;
   }
 
+  const uiPreferencesPromise = apiRetry("/api/ui/preferences", 1);
   const degradedModules = new Set();
   const markDataFailure = (key, detail) => {
     degradedModules.add(key);
@@ -1236,6 +1286,8 @@ async function boot() {
   }
 
   S = initial;
+  try { applyUiPreferences(await uiPreferencesPromise); }
+  catch (error) { applyUiPreferences(UI_PREFERENCES); console.warn("Using the default simple navigation", error); }
   if (S?.live && typeof S.live === "object") {
     for (const [key, value] of Object.entries(S.live)) {
       if (Number.isFinite(Number(value)) && !(H[key] || []).length) H[key] = [Number(value)];
@@ -1321,8 +1373,22 @@ async function boot() {
     setTimeout(() => URL.revokeObjectURL(link.href), 2000);
     toast("Exported " + LOGS.length + " events", "ok");
   };
-  initPalette(); initNotify(); initFC(); initIntelligence(); initActivityIntelligence();
+  initPalette(); initNotify(); initUiPreferences(); initFC(); initIntelligence(); initActivityIntelligence();
   initAdvanced(); initAgent(); initEngines(); initMaintenance(); initAgentAutomation(); initWindowsKnowledge(); initVoice(); bindJ("#metrics");
+  const commandRefresh = document.getElementById("cmd-agent-refresh");
+  if (commandRefresh) commandRefresh.onclick = loadCommandAssistantBrief;
+  const commandAgentHost = document.getElementById("cmd-agent-list");
+  if (commandAgentHost) commandAgentHost.addEventListener("click", handleCommandAgentAction);
+  const storageScanButton = document.getElementById("cmd-storage-scan");
+  if (storageScanButton) storageScanButton.onclick = async () => {
+    storageScanButton.disabled = true;
+    try {
+      const result = await api("/api/storage/scan", {});
+      if (result.error) throw new Error(result.error);
+      toast(result.message || "Storage scan queued for a safe idle window", "ok");
+    } catch (error) { toast(error.message || String(error), "bad"); }
+    finally { storageScanButton.disabled = false; }
+  };
   $("#e-go").onclick = loadEvi;
   $("#e-csv").onclick = csvExport;
   $("#e-q").onkeydown = event => event.key === "Enter" && loadEvi();
@@ -1359,6 +1425,9 @@ async function boot() {
     if (view === "agent") loadAgent();
   }, 10000);
   setInterval(loadStatus, 15000);
+  setInterval(() => {
+    if (view === "cmd" && document.visibilityState === "visible") loadCommandAssistantBrief();
+  }, 30000);
   setInterval(() => { if (view === "eng") loadEngines(); }, 8000);
 
   bootModuleState("stream", "LOADING", "Opening the local event stream");
@@ -2123,8 +2192,8 @@ async function searchWindowsKnowledge(){
   }catch(error){toast("Knowledge search: "+(error.message||String(error)),"bad");}
   finally{if(button){button.disabled=false;button.textContent="SEARCH LOCAL INDEX";}}
 }
-function renderWindowsSpecialist(result){
-  const host=document.getElementById("ix-win-result");if(!host)return;
+function renderWindowsSpecialist(result, hostId = "ix-win-result"){
+  const host=document.getElementById(hostId);if(!host)return;
   const citations=Array.isArray(result.citations)?result.citations:[];
   const recs=Array.isArray(result.recommendations)?result.recommendations:[];
   const evidence=Array.isArray(result.telemetry_evidence?.metrics)?result.telemetry_evidence.metrics:[];
