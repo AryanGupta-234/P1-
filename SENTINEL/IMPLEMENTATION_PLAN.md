@@ -1,7 +1,7 @@
 # SENTINEL Implementation Plan
 
 **Target:** Windows 11 x64 · local-first desktop runtime  
-**Plan revision:** 1.1 · **Release baseline:** 1.2.26  
+**Plan revision:** 1.2 · **Release baseline:** 1.2.32  
 **Status:** `[x]` existing capability · `[~]` integration/verification in progress · `[ ]` planned
 
 This is the single consolidated backlog for the next SENTINEL upgrade. It extends the existing collectors, SQLite store, maintenance executor, safeguard, adaptive runtime, AI council, memory engine, rollback journal and dashboard; it does not replace them.
@@ -119,7 +119,19 @@ Make SENTINEL a Windows-specialist, goal-driven performance and reliability assi
 - [ ] Measure diagnosis accuracy, grounding, calibration, false positives, unsafe recommendations, build correctness, latency, RAM and forgetting.
 - [ ] Model remains optional; all normal functionality works without Ollama.
 
-## P4.1 — Local Windows specialist (implemented in 1.2.25)\n\n- [x] Dedicated advisory-only `windows_intelligence` module.\n- [x] Loopback Ollama inference through the existing AI resource-admission gate; cloud models are rejected.\n- [x] Context bounded to 9,000 characters and six local knowledge passages.\n- [x] Prompt-injection-resistant instruction hierarchy for retrieved documentation; sources are untrusted evidence.\n- [x] Strict JSON schema and deterministic citation, evidence-ID and action-ID validation.\n- [x] Unknown action IDs and unknown evidence citations are rejected; no raw command/script fields exist.\n- [x] GUI question/answer panel in the Windows Knowledge workspace.\n- [x] Recommendations are labelled advisory and never execute or create approvals.\n\n## P5 — Windows action library
+## P4.1 — Local Windows specialist (implemented in 1.2.25)\n\n- [x] Dedicated advisory-only `windows_intelligence` module.\n- [x] Loopback Ollama inference through the existing AI resource-admission gate; cloud models are rejected.\n- [x] Context bounded to 18,000 characters and six local knowledge passages.\n- [x] Prompt-injection-resistant instruction hierarchy for retrieved documentation; sources are untrusted evidence.\n- [x] Strict JSON schema and deterministic citation, evidence-ID and action-ID validation.\n- [x] Unknown action IDs and unknown evidence citations are rejected; no raw command/script fields exist.\n- [x] GUI question/answer panel in the Windows Knowledge workspace.\n- [x] Recommendations are labelled advisory and never execute or create approvals.\n\n## P4.2 — Windows Intelligence Fusion (implemented in 1.2.32)
+
+- [x] Cross-subsystem, privacy-filtered evidence packet for process/resource, service, startup, task, app, driver/update, event, maintenance, app-usage and prior-answer data.
+- [x] Per-record evidence IDs and validation; context bounded to 18,000 characters.
+- [x] SQLite Event Viewer cursors/bookmarks across restarts; 30-day retention and selective historical crash/hardware-fault backfill.
+- [x] Event Viewer coverage for System, Application crashes, Diagnostics-Performance, Windows Update, Kernel-PnP and Task Scheduler.
+- [x] Local AI system review on a 12-hour default cadence, configurable 6–168 hours, plus an operator-triggered review endpoint and Command control.
+- [x] Review requires hydrated inventory/maintenance evidence, CPU/RAM admission and protected-game suppression; no mutations are executed.
+- [x] User answers are reused as bounded local context; stopped/manual/rarely observed services are not assumed useless.
+- [x] Privacy exclusions for command lines, window titles, browser content, credentials, file contents, accounts and remote addresses.
+- [~] Expand service-dependency, publisher/signature and per-app user-intent evidence before any ranking of background-service changes.
+
+## P5 — Windows action library
 
 All new writes start manual-only and use shared preview, capability manifest, broker when elevated, Safeguard, snapshot, verification and undo. Never execute model-generated commands.
 
@@ -182,6 +194,14 @@ All new writes start manual-only and use shared preview, capability manifest, br
 - [ ] Package-manager-supported move only for eligible Windows packaged applications.
 - [ ] Never use `shutil.move`, `os.rename` or manual manifest edits on launcher-owned game folders.
 - [ ] Verify destination capacity/filesystem without starting a migration.
+
+## P5.1 — Local workflow automation (planned)
+
+- [ ] Add Power Automate-style local flow templates with event, schedule, resource-threshold, driver-offer and app-lifecycle triggers.
+- [ ] Add typed conditions, bounded run history, cooldowns, retries, idempotency and user-visible execution traces.
+- [ ] Allow only fixed actions: create AI review, notify, run a read-only inventory/diagnostic, scan storage, or create an existing maintenance preview.
+- [ ] Require explicit approval for process close, service/startup changes, driver install/rollback, power/network changes or repairs.
+- [ ] Keep Microsoft cloud/Power Automate connectors opt-in and separate from local-only mode; never run arbitrary model-generated scripts.
 
 ## P6 — Goal loop and learning memory
 
