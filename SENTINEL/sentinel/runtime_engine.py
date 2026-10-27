@@ -6,6 +6,7 @@ security settings. System telemetry keeps its normal cadence; expensive agent wo
 """
 from __future__ import annotations
 
+import math
 import time
 from typing import Any
 
@@ -22,13 +23,22 @@ def evaluate() -> dict[str, Any]:
     vm = psutil.virtual_memory()
     available_gib = vm.available / (1024 ** 3)
     cpu = core.LIVE.get("cpu")
-    cpu_value = float(cpu) if cpu is not None else 0.0
+    try:
+        cpu_value = float(cpu)
+        cpu_known = math.isfinite(cpu_value) and 0.0 <= cpu_value <= 100.0
+    except (TypeError, ValueError):
+        cpu_value = 0.0
+        cpu_known = False
     valorant = bool(guard["valorant_active"])
     safety_ready = bool(guard["process_detection_complete"])
     playing = bool(game) or valorant
-    pressure = available_gib < 1.8 or cpu_value >= 92.0
+    pressure = available_gib < 1.8 or (cpu_known and cpu_value >= 92.0)
     if not safety_ready:
         mode = "safety_degraded"
+    elif not cpu_known:
+        # Missing telemetry is not idle telemetry. Keep diagnostics alive, but
+        # defer optional work until the CPU collector has produced a valid sample.
+        mode = "telemetry_degraded"
     elif valorant:
         mode = "valorant_guarded"
     elif pressure:
@@ -40,14 +50,15 @@ def evaluate() -> dict[str, Any]:
 
     process_interval = 2.2 if valorant else 1.8 if playing else 1.6 if pressure else 1.0
     inventory_multiplier = 3.0 if valorant else 2.0 if playing or pressure else 1.0
-    deep_allowed = safety_ready and not playing and available_gib >= 4.5 and cpu_value < 78.0
-    fast_allowed = safety_ready and not valorant and available_gib >= 1.8 and cpu_value < 92.0
+    deep_allowed = safety_ready and cpu_known and not playing and available_gib >= 4.5 and cpu_value < 78.0
+    fast_allowed = safety_ready and cpu_known and not valorant and available_gib >= 1.8 and cpu_value < 92.0
     return {
         "mode": mode,
+        "telemetry_ready": cpu_known,
         "valorant_active": valorant,
         "safety_ready": safety_ready,
         "game_active": playing,
-        "cpu_percent": round(cpu_value, 1),
+        "cpu_percent": round(cpu_value, 1) if cpu_known else None,
         "available_memory_gib": round(available_gib, 2),
         "memory_pressure": "high" if available_gib < 1.8 else "moderate" if available_gib < 3.5 else "normal",
         "process_scan_interval_s": process_interval,
@@ -84,7 +95,7 @@ def admit_optional_work(
     name = " ".join(str(workload or "optional-work").split())[:64]
     state = snapshot()
     mode = str(state.get("mode") or "unknown")
-    if mode != "balanced":
+    if mode != "balanced" or state.get("telemetry_ready") is False:
         return False, f"{name} deferred while runtime mode is {mode}"
     if state.get("game_active") and not allow_game:
         return False, f"{name} deferred during a foreground game session"
