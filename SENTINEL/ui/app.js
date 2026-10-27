@@ -1261,7 +1261,10 @@ async function boot() {
     return;
   }
 
-  const uiPreferencesPromise = apiRetry("/api/ui/preferences", 1);
+  const uiPreferencesPromise = apiRetry("/api/ui/preferences", 1).catch(error => {
+    console.warn("SENTINEL UI preference read failed; using the safe default", error);
+    return UI_PREFERENCES;
+  });
   const degradedModules = new Set();
   const markDataFailure = (key, detail) => {
     degradedModules.add(key);
