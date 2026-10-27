@@ -249,10 +249,10 @@ def _event_category(source: str, message: str) -> str | None:
     if (any(token in text for token in ("application error", "application hang", "windows error reporting", "bugcheck", ".net runtime failure"))
             or re.search(r"\b(?:event\s*id|eventid)\s*[:=]?\s*(?:1000|1001|1002|1026)\b", text)):
         return "application_crash"
-    if any(token in text for token in ("whea", "hardware error", "machine check")):
+    if any(token in text for token in ("whea", "hardware error", "machine check", "kernel-power", "unexpected shutdown", "unexpected restart")):
         return "hardware_error"
-    if any(token in text for token in ("kernel-pnp", "windowsupdateclient", "driver install", "device cannot start", "driver failure", "display driver", "nvlddmkm", "amdkmdag")):
-        return "driver_error" if any(token in text for token in ("pnp", "driver", "device cannot start", "display")) else "windows_update"
+    if any(token in text for token in ("kernel-pnp", "windowsupdateclient", "driver install", "device cannot start", "driver failure", "display driver", "nvlddmkm", "amdkmdag", "gpu driver reset", "tdr")):
+        return "driver_error" if any(token in text for token in ("pnp", "driver", "device cannot start", "display", "nvlddmkm", "amdkmdag", "tdr")) else "windows_update"
     if any(token in text for token in ("disk error", "ntfs", "stornvme", "storahci", "microsoft-windows-disk", "disk/storage", "bad block")):
         return "disk_error"
     if "windowsupdateclient" in text or "windows update" in text:
