@@ -1,8 +1,8 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>SENTINEL &middot; 1.2.26</title>
+<title>SENTINEL &middot; 1.2.31</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cpath d='M32 4l24 14v28L32 60 8 46V18z' fill='none' stroke='%238fd69d' stroke-width='4'/%3E%3Ccircle cx='32' cy='32' r='8' fill='%23a31c1b'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="app.css?v=1.2.26"></head>
+<link rel="stylesheet" href="app.css?v=1.2.31"></head>
 <body><div class="ambient"></div><canvas id="starfield"></canvas>
 <div class="boot" id="boot" role="status" aria-live="polite" aria-label="SENTINEL Windows node initialization">
   <div class="boot-grid" aria-hidden="true"></div><div class="boot-scanline" aria-hidden="true"></div>
@@ -54,7 +54,9 @@
   <span class="sp"></span>
   <div class="hstat">LAG INDEX<b id="h-lag">--</b></div>
   <div class="hstat">AGENT UPTIME<b id="h-up">--</b></div>
-  <button class="icon-btn" id="notifyBtn" title="Desktop alerts for serious lag">&#9742; ALERTS</button><button class="icon-btn" id="palBtn" title="Command palette">&#8981; COMMANDS <kbd>Ctrl K</kbd></button>
+  <button class="icon-btn" id="notifyBtn" title="Desktop alerts for serious lag">&#9742; ALERTS</button>
+  <button class="icon-btn ui-mode-toggle" id="ui-mode-toggle" type="button" aria-pressed="false" title="Switch between simple navigation and all technical workspaces">ALL TOOLS <span>↗</span></button>
+  <button class="icon-btn" id="palBtn" title="Command palette">&#8981; COMMANDS <kbd>Ctrl K</kbd></button>
   <div class="hstat">LOCAL TIME<b id="h-clock">--</b></div>
 </header>
 
@@ -102,6 +104,44 @@
       <div class="command-hero-orbit" aria-hidden="true">
         <i class="cmd-hero-orbit orbit-a"></i><i class="cmd-hero-orbit orbit-b"></i><i class="cmd-hero-orbit orbit-c"></i><i class="cmd-hero-core"></i>
       </div>
+    </div>
+
+    <section class="command-easy-grid" aria-label="Assistant and quick diagnosis">
+      <article class="command-easy-card panel command-assistant-card">
+        <div class="command-panel-head">
+          <div><span>AGENT ASSISTANT</span><b>Needs your attention</b></div>
+          <div class="command-easy-head-actions"><em id="cmd-agent-count">SYNCING</em><button class="btn sm" type="button" id="cmd-agent-refresh">REFRESH</button></div>
+        </div>
+        <div id="cmd-agent-list" class="command-agent-list" aria-live="polite">
+          <div class="empty">Loading the agent's saved findings…</div>
+        </div>
+        <div class="command-easy-foot">
+          <span>Answers are saved to agent memory.</span>
+          <button class="btn sm" type="button" data-command-route="agent">OPEN AGENT ↗</button>
+        </div>
+      </article>
+      <article class="command-easy-card panel command-diagnose-card">
+        <div class="command-panel-head">
+          <div><span>ASK SENTINEL</span><b>Describe what went wrong</b></div>
+          <em>LOCAL DIAGNOSIS</em>
+        </div>
+        <div class="command-diagnose-body">
+          <label class="sr-only" for="cmd-diagnose-question">Describe the Windows issue</label>
+          <textarea id="cmd-diagnose-question" rows="3" maxlength="1200" placeholder="Example: Wi-Fi disappeared after reboot, Device Manager shows Code 10…"></textarea>
+          <div class="command-diagnose-actions">
+            <small>Uses local telemetry and the installed specialist model when available.</small>
+            <button class="btn or" type="button" id="cmd-diagnose-run">DIAGNOSE</button>
+          </div>
+          <div id="cmd-diagnose-result" class="command-diagnose-result" aria-live="polite">
+            <div class="empty">SENTINEL will show likely causes, uncertainty and safe next checks here.</div>
+          </div>
+        </div>
+      </article>
+    </section>
+    <div class="command-easy-actions" aria-label="Everyday actions">
+      <button type="button" id="cmd-storage-scan" class="command-easy-action"><span>⌕</span><b>Scan storage</b><small>Queue a read-only scan for an idle window</small><i>↗</i></button>
+      <button type="button" data-command-route="maint" class="command-easy-action"><span>◈</span><b>Health &amp; maintenance</b><small>Review health and approved maintenance</small><i>↗</i></button>
+      <button type="button" data-command-route="sys" class="command-easy-action"><span>▣</span><b>System overview</b><small>Hardware, drives and security posture</small><i>↗</i></button>
     </div>
 
     <div class="command-gauges">
