@@ -51,9 +51,9 @@ SCHEMA = {
 _METRICS = (
     ("cpu_pct", "cpu"), ("memory_pct", "mem"), ("gpu_pct", "gpu"),
     ("gpu_temp_c", "gputemp"), ("dpc_pct", "dpc"), ("irq_pct", "irq"),
-    ("disk_latency_ms", "dlat"), ("disk_busy_pct", "disk_busy"),
+    ("disk_latency_ms", "dlat"),
     ("disk_read_mbps", "diskr"), ("disk_write_mbps", "diskw"),
-    ("available_memory_mb", "availablemb"), ("pagefile_pct", "pagefilepct"),
+    ("available_memory_mb", "mem_free_mb"), ("pagefile_pct", "swap"),
     ("pages_in_sec", "pagesin"), ("pages_out_sec", "pagesout"),
     ("network_down_mbps", "netdown"), ("network_up_mbps", "netup"),
     ("active_connections", "conns"),
@@ -107,7 +107,7 @@ def _evidence_packet() -> dict[str, Any]:
     evidence = []
     units = {
         "cpu_pct": "%", "memory_pct": "%", "gpu_pct": "%", "gpu_temp_c": "°C",
-        "dpc_pct": "%", "irq_pct": "%", "disk_latency_ms": "ms", "disk_busy_pct": "%",
+        "dpc_pct": "%", "irq_pct": "%", "disk_latency_ms": "ms",
         "disk_read_mbps": "MB/s", "disk_write_mbps": "MB/s",
         "available_memory_mb": "MB", "pagefile_pct": "%",
         "pages_in_sec": "pages/s", "pages_out_sec": "pages/s",
