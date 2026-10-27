@@ -187,8 +187,25 @@ def _evidence_packet() -> dict[str, Any]:
     if not drivers:
         drivers = project(inventory_data.get("drivers") or [],
                           ("name", "display", "state", "start"), "driver", 20, "name")
-    driver_updates = project(maintenance.get("driver_updates") or [],
-                             ("title", "reboot_required"), "driver-update", 10, "title")
+    driver_updates = []
+    for index, raw in enumerate((maintenance.get("driver_updates") or [])[:10]):
+        if not isinstance(raw, dict):
+            continue
+        hardware_ids = []
+        for identifier in (raw.get("hardware_ids") or [])[:5]:
+            value = clean(identifier, 100)
+            if value:
+                hardware_ids.append(value)
+        update = {
+            "id": "driver-update." + str(index + 1),
+            "title": clean(raw.get("title"), 120),
+            "update_id": clean(raw.get("update_id"), 60),
+            "revision": int(raw.get("revision") or 0),
+            "hardware_id_count": len(raw.get("hardware_ids") or []),
+            "hardware_id_samples": hardware_ids,
+            "reboot_required": bool(raw.get("reboot_required")),
+        }
+        driver_updates.append(update)
 
     now = time.time()
     recent_events = []
@@ -359,7 +376,7 @@ def _model_evidence_packet(evidence: dict[str, Any]) -> dict[str, Any]:
         "installed_apps": rows("installed_apps", 16, {"name": 75, "version": 35, "publisher": 55}),
         "drivers": rows("drivers", 16, {"DeviceName": 75, "DriverVersion": 35, "Manufacturer": 50,
                                          "name": 75, "display": 75}),
-        "driver_updates": rows("driver_updates", 10, {"title": 100}),
+        "driver_updates": rows("driver_updates", 10, {"title": 100, "update_id": 60}),
         "recent_events_7d": rows("recent_events_7d", 12, {"source": 45, "summary": 150}),
         "recent_insights": rows("recent_insights", 8, {"title": 100, "detail": 120}),
         "application_usage_30d": rows("application_usage_30d", 10, {"application": 70}),
