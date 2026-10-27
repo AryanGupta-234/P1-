@@ -834,7 +834,7 @@ def main():
         return 1
 
     from sentinel import collectors, brain, ai, intel, server, advanced, activity_engine, hardware_provider
-    from sentinel import runtime_engine, memory_engine, security_engine, maintenance, agent_assist, storage_intelligence
+    from sentinel import runtime_engine, memory_engine, security_engine, maintenance, agent_assist, storage_intelligence, workflow_engine
     try:
         core.STATE["traces"] = [
             {"file": row[0], "ts": row[1], "mb": round(row[2] / 1048576, 1), "source": row[3], "exists": os.path.isfile(row[0])}
@@ -896,6 +896,8 @@ def main():
     atexit.register(agent_assist.shutdown)
     storage_intelligence.start()
     atexit.register(storage_intelligence.shutdown)
+    workflow_engine.start()
+    atexit.register(workflow_engine.shutdown)
     collectors.start_all(demo="--demo" in arguments)
     core.thread(brain.brain_loop, "brain")
     core.thread(ai.ai_loop, "ai")
@@ -909,6 +911,7 @@ def main():
         maintenance.shutdown()
         agent_assist.shutdown()
         storage_intelligence.shutdown()
+        workflow_engine.shutdown()
         advanced.shutdown
         close_run()
     return 0
