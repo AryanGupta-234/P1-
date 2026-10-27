@@ -13,7 +13,7 @@ from typing import Any
 from . import ai, core, windows_knowledge
 
 MAX_QUESTION_CHARS = 500
-MAX_CONTEXT_CHARS = 18000
+MAX_CONTEXT_CHARS = 24000
 MAX_RECOMMENDATIONS = 4
 MAX_PROBES = 4
 MAX_NOTES = 5
@@ -304,6 +304,77 @@ def _evidence_packet() -> dict[str, Any]:
                                "credentials", "file_contents", "remote_ip_addresses"],
     }
 
+
+def _model_evidence_packet(evidence: dict[str, Any]) -> dict[str, Any]:
+    """Keep the highest-value, explicitly identified rows within the local context budget."""
+    def rows(key: str, limit: int, text_limits: dict[str, int] | None = None):
+        source = evidence.get(key)
+        if not isinstance(source, list):
+            return []
+        output = []
+        for raw in source[:limit]:
+            if not isinstance(raw, dict) or not isinstance(raw.get("id"), str):
+                continue
+            item = dict(raw)
+            for field, size in (text_limits or {}).items():
+                if isinstance(item.get(field), str):
+                    item[field] = item[field][:size]
+            output.append(item)
+        return output
+
+    service_data = evidence.get("services") if isinstance(evidence.get("services"), dict) else {}
+    services = rows_from_service = service_data.get("rows")
+    if not isinstance(rows_from_service, list):
+        rows_from_service = []
+    compact_services = []
+    for raw in rows_from_service[:44]:
+        if not isinstance(raw, dict) or not isinstance(raw.get("id"), str):
+            continue
+        item = dict(raw)
+        for field, limit in (("name", 55), ("display", 70), ("description", 75)):
+            if isinstance(item.get(field), str):
+                item[field] = item[field][:limit]
+        compact_services.append(item)
+
+    return {
+        "metrics": rows("metrics", 16),
+        "system": evidence.get("system", {}),
+        "process_summary": evidence.get("process_summary", {}),
+        "top_processes_by_resource": rows("top_processes_by_resource", 22, {"name": 70, "parent": 55}),
+        "services": {"running": service_data.get("running"), "total": service_data.get("total"),
+                     "rows": compact_services},
+        "startup": rows("startup", 12, {"name": 70, "where": 55}),
+        "scheduled_tasks": rows("scheduled_tasks", 12, {"name": 70, "state": 30, "path": 55}),
+        "installed_apps": rows("installed_apps", 16, {"name": 75, "version": 35, "publisher": 55}),
+        "drivers": rows("drivers", 16, {"DeviceName": 75, "DriverVersion": 35, "Manufacturer": 50,
+                                         "name": 75, "display": 75}),
+        "driver_updates": rows("driver_updates", 10, {"title": 100}),
+        "recent_events_7d": rows("recent_events_7d", 12, {"source": 45, "summary": 150}),
+        "recent_insights": rows("recent_insights", 8, {"title": 100, "detail": 120}),
+        "application_usage_30d": rows("application_usage_30d", 10, {"application": 70}),
+        "source_health": rows("source_health", 12, {"source": 40, "error": 80}),
+        "maintenance_findings": rows("maintenance_findings", 8, {"title": 100, "detail": 120}),
+        "prior_user_answers": rows("prior_user_answers", 8, {"topic": 75, "preference": 120}),
+        "coverage": evidence.get("coverage", {}),
+        "game_active": bool(evidence.get("game_active")),
+        "vanguard": evidence.get("vanguard", {}),
+        "privacy_exclusions": evidence.get("privacy_exclusions", []),
+    }
+
+
+def _packet_evidence_ids(packet: dict[str, Any]) -> set[str]:
+    ids: set[str] = set()
+    for value in packet.values():
+        if isinstance(value, list):
+            ids.update(row["id"] for row in value
+                       if isinstance(row, dict) and isinstance(row.get("id"), str))
+        elif isinstance(value, dict):
+            nested = value.get("rows")
+            if isinstance(nested, list):
+                ids.update(row["id"] for row in nested
+                           if isinstance(row, dict) and isinstance(row.get("id"), str))
+    return ids
+
 def _clean_text(value: Any, limit: int) -> str:
     if not isinstance(value, str):
         raise ValueError("Windows specialist returned a non-text field.")
@@ -393,10 +464,11 @@ def diagnose(question: str) -> dict:
             "edition": item.get("windows_edition"),
             "architecture": item.get("architecture"),
         })
-    valid_evidence = set(evidence.get("evidence_ids") or []) | {item["id"] for item in evidence.get("metrics", [])}
+    model_evidence = _model_evidence_packet(evidence)
+    valid_evidence = _packet_evidence_ids(model_evidence)
     prompt_packet = {"question": question, "windows": retrieval.get("windows", {}),
-                     "telemetry": evidence, "documentation": passages,
-                     "allowed_action_ids": sorted(ALLOWED_ACTION_IDS)}
+                     "telemetry": model_evidence, "allowed_action_ids": sorted(ALLOWED_ACTION_IDS),
+                     "documentation": passages}
     prompt = "Analyse this Windows issue using only the supplied telemetry and cited documentation.\n" + json.dumps(
         prompt_packet, ensure_ascii=False, separators=(",", ":"), default=str
     )[:MAX_CONTEXT_CHARS]
