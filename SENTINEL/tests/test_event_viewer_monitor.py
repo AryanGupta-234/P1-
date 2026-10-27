@@ -56,3 +56,21 @@ def test_event_viewer_baseline_is_durable_and_historical_crashes_are_reviewed():
     assert "if historical and not important" in content
     assert "application" in content and "1002" in content
     assert "DELETE FROM windows_event_seen WHERE seen_at<?" in content
+
+
+
+def test_event_log_backfill_remains_open_until_every_channel_is_readable():
+    source = open(collectors.__file__, encoding="utf-8").read()
+    assert "if not baseline and channels_ok == len(queries)" in source
+    assert "temporarily cannot query one of the configured Event Viewer logs" in source
+
+
+def test_kernel_power_and_gpu_driver_events_can_trigger_workflows():
+    from sentinel import workflow_engine
+
+    assert workflow_engine._event_category(
+        "Kernel-Power", "Kernel-Power unexpected restart Event ID 41"
+    ) == "hardware_error"
+    assert workflow_engine._event_category(
+        "Display", "GPU driver reset/error (TDR)"
+    ) == "driver_error"
