@@ -7,7 +7,7 @@ const FEATURES = [
   { k: "Intelligence", at: 0.92, line: "Bringing intelligence online" }
 ];
 const R = 92, C = 2 * Math.PI * R;
-const MIN_MS = 820;
+const MIN_MS = 480;
 
 export default function Boot({ phase, onDone, onRetry, onDemo }) {
   const [p, setP] = useState(0);
@@ -37,7 +37,7 @@ export default function Boot({ phase, onDone, onRetry, onDemo }) {
     if (p >= 0.999 && phase === "ready" && !done.current) {
       done.current = true;
       setOut(true);
-      setTimeout(onDone, 480);
+      setTimeout(onDone, 320);
     }
   }, [p, phase, onDone]);
 

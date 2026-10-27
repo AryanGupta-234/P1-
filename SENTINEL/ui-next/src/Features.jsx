@@ -1,5 +1,4 @@
 import React, { useState } from "react";
-import { openClassic } from "./api.js";
 
 /* Seeded RNG so every card paints the same picture each visit. */
 const rng = s => () => (s = (s * 16807) % 2147483647) / 2147483647;
@@ -47,7 +46,7 @@ const ITEMS = [
   { id: "ai", n: "06", t: "AI Core", d: "A local council of models that explains problems in plain language.", v: "ai" }
 ];
 
-export default function Features() {
+export default function Features({ onOpen }) {
   const [open, setOpen] = useState(2);
   const key = e => {
     if (e.key === "ArrowRight") setOpen(o => Math.min(ITEMS.length - 1, o + 1));
@@ -72,7 +71,7 @@ export default function Features() {
               <div className="cap">
                 <h3>{it.t}</h3>
                 <p>{it.d}</p>
-                <button className="btn solid sm" tabIndex={i === open ? 0 : -1} onClick={e => { e.stopPropagation(); openClassic(it.v); }}>Open screen →</button>
+                <button className="btn solid sm" tabIndex={i === open ? 0 : -1} onClick={e => { e.stopPropagation(); onOpen(it.v); }}>Open screen →</button>
               </div>
             </div>
           </article>

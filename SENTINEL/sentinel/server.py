@@ -275,9 +275,9 @@ class H(BaseHTTPRequestHandler):
             self.send_header("Content-Length", str(len(b)))
             # Vite emits content-hashed filenames, so built assets can be cached forever (faster relaunch).
             self.send_header("Cache-Control", "public, max-age=31536000, immutable" if name.replace("\\", "/").startswith("next/assets/") else "no-store")
-            self.send_header("X-Content-Type-Options", "nosniff"); self.send_header("X-Frame-Options", "DENY")
+            self.send_header("X-Content-Type-Options", "nosniff"); self.send_header("X-Frame-Options", "SAMEORIGIN")
             self.send_header("Referrer-Policy", "same-origin")
-            self.send_header("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'")
+            self.send_header("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; object-src 'none'; base-uri 'none'; frame-ancestors 'self'")
             self.end_headers()
             self.wfile.write(b); return
         if not self._authed(qs):

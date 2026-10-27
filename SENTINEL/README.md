@@ -1,4 +1,4 @@
-# SENTINEL 1.3.0 — Local Windows Specialist foundation
+# SENTINEL 1.3.1 — Local Windows Specialist foundation
 
 SENTINEL's observer, collectors and dashboard run as the signed-in user with a standard token. Administrator-only maintenance is handed to a narrowly scoped helper only after the operator confirms the exact preview and approves Windows UAC. The helper accepts one short-lived SQLite-backed job ID, binds it to the same Windows principal and interactive session, rechecks the kill switch, safeguard and original state, and can execute only a fixed allowlist of maintenance action IDs. It cannot accept arbitrary commands, scripts or paths.
 
@@ -314,11 +314,13 @@ The 1.2.27 presentation pass adds a cinematic boot cockpit while retaining the e
 
 The installer and launcher resolve the observer runtime from the immutable installed release: `versions/<VERSION>/.venv/Scripts/pythonw.exe`, that release's `agent.py`, and its release directory. The bootstrap Python used to run installation is never registered as the long-running observer. Missing release runtime or entrypoint files are hard failures; the launcher does not fall back to a globally installed Python. The scheduled task, Desktop and Start Menu shortcuts, runtime verification, and detached fallback launcher all use the same release-scoped paths. Previous release folders and `%ProgramData%\Sentinel` settings, SQLite history and traces remain separate and are preserved.
 
-## 1.3.0 — Nocturne React UI
+## 1.3.1 — Nocturne React UI, in-shell screens, one theme
 
 - New React + Vite front end (source in `ui-next/`, committed build in `ui/next/`), served at `/` and `/next/`. The original dashboard remains at `/?classic=1`.
-- Startup waits on a single `/api/snapshot` request; everything else hydrates after first paint. Built assets are cached (`immutable`).
-- **Reinstall required:** `install.bat` never overwrites an existing release folder, so this version bump is what makes the installer copy the new UI.
+- **Screens page:** all 18 classic screens open inside the new shell (same-origin frame in `embed` mode, re-skinned by `ui/nocturne.css`), so no click drops you back into the old layout. The server now allows same-origin framing only.
+- **One theme everywhere:** ink `#171717`, forest `#06110c`, crimson `#a31c1b`; hard-coded navy tints in `app.css` were removed.
+- **Faster start:** React shell gates on one `/api/snapshot` request; the classic boot now waits only for the Command deck and the screen being opened, then hydrates the rest in the background. Hashed assets are cached.
+- **Reinstall required:** `install.bat` never overwrites an existing release folder, so each UI release needs a new version number.
 
 ## 1.2.28 — Windows virtual-environment identity verification
 

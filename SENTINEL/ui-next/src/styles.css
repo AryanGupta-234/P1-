@@ -17,7 +17,7 @@ h1,h2,h3,p{margin:0}
 .muted{color:var(--muted)}
 
 /* ───────── boot ───────── */
-.boot{position:fixed;inset:0;z-index:50;display:grid;place-items:center;background:var(--forest);transition:opacity .45s ease,transform .45s ease,filter .45s ease}
+.boot{position:fixed;inset:0;z-index:50;display:grid;place-items:center;background:var(--forest);transition:opacity .3s ease,transform .3s ease,filter .3s ease}
 .boot.out{opacity:0;transform:scale(1.04);filter:blur(6px);pointer-events:none}
 .boot-bg{position:absolute;inset:0;background:radial-gradient(55% 55% at 50% 44%,#0e2a1e 0%,rgba(6,17,12,0) 70%),radial-gradient(40% 40% at 50% 100%,rgba(163,28,27,.16),transparent 70%)}
 .boot-bg::after{content:"";position:absolute;inset:0;background:repeating-linear-gradient(0deg,rgba(255,255,255,.018) 0 1px,transparent 1px 3px);mask-image:radial-gradient(circle at 50% 45%,#000 20%,transparent 75%)}
@@ -187,3 +187,22 @@ main{grid-area:main;overflow:auto;padding:14px 28px 28px;scrollbar-width:thin;sc
   .shingle{padding:20px 6px;height:380px}.frame{--w:46px;margin-left:-14px}.frame.open{flex-basis:230px}
 }
 @media (prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
+
+/* ───────── screens panel (hosts every classic screen, re-skinned) ───────── */
+main.flush{padding:10px 28px 22px;overflow:hidden}
+.screens{height:100%;display:grid;grid-template-columns:230px 1fr;gap:16px;min-height:0}
+.slist{background:var(--ink);border:1px solid var(--line);border-radius:26px;padding:18px 12px;overflow:auto;display:flex;flex-direction:column;gap:16px}
+.slist>div{display:flex;flex-direction:column;gap:3px}
+.slist .eyebrow{padding:0 10px 6px}
+.slist button{text-align:left;padding:9px 12px;border-radius:14px;border:1px solid transparent;background:transparent;color:var(--bone);font-size:13px;transition:.2s}
+.slist button:hover{background:rgba(232,235,227,.07)}
+.slist button.on{background:var(--crimson);color:#fff;box-shadow:0 6px 18px rgba(163,28,27,.4)}
+.sframe{display:flex;flex-direction:column;min-width:0;min-height:0;border-radius:26px;background:var(--forest);border:1px solid rgba(157,179,154,.22);overflow:hidden}
+.sframe>header{display:flex;align-items:center;justify-content:space-between;padding:12px 18px;background:linear-gradient(90deg,#0b2218,var(--forest));border-bottom:1px solid var(--line)}
+.sframe>header b{font:700 15px var(--display);letter-spacing:.02em}
+.sbody{position:relative;flex:1;min-height:0}
+.sbody iframe{position:absolute;inset:0;width:100%;height:100%;border:0;background:transparent;color-scheme:dark}
+.sload{position:absolute;inset:0;display:grid;place-content:center;justify-items:center;gap:14px;background:var(--forest);color:var(--muted)}
+.sload i{width:34px;height:34px;border-radius:50%;border:3px solid rgba(232,235,227,.12);border-top-color:var(--crimson-hi);animation:spin 1s linear infinite}
+.btn{display:inline-block;text-decoration:none;color:inherit}.btn.solid{color:#fff}
+@media (max-width:820px){.screens{grid-template-columns:1fr;grid-template-rows:auto 1fr}.slist{flex-direction:row;overflow-x:auto;padding:10px}.slist .eyebrow{display:none}.slist>div{flex-direction:row}.slist button{white-space:nowrap}main.flush{overflow:visible;padding:12px 16px}.sframe{min-height:70vh}}

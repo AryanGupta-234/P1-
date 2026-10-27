@@ -1438,6 +1438,20 @@ async function boot() {
     ["maint", "MAINTENANCE", async () => await loadMaintenance(false)]
   ];
   const allJobs = [...jobs, ...secondaryJobs];
+
+  // Lean boot: only the Command deck and the screen being opened gate first paint.
+  // Every other workspace already loads on demand when opened (see show()), so the
+  // remainder hydrates quietly in the background once the UI is visible.
+  const embedMode = document.documentElement.classList.contains("embed");
+  let wantView = "cmd";
+  try { wantView = localStorage.getItem("sv") || "cmd"; } catch (error) { }
+  const backgroundJobs = [];
+  if (embedMode && TITLES[wantView]) show(wantView); // show the requested screen at once; its data fills in
+  for (const group of [jobs, secondaryJobs]) {
+    for (let i = group.length - 1; i >= 0; i--) {
+      if (group[i][0] !== "command" && group[i][0] !== wantView) backgroundJobs.unshift(...group.splice(i, 1));
+    }
+  }
   let completed = 0;
   const total = allJobs.length;
   const runJob = async ([key, label, work]) => {
@@ -1506,12 +1520,13 @@ async function boot() {
   try { savedView = localStorage.getItem("sv") || "cmd"; } catch (error) { }
   if (TITLES[savedView] && savedView !== "cmd") show(savedView);
   const minimumDisplayMs = 900;
-  const remaining = minimumDisplayMs - (performance.now() - bootStartedAt);
+  const remaining = Math.min(minimumDisplayMs, embedMode ? 0 : 250) - (performance.now() - bootStartedAt);
   if (remaining > 0) await new Promise(resolve => setTimeout(resolve, remaining));
   bp(100, degraded ? "SENTINEL ONLINE · CHECK SOURCES" : "SENTINEL ONLINE",
     degraded ? "All workspaces were checked. Unavailable sources are marked for retry." : "All workspace data is ready for navigation.",
     degraded ? "warn" : "ok");
   endBoot();
+  setTimeout(() => { runPool(backgroundJobs).catch(error => console.error("Background hydration failed", error)); }, embedMode ? 1200 : 300);
 }
 /* ---------- reversible performance intelligence / thermal workspace ---------- */
 let ADV = null, advLastLoad = 0, advBusy = false, advRetryTimer = null;

@@ -36,3 +36,23 @@ def test_server_serves_next_by_default_and_keeps_classic():
     assert '"classic"' in server and "/next/" in server
     assert "immutable" in server and "next/assets/" in server
     assert (ROOT / "ui" / "index.html").is_file()  # classic dashboard remains reachable
+
+
+def test_every_classic_screen_is_reachable_inside_the_shell():
+    screens = (ROOT / "ui-next" / "src" / "Screens.jsx").read_text(encoding="utf-8")
+    app = (ROOT / "ui" / "app.js").read_text(encoding="utf-8")
+    titles = re.search(r"const TITLES = \{(.*?)\};", app, re.S).group(1)
+    keys = set(re.findall(r"(\w+):\s*\"", titles))
+    listed = set(re.findall(r'\["(\w+)", "[^"]+"\]', screens))
+    assert keys <= listed, f"screens missing from the shell: {keys - listed}"
+
+
+def test_classic_ui_is_themed_embeddable_and_lean():
+    html = (ROOT / "ui" / "index.html").read_text(encoding="utf-8")
+    assert 'src="embed.js"' in html and "nocturne.css" in html and "fonts.googleapis" not in html
+    css = (ROOT / "ui" / "nocturne.css").read_text(encoding="utf-8")
+    assert "html.embed header" in css and "#a31c1b" in css and "#06110c" in css and "#171717" in css
+    app = (ROOT / "ui" / "app.js").read_text(encoding="utf-8")
+    assert "backgroundJobs" in app and "embedMode" in app
+    server = (ROOT / "sentinel" / "server.py").read_text(encoding="utf-8")
+    assert "SAMEORIGIN" in server and "frame-ancestors 'self'" in server and "frame-ancestors 'none'" not in server
