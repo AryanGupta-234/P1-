@@ -33,6 +33,7 @@ The command workspace is a visual control surface: circular live CPU, RAM, GPU a
 ## Nocturne restyle and instant start (v1.2.31)
 
 - Styling only: every screen keeps its logic, layout and separate navigation. `ui/nocturne.css` re-skins the dashboard in ink `#171717`, forest `#06110c` and crimson `#a31c1b`, and leftover navy, mint and cyan tints were remapped into that palette.
+- One console design language on all 18 screens: a shared crimson banner (`ui/nocturne.js` adds one to screens that lacked a header), rounded cards, segmented meters, pill tabs and row-style tables.
 - The splash is now a minimal ring-and-wordmark animation (its markup and ids are unchanged; detail is hidden, and the full log reappears if startup fails).
 - No dataset gates the splash. The interface appears about 0.3 s after the first snapshot; foundation data and every workspace load underneath it, the saved screen first.
 - **Reinstall required:** `install.bat` never overwrites an existing release folder, so this release has a new version number.

@@ -93,3 +93,47 @@ a{color:var(--bone)}
 #bootPct{color:var(--bone)!important}
 #bootDetail{color:var(--cy2)!important}
 #bootStage{color:var(--cy2)!important}
+
+/* ═════════ Console design system — one language on every screen ═════════ */
+.view{gap:16px}
+/* 1 · banners: the same crimson console header everywhere */
+.nx-banner,.engine-head,.agent-overview-head,.proc-command-head,.signal-page-head,.adv-page-head,.maint-head,.system-node-banner,.activity-page-head,.ix-specialist-head{
+  position:relative;overflow:hidden;display:flex;align-items:center;justify-content:space-between;gap:18px;flex-wrap:wrap;
+  border-radius:30px!important;padding:22px 28px!important;border:1px solid rgba(255,255,255,.16)!important;
+  background:linear-gradient(135deg,#b52221 0%,var(--crimson) 45%,#5a0f0e 100%)!important;color:#fff;box-shadow:var(--shadow-card)}
+.nx-banner::after,.engine-head::after,.agent-overview-head::after,.proc-command-head::after,.signal-page-head::after,.adv-page-head::after,.maint-head::after,.system-node-banner::after,.activity-page-head::after,.ix-specialist-head::after{
+  content:"";position:absolute;right:-70px;top:-90px;width:320px;height:320px;border-radius:50%;pointer-events:none;
+  background:repeating-radial-gradient(circle,rgba(255,255,255,.13) 0 1px,transparent 1px 24px)}
+.nx-banner>div:first-child{display:grid;gap:4px;position:relative;z-index:1}
+.nx-banner span,.engine-head span,.signal-page-head>div>span{font:700 11px var(--mo)!important;letter-spacing:.18em;color:rgba(255,255,255,.78)!important}
+.nx-banner>div>b,.engine-head b,.signal-page-head>div>b{font:700 clamp(24px,3vw,34px)/1.05 "Bahnschrift","Segoe UI Variable Display",var(--hd)!important;letter-spacing:.06em;color:#fff!important}
+.nx-banner small,.signal-page-head>div>small{font:13px var(--hd)!important;color:rgba(255,255,255,.85)!important}
+.nx-stats{display:flex;gap:12px;position:relative;z-index:1}
+.nx-stats>div{background:rgba(6,17,12,.38);border-radius:18px;padding:10px 16px;font:700 10px var(--mo);letter-spacing:.14em;color:rgba(255,255,255,.8)}
+.nx-stats b{display:block;font:700 22px var(--hd);letter-spacing:0;color:#fff;margin-top:2px}
+.nx-banner .pill,.engine-head .pill,.signal-page-head .pill,.agent-overview-head .pill,.maint-head .pill,.activity-page-head .pill,.adv-page-head .pill,.proc-command-head .pill,.system-node-banner .pill{background:rgba(6,17,12,.4);color:#fff;border-color:rgba(255,255,255,.3)}
+.engine-head .btn,.agent-overview-head .btn,.signal-page-head .btn,.maint-head .btn,.activity-page-head .btn,.adv-page-head .btn,.proc-command-head .btn,.system-node-banner .btn{border-color:rgba(255,255,255,.7);color:#fff;background:transparent}
+.engine-head .btn:hover,.agent-overview-head .btn:hover,.signal-page-head .btn:hover,.maint-head .btn:hover,.activity-page-head .btn:hover,.adv-page-head .btn:hover,.proc-command-head .btn:hover,.system-node-banner .btn:hover{background:#fff;color:var(--crimson)}
+
+/* 2 · cards: one rounded surface, one radius */
+.panel{border-radius:28px}
+.pb{padding:16px 18px}
+.metric,.signal-tile,.engine-card,.heat-card,.cmd-gauge-card,.system-node-fact,.engine-pulse-card,.activity-setting,.tile{border-radius:22px;border:1px solid var(--line);background:rgba(232,235,227,.04)}
+.ins,.msg,.row,.feed>*{border-radius:16px}
+.tag,.chips>*,.system-state-chip{border-radius:99px}
+
+/* 3 · segmented meters */
+.meter,.corebar{height:10px;border-radius:99px;background:rgba(232,235,227,.09);overflow:hidden;
+  -webkit-mask-image:repeating-linear-gradient(90deg,#000 0 8px,transparent 8px 11px);mask-image:repeating-linear-gradient(90deg,#000 0 8px,transparent 8px 11px)}
+
+/* 4 · pill tabs */
+.adv-tabs{display:flex;flex-direction:column;gap:6px;padding:8px;border-radius:24px;background:rgba(232,235,227,.05);border:1px solid var(--line);width:auto;max-width:100%}
+.adv-tab{border-radius:99px!important;padding:8px 18px;border:0!important;background:transparent!important;color:var(--cy2)}
+.adv-tab.on,.adv-tab[aria-selected="true"]{background:var(--bone)!important;color:var(--forest)!important}
+
+/* 5 · tables become rows */
+table{border-collapse:separate;border-spacing:0 6px}
+th{background:transparent;border-bottom:0}
+td{background:rgba(232,235,227,.035);border-top:0;padding-top:10px;padding-bottom:10px}
+td:first-child{border-radius:14px 0 0 14px}td:last-child{border-radius:0 14px 14px 0}
+tr:hover td{background:rgba(232,235,227,.07)}
