@@ -140,12 +140,13 @@ def create_flow(payload: dict[str, Any]) -> dict[str, Any]:
     if isinstance(cooldown, bool) or not isinstance(cooldown, int) or not 5 <= cooldown <= 1440:
         raise ValueError("cooldown_minutes must be an integer from 5 to 1440")
     now = time.time()
+    latest_event = int(core.db("SELECT COALESCE(MAX(id),0) FROM events")[0][0]) if trigger_type == "event" else 0
     with _LOCK:
         flow_id = core.insert_id(
             "INSERT INTO automation_flows(name,enabled,trigger_type,trigger_json,action_type,action_json,"
-            "cooldown_seconds,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?)",
+            "cooldown_seconds,last_event_id,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?)",
             (name, int(enabled), trigger_type, json.dumps(trigger, separators=(",", ":")),
-             action_type, json.dumps(action, separators=(",", ":")), cooldown * 60, now, now),
+             action_type, json.dumps(action, separators=(",", ":")), cooldown * 60, latest_event, now, now),
         )
     core.log("automation", "local workflow created", "info", flow_id=flow_id,
              trigger=trigger_type, action=action_type)
@@ -339,7 +340,8 @@ def _tick_flow(flow: dict[str, Any], now: float) -> bool:
                                       "event_id": int(row[0]), "occurred_at": float(row[1]),
                                       "severity": str(row[2] or ""), "source": str(row[3] or "")[:80],
                                       "summary": str(row[4] or "")[:180]})
-            core.db("UPDATE automation_flows SET last_event_id=? WHERE id=?", (int(row[0]), flow["id"]))
+            if result:
+                core.db("UPDATE automation_flows SET last_event_id=? WHERE id=?", (int(row[0]), flow["id"]))
             return result
     core.db("UPDATE automation_flows SET last_event_id=? WHERE id=?", (int(rows[-1][0]), flow["id"]))
     return False
@@ -377,15 +379,21 @@ def _loop() -> None:
         _STOP.wait(30)
 
 
+_THREAD: threading.Thread | None = None
+
+
 def start() -> None:
-    global _STARTED
+    global _STARTED, _THREAD
     if _STARTED:
         return
     ensure_schema()
     _STOP.clear()
     _STARTED = True
-    core.thread(_loop, "local-workflow-automation")
+    _THREAD = threading.Thread(target=_loop, name="local-workflow-automation", daemon=True)
+    _THREAD.start()
 
 
 def shutdown() -> None:
     _STOP.set()
+    if _THREAD and _THREAD.is_alive():
+        _THREAD.join(timeout=3.0)
