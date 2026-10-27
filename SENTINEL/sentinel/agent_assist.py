@@ -188,6 +188,14 @@ def _classify(source: str, message: str, severity: str) -> dict[str, str]:
             "question": "Does this happen on battery, while plugged in, during sleep/wake, or during shutdown?",
             "fix": "Correlate the event with AC/battery state, charge level and sleep-transition timestamps. Check the OEM adapter and battery diagnostics before changing power plans or disabling devices.",
         }
+    if any(word in text for word in ("display driver stopped responding", "display driver reset", "nvlddmkm", "amdkmdag", "igdkmd64", "gpu driver reset", "graphics driver")):
+        return {
+            "category": "gpu-driver",
+            "title": "Graphics driver recovery or reset detected",
+            "explanation": "Windows reported a graphics-driver timeout, reset or recovery. The event may relate to a driver fault, device power state, thermal condition or an unstable workload.",
+            "question": "Did the screen flicker, go black, recover after a few seconds, or did the application/game close?",
+            "fix": "Capture the display event ID, driver version and GPU temperature/power state at the same timestamp. Compare with recent driver changes; do not uninstall the active graphics driver or change voltage/firmware settings as a first step.",
+        }
     if any(word in text for word in ("code 10", "cm_prob_failed_start", "device cannot start", "driver failed", "driver error", "driver start")):
         return {
             "category": "driver",
@@ -196,7 +204,7 @@ def _classify(source: str, message: str, severity: str) -> dict[str, str]:
             "question": "Which device is affected, and did this begin after a Windows or driver update?",
             "fix": "Check the exact Device Manager problem code, device instance, driver provider and version. Prefer the device manufacturer's signed driver; do not remove the current driver until a recovery path is available.",
         }
-    if any(word in text for word in ("no internet", "network disconnected", "wifi", "wi-fi", "dns", "winsock", "network adapter", "network interface")):
+    if any(word in text for word in ("no internet", "network disconnected", "wifi", "wi-fi", "dns", "dhcp", "winsock", "tcpip", "ndis", "network adapter", "network interface")):
         return {
             "category": "network",
             "title": "Network connectivity needs diagnosis",
@@ -235,6 +243,14 @@ def _classify(source: str, message: str, severity: str) -> dict[str, str]:
             "explanation": "The issue may be caused by a competing process, a single-thread bottleneck or reduced CPU frequency under load.",
             "question": "Does this happen only while gaming, or also when the machine is idle?",
             "fix": "Correlate CPU utilization with the top non-game process, effective clock and temperature. Check cooling and power-adapter state before changing performance profiles or process priority.",
+        }
+    if any(word in text for word in ("bad block", "disk error", "disk has a bad block", "ntfs", "storahci", "stornvme", "nvme reset", "device was surprise removed", "disk controller error", "uncorrectable disk")):
+        return {
+            "category": "disk-health",
+            "title": "Disk, NTFS or storage-controller integrity warning",
+            "explanation": "Windows recorded a disk, filesystem or storage-controller health event. It can indicate a transient link/reset, filesystem issue or failing device; the exact event and drive identity matter.",
+            "question": "Which drive was affected, and did you notice freezes, clicking/noise, disconnects or a file read/write error?",
+            "fix": "Back up important data first if the device may be failing, then correlate the disk number/serial, event ID and SMART/health evidence. Do not run repair, format or destructive surface scans until data is protected.",
         }
     if any(word in text for word in ("disk latency", "disk stall", "disk busy", "storage stall", "i/o stall")):
         return {
@@ -300,7 +316,7 @@ def _classify(source: str, message: str, severity: str) -> dict[str, str]:
             "question": "Is the sensor provider application open, and does its local endpoint respond?",
             "fix": "Check the provider process, configured loopback port and sensor permissions. Keep core telemetry active; the agent will not install drivers or alter firmware to recover sensors.",
         }
-    if any(word in text for word in ("crash", "unhandled exception", "access violation", "application fault", "terminated unexpectedly")):
+    if any(word in text for word in ("crash", "unhandled exception", "access violation", "application fault", "faulting application", "faulting module", "appcrash", "event id 1000", "event id 1001", "terminated unexpectedly")):
         return {
             "category": "application",
             "title": "Application failure signal observed",
