@@ -27,6 +27,8 @@ DEFAULTS: dict[str, Any] = {
     "suppress_during_games": True,
     "max_notifications_per_hour": 4,
     "dedupe_cooldown_minutes": 60,
+    "system_reviews_enabled": True,
+    "system_review_interval_hours": 12,
 }
 
 
@@ -84,7 +86,7 @@ def update_settings(payload: dict[str, Any]) -> dict[str, Any]:
     for key, value in payload.items():
         if key not in DEFAULTS:
             raise ValueError(f"unknown agent-assist setting: {key}")
-        if key in ("enabled", "ask_follow_up_questions", "agent_notifications", "ai_deep_diagnosis", "suppress_during_games"):
+        if key in ("enabled", "ask_follow_up_questions", "agent_notifications", "ai_deep_diagnosis", "suppress_during_games", "system_reviews_enabled"):
             if not isinstance(value, bool):
                 raise ValueError(f"{key} must be a boolean")
         elif key == "max_notifications_per_hour":
@@ -93,6 +95,9 @@ def update_settings(payload: dict[str, Any]) -> dict[str, Any]:
         elif key == "dedupe_cooldown_minutes":
             if isinstance(value, bool) or not isinstance(value, int) or not 10 <= value <= 1440:
                 raise ValueError("dedupe_cooldown_minutes must be an integer from 10 to 1440")
+        elif key == "system_review_interval_hours":
+            if isinstance(value, bool) or not isinstance(value, int) or not 6 <= value <= 168:
+                raise ValueError("system_review_interval_hours must be an integer from 6 to 168")
         updated[key] = value
     now = time.time()
     for key, value in updated.items():
@@ -116,6 +121,14 @@ def _clean(value: Any, limit: int = 360) -> str:
 
 def _classify(source: str, message: str, severity: str) -> dict[str, str]:
     text = (source + " " + message).casefold()
+    if "system-review" in text or "system review" in text:
+        return {
+            "category": "system-review",
+            "title": "Windows system review is ready",
+            "explanation": "SENTINEL has correlated process, application, service, startup, scheduled-task, driver, resource, Event Viewer and app-usage evidence. Coverage gaps and unknown causes remain explicit; this is a review, not a verdict that something is useless.",
+            "question": "Which background applications, vendor helpers or scheduled tasks do you intentionally rely on (for example sync, gaming, audio, touchpad, hotkeys or updates)? Tell me what must stay running so future suggestions can respect it.",
+            "fix": "Review the evidence-linked recommendations and ask about ownership before proposing a close, startup change, service change or driver update. Never infer that a stopped/manual/rarely observed service is useless.",
+        }
     if any(word in text for word in ("whea-logger", "whea_uncorrectable_error", "machine check exception", "hardware error", "uncorrectable hardware error")):
         return {
             "category": "hardware-error",
@@ -392,7 +405,7 @@ def _agent_toast(title: str, body: str) -> bool:
 
 
 def create_notification(source: str, message: str, severity: str = "warn",
-                        evidence: dict[str, Any] | None = None) -> int | None:
+                        evidence: dict[str, Any] | None = None, *, request_ai: bool = False) -> int | None:
     config = settings()
     if not config.get("enabled"):
         return None
@@ -444,7 +457,7 @@ def create_notification(source: str, message: str, severity: str = "warn",
            "severity": "high" if str(severity).casefold() in ("error", "critical", "high") else "normal",
            "question": question, "evidence": safe_evidence}
     core.publish("agent_notification", row)
-    if str(severity).casefold() in ("error", "critical", "high") and config.get("ai_deep_diagnosis"):
+    if (request_ai or str(severity).casefold() in ("error", "critical", "high")) and config.get("ai_deep_diagnosis"):
         # Count every queued attempt, including failed/unavailable jobs. Counting
         # only successful results lets a broken local model be hammered repeatedly.
         if _ai_diagnosis_budget_available(now):
@@ -545,8 +558,14 @@ def status() -> dict[str, Any]:
     open_count = int(core.db("SELECT COUNT(*) FROM agent_notifications WHERE state='open'")[0][0])
     answered_count = int(core.db("SELECT COUNT(*) FROM agent_assist_feedback")[0][0])
     latest = core.db("SELECT MAX(created_at) FROM agent_notifications")[0][0]
-    return {"settings": settings(), "open_notifications": open_count,
+    cursor = core.db("SELECT last_id FROM agent_assist_cursors WHERE cursor_key=? LIMIT 1", ("system-review",))
+    last_review = int(cursor[0][0]) if cursor else 0
+    config = settings()
+    return {"settings": config, "open_notifications": open_count,
             "answered_questions": answered_count, "last_trigger_at": latest,
+            "system_review": {"enabled": bool(config.get("system_reviews_enabled")),
+                              "interval_hours": int(config.get("system_review_interval_hours", 12)),
+                              "last_run_at": last_review or None},
             "engine": "agent-owned", "repairs_executed": 0}
 
 
@@ -723,6 +742,61 @@ def _ai_worker() -> None:
         except Exception as exc:
             core.log("agent-assist", f"AI diagnosis worker failed: {type(exc).__name__}: {_clean(exc,160)}", "warn")
         _STOP.wait(15)
+
+
+def _maybe_system_review() -> None:
+    """Queue low-frequency, evidence-led AI reviews after inventory has hydrated."""
+    config = settings()
+    if not config.get("enabled") or not config.get("system_reviews_enabled") or not config.get("ai_deep_diagnosis"):
+        return
+    if config.get("suppress_during_games") and _runtime_suppressed(config):
+        return
+    now = time.time()
+    cursor = core.db("SELECT last_id FROM agent_assist_cursors WHERE cursor_key=? LIMIT 1", ("system-review",))
+    last_run = int(cursor[0][0]) if cursor else 0
+    interval = max(6, min(168, int(config.get("system_review_interval_hours", 12)))) * 3600
+    if last_run and now - last_run < interval:
+        return
+    try:
+        from . import inventory, runtime_engine, maintenance
+        if not inventory.INV.get("ts") or not core.STATE.get("services_catalog"):
+            return
+        permitted, _reason = runtime_engine.admit_optional_work(
+            "scheduled Windows intelligence review", min_available_gib=5.0, max_cpu_percent=40.0,
+        )
+        if not permitted:
+            return
+        # Reserve the interval before queueing to avoid duplicate reviews after restart.
+        core.db("INSERT INTO agent_assist_cursors(cursor_key,last_id) VALUES(?,?) "
+                "ON CONFLICT(cursor_key) DO UPDATE SET last_id=excluded.last_id",
+                ("system-review", int(now)))
+        report = maintenance.status()
+        health = report.get("system_health") if isinstance(report, dict) else {}
+        findings = health.get("findings", []) if isinstance(health, dict) else []
+        services = core.STATE.get("services") if isinstance(core.STATE.get("services"), dict) else {}
+        evidence = {
+            "processes_observed": int(core.STATE.get("proc_total", 0) or 0),
+            "services_observed": int(services.get("total", 0) or 0),
+            "scheduled_tasks": len(inventory.INV.get("tasks") or []),
+            "installed_apps": len(inventory.INV.get("apps") or []),
+            "driver_updates_offered": len(report.get("driver_updates") or []),
+            "health_findings": len(findings),
+            "event_errors_7d": int(core.db(
+                "SELECT COUNT(*) FROM events WHERE ts>=? AND lower(level) IN ('error','critical')",
+                (now - 7 * 86400,),
+            )[0][0]),
+            "inventory_sources_unknown": sum(
+                1 for value in (inventory.INV.get("health") or {}).values()
+                if isinstance(value, dict) and value.get("ok") is False
+            ),
+        }
+        create_notification(
+            "system-review", "Periodic evidence review across Windows telemetry sources",
+            severity="normal", evidence=evidence, request_ai=True,
+        )
+        core.heartbeat("Windows system intelligence review", 60, "evidence packet queued for local AI review")
+    except Exception as exc:
+        core.log("agent-assist", f"system review deferred: {type(exc).__name__}: {_clean(exc, 160)}", "warn")
 
 
 def _loop() -> None:
