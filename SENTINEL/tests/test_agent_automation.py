@@ -367,3 +367,24 @@ def test_ai_diagnosis_quota_caps_pending_backlog_even_after_hour_rollover(monkey
         raise AssertionError(sql)
     monkeypatch.setattr(agent_assist.core, "db", fake_db)
     assert agent_assist._ai_diagnosis_budget_available(now=20000) is False
+
+
+
+def test_broad_storage_roots_skip_generated_trees_but_explicit_package_roots_scan_them(tmp_path):
+    project = tmp_path / "Project"
+    generated = project / "node_modules" / "sample-package"
+    generated.mkdir(parents=True)
+    (generated / "index.js").write_bytes(b"x" * 31)
+    (project / "notes.txt").write_bytes(b"n" * 7)
+
+    broad = storage_intelligence._measure(
+        str(project), max_entries=100, deadline=time.monotonic() + 5,
+        category="user-files",
+    )
+    explicit = storage_intelligence._measure(
+        str(project / "node_modules"), max_entries=100,
+        deadline=time.monotonic() + 5, category="node-dependencies",
+    )
+    assert broad["bytes"] == 7
+    assert explicit["bytes"] == 31
+    assert explicit["top_level"][0]["name"] == "sample-package"
