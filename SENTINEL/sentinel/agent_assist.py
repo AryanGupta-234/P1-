@@ -565,7 +565,12 @@ def _ai_diagnosis_budget_available(now: float | None = None) -> bool:
     count = core.db(
         "SELECT COUNT(*) FROM agent_assist_ai_jobs WHERE created_at>=?", (moment - 3600,)
     )[0][0]
-    return int(count) < 2
+    if int(count) >= 2:
+        return False
+    pending = core.db(
+        "SELECT COUNT(*) FROM agent_assist_ai_jobs WHERE status IN ('queued','running')"
+    )[0][0]
+    return int(pending) < 2
 
 
 def _process_new_events() -> None:
