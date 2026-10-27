@@ -307,3 +307,39 @@ def test_runtime_fails_closed_when_cpu_telemetry_is_unknown(monkeypatch):
     allowed, reason = runtime_engine.admit_optional_work("unknown telemetry")
     assert allowed is False
     assert "telemetry_degraded" in reason
+
+
+
+def test_agent_assistant_covers_whea_and_defender_without_unsafe_remediation():
+    whea = agent_assist._classify("WHEA-Logger", "WHEA_UNCORRECTABLE_ERROR", "critical")
+    assert whea["category"] == "hardware-error"
+    assert "voltage" in whea["fix"].lower()
+
+    defender = agent_assist._classify(
+        "Microsoft Defender", "Windows Defender threat detected", "high",
+    )
+    assert defender["category"] == "windows-security"
+    assert "disable Defender" in defender["fix"]
+
+
+def test_storage_intelligence_excludes_known_game_library_roots():
+    protected = {"steam", "steamapps", "steamlibrary", "epic games", "riot games", "valorant"}
+    assert protected <= storage_intelligence.GAME_ROOT_NAMES
+    assert protected <= storage_intelligence.SKIP_NAMES
+
+
+def test_runtime_keeps_valorant_guard_when_cpu_sample_is_missing(monkeypatch):
+    monkeypatch.setattr(runtime_engine.core, "LIVE", {"cpu": None})
+    monkeypatch.setattr(runtime_engine.core, "STATE", {"game": {"name": "VALORANT"}})
+    monkeypatch.setattr(runtime_engine.safeguard, "snapshot", lambda: {
+        "valorant_active": True,
+        "process_detection_complete": True,
+        "kernel_trace_allowed": False,
+    })
+    state = runtime_engine.evaluate()
+    assert state["mode"] == "valorant_guarded"
+    assert state["game_active"] is True
+    assert state["telemetry_ready"] is False
+    allowed, reason = runtime_engine.admit_optional_work("foreground priority")
+    assert allowed is False
+    assert "valorant_guarded" in reason
