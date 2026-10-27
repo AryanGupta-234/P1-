@@ -215,7 +215,13 @@ A durable cursor schedules one broad review every 12 hours by default, configura
 
 ### Automation boundary
 
-The evidence/review foundation is designed to feed a local Power Automate-style flow engine: approved event/schedule/threshold triggers, explicit conditions, user questions, notifications, bounded read-only probes and existing preview-gated action IDs. The flow engine is not part of 1.2.32. No Microsoft cloud connection, arbitrary PowerShell, model-authored workflow code, unattended driver install or approval bypass is introduced by this release.
+**Module:** `sentinel/workflow_engine.py`  
+**API:** `GET/POST /api/automation/flows` plus enable/delete operations  
+**Persistence:** `automation_flows` and `automation_runs` in local SQLite
+
+The Maintenance workspace includes a local Power Automate-style flow builder. Supported triggers are new Windows application-crash, hardware, driver, disk or Windows Update events; fixed intervals (6/12/24/48/168 hours); and sustained CPU, memory, disk-latency, ping, GPU-temperature or packet-loss thresholds over 2–20 consecutive samples. Supported actions are a local Windows AI review, refresh of read-only diagnostics, a queued read-only storage scan, or a Windows notification. Event flows bookmark the current event ID at creation, preventing old event history from firing a newly configured flow. Cooldowns, enable state, trigger cursors and up to 100 recent runs per flow are persisted. The engine evaluates at most 20 flows and polls on a low-cost 30-second interval.
+
+The workflow schema is closed and typed. It rejects unknown trigger fields, actions, command strings, scripts, arbitrary paths and model-authored code. A flow can request analysis/scans/alerts but cannot approve a repair, change services/startup, install/rollback drivers, terminate processes or bypass the maintenance kill switch. Any future mutating workflow step must create a normal preview and require operator approval through the existing action lifecycle. No Microsoft cloud Power Automate connection is configured; flows execute inside the local Windows agent.
 
 ## Action lifecycle
 
