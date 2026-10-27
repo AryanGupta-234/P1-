@@ -355,3 +355,15 @@ def test_agent_native_toast_contains_question_and_safe_next_check():
     assert "Next check:" in body
     assert "signed driver" in body
     assert len(body) <= 240
+
+
+
+def test_ai_diagnosis_quota_caps_pending_backlog_even_after_hour_rollover(monkeypatch):
+    def fake_db(sql, params=()):
+        if "created_at>=?" in sql:
+            return [(0,)]
+        if "status IN ('queued','running')" in sql:
+            return [(2,)]
+        raise AssertionError(sql)
+    monkeypatch.setattr(agent_assist.core, "db", fake_db)
+    assert agent_assist._ai_diagnosis_budget_available(now=20000) is False
