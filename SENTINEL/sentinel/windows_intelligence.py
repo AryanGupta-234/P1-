@@ -51,7 +51,13 @@ SCHEMA = {
 _METRICS = (
     ("cpu_pct", "cpu"), ("memory_pct", "mem"), ("gpu_pct", "gpu"),
     ("gpu_temp_c", "gputemp"), ("dpc_pct", "dpc"), ("irq_pct", "irq"),
-    ("disk_latency_ms", "dlat"), ("ping_ms", "ping"), ("jitter_ms", "jitter"),
+    ("disk_latency_ms", "dlat"), ("disk_busy_pct", "disk_busy"),
+    ("disk_read_mbps", "diskr"), ("disk_write_mbps", "diskw"),
+    ("available_memory_mb", "availablemb"), ("pagefile_pct", "pagefilepct"),
+    ("pages_in_sec", "pagesin"), ("pages_out_sec", "pagesout"),
+    ("network_down_mbps", "netdown"), ("network_up_mbps", "netup"),
+    ("active_connections", "conns"),
+    ("ping_ms", "ping"), ("jitter_ms", "jitter"),
     ("packet_loss_pct", "loss"), ("lag_index", "lag_index"),
 )
 
@@ -101,8 +107,13 @@ def _evidence_packet() -> dict[str, Any]:
     evidence = []
     units = {
         "cpu_pct": "%", "memory_pct": "%", "gpu_pct": "%", "gpu_temp_c": "°C",
-        "dpc_pct": "%", "irq_pct": "%", "disk_latency_ms": "ms",
-        "ping_ms": "ms", "jitter_ms": "ms", "packet_loss_pct": "%", "lag_index": "index",
+        "dpc_pct": "%", "irq_pct": "%", "disk_latency_ms": "ms", "disk_busy_pct": "%",
+        "disk_read_mbps": "MB/s", "disk_write_mbps": "MB/s",
+        "available_memory_mb": "MB", "pagefile_pct": "%",
+        "pages_in_sec": "pages/s", "pages_out_sec": "pages/s",
+        "network_down_mbps": "MB/s", "network_up_mbps": "MB/s",
+        "active_connections": "count", "ping_ms": "ms", "jitter_ms": "ms",
+        "packet_loss_pct": "%", "lag_index": "index",
     }
     for evidence_id, key in _METRICS:
         value = core.LIVE.get(key)
