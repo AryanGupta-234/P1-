@@ -310,6 +310,17 @@ def test_runtime_fails_closed_when_cpu_telemetry_is_unknown(monkeypatch):
 
 
 
+def test_agent_assistant_classifies_common_windows_telemetry_events():
+    cases = [
+        ("Display driver nvlddmkm stopped responding", "gpu-driver"),
+        ("DHCP Client failed to obtain an IP address", "network"),
+        ("NTFS event reports a bad block on the disk", "disk-health"),
+        ("Application Error: Faulting application name: app.exe", "application"),
+    ]
+    for message, category in cases:
+        assert agent_assist._classify("Windows Event Log", message, "error")["category"] == category
+
+
 def test_agent_assistant_covers_whea_and_defender_without_unsafe_remediation():
     whea = agent_assist._classify("WHEA-Logger", "WHEA_UNCORRECTABLE_ERROR", "critical")
     assert whea["category"] == "hardware-error"
