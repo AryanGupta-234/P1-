@@ -941,7 +941,7 @@ def _parse_event_xml(fragment: str) -> dict:
         if not value:
             continue
         if any(token in normalized for token in ("appname", "applicationname", "processname", "modulename", "drivername")):
-            value = os.path.basename(value.replace("/", "\\"))
+            value = value.replace("\\", "/").rsplit("/", 1)[-1]
         if re.search(r"(?i)(password|token|secret|credential|cookie|authorization|api.?key)", value):
             continue
         data[name[:40]] = value[:140]
