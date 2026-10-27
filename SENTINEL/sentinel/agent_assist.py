@@ -116,6 +116,22 @@ def _clean(value: Any, limit: int = 360) -> str:
 
 def _classify(source: str, message: str, severity: str) -> dict[str, str]:
     text = (source + " " + message).casefold()
+    if any(word in text for word in ("whea-logger", "whea_uncorrectable_error", "machine check exception", "hardware error", "uncorrectable hardware error")):
+        return {
+            "category": "hardware-error",
+            "title": "Windows hardware error reported",
+            "explanation": "Windows recorded a hardware error (WHEA). The source may be CPU, memory, PCIe, storage or firmware; an event name alone cannot isolate the component.",
+            "question": "Did the error happen at idle, under gaming/load, or during sleep/wake, and did the PC freeze or restart?",
+            "fix": "Preserve the full WHEA event details and correlate its APIC/bus/device identifiers with temperature, power and driver telemetry. Do not change voltage, BIOS or firmware settings based on a single event.",
+        }
+    if any(word in text for word in ("windows defender", "microsoft defender", "defender threat", "antimalware service", "security intelligence update", "threat detected")):
+        return {
+            "category": "windows-security",
+            "title": "Windows security event needs review",
+            "explanation": "A Defender or Windows security event was recorded. It may be a detection, an update problem or a service-health warning; preserve the exact event and threat identity.",
+            "question": "Does Windows Security show a threat detection, a protection-history action, or an update/service error?",
+            "fix": "Open Windows Security protection history and verify the exact detection, affected path and action. Do not disable Defender, Tamper Protection or firewall protections, and do not restore a detected file unless its publisher and hash are independently verified.",
+        }
     if any(word in text for word in ("blue screen", "bugcheck", "bug check", "stop code", "kernel power 41", "unexpected reboot", "system rebooted unexpectedly")):
         return {
             "category": "blue-screen",
@@ -357,7 +373,18 @@ def create_notification(source: str, message: str, severity: str = "warn",
     # Core insights also emit a corresponding activity-log row. A short title
     # signature lets those two records collapse into one durable finding.
     title_signature = " ".join(stable_message.split()[:12])
-    normalized = " ".join((diagnosis["category"] + " " + title_signature).split())[:180]
+    identity_keys = {
+        "device", "device_name", "instance", "instance_id", "interface", "adapter",
+        "service", "process", "process_name", "application", "package", "mountpoint",
+        "path", "volume", "driver",
+    }
+    identity = " ".join(
+        f"{str(key).casefold()}={_clean(value, 100).casefold()}"
+        for key, value in sorted(safe_evidence.items())
+        if str(key).casefold() in identity_keys and value
+    )
+    identity = re.sub(r"\b\d+(?:\.\d+)?\b", "#", identity)
+    normalized = " ".join((diagnosis["category"] + " " + title_signature + " " + identity).split())[:300]
     dedupe_key = hashlib.sha256(normalized.encode("utf-8")).hexdigest()
     cooldown = max(600, int(config.get("dedupe_cooldown_minutes", 60)) * 60)
     previous = core.db(
@@ -560,7 +587,7 @@ def _process_new_events() -> None:
                 severity = str(level or "info").casefold()
                 evidence = {"event_id": row_id, "timestamp": ts, "source": source, "level": severity}
                 evidence.update(_event_data_evidence(raw_data))
-                if severity not in ("warn", "warning", "error", "critical"):
+                if severity not in ("warn", "warning", "error", "critical", "high", "fatal", "alert"):
                     continue
                 if str(source or "").casefold() in ("agent-assist", "storage-intelligence"):
                     continue
