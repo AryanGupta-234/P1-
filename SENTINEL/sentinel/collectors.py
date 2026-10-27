@@ -987,7 +987,7 @@ def _event_summary(channel: str, event: dict, historical: bool) -> str:
         if value:
             parts.append(f"{key}={value}")
     if historical:
-        parts.append("found in existing Event Viewer history at agent startup")
+        parts.append("historical event found in existing Event Viewer history at agent startup")
     return " · ".join(parts)[:900]
 
 
