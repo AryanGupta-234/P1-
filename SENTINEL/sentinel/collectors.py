@@ -1031,10 +1031,15 @@ def evtlog_loop():
                     event = _parse_event_xml(fragment)
                 except (ET.ParseError, TypeError, ValueError):
                     continue
-                record_id = event.get("record_id")
+                event_record_id = event.get("record_id")
                 event_id = event.get("event_id")
-                if not record_id or not event_id:
+                occurred_at = event.get("occurred_at")
+                if not event_record_id or not event_id:
                     continue
+                # EventRecordID can restart at 1 after a log is cleared. Include
+                # the provider timestamp in the durable identity when available.
+                record_id = (str(event_record_id) + "@" + str(int(float(occurred_at) * 1000))
+                             if occurred_at is not None else str(event_record_id))
                 key = (channel, record_id)
                 if key in _seen_evt:
                     continue
@@ -1061,7 +1066,7 @@ def evtlog_loop():
                 )
                 payload = {
                     "provider": provider, "event_id": event_id, "channel": channel,
-                    "record_id": record_id, "occurred_at": event.get("occurred_at"),
+                    "record_id": str(event_record_id), "record_signature": record_id, "occurred_at": occurred_at,
                     "historical_backfill": historical, "event_data": event.get("data") or {},
                 }
                 log("eventlog", summary, severity, **payload)
