@@ -2243,6 +2243,66 @@ function renderAgentNotifications(){
       '</div></article>';
   }).join("");
 }
+function renderCommandAssistant(){
+  const host=document.getElementById("cmd-agent-list");
+  const count=document.getElementById("cmd-agent-count");
+  if(!host)return;
+  const rows=Array.isArray(AGENT_NOTIFICATIONS)?AGENT_NOTIFICATIONS.slice(0,3):[];
+  if(count)count.textContent=rows.length?rows.length+" OPEN":"ALL CLEAR";
+  if(!rows.length){
+    host.innerHTML='<div class="command-agent-empty"><span>✓</span><div><b>No unresolved findings</b><small>The background agent is still observing. New questions will appear here.</small></div></div>';
+    return;
+  }
+  host.innerHTML=rows.map(item=>{
+    const id=Number(item.id);
+    const ai=item.ai_diagnosis?.diagnosis;
+    return '<article class="command-agent-item">'+
+      '<div class="command-agent-item-head"><b>'+esc(item.title||"System finding")+'</b><span class="tag '+(item.severity==="high"?"bad":"mu")+'">'+esc(String(item.severity||"normal").toUpperCase())+'</span></div>'+
+      '<p>'+esc(item.question||item.explanation||"The agent has recorded a new finding.")+'</p>'+
+      '<div class="command-agent-fix"><small> SUGGESTED NEXT CHECK </small>'+esc(item.suggested_fix||"Review the evidence in the Agent workspace.")+'</div>'+
+      (ai?'<small class="command-agent-ai">LOCAL AI · '+esc(ai.confidence||"advisory")+' confidence · '+esc(ai.diagnosis)+'</small>':"")+
+      '<div class="command-agent-reply"><input type="text" maxlength="1200" data-command-agent-input="'+id+'" aria-label="Answer the agent follow-up" placeholder="Add a detail for the agent…">'+
+      '<button type="button" class="btn or sm" data-command-agent-reply="'+id+'">REPLY</button>'+
+      '<button type="button" class="btn sm" data-command-agent-dismiss="'+id+'">DISMISS</button></div>'+
+      '</article>';
+  }).join("");
+}
+async function loadCommandAssistantBrief(){
+  if(document.visibilityState!=="visible")return;
+  try{
+    const rows=await api("/api/agent-assist/notifications?limit=20");
+    if(rows.error)throw new Error(rows.error);
+    AGENT_NOTIFICATIONS=Array.isArray(rows)?rows:[];
+    renderCommandAssistant();
+  }catch(error){
+    const host=document.getElementById("cmd-agent-list");
+    if(host&&!AGENT_NOTIFICATIONS.length)host.innerHTML='<div class="empty">Agent inbox temporarily unavailable · '+esc(error.message||String(error))+'</div>';
+  }
+}
+async function handleCommandAgentAction(event){
+  const reply=event.target.closest("[data-command-agent-reply]");
+  const dismiss=event.target.closest("[data-command-agent-dismiss]");
+  const target=reply||dismiss;
+  if(!target)return;
+  const id=Number(target.dataset.commandAgentReply||target.dataset.commandAgentDismiss||0);
+  if(!id)return;
+  const input=target.closest(".command-agent-item")?.querySelector('[data-command-agent-input="'+id+'"]');
+  const answer=dismiss?"":(input?.value.trim()||"");
+  if(reply&&!answer){input?.focus();return toast("Add a short answer before replying","warn");}
+  target.disabled=true;
+  try{
+    const result=await api("/api/agent-assist/notification/respond",{id,answer,dismiss:!!dismiss});
+    if(result.error)throw new Error(result.error);
+    AGENT_NOTIFICATIONS=AGENT_NOTIFICATIONS.filter(item=>Number(item.id)!==id);
+    renderCommandAssistant();
+    renderAgentNotifications();
+    toast(dismiss?"Finding dismissed":"Answer saved to agent history","ok");
+  }catch(error){
+    toast(error.message||String(error),"bad");
+    target.disabled=false;
+  }
+}
+
 function renderStorageIntelligence(){
   const host=document.getElementById("storage-scan-results");
   const state=document.getElementById("storage-scan-state");
@@ -2306,6 +2366,7 @@ async function loadAgentAutomation(){
     const agentState=document.getElementById("agent-assist-state");
     if(agentState)agentState.textContent=AGENT_ASSIST.engine==="agent-owned"?"AGENT-OWNED · "+(AGENT_ASSIST.open_notifications||0)+" OPEN":"AGENT STATUS";
     renderAgentNotifications();
+    renderCommandAssistant();
     const storageSettings=STORAGE_INTELLIGENCE?.settings||{};
     set("storage-scan-enabled",storageSettings.enabled);
     const interval=document.getElementById("storage-scan-interval");
@@ -2375,26 +2436,36 @@ function initAgentAutomation(){
   void loadAgentAutomation();
 }
 
+async function runWindowsDiagnosis(questionId,buttonId,resultId){
+  const question=document.getElementById(questionId);
+  const button=document.getElementById(buttonId);
+  const host=document.getElementById(resultId);
+  const value=question?.value.trim()||"";
+  if(!value)return toast("Describe the Windows issue first","warn");
+  if(button){button.disabled=true;button.textContent="ANALYSING…";}
+  if(host)host.innerHTML='<div class="empty">Correlating local telemetry with version-matched documentation…</div>';
+  try{
+    const result=await api("/api/windows-intelligence/diagnose",{question:value});
+    if(result.error)throw new Error(result.error);
+    renderWindowsSpecialist(result,resultId);
+    toast("Local Windows specialist analysis complete","ok");
+  }catch(error){
+    if(host)host.innerHTML='<div class="empty">'+esc(error.message||String(error))+'</div>';
+    toast("Windows specialist: "+(error.message||String(error)),"warn");
+  }finally{
+    if(button){button.disabled=false;button.textContent="DIAGNOSE";}
+  }
+}
+function bindWindowsDiagnosis(questionId,buttonId,resultId){
+  const button=document.getElementById(buttonId),question=document.getElementById(questionId);
+  if(button)button.onclick=()=>runWindowsDiagnosis(questionId,buttonId,resultId);
+  if(question)question.addEventListener("keydown",event=>{
+    if(event.key==="Enter"&&!event.shiftKey){event.preventDefault();runWindowsDiagnosis(questionId,buttonId,resultId);}
+  });
+}
 function initWindowsKnowledge(){
-  const diagnose=document.getElementById("ix-win-diagnose"),question=document.getElementById("ix-win-question");
-  const runDiagnosis=async()=>{
-    const value=question?.value.trim()||"";
-    if(!value)return toast("Describe the Windows issue first","warn");
-    if(diagnose){diagnose.disabled=true;diagnose.textContent="ANALYSING…";}
-    const host=document.getElementById("ix-win-result");
-    if(host)host.innerHTML='<div class="empty">Correlating local telemetry with version-matched documentation…</div>';
-    try{
-      const result=await api("/api/windows-intelligence/diagnose",{question:value});
-      if(result.error)throw new Error(result.error);
-      renderWindowsSpecialist(result);
-      toast("Local Windows specialist analysis complete","ok");
-    }catch(error){
-      if(host)host.innerHTML='<div class="empty">'+esc(error.message||String(error))+'</div>';
-      toast("Windows specialist: "+(error.message||String(error)),"warn");
-    }finally{if(diagnose){diagnose.disabled=false;diagnose.textContent="ANALYSE WITH LOCAL MODEL";}}
-  };
-  if(diagnose)diagnose.onclick=runDiagnosis;
-  if(question)question.addEventListener("keydown",event=>{if(event.key==="Enter")runDiagnosis();});
+  bindWindowsDiagnosis("ix-win-question","ix-win-diagnose","ix-win-result");
+  bindWindowsDiagnosis("cmd-diagnose-question","cmd-diagnose-run","cmd-diagnose-result");
   const add=document.getElementById("ix-kb-add"),search=document.getElementById("ix-kb-search");
   if(search)search.onclick=searchWindowsKnowledge;
   const query=document.getElementById("ix-kb-query");
