@@ -35,8 +35,12 @@ DEFAULTS: dict[str, Any] = {
 SKIP_NAMES = {
     "$recycle.bin", "system volume information", "windows", "program files",
     "program files (x86)", "programdata", ".git", ".hg", ".svn",
-    "node_cache", "lost+found",
+    "node_cache", "lost+found", "steam", "steamapps", "steamlibrary",
+    "epic games", "riot games", "valorant", "xboxgames", "gog galaxy",
+    "battle.net games",
 }
+GAME_ROOT_NAMES = {"steam", "steamapps", "steamlibrary", "epic games", "riot games",
+                   "valorant", "xboxgames", "gog galaxy", "battle.net games"}
 ARTIFACT_NAMES = (".venv", "venv", "node_modules", "target", "build", "dist", "bin", "obj")
 
 
@@ -130,7 +134,6 @@ def _local_roots() -> list[tuple[str, str, str]]:
         ("Windows temporary files", str(local / "Temp"), "temporary"),
         ("Python package cache", str(local / "pip" / "Cache"), "python-cache"),
         ("Python package cache", str(home / ".cache" / "pip"), "python-cache"),
-        ("Python user packages", str(roaming / "Python"), "python-packages"),
         ("Python environments", str(home / ".virtualenvs"), "python-environments"),
         ("SENTINEL runtime Python packages", str(Path(sys.prefix) / "Lib" / "site-packages"), "python-packages"),
         ("npm cache", str(local / "npm-cache"), "node-cache"),
@@ -152,6 +155,11 @@ def _local_roots() -> list[tuple[str, str, str]]:
         ("Conda package cache", str(home / "anaconda3" / "pkgs"), "python-cache"),
         ("Conda package cache", str(home / "miniconda3" / "pkgs"), "python-cache"),
         ("Conda package cache", str(home / "miniforge3" / "pkgs"), "python-cache"),
+        ("Bun package cache", str(local / "Bun" / "install" / "cache"), "node-cache"),
+        ("Deno dependency cache", str(local / "deno" / "deps"), "node-cache"),
+        ("Deno npm cache", str(local / "deno" / "npm"), "node-cache"),
+        ("Global npm packages", str(roaming / "npm" / "node_modules"), "node-dependencies"),
+        ("Yarn global packages", str(local / "Yarn" / "Data" / "global" / "node_modules"), "node-dependencies"),
     ]
     # Discover versioned roaming Python site-packages without scanning the whole
     # profile. This keeps package attribution at the actual environment boundary.
@@ -567,6 +575,11 @@ def scan_once(roots: list[tuple[str, str, str]] | None = None,
                     deferred, partial, defer_reason = True, True, reason
                     break
             if not os.path.isdir(path) or os.path.islink(path):
+                roots_processed += 1
+                continue
+            if category == "drive-directory" and os.path.basename(path).casefold() in GAME_ROOT_NAMES:
+                # Game-library metadata walks can generate heavy random I/O and
+                # are not needed for user cache/storage triage.
                 roots_processed += 1
                 continue
 
