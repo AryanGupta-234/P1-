@@ -91,7 +91,7 @@ def test_evidence_packet_fuses_windows_sources_without_private_process_content(m
             "start": "manual", "pid": 0, "description": "Optional helper",
             "binpath": r"C:\Users\private-user\vendor.exe", "username": "DOMAIN\\user",
         }],
-        "startup": [{"name": "VendorTray", "where": "HKCU\Run",
+        "startup": [{"name": "VendorTray", "where": r"HKCU\Run",
                      "cmd": r"C:\Users\private-user\vendor.exe --token=private"}],
         "maintenance": {
             "drivers": [{"DeviceName": "Realtek Network Adapter", "DriverVersion": "1.2.3",
