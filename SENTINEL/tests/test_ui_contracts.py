@@ -272,6 +272,10 @@ def test_full_windows_review_is_agent_owned_local_and_exposed_from_command_deck(
     collectors = (ROOT / "sentinel" / "collectors.py").read_text(encoding="utf-8")
 
     assert 'id="cmd-system-review"' in html
+    assert 'id="agent-assist-reviews"' in html
+    assert 'id="agent-assist-review-interval"' in html
+    assert 'system_reviews_enabled:!!document.getElementById("agent-assist-reviews")?.checked' in app
+    assert 'system_review_interval_hours:Number(document.getElementById("agent-assist-review-interval")?.value||12)' in app
     assert 'api("/api/agent-assist/system-review"' in app
     assert 'if p == "/api/agent-assist/system-review":' in server
     assert "agent_assist.request_system_review()" in server
