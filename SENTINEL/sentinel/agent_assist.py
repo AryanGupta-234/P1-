@@ -116,6 +116,62 @@ def _clean(value: Any, limit: int = 360) -> str:
 
 def _classify(source: str, message: str, severity: str) -> dict[str, str]:
     text = (source + " " + message).casefold()
+    if any(word in text for word in ("blue screen", "bugcheck", "bug check", "stop code", "kernel power 41", "unexpected reboot", "system rebooted unexpectedly")):
+        return {
+            "category": "blue-screen",
+            "title": "Windows crash or unexpected restart detected",
+            "explanation": "A stop-code, bug-check or unexpected-restart signal was observed. A Kernel-Power event alone does not identify the root cause.",
+            "question": "Did Windows show a blue-screen stop code, restart without warning, or simply lose power?",
+            "fix": "Capture the exact stop code, dump timestamp and matching WER/bug-check event. Correlate the faulting module and recent driver changes before replacing drivers or changing firmware.",
+        }
+    if any(word in text for word in ("windows update", "wuaueng", "windowsupdateclient", "update installation failed", "0x8024", "servicing stack", "component store")):
+        return {
+            "category": "windows-update",
+            "title": "Windows Update or servicing failure",
+            "explanation": "Windows Update or component servicing reported an error. The update code and servicing stage are needed before selecting a repair.",
+            "question": "Is the update stuck downloading, failing to install, rolling back, or repeatedly asking for a restart?",
+            "fix": "Record the exact update KB and error code, then inspect Windows Update and CBS events around the same time. Avoid resetting update components or deleting SoftwareDistribution data before collecting the failure details.",
+        }
+    if any(word in text for word in ("boot failure", "boot configuration", "startup repair", "bootmgr", "winload", "startup failed", "logon failed")):
+        return {
+            "category": "boot-startup",
+            "title": "Windows boot or startup issue",
+            "explanation": "A boot, logon or startup component reported a failure. The last successful boot and the exact failing component are important for safe recovery.",
+            "question": "Does Windows fail before sign-in, after sign-in, or only when one application starts?",
+            "fix": "Record the exact startup error and recovery screen, then check the matching boot, Service Control Manager and reliability events. Do not edit BCD or disable startup services without a verified recovery path.",
+        }
+    if any(word in text for word in ("audio endpoint", "audiosrv", "no audio", "sound device", "audio service", "microphone not", "speaker not")):
+        return {
+            "category": "audio",
+            "title": "Audio device or service problem",
+            "explanation": "An audio endpoint, driver or Windows audio service may not be operating correctly. The selected output/input device and service state need to be separated.",
+            "question": "Is sound missing from every application, only one application, or is the microphone affected?",
+            "fix": "Check the selected playback/recording endpoint, device status and Windows Audio service dependencies. Verify the exact signed audio driver before reinstalling it; do not stop unrelated audio services.",
+        }
+    if any(word in text for word in ("bluetooth", "bthserv", "usb device", "usb controller", "device descriptor", "unknown usb device")):
+        return {
+            "category": "peripheral",
+            "title": "Bluetooth or USB peripheral issue",
+            "explanation": "Windows reported a Bluetooth or USB device problem. Port, power management, device enumeration and driver state are possible causes.",
+            "question": "Is this a Bluetooth device, a USB peripheral, or a built-in adapter, and does it fail on every port?",
+            "fix": "Check the device instance/problem code, connection path and matching Kernel-PnP events. Test a known-good port or cable first; do not uninstall host controllers or remove paired devices before collecting the device identity.",
+        }
+    if any(word in text for word in ("application hang", "apphang", "not responding", "window is not responding", "hung application")):
+        return {
+            "category": "application-hang",
+            "title": "Application hang or unresponsive window",
+            "explanation": "A process appears to be stuck rather than cleanly crashing. The blocked thread, disk/network wait or resource contention may be responsible.",
+            "question": "Which application stopped responding, and did it recover by itself or require you to close it?",
+            "fix": "Compare the hang timestamp with per-process CPU, memory and I/O plus Windows Error Reporting hang events. Save work before ending the process; do not force-close background services based only on a timeout.",
+        }
+    if any(word in text for word in ("battery", "ac adapter", "power state", "modern standby", "sleep transition", "hibernate", "critical battery", "powercfg")):
+        return {
+            "category": "power-battery",
+            "title": "Power, battery or sleep-state issue",
+            "explanation": "A power transition, battery or adapter warning was detected. Battery health, charger state and sleep/Modern Standby behavior are distinct causes.",
+            "question": "Does this happen on battery, while plugged in, during sleep/wake, or during shutdown?",
+            "fix": "Correlate the event with AC/battery state, charge level and sleep-transition timestamps. Check the OEM adapter and battery diagnostics before changing power plans or disabling devices.",
+        }
     if any(word in text for word in ("code 10", "cm_prob_failed_start", "device cannot start", "driver failed", "driver error", "driver start")):
         return {
             "category": "driver",
@@ -284,7 +340,10 @@ def create_notification(source: str, message: str, severity: str = "warn",
     if not config.get("enabled"):
         return None
     source_text, message_text = _clean(source, 80), _clean(message, 360)
-    diagnosis = _classify(source_text, message_text, severity)
+    safe_evidence = evidence if isinstance(evidence, dict) else {}
+    safe_evidence = {str(k)[:40]: _clean(v, 180) for k, v in list(safe_evidence.items())[:8]}
+    evidence_context = " ".join(f"{key}: {value}" for key, value in safe_evidence.items())
+    diagnosis = _classify(source_text, _clean(f"{message_text} {evidence_context}", 700), severity)
     stable_message = re.sub(r"\b\d+(?:\.\d+)?\b", "#", message_text.casefold())
     stable_message = re.sub(r"\[(?:HIGH|WARN|ERROR|CRITICAL)\]\s*", "", stable_message, flags=re.IGNORECASE)
     # Core insights also emit a corresponding activity-log row. A short title
@@ -305,8 +364,6 @@ def create_notification(source: str, message: str, severity: str = "warn",
     if int(findings_last_hour) >= 60:
         return None
     question = diagnosis["question"] if config.get("ask_follow_up_questions") else ""
-    safe_evidence = evidence if isinstance(evidence, dict) else {}
-    safe_evidence = {str(k)[:40]: _clean(v, 180) for k, v in list(safe_evidence.items())[:8]}
     now = time.time()
     notification_id = core.insert_id(
         "INSERT INTO agent_notifications(created_at,category,severity,title,explanation,question,suggested_fix,"
@@ -320,10 +377,12 @@ def create_notification(source: str, message: str, severity: str = "warn",
            "question": question, "evidence": safe_evidence}
     core.publish("agent_notification", row)
     if str(severity).casefold() in ("error", "critical", "high") and config.get("ai_deep_diagnosis"):
-        completed = core.db("SELECT COUNT(*) FROM agent_assist_ai_results WHERE completed_at>=?",
-                            (now - 3600,))[0][0]
-        pending = core.db("SELECT COUNT(*) FROM agent_assist_ai_jobs WHERE status IN ('queued','running')")[0][0]
-        if int(completed) + int(pending) < 2:
+        # Count every queued attempt, including failed/unavailable jobs. Counting
+        # only successful results lets a broken local model be hammered repeatedly.
+        attempts_last_hour = core.db(
+            "SELECT COUNT(*) FROM agent_assist_ai_jobs WHERE created_at>=?", (now - 3600,)
+        )[0][0]
+        if int(attempts_last_hour) < 2:
             core.db("INSERT OR IGNORE INTO agent_assist_ai_jobs(notification_id,created_at,updated_at,status) VALUES(?,?,?,'queued')",
                     (notification_id, now, now))
     alerts_last_hour = core.db(
@@ -432,6 +491,33 @@ def _advance_cursor(key: str, value: int) -> None:
             (key, int(value)))
 
 
+def _event_data_evidence(raw_data: Any) -> dict[str, str]:
+    """Extract small, non-secret diagnostic fields from an event's structured payload."""
+    if not raw_data:
+        return {}
+    try:
+        parsed = json.loads(raw_data) if isinstance(raw_data, str) else raw_data
+    except (TypeError, ValueError):
+        return {}
+    if not isinstance(parsed, dict):
+        return {}
+    result: dict[str, str] = {}
+    for key, value in list(parsed.items())[:12]:
+        name = _clean(key, 40)
+        if not name or re.search(r"secret|token|password|credential|cookie|authorization|api.?key", name, re.I):
+            continue
+        try:
+            encoded = json.dumps(value, ensure_ascii=False, separators=(",", ":"), default=str) if isinstance(value, (dict, list)) else str(value)
+        except (TypeError, ValueError):
+            continue
+        cleaned = _clean(encoded, 140)
+        if cleaned:
+            result[name] = cleaned
+        if len(result) >= 8:
+            break
+    return result
+
+
 def _process_new_events() -> None:
     config = settings()
     if not config.get("enabled"):
@@ -459,6 +545,7 @@ def _process_new_events() -> None:
                 _, ts, level, source, message, raw_data = row
                 severity = str(level or "info").casefold()
                 evidence = {"event_id": row_id, "timestamp": ts, "source": source, "level": severity}
+                evidence.update(_event_data_evidence(raw_data))
                 if severity not in ("warn", "warning", "error", "critical"):
                     continue
                 if str(source or "").casefold() in ("agent-assist", "storage-intelligence"):
