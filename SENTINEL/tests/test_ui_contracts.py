@@ -299,3 +299,38 @@ def test_full_windows_review_is_agent_owned_local_and_exposed_from_command_deck(
     assert "Microsoft-Windows-WindowsUpdateClient/Operational" in collectors
     assert "Microsoft-Windows-Kernel-PnP/Configuration" in collectors
     assert "Application Error" in collectors
+
+
+
+def test_local_automation_builder_uses_typed_allowlisted_windows_flows():
+    html = (ROOT / "ui" / "index.html").read_text(encoding="utf-8")
+    app = (ROOT / "ui" / "app.js").read_text(encoding="utf-8")
+    server = (ROOT / "sentinel" / "server.py").read_text(encoding="utf-8")
+    agent = (ROOT / "agent.py").read_text(encoding="utf-8")
+    engine = (ROOT / "sentinel" / "workflow_engine.py").read_text(encoding="utf-8")
+
+    for control in (
+        'id="flow-name"', 'id="flow-trigger"', 'id="flow-action"',
+        'id="flow-event-category"', 'id="flow-schedule-hours"',
+        'id="flow-metric"', 'id="flow-threshold"', 'id="flow-samples"',
+        'id="flow-create"', 'id="local-automation-flows"',
+    ):
+        assert control in html
+
+    assert 'if p == "/api/automation/flows":' in server
+    assert "workflow_engine.create_flow(body)" in server
+    assert "workflow_engine.set_enabled(" in server
+    assert "workflow_engine.delete_flow(" in server
+    assert "workflow_engine.list_flows()" in server
+    assert "workflow_engine.start()" in agent
+    assert "workflow_engine.shutdown()" in agent
+    assert 'api("/api/automation/flows",payload)' in app
+    assert "initLocalAutomation();" in app
+
+    assert 'TRIGGERS = frozenset({"event", "schedule", "metric"})' in engine
+    assert '"local_ai_review"' in engine and '"read_only_diagnostics"' in engine
+    assert '"storage_scan"' in engine and '"notify_user"' in engine
+    assert "at most 20 local workflows" in engine
+    assert "last_event_id" in engine and "cooldown_seconds" in engine
+    assert "arbitrary commands and scripts are not accepted" in engine
+    assert "subprocess" not in engine and "Popen(" not in engine
