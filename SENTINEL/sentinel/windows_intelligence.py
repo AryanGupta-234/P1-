@@ -63,6 +63,7 @@ def _evidence_packet() -> dict[str, Any]:
     URLs, credentials, file contents, account names or remote IP addresses
     are sent to the local model.
     """
+    import os
     import time
 
     def clean(value: Any, limit: int = 140) -> str:
