@@ -310,6 +310,15 @@ def test_runtime_fails_closed_when_cpu_telemetry_is_unknown(monkeypatch):
 
 
 
+def test_kernel_power_41_message_without_literal_event_id_still_maps_to_restart():
+    diagnosis = agent_assist._classify(
+        "Microsoft-Windows-Kernel-Power",
+        "The system has rebooted without cleanly shutting down first.",
+        "critical",
+    )
+    assert diagnosis["category"] == "blue-screen"
+
+
 def test_agent_assistant_classifies_common_windows_telemetry_events():
     cases = [
         ("Display driver nvlddmkm stopped responding", "gpu-driver"),
