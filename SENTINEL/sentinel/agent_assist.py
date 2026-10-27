@@ -768,6 +768,8 @@ def _queue_system_review(*, force: bool = False) -> dict[str, Any]:
     if not permitted:
         return {"queued": False, "reason": reason}
     report = maintenance.status()
+    if report.get("diagnostics_state") != "ready":
+        return {"queued": False, "reason": "Waiting for read-only maintenance and driver inventory to finish."}
     health = report.get("system_health") if isinstance(report, dict) else {}
     findings = health.get("findings", []) if isinstance(health, dict) else []
     services = core.STATE.get("services") if isinstance(core.STATE.get("services"), dict) else {}
