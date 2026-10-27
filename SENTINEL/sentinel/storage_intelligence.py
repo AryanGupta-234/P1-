@@ -37,8 +37,7 @@ SKIP_NAMES = {
     "program files (x86)", "programdata", ".git", ".hg", ".svn",
     "node_cache", "lost+found", "steam", "steamapps", "steamlibrary",
     "epic games", "riot games", "valorant", "xboxgames", "gog galaxy",
-    "battle.net games", ".venv", "venv", "node_modules", "target", "build",
-    "dist", "bin", "obj",
+    "battle.net games",
 }
 GAME_ROOT_NAMES = {"steam", "steamapps", "steamlibrary", "epic games", "riot games",
                    "valorant", "xboxgames", "gog galaxy", "battle.net games"}
@@ -345,7 +344,9 @@ def _measure(
                 entry_hidden = _hidden(entry, stat_result)
                 if entry.is_dir(follow_symlinks=False):
                     dirs += 1
-                    if depth < 5 and entry.name.casefold() not in SKIP_NAMES:
+                    entry_name = entry.name.casefold()
+                    duplicate_artifact = category in ("user-files", "drive-directory") and entry_name in ARTIFACT_NAMES
+                    if depth < 5 and entry_name not in SKIP_NAMES and not duplicate_artifact:
                         # Attribute package directories individually, including scoped
                         # npm packages and Python site-packages children.
                         if category_is_node_dependencies(path) and depth == 1 and package_name.startswith("@"):
