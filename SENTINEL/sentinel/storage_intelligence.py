@@ -12,7 +12,7 @@ import threading
 import time
 from collections import defaultdict
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 import psutil
 
@@ -48,6 +48,8 @@ def ensure_schema() -> None:
         payload_json TEXT NOT NULL, bytes_scanned INTEGER NOT NULL DEFAULT 0,
         files_scanned INTEGER NOT NULL DEFAULT 0, partial INTEGER NOT NULL DEFAULT 0)""")
     core.db("CREATE INDEX IF NOT EXISTS ix_storage_scan_history_ts ON storage_scan_history(scanned_at)")
+    core.db("""CREATE TABLE IF NOT EXISTS storage_intelligence_state(
+        state_key TEXT PRIMARY KEY, value_json TEXT NOT NULL, updated_at REAL NOT NULL)""")
     now = time.time()
     for key, value in DEFAULTS.items():
         core.db("INSERT OR IGNORE INTO storage_intelligence_settings(setting_key,value_json,updated_at) VALUES(?,?,?)",
@@ -139,7 +141,47 @@ def _local_roots() -> list[tuple[str, str, str]]:
         ("NuGet package cache", str(home / ".nuget" / "packages"), "dotnet-cache"),
         ("Gradle cache", str(home / ".gradle" / "caches"), "java-cache"),
         ("Maven repository", str(home / ".m2" / "repository"), "java-cache"),
+        ("uv package cache", str(local / "uv" / "cache"), "python-cache"),
+        ("Poetry package cache", str(roaming / "pypoetry" / "Cache"), "python-cache"),
+        ("PDM package cache", str(local / "pdm" / "Cache"), "python-cache"),
+        ("pipx environments", str(local / "pipx" / "venvs"), "python-environments"),
+        ("Go module cache", str(home / "go" / "pkg" / "mod"), "go-cache"),
+        ("Go build cache", str(local / "go-build"), "go-cache"),
+        ("PHP Composer cache", str(local / "Composer" / "files"), "php-cache"),
+        ("Ruby gems", str(home / ".gem"), "ruby-cache"),
+        ("Conda package cache", str(home / "anaconda3" / "pkgs"), "python-cache"),
+        ("Conda package cache", str(home / "miniconda3" / "pkgs"), "python-cache"),
+        ("Conda package cache", str(home / "miniforge3" / "pkgs"), "python-cache"),
     ]
+    # Discover versioned roaming Python site-packages without scanning the whole
+    # profile. This keeps package attribution at the actual environment boundary.
+    try:
+        for version_dir in sorted((roaming / "Python").iterdir())[:12]:
+            site_packages = version_dir / "site-packages"
+            candidates.append(("Python user site-packages", str(site_packages), "python-packages"))
+    except OSError:
+        pass
+    # Respect explicit language-tool cache overrides as well as their standard paths.
+    environment_roots = (
+        ("Configured pip cache", "PIP_CACHE_DIR", "python-cache"),
+        ("Configured uv cache", "UV_CACHE_DIR", "python-cache"),
+        ("Configured npm cache", "NPM_CONFIG_CACHE", "node-cache"),
+        ("Configured pnpm store", "PNPM_HOME", "node-cache"),
+        ("Configured Cargo home", "CARGO_HOME", "rust-cache"),
+        ("Configured Go module cache", "GOMODCACHE", "go-cache"),
+        ("Configured Go build cache", "GOCACHE", "go-cache"),
+        ("Configured NuGet packages", "NUGET_PACKAGES", "dotnet-cache"),
+        ("Configured Gradle home", "GRADLE_USER_HOME", "java-cache"),
+        ("Configured Maven home", "MAVEN_USER_HOME", "java-cache"),
+        ("Configured Composer cache", "COMPOSER_CACHE_DIR", "php-cache"),
+        ("Configured Ruby gems", "GEM_HOME", "ruby-cache"),
+        ("Configured Conda package cache", "CONDA_PKGS_DIRS", "python-cache"),
+    )
+    for label, variable, category in environment_roots:
+        configured = os.environ.get(variable, "").strip()
+        for raw_path in configured.split(os.pathsep):
+            if raw_path.strip():
+                candidates.append((label, raw_path.strip(), category))
     for parent in (local / "Programs" / "Python", home / "AppData" / "Local" / "Programs" / "Python"):
         try:
             for install in sorted(parent.iterdir())[:8]:
@@ -212,18 +254,29 @@ def category_is_node_dependencies(path: str) -> bool:
     return os.path.basename(os.path.normpath(path)).casefold() == "node_modules"
 
 
-def _measure(path: str, max_entries: int, deadline: float, category: str = "") -> dict[str, Any]:
-    """Count directory metadata only, with one shared time/entry budget."""
+def _measure(
+    path: str,
+    max_entries: int,
+    deadline: float,
+    category: str = "",
+    should_yield: Callable[[], bool] | None = None,
+) -> dict[str, Any]:
+    """Count metadata only; periodically yield if a foreground workload takes priority."""
     total_bytes = files = dirs = hidden_files = hidden_bytes = 0
     extension_bytes: dict[str, int] = defaultdict(int)
+    extension_counts: dict[str, int] = defaultdict(int)
     newest_mtime = 0.0
     oldest_atime = time.time()
     newest_atime = 0.0
     top_level_access: dict[str, float] = defaultdict(float)
-    partial = False
-    stack: list[tuple[str, int, str, bool]] = [(path, 0, "", False)]
     top_level_bytes: dict[str, int] = defaultdict(int)
+    top_files: list[dict[str, Any]] = []
+    file_review_candidates: list[dict[str, Any]] = []
+    partial = False
+    yielded = False
+    stack: list[tuple[str, int, str, bool]] = [(path, 0, "", False)]
     visited = 0
+
     while stack:
         if visited >= max_entries or time.monotonic() >= deadline:
             partial = True
@@ -239,18 +292,29 @@ def _measure(path: str, max_entries: int, deadline: float, category: str = "") -
                     partial = True
                     break
                 visited += 1
+                if should_yield is not None and visited % 64 == 0:
+                    try:
+                        if should_yield():
+                            yielded = True
+                            partial = True
+                            break
+                    except Exception:
+                        # Unknown runtime state is treated as a request to yield.
+                        yielded = True
+                        partial = True
+                        break
                 try:
                     stat_result = entry.stat(follow_symlinks=False)
                 except (OSError, PermissionError):
                     continue
                 if entry.is_symlink():
                     continue
+                entry_hidden = _hidden(entry, stat_result)
                 if entry.is_dir(follow_symlinks=False):
                     dirs += 1
                     if depth < 5 and entry.name.casefold() not in SKIP_NAMES:
-                        # Direct package folders become individual buckets.
-                        # Scoped npm packages are named @scope/package rather than
-                        # collapsed into one @scope aggregate.
+                        # Attribute package directories individually, including scoped
+                        # npm packages and Python site-packages children.
                         if category_is_node_dependencies(path) and depth == 1 and package_name.startswith("@"):
                             child_group = package_name + "/" + entry.name
                         elif category == "python-environments" and depth == 2 and os.path.basename(folder).casefold() == "site-packages":
@@ -260,44 +324,103 @@ def _measure(path: str, max_entries: int, deadline: float, category: str = "") -
                         else:
                             child_group = entry.name if depth == 0 else package_name
                         stack.append((entry.path, depth + 1, child_group,
-                                      in_hidden_dir or _hidden(entry, stat_result)))
+                                      in_hidden_dir or entry_hidden))
                     continue
                 if not entry.is_file(follow_symlinks=False):
                     continue
+
                 size = max(0, int(stat_result.st_size))
                 files += 1
                 total_bytes += size
                 if package_name:
                     top_level_bytes[package_name] += size
-                newest_mtime = max(newest_mtime, float(stat_result.st_mtime or 0))
-                if stat_result.st_atime:
-                    access_time = float(stat_result.st_atime)
-                    oldest_atime = min(oldest_atime, access_time)
-                    newest_atime = max(newest_atime, access_time)
+                modified_at = float(stat_result.st_mtime or 0)
+                accessed_at = float(stat_result.st_atime or 0)
+                newest_mtime = max(newest_mtime, modified_at)
+                if accessed_at:
+                    oldest_atime = min(oldest_atime, accessed_at)
+                    newest_atime = max(newest_atime, accessed_at)
                     if package_name:
-                        top_level_access[package_name] = max(top_level_access[package_name], access_time)
-                if in_hidden_dir or _hidden(entry, stat_result):
+                        top_level_access[package_name] = max(top_level_access[package_name], accessed_at)
+
+                hidden = in_hidden_dir or entry_hidden
+                if hidden:
                     hidden_files += 1
                     hidden_bytes += size
+
                 suffix = Path(entry.name).suffix.casefold() or "[no extension]"
                 extension_bytes[suffix] += size
+                extension_counts[suffix] += 1
+                modified_age = max(0, int((time.time() - modified_at) / 86400)) if modified_at else None
+                access_age = max(0, int((time.time() - accessed_at) / 86400)) if accessed_at else None
+                file_row = {
+                    "name": entry.name[:160],
+                    "path": entry.path[:520],
+                    "bytes": size,
+                    "extension": suffix,
+                    "hidden": hidden,
+                    "last_write_age_days": modified_age,
+                    "last_access_age_days": access_age,
+                }
+                if len(top_files) < 30:
+                    top_files.append(file_row)
+                else:
+                    smallest = min(range(len(top_files)), key=lambda index: int(top_files[index]["bytes"]))
+                    if size > int(top_files[smallest]["bytes"]):
+                        top_files[smallest] = file_row
+
+                # An old timestamp is not proof of disuse. Only surface large files
+                # when both write and access signals are old; users must review them.
+                if size >= 64 * 1024 * 1024 and modified_age is not None and modified_age >= 90 and access_age is not None and access_age >= 60:
+                    candidate = {
+                        "name": entry.name[:160],
+                        "path": entry.path[:520],
+                        "bytes": size,
+                        "extension": suffix,
+                        "hidden": hidden,
+                        "last_write_age_days": modified_age,
+                        "last_access_age_days": access_age,
+                    }
+                    if len(file_review_candidates) < 12:
+                        file_review_candidates.append(candidate)
+                    else:
+                        smallest = min(range(len(file_review_candidates)),
+                                       key=lambda index: int(file_review_candidates[index]["bytes"]))
+                        if size > int(file_review_candidates[smallest]["bytes"]):
+                            file_review_candidates[smallest] = candidate
+            if yielded:
+                break
+
     return {
-        "path": path[:320], "bytes": total_bytes, "files": files, "directories": dirs,
-        "hidden_files": hidden_files, "hidden_bytes": hidden_bytes,
+        "path": path[:320],
+        "bytes": total_bytes,
+        "files": files,
+        "directories": dirs,
+        "hidden_files": hidden_files,
+        "hidden_bytes": hidden_bytes,
         "newest_write_at": newest_mtime or None,
         "oldest_access_at": oldest_atime if oldest_atime < time.time() else None,
         "newest_access_at": newest_atime or None,
         "extensions": dict(extension_bytes),
+        "extension_counts": dict(extension_counts),
         "top_level": [
-            {"name": name, "bytes": size,
-             "newest_access_at": top_level_access.get(name) or None,
-             "last_access_age_days": max(0, int((time.time() - top_level_access[name]) / 86400))
-                 if top_level_access.get(name) else None}
+            {
+                "name": name,
+                "bytes": size,
+                "newest_access_at": top_level_access.get(name) or None,
+                "last_access_age_days": max(0, int((time.time() - top_level_access[name]) / 86400))
+                    if top_level_access.get(name) else None,
+            }
             for name, size in sorted(top_level_bytes.items(), key=lambda item: item[1], reverse=True)[:30]
         ],
-        "entries_visited": visited, "partial": partial,
+        "top_files": sorted(top_files, key=lambda item: int(item["bytes"]), reverse=True),
+        "file_review_candidates": sorted(
+            file_review_candidates, key=lambda item: int(item["bytes"]), reverse=True
+        ),
+        "entries_visited": visited,
+        "partial": partial,
+        "yielded": yielded,
     }
-
 
 def _drive_summary() -> list[dict[str, Any]]:
     drives: list[dict[str, Any]] = []
@@ -338,14 +461,63 @@ def _category_label(category: str) -> str:
         "rust-cache": "Rust/Cargo cache",
         "dotnet-cache": ".NET/NuGet packages",
         "java-cache": "Java/Gradle/Maven cache",
+        "go-cache": "Go module/build cache",
+        "php-cache": "PHP/Composer cache",
+        "ruby-cache": "Ruby gems",
         "build-output": "Build outputs",
         "drive-directory": "Other drive folders",
     }.get(category, category)
 
 
+def _publish_agent_findings(payload: dict[str, Any]) -> None:
+    """Turn only material storage findings into agent-owned follow-up prompts."""
+    try:
+        from . import agent_assist
+
+        drives = sorted(
+            [drive for drive in payload.get("drives", []) if drive.get("status") in ("low", "critical")],
+            key=lambda drive: (drive.get("status") != "critical", float(drive.get("free_percent") or 100)),
+        )
+        if drives:
+            drive = drives[0]
+            severity = "critical" if drive.get("status") == "critical" else "warn"
+            message = (
+                f"Drive storage pressure: {drive.get('mountpoint', 'volume')} has "
+                f"{float(drive.get('free_percent') or 0):.1f}% free space"
+            )
+            agent_assist.create_notification(
+                "storage-intelligence", message, severity,
+                {"mountpoint": drive.get("mountpoint"), "filesystem": drive.get("filesystem"),
+                 "free_bytes": drive.get("free_bytes"), "free_percent": drive.get("free_percent")},
+            )
+
+        candidates = [
+            item for item in payload.get("review_candidates", [])
+            if int(item.get("bytes") or 0) >= 256 * 1024 * 1024
+            and item.get("review_type") in (
+                "large-old-file", "cache-or-generated-output", "package-usage-review",
+                "hidden-file-review", "large-drive-folder", "user-file-review",
+            )
+        ]
+        if candidates:
+            candidate = max(candidates, key=lambda item: int(item.get("bytes") or 0))
+            message = (
+                f"Storage review candidate: {candidate.get('name', 'large item')} uses "
+                f"{int(candidate.get('bytes') or 0)} bytes; {candidate.get('reason', 'review recommended')}"
+            )
+            agent_assist.create_notification(
+                "storage-intelligence", message, "warn",
+                {"path": candidate.get("path"), "bytes": candidate.get("bytes"),
+                 "review_type": candidate.get("review_type"), "confidence": candidate.get("confidence"),
+                 "usage_signal": candidate.get("usage_signal")},
+            )
+    except Exception as exc:
+        core.log("storage-intelligence", f"agent review prompt could not be queued: {type(exc).__name__}: {str(exc)[:140]}", "warn")
+
+
 def scan_once(roots: list[tuple[str, str, str]] | None = None,
               max_entries: int | None = None, max_seconds: int | None = None) -> dict[str, Any]:
-    """Run a bounded scan and persist a single immutable result snapshot."""
+    """Run a bounded metadata scan, rotating roots and yielding to foreground work."""
     if not _SCAN_LOCK.acquire(blocking=False):
         return {"accepted": False, "reason": "a storage scan is already running"}
     try:
@@ -353,30 +525,65 @@ def scan_once(roots: list[tuple[str, str, str]] | None = None,
         entry_budget = int(max_entries or config["max_entries"])
         duration_budget = int(max_seconds or config["max_seconds"])
         deadline = time.monotonic() + max(5, min(45, duration_budget))
-        selected = roots if roots is not None else _local_roots()
+        automatic = roots is None
+        selected_all = list(roots if roots is not None else _local_roots())[:100]
+        root_count = len(selected_all)
+        root_offset = 0
+        if automatic and root_count:
+            cursor_rows = core.db(
+                "SELECT value_json FROM storage_intelligence_state WHERE state_key='next_root_index'"
+            )
+            if cursor_rows:
+                try:
+                    root_offset = int(json.loads(cursor_rows[0][0])) % root_count
+                except (TypeError, ValueError):
+                    root_offset = 0
+        selected = selected_all[root_offset:] + selected_all[:root_offset] if root_count else []
+
         root_results: list[dict[str, Any]] = []
         extension_totals: dict[str, int] = defaultdict(int)
+        extension_file_counts: dict[str, int] = defaultdict(int)
         category_totals: dict[str, int] = defaultdict(int)
         candidates: list[dict[str, Any]] = []
-        used_entries = 0
-        used_bytes = 0
-        partial = False
+        used_entries = used_bytes = roots_processed = 0
+        partial = deferred = False
+        defer_reason = ""
         now = time.time()
-        for label, path, category in selected[:100]:
+
+        for label, path, category in selected:
             if used_entries >= entry_budget or time.monotonic() >= deadline:
                 partial = True
                 break
+            if automatic:
+                permitted, reason = _resources_allow_scan()
+                if not permitted:
+                    deferred, partial, defer_reason = True, True, reason
+                    break
             if not os.path.isdir(path) or os.path.islink(path):
+                roots_processed += 1
                 continue
+
             remaining = max(1, entry_budget - used_entries)
             root_deadline = min(deadline, time.monotonic() + 1.5)
-            measured = _measure(path, remaining, root_deadline, category=category)
+            measured = _measure(
+                path, remaining, root_deadline, category=category,
+                should_yield=(lambda: not _resources_allow_scan()[0]) if automatic else None,
+            )
             used_entries += measured["entries_visited"]
             used_bytes += measured["bytes"]
             partial = partial or bool(measured["partial"])
             category_totals[category] += int(measured["bytes"])
             for extension, size in measured["extensions"].items():
                 extension_totals[extension] += int(size)
+            for extension, count in measured["extension_counts"].items():
+                extension_file_counts[extension] += int(count)
+
+            if measured.get("yielded"):
+                deferred, partial = True, True
+                _, defer_reason = _resources_allow_scan()
+                break
+            roots_processed += 1
+
             newest = measured.get("newest_write_at")
             newest_access = measured.get("newest_access_at")
             age_days = max(0, int((now - newest) / 86400)) if newest else None
@@ -394,6 +601,21 @@ def scan_once(roots: list[tuple[str, str, str]] | None = None,
                 "usage_signal": usage_signal,
             }
             root_results.append(result)
+
+            for file_candidate in measured.get("file_review_candidates", [])[:4]:
+                candidates.append({
+                    "path": file_candidate["path"],
+                    "name": file_candidate["name"],
+                    "bytes": file_candidate["bytes"],
+                    "reason": "Large file with old last-write and last-access signals",
+                    "review_type": "large-old-file",
+                    "confidence": "low",
+                    "usage_signal": "possibly-cold-weak-signal",
+                    "last_write_age_days": file_candidate["last_write_age_days"],
+                    "last_access_age_days": file_candidate["last_access_age_days"],
+                    "suggestion": "Review this file individually and confirm its owner and backup status. Windows last-access timestamps may be disabled or coarse; age is not proof that a file is unused.",
+                })
+
             name = os.path.basename(path).casefold()
             size = int(measured["bytes"])
             if category in ("python-environments", "python-packages", "node-dependencies", "dotnet-cache"):
@@ -413,7 +635,8 @@ def scan_once(roots: list[tuple[str, str, str]] | None = None,
                         })
             if size >= 150 * 1024 * 1024 and category in (
                 "temporary", "python-cache", "node-cache", "rust-cache",
-                "dotnet-cache", "java-cache", "build-output", "node-dependencies",
+                "dotnet-cache", "java-cache", "go-cache", "php-cache", "ruby-cache",
+                "build-output", "node-dependencies",
             ):
                 candidates.append({
                     "path": path[:320], "name": label, "bytes": size,
@@ -447,6 +670,16 @@ def scan_once(roots: list[tuple[str, str, str]] | None = None,
                     "confidence": "low",
                     "suggestion": "Inspect hidden paths individually. Hidden files often contain application settings, credentials or active caches; do not bulk-delete them.",
                 })
+
+        next_root_index = (root_offset + roots_processed) % root_count if root_count else 0
+        cycle_completed = bool(automatic and root_count and roots_processed >= root_count and not deferred)
+        if automatic and root_count:
+            core.db(
+                "INSERT INTO storage_intelligence_state(state_key,value_json,updated_at) VALUES('next_root_index',?,?) "
+                "ON CONFLICT(state_key) DO UPDATE SET value_json=excluded.value_json,updated_at=excluded.updated_at",
+                (json.dumps(next_root_index), time.time()),
+            )
+
         drive_rows = _drive_summary()
         if any(drive["status"] in ("low", "critical") for drive in drive_rows):
             candidates.insert(0, {
@@ -457,42 +690,72 @@ def scan_once(roots: list[tuple[str, str, str]] | None = None,
             })
         top_extensions = sorted(extension_totals.items(), key=lambda item: item[1], reverse=True)[:24]
         top_roots = sorted(root_results, key=lambda item: item["bytes"], reverse=True)[:30]
-        candidates.sort(key=lambda item: item["bytes"], reverse=True)
+        top_files = sorted(
+            [file_row for root in root_results for file_row in root.get("top_files", [])],
+            key=lambda item: int(item.get("bytes") or 0), reverse=True,
+        )[:40]
+        candidates.sort(key=lambda item: int(item["bytes"]), reverse=True)
+        coverage_partial = partial or roots_processed < len(selected)
         payload = {
-            "scanned_at": now, "scan_mode": "bounded-read-only",
-            "drives": drive_rows, "roots": top_roots,
+            "scanned_at": now,
+            "scan_mode": "bounded-read-only",
+            "drives": drive_rows,
+            "roots": top_roots,
+            "top_files": top_files,
             "language_footprints": [
                 {"name": _category_label(key), "bytes": value, "category": key}
                 for key, value in sorted(category_totals.items(), key=lambda item: item[1], reverse=True)
                 if key in {"python-cache", "python-packages", "python-environments", "node-cache",
-                           "node-dependencies", "rust-cache", "dotnet-cache", "java-cache", "build-output"}
+                           "node-dependencies", "rust-cache", "dotnet-cache", "java-cache",
+                           "go-cache", "php-cache", "ruby-cache", "build-output"}
             ],
-            "extensions": [{"extension": key, "bytes": value} for key, value in top_extensions],
-            "review_candidates": candidates[:30],
-            "coverage": {"entries_visited": used_entries, "bytes_metadata_total": used_bytes,
-                         "roots_measured": len(root_results), "partial": partial or len(root_results) < len(selected)},
+            "extensions": [
+                {"extension": key, "bytes": value, "files": extension_file_counts.get(key, 0)}
+                for key, value in top_extensions
+            ],
+            "review_candidates": candidates[:40],
+            "coverage": {
+                "entries_visited": used_entries,
+                "bytes_accounted": used_bytes,
+                "roots_measured": len(root_results),
+                "roots_available": root_count,
+                "roots_processed_this_pass": roots_processed,
+                "root_rotation_offset": root_offset,
+                "next_root_index": next_root_index,
+                "cycle_completed": cycle_completed,
+                "partial": coverage_partial,
+                "deferred_for_foreground_work": deferred,
+                "defer_reason": defer_reason,
+            },
             "usage_caveat": "File usage is not directly instrumented. Last-access metadata can be disabled or coarse on Windows; last-write age is a heuristic, not proof that content is unused.",
-            "safety": {"file_contents_opened": False, "files_deleted": 0,
-                       "packages_uninstalled": 0, "system_paths_scanned": False},
+            "safety": {
+                "file_contents_opened": False,
+                "files_deleted": 0,
+                "packages_uninstalled": 0,
+                "system_paths_scanned": False,
+            },
         }
         raw = json.dumps(payload, ensure_ascii=False, separators=(",", ":"), default=str)
         if len(raw.encode("utf-8")) > 3 * 1024 * 1024:
             payload["review_candidates"] = payload["review_candidates"][:12]
+            payload["top_files"] = payload["top_files"][:16]
             payload["roots"] = payload["roots"][:12]
             raw = json.dumps(payload, ensure_ascii=False, separators=(",", ":"), default=str)
         core.db(
             "INSERT INTO storage_scan_history(scanned_at,payload_json,bytes_scanned,files_scanned,partial) VALUES(?,?,?,?,?)",
-            (now, raw, used_bytes, used_entries, int(partial)),
+            (now, raw, used_bytes, used_entries, int(coverage_partial)),
         )
         core.db("DELETE FROM storage_scan_history WHERE id NOT IN (SELECT id FROM storage_scan_history ORDER BY id DESC LIMIT 12)")
         core.persist_snapshot("storage_intelligence", payload)
         core.STATE["storage_intelligence"] = payload
         core.log("storage-intelligence", "bounded read-only storage scan completed", "ok",
-                 roots=len(root_results), entries=used_entries, partial=partial)
+                 roots=len(root_results), entries=used_entries, partial=coverage_partial,
+                 deferred=deferred, cycle_completed=cycle_completed)
+        if automatic:
+            _publish_agent_findings(payload)
         return payload
     finally:
         _SCAN_LOCK.release()
-
 
 def _clean_label(value: str) -> str:
     return " ".join(str(value or "").split())[:100]
@@ -548,8 +811,19 @@ def _worker() -> None:
                 try:
                     result = scan_once()
                     if result.get("accepted") is not False:
-                        interval = int(settings()["deep_scan_interval_hours"]) * 3600
-                        _NEXT_SCAN = time.time() + interval
+                        coverage = result.get("coverage", {})
+                        if coverage.get("deferred_for_foreground_work"):
+                            _SCAN_REQUESTED = True
+                            _NEXT_SCAN = time.time() + 120
+                        elif not coverage.get("cycle_completed", True):
+                            # Continue the next bounded root batch later; never let
+                            # the first group of folders monopolize every scan.
+                            _SCAN_REQUESTED = True
+                            _NEXT_SCAN = time.time() + 900
+                        else:
+                            _SCAN_REQUESTED = False
+                            interval = int(settings()["deep_scan_interval_hours"]) * 3600
+                            _NEXT_SCAN = time.time() + interval
                 except Exception as exc:
                     core.log("storage-intelligence", f"scan failed: {type(exc).__name__}: {str(exc)[:160]}", "warn")
                     _NEXT_SCAN = time.time() + 1800
