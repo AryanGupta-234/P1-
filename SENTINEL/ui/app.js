@@ -2383,6 +2383,9 @@ async function loadAgentAutomation(){
     set("agent-assist-questions",a.ask_follow_up_questions);
     set("agent-assist-notifications",a.agent_notifications);
     set("agent-assist-ai",a.ai_deep_diagnosis);
+    set("agent-assist-reviews",a.system_reviews_enabled);
+    const reviewInterval=document.getElementById("agent-assist-review-interval");
+    if(reviewInterval)reviewInterval.value=String(a.system_review_interval_hours||12);
     const agentState=document.getElementById("agent-assist-state");
     if(agentState)agentState.textContent=AGENT_ASSIST.engine==="agent-owned"?"AGENT-OWNED · "+(AGENT_ASSIST.open_notifications||0)+" OPEN":"AGENT STATUS";
     renderAgentNotifications();
@@ -2406,7 +2409,9 @@ function initAgentAutomation(){
       enabled:!!document.getElementById("agent-assist-enabled")?.checked,
       ask_follow_up_questions:!!document.getElementById("agent-assist-questions")?.checked,
       agent_notifications:!!document.getElementById("agent-assist-notifications")?.checked,
-      ai_deep_diagnosis:!!document.getElementById("agent-assist-ai")?.checked
+      ai_deep_diagnosis:!!document.getElementById("agent-assist-ai")?.checked,
+      system_reviews_enabled:!!document.getElementById("agent-assist-reviews")?.checked,
+      system_review_interval_hours:Number(document.getElementById("agent-assist-review-interval")?.value||12)
     });
     if(result.error)return toast(result.error,"bad");
     toast("Agent assistant settings saved to the local database","ok");
