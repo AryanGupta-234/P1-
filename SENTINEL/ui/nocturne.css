@@ -1,0 +1,95 @@
+/* SENTINEL · Nocturne theme layer — loads after app.css and re-skins every classic screen.
+   Palette (equal weight): ink #171717 · forest #06110c · crimson #a31c1b. */
+:root{
+  --ink:#171717; --forest:#06110c; --crimson:#a31c1b; --crimson-hi:#d2453f; --bone:#e8ebe3;
+  --bg:#06110c; --bg2:#06110c; --panel:#171717; --panel2:#1d1d1d;
+  --line:rgba(232,235,227,.1); --line2:rgba(232,235,227,.17);
+  --cy:#e8ebe3; --cy2:#8c9a88; --or:#a31c1b; --am:#e0b48c; --gr:#9db39a; --rd:#ff7b72; --pu:#c49a96;
+  --tx:#e8ebe3; --soft:#c5cbbf; --dim:#8c9a88; --mut:#5f6e62;
+  --hd:"Segoe UI Variable Text","Segoe UI",system-ui,-apple-system,Roboto,sans-serif;
+  --mo:"Cascadia Mono",Consolas,ui-monospace,monospace;
+  --radius:26px; --radius-sm:18px;
+  --shadow-card:0 14px 40px rgba(0,0,0,.35);
+}
+body{background:radial-gradient(70% 55% at 85% -10%,rgba(163,28,27,.16),transparent 60%),radial-gradient(60% 50% at 0% 100%,#0e2a1e 0%,transparent 65%),var(--forest)}
+::selection{background:var(--crimson);color:#fff}
+::-webkit-scrollbar-thumb{background:#2a342e}
+
+/* chrome */
+header{background:var(--ink);border-bottom:1px solid var(--line)}
+header::after{background:linear-gradient(90deg,var(--crimson),transparent 35%,transparent 65%,#14382a)}
+.brand b{background:linear-gradient(90deg,var(--bone),#ff8a80);-webkit-background-clip:text;background-clip:text}
+.brand small{color:var(--cy2)}
+.brand svg{filter:drop-shadow(0 0 8px rgba(163,28,27,.6))}
+.vtitle b{font-family:"Bahnschrift","Segoe UI Variable Display",var(--hd);letter-spacing:.06em}
+.pill{border-radius:99px;background:transparent;color:var(--soft);border-color:var(--line2)}
+.pill.ok{color:#b9d1b2;border-color:rgba(157,179,154,.45);background:rgba(157,179,154,.07)}
+.pill.game,.pill.bad{color:#ff9a92;border-color:rgba(210,69,63,.6);background:rgba(163,28,27,.2)}
+nav{background:var(--ink);border-right:1px solid var(--line)}
+nav button{border-radius:16px;margin:0 8px;color:var(--cy2)}
+nav button:hover{background:rgba(232,235,227,.07);color:var(--bone)}
+nav button.on{background:var(--crimson);color:#fff;box-shadow:0 8px 22px rgba(163,28,27,.4)}
+nav button.on::before,nav button.on::after{display:none}
+.side-note{border-color:var(--line2);background:rgba(6,17,12,.7);color:var(--soft)}
+.side-note b{color:var(--gr)}
+
+/* panels: ink by default, forest every third, crimson when "hot" */
+.panel{background:var(--ink);border:1px solid var(--line);border-radius:var(--radius)}
+.view .panel:nth-child(3n+2){background:linear-gradient(160deg,#0b2218 0%,var(--forest) 80%);border-color:rgba(157,179,154,.2)}
+.panel.hot,.panel.hot:nth-child(n){background:linear-gradient(160deg,#b52221,var(--crimson) 55%,#7d1413);border-color:rgba(255,255,255,.18);color:#fff}
+.ph{font:700 11px var(--mo);letter-spacing:.16em;color:var(--cy2);border-bottom:1px solid var(--line)}
+.panel.hot .ph,.panel.hot .ph em{color:rgba(255,255,255,.85)}
+.ph::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--crimson);box-shadow:0 0 10px var(--crimson);flex:none}
+.panel.hot .ph::before{background:#fff;box-shadow:none}
+
+/* tiles: the first tile of every grid becomes the crimson hero block */
+.tile{background:rgba(232,235,227,.04);border:1px solid var(--line);border-radius:var(--radius-sm)}
+.tiles .tile:first-child{background:linear-gradient(160deg,#b52221,var(--crimson) 60%,#7d1413);border-color:rgba(255,255,255,.2);color:#fff}
+.tiles .tile:first-child .k,.tiles .tile:first-child .v small{color:rgba(255,255,255,.82)}
+.tile .v{font-family:"Bahnschrift","Segoe UI Variable Display",var(--hd)}
+.tile.warn{border-color:rgba(224,180,140,.55)}.tile.bad{border-color:rgba(210,69,63,.8);background:rgba(163,28,27,.16)}
+.ins,.msg,.act,.node,.ref,.metric{background:rgba(232,235,227,.035);border-color:var(--line);border-radius:var(--radius-sm)}
+
+/* controls */
+input,select,textarea{background:rgba(232,235,227,.05);border:1px solid var(--line2);border-radius:14px;color:var(--bone);font-family:var(--mo)}
+input:focus,select:focus,textarea:focus{border-color:var(--crimson-hi);box-shadow:0 0 0 3px rgba(163,28,27,.25)}
+.btn{border-radius:99px;color:var(--bone);border:1px solid var(--line2);letter-spacing:.12em;transition:.2s}
+.btn:hover{background:var(--bone);color:var(--forest);box-shadow:none}
+.btn.or,.btn.primary{background:var(--crimson);border-color:var(--crimson);color:#fff}
+.btn.or:hover,.btn.primary:hover{background:var(--crimson-hi);border-color:var(--crimson-hi);color:#fff;box-shadow:0 8px 22px rgba(163,28,27,.4)}
+th{color:var(--cy2);background:var(--ink);border-bottom-color:var(--line2)}
+tr:hover td{background:rgba(232,235,227,.04)}
+.chip{border-radius:99px}
+.toast{border-radius:16px;background:var(--ink);border:1px solid var(--line2)}
+a{color:var(--bone)}
+
+/* calmer backdrop: keep the animation logic, soften the old grid/stars */
+.ambient{background:radial-gradient(ellipse at 90% 0%,rgba(163,28,27,.14),transparent 45%),radial-gradient(ellipse at 0% 100%,rgba(14,42,30,.9),transparent 55%)}
+.ambient:before{opacity:.05}.ambient:after{background:linear-gradient(90deg,transparent,var(--crimson),transparent);opacity:.35}
+#starfield{opacity:.1}
+
+/* ───────── splash: minimal AI boot (markup and ids untouched; detail is hidden, not removed) ───────── */
+.boot{background:radial-gradient(55% 55% at 50% 42%,#0e2a1e 0%,var(--forest) 70%)}
+.boot-grid,.boot-scanline,.boot-topline,.boot-node-readout,.boot-live-readouts,.boot-visual-spectrum,.boot-signal-label,
+.boot-eyebrow,.boot-lanes,.boot-modules,.boot-log-wrap,.boot-stage span:last-child,.boot-sub{display:none!important}
+.boot-console{background:none!important;border:0!important;box-shadow:none!important;max-width:560px;width:100%}
+.boot-body{display:flex!important;flex-direction:column;align-items:center;gap:22px;text-align:center}
+.boot-visual,.boot-content{width:100%;display:flex;flex-direction:column;align-items:center;gap:14px;background:none!important;border:0!important;padding:0!important}
+.boot-reactor{width:210px;height:210px;margin:0 auto}
+.boot-gauge-track{stroke:rgba(232,235,227,.08)!important}
+.boot-gauge-progress{stroke:var(--crimson-hi)!important;filter:drop-shadow(0 0 7px rgba(210,69,63,.7))}
+.reactor-core{background:radial-gradient(circle,#ff7a6e,var(--crimson) 55%,transparent 72%)!important;box-shadow:0 0 40px rgba(163,28,27,.7)!important}
+.boot-title{font:700 clamp(28px,5vw,40px)/1 "Bahnschrift","Segoe UI Variable Display",var(--hd);letter-spacing:.42em;margin-right:-.42em;color:var(--bone);-webkit-text-fill-color:currentColor;background:none}
+.boot-progress-meta{justify-content:center;gap:14px;color:var(--cy2)}
+.boot-track{width:min(320px,70vw);height:3px;border-radius:9px;background:rgba(232,235,227,.08)}
+.boot-progress{background:linear-gradient(90deg,var(--crimson),#ff6a5f)!important;border-radius:9px}
+.boot-stage{justify-content:center;color:var(--cy2);letter-spacing:.2em}
+.boot.boot-error .boot-log-wrap{display:block!important}
+.boot-retry[hidden]{display:none!important}
+.boot-body{gap:6px!important}
+.boot-visual{min-height:0!important;height:auto!important;margin:0!important}
+.boot-content{min-height:0!important;height:auto!important;gap:12px!important}
+.boot-reactor *:not(.boot-gauge-progress):not(.reactor-core){filter:saturate(.15)}
+#bootPct{color:var(--bone)!important}
+#bootDetail{color:var(--cy2)!important}
+#bootStage{color:var(--cy2)!important}

@@ -212,7 +212,7 @@ function line(x, d, w, h, col, lo, hi, fill) {
 function spark(c, k, col, lo, hi) { const [x, w, h] = prep(c); const d = H[k] || []; if (hi == null) hi = Math.max(lo + 1, ...d) * 1.1; line(x, d, w, h, col, lo, hi, true); }
 function big(c, series, opts = {}) {
   const [x, w, h] = prep(c); const all = series.flatMap(s => H[s.k] || []); let hi = opts.hi ?? Math.max(1, ...all) * 1.15, lo = opts.lo ?? 0;
-  x.strokeStyle = "rgba(184,230,91,.08)"; x.fillStyle = "#5a6a60"; x.font = "10px 'Share Tech Mono',monospace";
+  x.strokeStyle = "rgba(157,179,154,.08)"; x.fillStyle = "#5a6a60"; x.font = "10px 'Share Tech Mono',monospace";
   for (let i = 0; i <= 4; i++) { const y = 4 + i * (h - 8) / 4; x.beginPath(); x.moveTo(0, y); x.lineTo(w, y); x.stroke(); x.fillText(fmt(hi - (hi - lo) * i / 4, hi < 10 ? 1 : 0), 4, y - 2); }
   series.forEach((s, i) => { line(x, H[s.k] || [], w, h, s.c, lo, hi, i === 0); x.fillStyle = s.c; x.fillText(s.l, w - 90, 14 + i * 12); });
 }
@@ -316,9 +316,9 @@ function renderCommandVisuals() {
   if (uptime) uptime.textContent = dur(Number(S.uptime || 0));
   const canvas = document.getElementById("cmd-performance-chart");
   if (canvas) big(canvas, [
-    { k: "cpu", c: "#69d6bd", l: "CPU" },
-    { k: "mem", c: "#b8e65b", l: "MEMORY" },
-    { k: "gpu", c: "#62c7e8", l: "GPU" },
+    { k: "cpu", c: "#e8ebe3", l: "CPU" },
+    { k: "mem", c: "#9db39a", l: "MEMORY" },
+    { k: "gpu", c: "#e8ebe3", l: "GPU" },
     { k: "dpc", c: "#ffad75", l: "DPC" }
   ], { lo: 0, hi: 100 });
   return true;
@@ -326,18 +326,18 @@ function renderCommandVisuals() {
 
 /* ---------- tiles ---------- */
 const TILES = [
-  { k: "cpu", l: "CPU", u: "%", c: "#b8e65b", lo: 0, hi: 100, w: 75, b: 92 },
+  { k: "cpu", l: "CPU", u: "%", c: "#9db39a", lo: 0, hi: 100, w: 75, b: 92 },
   { k: "dpc", l: "DPC TIME", u: "%", c: "#a99bff", lo: 0, hi: null, w: 3, b: 8, d: 1 },
-  { k: "mem_free_mb", l: "FREE RAM", u: "MB", c: "#7cd59c", lo: 0, hi: null, w: 2500, b: 1200, inv: 1 },
+  { k: "mem_free_mb", l: "FREE RAM", u: "MB", c: "#d2453f", lo: 0, hi: null, w: 2500, b: 1200, inv: 1 },
   { k: "pagesout", l: "PAGE EVICT", u: "/s", c: "#ff6b38", lo: 0, hi: null, w: 100, b: 400 },
   { k: "dlat", l: "DISK LATENCY", u: "ms", c: "#ff6b38", lo: 0, hi: null, w: 12, b: 40, d: 1 },
-  { k: "gpu", l: "GPU 3D", u: "%", c: "#b8e65b", lo: 0, hi: 100, w: 999, b: 999 },
+  { k: "gpu", l: "GPU 3D", u: "%", c: "#9db39a", lo: 0, hi: 100, w: 999, b: 999 },
   { k: "gputemp", l: "GPU TEMP", u: "°C", c: "#ff6b38", lo: 30, hi: 100, w: 80, b: 87 },
-  { k: "ping", l: "PING", u: "ms", c: "#7cd59c", lo: 0, hi: null, w: 40, b: 80, d: 1 },
+  { k: "ping", l: "PING", u: "ms", c: "#d2453f", lo: 0, hi: null, w: 40, b: 80, d: 1 },
   { k: "jitter", l: "JITTER", u: "ms", c: "#ff6b38", lo: 0, hi: null, w: 8, b: 20, d: 1 },
-  { k: "cpuperf", l: "CPU CLOCK", u: "%", c: "#b8e65b", lo: 0, hi: 130, w: 80, b: 60, inv: 1 },
+  { k: "cpuperf", l: "CPU CLOCK", u: "%", c: "#9db39a", lo: 0, hi: 130, w: 80, b: 60, inv: 1 },
   { k: "pagesin", l: "HARD FAULTS", u: "/s", c: "#a99bff", lo: 0, hi: null, w: 1500, b: 5000 },
-  { k: "netdown", l: "NET DOWN", u: "Mb/s", c: "#7cd59c", lo: 0, hi: null, w: 9e9, b: 9e9, d: 1 },
+  { k: "netdown", l: "NET DOWN", u: "Mb/s", c: "#d2453f", lo: 0, hi: null, w: 9e9, b: 9e9, d: 1 },
 ];
 function buildTiles() { $("#tiles").innerHTML = TILES.map(t => `<div class="tile" id="t-${t.k}"><div class="k"><span>${t.l}</span><span id="tk-${t.k}"></span></div><div class="v"><span id="tv-${t.k}">--</span><small>${t.u}</small></div><canvas id="tc-${t.k}"></canvas></div>`).join(""); }
 function updTiles() {
@@ -352,7 +352,7 @@ function updTiles() {
 
 /* ---------- command view ---------- */
 function updHero() {
-  const v = S.live.lag_index ?? 0, col = v < 20 ? "#b8e65b" : v < 45 ? "#ff6b38" : "#f05252";
+  const v = S.live.lag_index ?? 0, col = v < 20 ? "#9db39a" : v < 45 ? "#ff6b38" : "#f05252";
   $("#arc").style.strokeDashoffset = 653.5 * (1 - v / 100); $("#arc").style.stroke = col;
   $("#c-num").textContent = fmt(v); $("#h-lag").textContent = fmt(v);
   const st = $("#c-st"); st.textContent = v < 12 ? "OPTIMAL" : v < 25 ? "NOMINAL" : v < 45 ? "ELEVATED" : v < 70 ? "DEGRADED" : "CRITICAL"; st.setAttribute("fill", col);
@@ -464,8 +464,8 @@ function maybeRefreshProcesses() { if (view === "proc" && Date.now() - procLastF
 function updNet() {
   renderNetworkSignals();
   $("#ntab").innerHTML = "<tr><th>Process</th><th>Remote</th><th>Port</th></tr>" + S.net.filter(c => { const q = ($("#n-q").value || "").toLowerCase(); return !q || (c.proc + " " + c.ip + " " + c.port).toLowerCase().includes(q); }).map(c => `<tr><td>${esc(c.proc)}</td><td>${esc(c.ip)}</td><td>${c.port}</td></tr>`).join(""); $("#n-n").textContent = S.net.length + " established";
-  big($("#nc-ping"), [{ k: "ping", c: "#7cd59c", l: "PING ms" }, { k: "jitter", c: "#ff6b38", l: "JITTER ms" }]);
-  big($("#nc-thr"), [{ k: "netdown", c: "#b8e65b", l: "DOWN Mb/s" }, { k: "netup", c: "#ff6b38", l: "UP Mb/s" }]);
+  big($("#nc-ping"), [{ k: "ping", c: "#d2453f", l: "PING ms" }, { k: "jitter", c: "#ff6b38", l: "JITTER ms" }]);
+  big($("#nc-thr"), [{ k: "netdown", c: "#9db39a", l: "DOWN Mb/s" }, { k: "netup", c: "#ff6b38", l: "UP Mb/s" }]);
 }
 let kernelArchiveLast = 0;
 async function loadKernelArchive() {
@@ -489,7 +489,7 @@ async function loadKernelArchive() {
 function updKer() {
   renderKernelSignals();
   big($("#kc-dpc"), [{ k: "dpc", c: "#a99bff", l: "PDH DPC %" }, { k: "irq", c: "#ff6b38", l: "PDH IRQ %" }]);
-  big($("#kc-pg"), [{ k: "pagesin", c: "#b8e65b", l: "PAGES IN/s" }, { k: "pagesout", c: "#ff6b38", l: "PAGES OUT/s" }, { k: "pagefaults", c: "#a99bff", l: "PAGE FAULTS/s" }]);
+  big($("#kc-pg"), [{ k: "pagesin", c: "#9db39a", l: "PAGES IN/s" }, { k: "pagesout", c: "#ff6b38", l: "PAGES OUT/s" }, { k: "pagefaults", c: "#a99bff", l: "PAGE FAULTS/s" }]);
   const k = S.kernel || {}, pdh = k.pdh || {}, etw = k.etw || {};
   const age = pdh.last_sample ? `${Math.max(0, Math.round(Date.now()/1000-pdh.last_sample))}s ago` : "no samples yet";
   $("#kernel-health").innerHTML = `<div class="row"><b>PDH / typeperf counters</b><span class="tag ${pdh.available && pdh.state === "streaming" ? "ok" : "bad"}">${esc(pdh.state || "unknown")}</span></div><small>${esc(pdh.source || "No source reported")} · ${esc(pdh.samples || 0)} samples · ${esc(age)}</small><small>${esc(pdh.counters?.length || 0)} requested counter(s) · ${esc(pdh.unsupported?.length || 0)} unsupported · ${esc(pdh.error || "")}</small><div class="row"><b>WPR / ETW session</b><span class="tag ${etw.recording === true ? "ok" : etw.recording === false ? "mu" : "bad"}">${etw.recording === true ? "RECORDING" : etw.recording === false ? "IDLE" : "UNKNOWN"}</span></div><small>${esc(etw.source || "Windows Performance Recorder")} · checked ${etw.checked_at ? new Date(etw.checked_at*1000).toLocaleTimeString() : "never"}</small><small>${esc(etw.error || "")}</small><small class="proc-path">${esc(etw.status_text || "No WPR status output available")}</small><small>Live paging/DPC values are PDH counters. ETW event payloads are not decoded into a live paging timeline yet; approved WPR captures are retained as ETL for WPA/GPUView analysis.</small>`;
@@ -1245,6 +1245,18 @@ async function boot() {
   renderIns();
   updateBootTelemetry();
   markDataReady("core", "Snapshot loaded · " + Number(S.proc_total || 0).toLocaleString() + " cached process records");
+  // The splash is only an animation: reveal the interface as soon as the snapshot is in.
+  // Foundation data and every workspace keep loading underneath it.
+  const interfaceRevealed = new Promise(resolve => setTimeout(() => {
+    if (!bootDone) {
+      let early = "cmd";
+      try { early = localStorage.getItem("sv") || "cmd"; } catch (error) { }
+      if (TITLES[early] && early !== "cmd") show(early);
+      bp(100, "SENTINEL ONLINE", "Workspace data is loading in the background", "ok");
+      endBoot();
+    }
+    resolve();
+  }, Math.max(0, 300 - (performance.now() - bootStartedAt))));
   bp(20, "LOADING FOUNDATION DATA", "History, events, policy, runtime status and AI transcript");
 
   const foundation = await Promise.allSettled([
@@ -1255,6 +1267,9 @@ async function boot() {
     apiRetry("/api/status", 1),
     apiRetry("/api/ai", 1)
   ]);
+  // Let the interface appear and paint before the heavier synchronous setup below.
+  await interfaceRevealed;
+  await new Promise(resolve => requestAnimationFrame(() => setTimeout(resolve, 0)));
   let foundationDegraded = 0;
   const readFoundation = (index, key, validate, apply, label) => {
     const result = foundation[index];
@@ -1438,6 +1453,15 @@ async function boot() {
     ["maint", "MAINTENANCE", async () => await loadMaintenance(false)]
   ];
   const allJobs = [...jobs, ...secondaryJobs];
+
+  // Fast start: the splash is only an animation. No dataset gates it; every workspace
+  // loads right after the interface appears (saved screen first, then Command, then the rest).
+  let wantView = "cmd";
+  try { wantView = localStorage.getItem("sv") || "cmd"; } catch (error) { }
+  const backgroundJobs = [];
+  for (const group of [jobs, secondaryJobs]) backgroundJobs.push(...group.splice(0));
+  const jobRank = job => job[0] === wantView ? 0 : job[0] === "command" ? 1 : 2;
+  backgroundJobs.sort((left, right) => jobRank(left) - jobRank(right));
   let completed = 0;
   const total = allJobs.length;
   const runJob = async ([key, label, work]) => {
@@ -1476,19 +1500,16 @@ async function boot() {
   };
 
   // Primary operational datasets first; all remaining pages hydrate before first paint.
-  bp(22, "HYDRATING OPERATIONAL DATA", "Four bounded request workers · no duplicate agent collectors");
+  bp(22, "STARTING", "Interface first · data follows");
   await runPool(jobs);
-  const streamConnected = await streamReady;
-  if (!streamSettled) {
-    streamSettled = true;
-    clearTimeout(streamTimer);
-    resolveStream(false);
-  }
-  bootModuleState("stream", streamConnected ? "READY" : "DEGRADED",
-    streamConnected ? "Local event channel opened" : "Live link will reconnect in the background");
-  if (!streamConnected) markDataFailure("stream", "The event channel did not open before the splash timeout");
-  else degradedModules.delete("stream");
-  bp(72, "HYDRATING WORKSPACES", "Loading intelligence, evidence, action and history datasets");
+  const streamConnected = await Promise.race([streamReady, new Promise(resolve => setTimeout(() => resolve(streamSettled ? false : null), 250))]);
+  // A slow event channel never holds the splash: it keeps connecting and its own
+  // open/error handlers report the real state.
+  bootModuleState("stream", streamConnected ? "READY" : streamConnected === false ? "DEGRADED" : "LOADING",
+    streamConnected ? "Local event channel opened" : streamConnected === false ? "Live link will reconnect in the background" : "Live link is connecting in the background");
+  if (streamConnected === false) markDataFailure("stream", "The event channel did not open");
+  else if (streamConnected) degradedModules.delete("stream");
+  bp(72, "OPENING INTERFACE", "Workspace data loads in the background");
   await runPool(secondaryJobs);
 
   // Bring the command canvas up with the loaded history and current snapshot.
@@ -1500,18 +1521,19 @@ async function boot() {
   }
   const degraded = degradedModules.size;
   if (degraded) bp(98, "READY WITH DEGRADED SOURCES", degraded + " module(s) could not return complete data", "warn");
-  else bp(99, "ALL DATASETS SYNCHRONIZED", "Every workspace was queried and its result rendered", "ok");
+  else bp(99, "INTERFACE READY", "Workspace data is loading in the background", "ok");
 
   let savedView = "cmd";
   try { savedView = localStorage.getItem("sv") || "cmd"; } catch (error) { }
   if (TITLES[savedView] && savedView !== "cmd") show(savedView);
   const minimumDisplayMs = 900;
-  const remaining = minimumDisplayMs - (performance.now() - bootStartedAt);
+  const remaining = Math.min(minimumDisplayMs, 300) - (performance.now() - bootStartedAt);
   if (remaining > 0) await new Promise(resolve => setTimeout(resolve, remaining));
   bp(100, degraded ? "SENTINEL ONLINE · CHECK SOURCES" : "SENTINEL ONLINE",
-    degraded ? "All workspaces were checked. Unavailable sources are marked for retry." : "All workspace data is ready for navigation.",
+    degraded ? "Some sources are unavailable and are marked for retry." : "Workspace data is loading in the background.",
     degraded ? "warn" : "ok");
   endBoot();
+  setTimeout(() => { runPool(backgroundJobs).catch(error => console.error("Background hydration failed", error)); }, 0);
 }
 /* ---------- reversible performance intelligence / thermal workspace ---------- */
 let ADV = null, advLastLoad = 0, advBusy = false, advRetryTimer = null;
@@ -1534,7 +1556,7 @@ function advGauge(id, temp, threshold, valId, sourceId, source) {
     dial.style.setProperty("--heat", 0); dial.style.setProperty("--heat-color", "#526879");
     value.textContent = "--"; src.textContent = source || "Sensor unavailable"; return;
   }
-  const n = Number(temp), color = n >= threshold ? "#f05252" : n >= threshold - 10 ? "#f5a64a" : "#a7dc62";
+  const n = Number(temp), color = n >= threshold ? "#f05252" : n >= threshold - 10 ? "#f5a64a" : "#e0b48c";
   dial.style.setProperty("--heat", Math.max(0, Math.min(100, n / 105 * 100)));
   dial.style.setProperty("--heat-color", color); value.textContent = n.toFixed(1) + "°";
   src.textContent = source || "Measured Windows sensor";
@@ -1572,8 +1594,8 @@ function advPowerClockWaterfall() {
     }).join("");
     return `<g><text x="8" y="${y + 29}" class="adv-waterfall-label">${label}</text><text x="8" y="${y + 43}" class="adv-waterfall-unit">${unit}</text><line x1="${left}" y1="${base}" x2="${left + width}" y2="${base}" class="adv-waterfall-axis"></line>${bars}<text x="${left}" y="${base + 12}" class="adv-waterfall-range">${lo.toFixed(0)}</text><text x="${left + width}" y="${base + 12}" text-anchor="end" class="adv-waterfall-range">${hi.toFixed(0)}</text></g>`;
   };
-  svg.innerHTML = renderLane(clocks, 0, "CLOCK", "MHz", "#b6e66a")
-    + renderLane(power, 72, "POWER", "W", "#62c7e8");
+  svg.innerHTML = renderLane(clocks, 0, "CLOCK", "MHz", "#c49a96")
+    + renderLane(power, 72, "POWER", "W", "#e8ebe3");
 }
 function advRows(rows, empty) {
   return rows.length ? rows.join("") : `<div class="empty">${esc(empty)}</div>`;

@@ -1,4 +1,4 @@
-# SENTINEL 1.2.30 — Adaptive Agent Assist and deeper Storage Intelligence
+# SENTINEL 1.2.31 — Nocturne restyle, instant start
 
 SENTINEL's observer, collectors and dashboard run as the signed-in user with a standard token. Administrator-only maintenance is handed to a narrowly scoped helper only after the operator confirms the exact preview and approves Windows UAC. The helper accepts one short-lived SQLite-backed job ID, binds it to the same Windows principal and interactive session, rechecks the kill switch, safeguard and original state, and can execute only a fixed allowlist of maintenance action IDs. It cannot accept arbitrary commands, scripts or paths.
 
@@ -29,6 +29,13 @@ SENTINEL's splash screen is now a real workspace data-loading phase, not an anim
 The loader uses a shared four-request asynchronous I/O limit and bounded request timeouts. This avoids flooding the local agent with dozens of concurrent requests and avoids starting duplicate Windows collectors in the browser; it reads the agent's existing collectors and caches. Each workspace exposes a real data-ready or degraded status. Missing or unsupported sources are not reported as successfully loaded. The first view is shown only after the preload batches finish; the splash has a short minimum display time so very fast machines still show the startup feedback.
 
 The command workspace is a visual control surface: circular live CPU, RAM, GPU and DPC gauges, a recent multi-signal performance chart, a radar-style node summary and icon-led shortcuts to the main workspaces. Evidence, activity feeds, culprits and secondary telemetry remain available as expandable detail panels. The rest of the UI retains the current glass visual language, with animated page entry, panel highlights, orbital instrumentation and responsive layouts. Reduced-motion preferences are respected.
+
+## Nocturne restyle and instant start (v1.2.31)
+
+- Styling only: every screen keeps its logic, layout and separate navigation. `ui/nocturne.css` re-skins the dashboard in ink `#171717`, forest `#06110c` and crimson `#a31c1b`, and leftover navy, mint and cyan tints were remapped into that palette.
+- The splash is now a minimal ring-and-wordmark animation (its markup and ids are unchanged; detail is hidden, and the full log reappears if startup fails).
+- No dataset gates the splash. The interface appears about 0.3 s after the first snapshot; foundation data and every workspace load underneath it, the saved screen first.
+- **Reinstall required:** `install.bat` never overwrites an existing release folder, so this release has a new version number.
 
 ## Agent-first diagnostics and storage review (v1.2.30)
 
