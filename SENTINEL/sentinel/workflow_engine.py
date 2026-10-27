@@ -240,7 +240,7 @@ def list_flows() -> dict[str, Any]:
 def _event_category(source: str, message: str) -> str | None:
     text = (source + " " + message).casefold()
     if (any(token in text for token in ("application error", "application hang", "windows error reporting", "bugcheck", ".net runtime failure"))
-            or re.search(r"\\b(?:event\\s*id|eventid)\\s*[:=]?\\s*(?:1000|1001|1002|1026)\\b", text)):
+            or re.search(r"\b(?:event\s*id|eventid)\s*[:=]?\s*(?:1000|1001|1002|1026)\b", text)):
         return "application_crash"
     if any(token in text for token in ("whea", "hardware error", "machine check")):
         return "hardware_error"
