@@ -93,7 +93,7 @@ Make SENTINEL a Windows-specialist, goal-driven performance and reliability assi
 - [ ] Bounded low-overhead CPU, memory, disk, network and process counters.
 - [ ] ETW provider/session registry with ownership, bounded capture, loss counters, timestamps and schema/version metadata.
 - [ ] Targeted WPR/ETW for scheduler, DPC/ISR, storage, network and process lifecycle; never stop another recorder's session.
-- [ ] Event Log correlation with channel allowlists, bounded windows, persisted cursors and redaction.
+- [x] Event Log correlation with channel allowlists, bounded windows, persisted cursors and redaction (Application/System, Diagnostics-Performance, Windows Update, Kernel-PnP and Task Scheduler).
 - [ ] PnP/driver inventory with exact instance/hardware IDs, package/provider/version/date, signature and OS matching context.
 - [ ] Power/battery/Modern Standby diagnostics via supported APIs and `powercfg`.
 - [ ] Disk capacity/latency, filesystem and SSD TRIM diagnostics with capability checks.
@@ -195,13 +195,18 @@ All new writes start manual-only and use shared preview, capability manifest, br
 - [ ] Never use `shutil.move`, `os.rename` or manual manifest edits on launcher-owned game folders.
 - [ ] Verify destination capacity/filesystem without starting a migration.
 
-## P5.1 — Local workflow automation (planned)
+## P5.1 — Local workflow automation (implemented in 1.2.32)
 
-- [ ] Add Power Automate-style local flow templates with event, schedule, resource-threshold, driver-offer and app-lifecycle triggers.
-- [ ] Add typed conditions, bounded run history, cooldowns, retries, idempotency and user-visible execution traces.
-- [ ] Allow only fixed actions: create AI review, notify, run a read-only inventory/diagnostic, scan storage, or create an existing maintenance preview.
-- [ ] Require explicit approval for process close, service/startup changes, driver install/rollback, power/network changes or repairs.
-- [ ] Keep Microsoft cloud/Power Automate connectors opt-in and separate from local-only mode; never run arbitrary model-generated scripts.
+- [x] Power Automate-style flow builder in Maintenance with persisted definitions and run history.
+- [x] Event triggers for application crashes, hardware faults, driver/device failures, disk faults and Windows Update errors.
+- [x] Schedule triggers at 6, 12, 24, 48 and 168 hours; sustained CPU/RAM/disk-latency/ping/GPU-temperature/packet-loss thresholds.
+- [x] Fixed actions: local AI review, read-only diagnostics, read-only storage scan and Windows notification.
+- [x] Typed schema validation, event cursor-at-create, 5–1440 minute cooldown, bounded 20-flow execution and run-history retention.
+- [x] Enable/pause/delete controls and local-only authenticated APIs.
+- [x] No shell/script/path input, arbitrary PowerShell, maintenance approval or direct mutation surface.
+- [ ] Add optional user-approved Microsoft Power Automate cloud connector as a separate opt-in integration; local-only remains default.
+- [ ] Extend triggers with device/app lifecycle and driver-offer matching, and add formal retry/idempotency state transitions.
+- [ ] Add preview-creating workflow steps for supported maintenance actions; actual execution must still require the normal independent user approval.
 
 ## P6 — Goal loop and learning memory
 
