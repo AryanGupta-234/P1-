@@ -56,7 +56,7 @@ Event Viewer monitoring now parses allowlisted crash/fault metadata from System,
 
 Driver offers are read from Windows Update and matched to installed-device evidence where available. The agent may explain candidate updates and propose the existing allowlisted driver workflow, but it does not install, roll back or replace drivers automatically. Likewise, process closure, startup changes, service changes and repairs still require the existing identity checks, fresh preview, explicit approval, Safeguard and rollback contract. SENTINEL does not disable Windows, Defender, firewall, accessibility, backup, storage, update or Vanguard components.
 
-The next automation phase is a local Power Automate-style flow composer (event/schedule/threshold triggers, conditions, approvals and fixed SENTINEL actions). This release lays its evidence and review foundation; it does not claim to connect to Microsoft's Power Automate cloud or execute arbitrary desktop flows.
+The local workflow builder provides Power Automate-style automation without a cloud account: create an event, schedule or sustained-resource trigger and select a fixed action (local AI review, read-only diagnostics, storage scan or Windows notification). Flow definitions, cooldowns, trigger cursors and bounded run history persist in SQLite. It does not run arbitrary scripts, approve maintenance or connect to Microsoft's Power Automate cloud. Driver installation, service/startup changes, process closure and repair remain explicit separate approval workflows.
 
 # SENTINEL
 
