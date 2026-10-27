@@ -71,7 +71,9 @@ def test_evidence_packet_fuses_windows_sources_without_private_process_content(m
     from sentinel import core, inventory
 
     monkeypatch.setattr(core, "LIVE", {
-        "cpu": 42.5, "mem": 67.0, "dpc": 1.2, "loss": 0.0,
+        "cpu": 42.5, "mem": 67.0, "mem_free_mb": 4096.0, "swap": 12.0,
+        "diskr": 8.5, "diskw": 2.5, "netdown": 40.0, "netup": 5.0,
+        "dpc": 1.2, "loss": 0.0,
     })
     monkeypatch.setattr(core, "STATE", {
         "system": {"os": "Windows 11", "windows_build": "26300", "cpu_name": "Core i5"},
@@ -126,6 +128,11 @@ def test_evidence_packet_fuses_windows_sources_without_private_process_content(m
     serialized = json.dumps(packet, ensure_ascii=False)
 
     assert packet["process_summary"]["observed"] == 25
+    metrics = {item["id"]: item for item in packet["metrics"]}
+    assert metrics["metric.available_memory_mb"] == {"id": "metric.available_memory_mb", "value": 4096.0, "unit": "MB"}
+    assert metrics["metric.pagefile_pct"]["value"] == 12.0
+    assert metrics["metric.disk_read_mbps"]["unit"] == "MB/s"
+    assert metrics["metric.network_down_mbps"]["unit"] == "Mbps"
     assert packet["top_processes_by_resource"][0]["id"] == "process.101"
     assert packet["services"]["rows"][0]["state"] == "stopped"
     assert packet["driver_updates"][0]["id"].startswith("driver-update.")
