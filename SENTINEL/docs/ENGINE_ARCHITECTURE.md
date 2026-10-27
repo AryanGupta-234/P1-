@@ -193,6 +193,30 @@ The Command home provides a compact agent inbox, answer/dismiss controls, an opt
 
 Only the navigation presentation choice is stored in `ui_preferences` within the existing SQLite database. A settings change does not alter collection cadence, AI policy, alert policy, maintenance approval, Safeguard or any Windows configuration. The full toolset remains available; Simple Mode is a navigation and information-density preference, not a feature lockout.
 
+## Windows Intelligence Fusion and Event Viewer (1.2.32)
+
+**Modules:** `sentinel/windows_intelligence.py`, `sentinel/collectors.py`, `sentinel/agent_assist.py`  
+**API:** `POST /api/agent-assist/system-review`  
+**Persistence:** local SQLite event bookmarks, agent findings, AI jobs/results and feedback
+
+The Windows specialist composes a bounded evidence packet from existing collectors and inventories rather than adding a parallel poller. Sources include performance metrics; resource-ranked process instances with session/GUI visibility; service state/start metadata; startup registrations; scheduled tasks; installed applications; signed PnP drivers and available Windows Update driver offers; seven-day Event Viewer/insight records; 30-day aggregate foreground application usage; maintenance findings; source-health metadata; and prior user answers. Every evidence record has a stable, locally validated evidence ID. The context limit is 18,000 characters and the specialist rejects evidence IDs that were not supplied.
+
+Privacy projection is allowlist-based. The model does not receive process command lines, window titles, browser contents, credentials, file contents, user/account names, executable paths, or external connection addresses. App usage is aggregate app name/session/foreground-duration data; it does not include title or URL history. The model is local-only and subject to AI Orchestrator admission. Output remains a strict JSON schema with citations, bounded probes, known action IDs and an explicit no-execution field.
+
+### Event Viewer collector
+
+The Event Viewer collector parses XML from bounded `wevtutil qe` queries for System, Application crash IDs 1000/1001/1002/1026, Diagnostics-Performance, WindowsUpdateClient, Kernel-PnP and TaskScheduler. It keeps only an allowlist of crash/device/update metadata and discards the raw XML. A SQLite primary key over channel + EventRecordID deduplicates events across agent restarts; seen-record retention is 30 days. The initial baseline imports historical application crashes and high-value hardware/driver faults while marking the history as historical; it does not flood the finding inbox with every old generic warning. Later events are correlated by the existing agent assistant and may enter local AI triage. Missing channels and query errors remain explicit source-health errors.
+
+### Scheduled and operator-triggered AI review
+
+A durable cursor schedules one broad review every 12 hours by default, configurable between 6 and 168 hours. The worker waits until inventory, service catalogue and read-only maintenance/driver diagnostics have completed. It also requires the shared runtime gate (at least 5 GiB available RAM and below 40% host CPU), suppresses optional inference during protected game sessions, and never performs a Windows mutation. The Command home offers a manual review request; the same resource and game gates still apply. Review findings, diagnosis output, user answers and cadence are persisted in SQLite. User answers are context for future suggestion ranking only; they cannot change action permissions or Safeguard rules.
+
+**Service and process interpretation:** stopped/manual/trigger-started state, low foreground use, or absence from a short sample is not proof of disuse. The specialist must state dependencies/coverage limits and ask the operator about required helper apps or services before suggesting closure, startup changes or service changes. Windows core, security, Defender, firewall, update, accessibility, backup, storage, network, hardware and Riot Vanguard/VALORANT components remain protected.
+
+### Automation boundary
+
+The evidence/review foundation is designed to feed a local Power Automate-style flow engine: approved event/schedule/threshold triggers, explicit conditions, user questions, notifications, bounded read-only probes and existing preview-gated action IDs. The flow engine is not part of 1.2.32. No Microsoft cloud connection, arbitrary PowerShell, model-authored workflow code, unattended driver install or approval bypass is introduced by this release.
+
 ## Action lifecycle
 
 All state-changing actions follow this sequence:
