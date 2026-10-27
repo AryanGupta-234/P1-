@@ -1382,6 +1382,23 @@ async function boot() {
   if (commandRefresh) commandRefresh.onclick = loadCommandAssistantBrief;
   const commandAgentHost = document.getElementById("cmd-agent-list");
   if (commandAgentHost) commandAgentHost.addEventListener("click", handleCommandAgentAction);
+  const fullReviewButton = document.getElementById("cmd-system-review");
+  if (fullReviewButton) fullReviewButton.onclick = async () => {
+    fullReviewButton.disabled = true;
+    const oldLabel = fullReviewButton.textContent;
+    fullReviewButton.textContent = "QUEUING REVIEW…";
+    try {
+      const result = await api("/api/agent-assist/system-review", {});
+      if (result.error) throw new Error(result.error);
+      if (!result.queued) {
+        toast(result.reason || "Full review deferred by the safety/resource governor", "warn");
+      } else {
+        toast("Full Windows evidence review queued for local AI analysis", "ok");
+        await loadCommandAssistantBrief();
+      }
+    } catch (error) { toast(error.message || String(error), "bad"); }
+    finally { fullReviewButton.disabled = false; fullReviewButton.textContent = oldLabel; }
+  };
   const storageScanButton = document.getElementById("cmd-storage-scan");
   if (storageScanButton) storageScanButton.onclick = async () => {
     storageScanButton.disabled = true;
