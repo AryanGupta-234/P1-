@@ -2440,6 +2440,8 @@ async function runWindowsDiagnosis(questionId,buttonId,resultId){
   const question=document.getElementById(questionId);
   const button=document.getElementById(buttonId);
   const host=document.getElementById(resultId);
+  const idleLabel=button?(button.dataset.idleLabel||button.textContent.trim()):"DIAGNOSE";
+  if(button)button.dataset.idleLabel=idleLabel;
   const value=question?.value.trim()||"";
   if(!value)return toast("Describe the Windows issue first","warn");
   if(button){button.disabled=true;button.textContent="ANALYSING…";}
@@ -2453,7 +2455,7 @@ async function runWindowsDiagnosis(questionId,buttonId,resultId){
     if(host)host.innerHTML='<div class="empty">'+esc(error.message||String(error))+'</div>';
     toast("Windows specialist: "+(error.message||String(error)),"warn");
   }finally{
-    if(button){button.disabled=false;button.textContent="DIAGNOSE";}
+    if(button){button.disabled=false;button.textContent=idleLabel;}
   }
 }
 function bindWindowsDiagnosis(questionId,buttonId,resultId){
