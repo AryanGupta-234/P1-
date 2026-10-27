@@ -803,6 +803,7 @@ def _loop() -> None:
     while not _STOP.is_set():
         try:
             _process_new_events()
+            _maybe_system_review()
             _deliver_pending_notifications()
             core.heartbeat("proactive agent assistant", 15, f"{status()['open_notifications']} open review item(s)")
             # Keep SQLite history bounded without discarding unresolved or answered context.
