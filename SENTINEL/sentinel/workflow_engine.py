@@ -162,8 +162,14 @@ def set_enabled(flow_id: int, enabled: bool) -> dict[str, Any]:
     rows = core.db("SELECT id FROM automation_flows WHERE id=?", (int(flow_id),))
     if not rows:
         raise ValueError("workflow not found")
-    core.db("UPDATE automation_flows SET enabled=?,updated_at=? WHERE id=?",
-            (int(enabled), time.time(), int(flow_id)))
+    now = time.time()
+    if enabled:
+        latest_event = int(core.db("SELECT COALESCE(MAX(id),0) FROM events")[0][0])
+        core.db("UPDATE automation_flows SET enabled=1,last_event_id=?,last_fired_at=?,consecutive_count=0,updated_at=? WHERE id=?",
+                (latest_event, now, now, int(flow_id)))
+    else:
+        core.db("UPDATE automation_flows SET enabled=0,consecutive_count=0,updated_at=? WHERE id=?",
+                (now, int(flow_id)))
     return get_flow(int(flow_id))
 
 
@@ -325,7 +331,7 @@ def _tick_flow(flow: dict[str, Any], now: float) -> bool:
         if not isinstance(current, (int, float)) or isinstance(current, bool):
             core.db("UPDATE automation_flows SET consecutive_count=0 WHERE id=?", (flow["id"],))
             return False
-        count = flow["consecutive_count"] + 1 if float(current) > float(trigger["threshold"]) else 0
+        count = min(int(trigger["consecutive_samples"]), flow["consecutive_count"] + 1) if float(current) > float(trigger["threshold"]) else 0
         core.db("UPDATE automation_flows SET consecutive_count=? WHERE id=?", (count, flow["id"]))
         if count >= int(trigger["consecutive_samples"]):
             accepted = _run_flow(flow, {"trigger": "metric", "metric": metric, "value": current,
