@@ -236,6 +236,14 @@ def _classify(source: str, message: str, severity: str) -> dict[str, str]:
             "question": "Does performance recover after the laptop cools, and are the fans or air vents obstructed?",
             "fix": "Check sustained temperature, power and clock readings plus the exact sensor source. Keep vents clear and use the OEM cooling profile; Sentinel will not write fan registers, EC controls or firmware settings.",
         }
+    if any(word in text for word in ("storage review candidate", "package usage review", "hidden file review", "large old file")):
+        return {
+            "category": "storage-review",
+            "title": "Large or possibly cold storage item found",
+            "explanation": "The bounded storage scan found a large cache, package component or file with weak age/usage signals. The scan does not prove that the item is unused.",
+            "question": "Do you still use the application, project or environment that owns this path, and should I keep it on the review list?",
+            "fix": "Check the owning project, package manifest, active processes and backup status before removing anything. Use the matching package manager or application's own cleanup workflow; SENTINEL will not delete files or uninstall packages.",
+        }
     if any(word in text for word in ("disk full", "low disk", "storage pressure", "space available", "free space")):
         return {
             "category": "storage",
@@ -300,7 +308,7 @@ def _runtime_suppressed(config: dict[str, Any]) -> bool:
         from . import runtime_engine
         runtime = runtime_engine.snapshot()
         if not config.get("suppress_during_games", True):
-            return runtime.get("mode") in ("resource_pressure", "safety_degraded")
+            return runtime.get("mode") in ("resource_pressure", "safety_degraded", "telemetry_degraded")
         return runtime.get("mode") != "balanced"
     except Exception:
         return True
@@ -379,10 +387,7 @@ def create_notification(source: str, message: str, severity: str = "warn",
     if str(severity).casefold() in ("error", "critical", "high") and config.get("ai_deep_diagnosis"):
         # Count every queued attempt, including failed/unavailable jobs. Counting
         # only successful results lets a broken local model be hammered repeatedly.
-        attempts_last_hour = core.db(
-            "SELECT COUNT(*) FROM agent_assist_ai_jobs WHERE created_at>=?", (now - 3600,)
-        )[0][0]
-        if int(attempts_last_hour) < 2:
+        if _ai_diagnosis_budget_available(now):
             core.db("INSERT OR IGNORE INTO agent_assist_ai_jobs(notification_id,created_at,updated_at,status) VALUES(?,?,?,'queued')",
                     (notification_id, now, now))
     alerts_last_hour = core.db(
@@ -516,6 +521,15 @@ def _event_data_evidence(raw_data: Any) -> dict[str, str]:
         if len(result) >= 8:
             break
     return result
+
+
+def _ai_diagnosis_budget_available(now: float | None = None) -> bool:
+    """Limit all queued local diagnoses, including failures and unavailable models."""
+    moment = time.time() if now is None else float(now)
+    count = core.db(
+        "SELECT COUNT(*) FROM agent_assist_ai_jobs WHERE created_at>=?", (moment - 3600,)
+    )[0][0]
+    return int(count) < 2
 
 
 def _process_new_events() -> None:
