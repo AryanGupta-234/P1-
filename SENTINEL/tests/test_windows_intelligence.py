@@ -96,8 +96,9 @@ def test_evidence_packet_fuses_windows_sources_without_private_process_content(m
         "maintenance": {
             "drivers": [{"DeviceName": "Realtek Network Adapter", "DriverVersion": "1.2.3",
                          "DriverDate": "2026-01-01", "Manufacturer": "Realtek", "DeviceClass": "NET"}],
-            "driver_updates": [{"title": "Realtek - Net - update available", "reboot_required": False,
-                                "hardware_ids": ["PRIVATE-HARDWARE-ID"]}],
+            "driver_updates": [{"title": "Realtek - Net - update available", "update_id": "update-guid",
+                                "revision": 2, "reboot_required": False,
+                                "hardware_ids": ["PCI\\\\VEN_10EC&DEV_8821"]}],
             "system_health": {"findings": [{"code": "memory_pressure", "severity": "medium",
                                              "title": "Memory pressure", "detail": "Working set increased"}]},
         },
@@ -128,6 +129,9 @@ def test_evidence_packet_fuses_windows_sources_without_private_process_content(m
     assert packet["top_processes_by_resource"][0]["id"] == "process.101"
     assert packet["services"]["rows"][0]["state"] == "stopped"
     assert packet["driver_updates"][0]["id"].startswith("driver-update.")
+    assert packet["driver_updates"][0]["update_id"] == "update-guid"
+    assert packet["driver_updates"][0]["revision"] == 2
+    assert packet["driver_updates"][0]["hardware_id_samples"] == ["PCI\\VEN_10EC&DEV_8821"]
     assert packet["recent_events_7d"][0]["id"] == "event.77"
     assert packet["application_usage_30d"][0]["foreground_hours_30d"] == 2.0
     assert packet["prior_user_answers"][0]["preference"].startswith("Keep my audio")
