@@ -744,59 +744,77 @@ def _ai_worker() -> None:
         _STOP.wait(15)
 
 
-def _maybe_system_review() -> None:
-    """Queue low-frequency, evidence-led AI reviews after inventory has hydrated."""
+def _queue_system_review(*, force: bool = False) -> dict[str, Any]:
+    """Collect a bounded Windows evidence summary and queue local-only reasoning."""
     config = settings()
-    if not config.get("enabled") or not config.get("system_reviews_enabled") or not config.get("ai_deep_diagnosis"):
-        return
+    if not config.get("enabled") or not config.get("ai_deep_diagnosis"):
+        raise RuntimeError("The proactive agent or local AI diagnosis is disabled.")
+    if not force and not config.get("system_reviews_enabled"):
+        return {"queued": False, "reason": "Scheduled system reviews are disabled."}
     if config.get("suppress_during_games") and _runtime_suppressed(config):
-        return
+        return {"queued": False, "reason": "Deferred while a game or protected session is active."}
     now = time.time()
     cursor = core.db("SELECT last_id FROM agent_assist_cursors WHERE cursor_key=? LIMIT 1", ("system-review",))
     last_run = int(cursor[0][0]) if cursor else 0
     interval = max(6, min(168, int(config.get("system_review_interval_hours", 12)))) * 3600
-    if last_run and now - last_run < interval:
-        return
+    if not force and last_run and now - last_run < interval:
+        return {"queued": False, "reason": "The next scheduled review is not due yet.", "last_run_at": last_run}
+    from . import inventory, runtime_engine, maintenance
+    if not inventory.INV.get("ts") or not core.STATE.get("services_catalog"):
+        return {"queued": False, "reason": "Waiting for the Windows process, service and inventory baselines."}
+    permitted, reason = runtime_engine.admit_optional_work(
+        "Windows intelligence review", min_available_gib=5.0, max_cpu_percent=40.0,
+    )
+    if not permitted:
+        return {"queued": False, "reason": reason}
+    report = maintenance.status()
+    health = report.get("system_health") if isinstance(report, dict) else {}
+    findings = health.get("findings", []) if isinstance(health, dict) else []
+    services = core.STATE.get("services") if isinstance(core.STATE.get("services"), dict) else {}
+    evidence = {
+        "processes_observed": int(core.STATE.get("proc_total", 0) or 0),
+        "services_observed": int(services.get("total", 0) or 0),
+        "scheduled_tasks": len(inventory.INV.get("tasks") or []),
+        "installed_apps": len(inventory.INV.get("apps") or []),
+        "driver_updates_offered": len(report.get("driver_updates") or []),
+        "health_findings": len(findings),
+        "event_errors_7d": int(core.db(
+            "SELECT COUNT(*) FROM events WHERE ts>=? AND lower(level) IN ('error','critical')",
+            (now - 7 * 86400,),
+        )[0][0]),
+        "inventory_sources_unknown": sum(
+            1 for value in (inventory.INV.get("health") or {}).values()
+            if isinstance(value, dict) and value.get("ok") is False
+        ),
+    }
+    notification_id = create_notification(
+        "system-review", "Cross-subsystem Windows review requested from current local evidence",
+        severity="normal", evidence=evidence, request_ai=True,
+    )
+    if notification_id is None:
+        rows = core.db(
+            "SELECT id FROM agent_notifications WHERE category='system-review' AND state='open' "
+            "ORDER BY id DESC LIMIT 1"
+        )
+        notification_id = int(rows[0][0]) if rows else None
+    core.db("INSERT INTO agent_assist_cursors(cursor_key,last_id) VALUES(?,?) "
+            "ON CONFLICT(cursor_key) DO UPDATE SET last_id=excluded.last_id",
+            ("system-review", int(now)))
+    core.heartbeat("Windows system intelligence review", 60, "evidence packet queued for local AI review")
+    return {"queued": bool(notification_id), "notification_id": notification_id,
+            "evidence_summary": evidence, "local_only": True, "mutations_executed": 0}
+
+
+def _maybe_system_review() -> None:
     try:
-        from . import inventory, runtime_engine, maintenance
-        if not inventory.INV.get("ts") or not core.STATE.get("services_catalog"):
-            return
-        permitted, _reason = runtime_engine.admit_optional_work(
-            "scheduled Windows intelligence review", min_available_gib=5.0, max_cpu_percent=40.0,
-        )
-        if not permitted:
-            return
-        # Reserve the interval before queueing to avoid duplicate reviews after restart.
-        core.db("INSERT INTO agent_assist_cursors(cursor_key,last_id) VALUES(?,?) "
-                "ON CONFLICT(cursor_key) DO UPDATE SET last_id=excluded.last_id",
-                ("system-review", int(now)))
-        report = maintenance.status()
-        health = report.get("system_health") if isinstance(report, dict) else {}
-        findings = health.get("findings", []) if isinstance(health, dict) else []
-        services = core.STATE.get("services") if isinstance(core.STATE.get("services"), dict) else {}
-        evidence = {
-            "processes_observed": int(core.STATE.get("proc_total", 0) or 0),
-            "services_observed": int(services.get("total", 0) or 0),
-            "scheduled_tasks": len(inventory.INV.get("tasks") or []),
-            "installed_apps": len(inventory.INV.get("apps") or []),
-            "driver_updates_offered": len(report.get("driver_updates") or []),
-            "health_findings": len(findings),
-            "event_errors_7d": int(core.db(
-                "SELECT COUNT(*) FROM events WHERE ts>=? AND lower(level) IN ('error','critical')",
-                (now - 7 * 86400,),
-            )[0][0]),
-            "inventory_sources_unknown": sum(
-                1 for value in (inventory.INV.get("health") or {}).values()
-                if isinstance(value, dict) and value.get("ok") is False
-            ),
-        }
-        create_notification(
-            "system-review", "Periodic evidence review across Windows telemetry sources",
-            severity="normal", evidence=evidence, request_ai=True,
-        )
-        core.heartbeat("Windows system intelligence review", 60, "evidence packet queued for local AI review")
+        _queue_system_review(force=False)
     except Exception as exc:
-        core.log("agent-assist", f"system review deferred: {type(exc).__name__}: {_clean(exc, 160)}", "warn")
+        core.log("agent-assist", f"system review deferred: {type(exc).__name__}: {_clean(exc, 160)}")
+
+
+def request_system_review() -> dict[str, Any]:
+    """Operator-triggered full review; still honors game, resource and local-only gates."""
+    return _queue_system_review(force=True)
 
 
 def _loop() -> None:
