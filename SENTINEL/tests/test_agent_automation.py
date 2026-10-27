@@ -207,7 +207,7 @@ def test_pending_desktop_alerts_are_delivered_by_the_agent_when_idle(monkeypatch
     )
 
     assert agent_assist._deliver_pending_notifications() == 1
-    assert delivered == [("Device failed", "Which device?")]
+    assert delivered == [("Device failed", "Which device? Next check: Check the signed driver.")]
 
 
 def test_pending_desktop_alerts_stay_queued_during_game_or_resource_pressure(monkeypatch):
@@ -343,3 +343,15 @@ def test_runtime_keeps_valorant_guard_when_cpu_sample_is_missing(monkeypatch):
     allowed, reason = runtime_engine.admit_optional_work("foreground priority")
     assert allowed is False
     assert "valorant_guarded" in reason
+
+
+
+def test_agent_native_toast_contains_question_and_safe_next_check():
+    body = agent_assist._toast_body(
+        "Which device is affected?",
+        "Verify the signed driver and exact Device Manager problem code.",
+    )
+    assert "Which device is affected?" in body
+    assert "Next check:" in body
+    assert "signed driver" in body
+    assert len(body) <= 240
