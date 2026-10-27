@@ -132,7 +132,15 @@ def _classify(source: str, message: str, severity: str) -> dict[str, str]:
             "question": "Does Windows Security show a threat detection, a protection-history action, or an update/service error?",
             "fix": "Open Windows Security protection history and verify the exact detection, affected path and action. Do not disable Defender, Tamper Protection or firewall protections, and do not restore a detected file unless its publisher and hash are independently verified.",
         }
-    if any(word in text for word in ("blue screen", "bugcheck", "bug check", "stop code", "kernel power 41", "unexpected reboot", "system rebooted unexpectedly")):
+    kernel_power_restart = (
+        ("kernel-power" in text or "kernel power" in text)
+        and any(word in text for word in ("41", "reboot", "shutdown"))
+    )
+    if kernel_power_restart or any(word in text for word in (
+        "blue screen", "bugcheck", "bug check", "stop code", "unexpected reboot",
+        "system rebooted unexpectedly", "unexpected shutdown",
+        "the previous system shutdown was unexpected", "event id 6008",
+    )):
         return {
             "category": "blue-screen",
             "title": "Windows crash or unexpected restart detected",
@@ -164,7 +172,7 @@ def _classify(source: str, message: str, severity: str) -> dict[str, str]:
             "question": "Is sound missing from every application, only one application, or is the microphone affected?",
             "fix": "Check the selected playback/recording endpoint, device status and Windows Audio service dependencies. Verify the exact signed audio driver before reinstalling it; do not stop unrelated audio services.",
         }
-    if any(word in text for word in ("bluetooth", "bthserv", "usb device", "usb controller", "device descriptor", "unknown usb device")):
+    if any(word in text for word in ("bluetooth", "bthserv", "bthusb", "usb device", "usb controller", "device descriptor", "unknown usb device")):
         return {
             "category": "peripheral",
             "title": "Bluetooth or USB peripheral issue",
