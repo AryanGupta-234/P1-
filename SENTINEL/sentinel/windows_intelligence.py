@@ -334,7 +334,7 @@ def _model_evidence_packet(evidence: dict[str, Any]) -> dict[str, Any]:
         return output
 
     service_data = evidence.get("services") if isinstance(evidence.get("services"), dict) else {}
-    services = rows_from_service = service_data.get("rows")
+    rows_from_service = service_data.get("rows")
     if not isinstance(rows_from_service, list):
         rows_from_service = []
     compact_services = []
