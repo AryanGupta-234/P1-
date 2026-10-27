@@ -1,4 +1,4 @@
-# SENTINEL 1.2.31 — Simple Command Home and operator-first workflows
+# SENTINEL 1.2.32 — Windows Intelligence Fusion and proactive AI review
 
 SENTINEL's observer, collectors and dashboard run as the signed-in user with a standard token. Administrator-only maintenance is handed to a narrowly scoped helper only after the operator confirms the exact preview and approves Windows UAC. The helper accepts one short-lived SQLite-backed job ID, binds it to the same Windows principal and interactive session, rechecks the kill switch, safeguard and original state, and can execute only a fixed allowlist of maintenance action IDs. It cannot accept arbitrary commands, scripts or paths.
 
@@ -45,6 +45,18 @@ The default HUD opens in **Simple Mode**, keeping the everyday navigation to Com
 The Command home now includes a short agent inbox with inline replies/dismissals, the suggested next check, optional local-AI diagnosis output, a direct local Windows specialist diagnosis box, and a one-click read-only storage scan request. The inbox is refreshed only while the Command view is visible; this is a display read, not the event detector or notification scheduler. Detection, AI admission, scanning, native alert delivery and policy remain owned by the background agent.
 
 The simple layout collapses secondary telemetry and legacy detail panels without deleting or disabling their screens. Users can switch to All Tools at any time. The dashboard does not gain authority to execute repairs; all existing preview, approval, Safeguard and rollback gates remain in force.
+
+## Windows Intelligence Fusion (v1.2.32)
+
+The local Windows specialist now receives a bounded, evidence-ID-backed view assembled from SENTINEL's existing local telemetry: top resource-consuming processes (CPU, working set, I/O, session and GUI visibility), service state/start type/description, startup entries, scheduled tasks, installed applications, signed PnP drivers, available Windows Update driver offers, seven-day Event Viewer and insight history, 30-day aggregate application foreground usage, source-health gaps, maintenance findings and prior answers to agent questions. Process command lines, window titles, browser contents, credentials, file contents, account names and remote connection addresses are excluded. The model must cite supplied evidence IDs and remains proposal-only.
+
+The agent runs a whole-PC review every 12 hours by default (configurable from 6 hours to 7 days) and provides a **FULL WINDOWS AI REVIEW** command for an on-demand review. It waits for service/inventory and read-only maintenance/driver diagnostics to be ready, and uses the same CPU, memory, game-session and VALORANT admission gates as other optional AI work. It asks the operator which background applications, vendor helpers and scheduled tasks are required; those answers are retained locally and inform subsequent ranking. A stopped, manual or rarely observed service is never classified as useless on that basis alone.
+
+Event Viewer monitoring now parses allowlisted crash/fault metadata from System, Application, Diagnostics-Performance, Windows Update, Kernel-PnP and Task Scheduler logs. Application Error, Windows Error Reporting, Application Hang, .NET Runtime, WHEA, Kernel-Power, disk/storage and driver/device failures become durable event evidence. Record IDs are deduplicated across restarts in SQLite, the first scan selectively backfills historical crashes/hardware faults, and old cursors are retained for 30 days. Channel failures remain visible as coverage gaps.
+
+Driver offers are read from Windows Update and matched to installed-device evidence where available. The agent may explain candidate updates and propose the existing allowlisted driver workflow, but it does not install, roll back or replace drivers automatically. Likewise, process closure, startup changes, service changes and repairs still require the existing identity checks, fresh preview, explicit approval, Safeguard and rollback contract. SENTINEL does not disable Windows, Defender, firewall, accessibility, backup, storage, update or Vanguard components.
+
+The next automation phase is a local Power Automate-style flow composer (event/schedule/threshold triggers, conditions, approvals and fixed SENTINEL actions). This release lays its evidence and review foundation; it does not claim to connect to Microsoft's Power Automate cloud or execute arbitrary desktop flows.
 
 # SENTINEL
 
