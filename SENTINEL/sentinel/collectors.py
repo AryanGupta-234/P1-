@@ -1080,7 +1080,9 @@ def evtlog_loop():
                     insight("high", "disk-err", "Disk/storage error", summary, provider,
                             event_id=event_id, channel=channel)
                 n_new += 1
-        if not baseline:
+        if not baseline and channels_ok == len(queries):
+            # Do not freeze a partial historical backfill when Windows denies or
+            # temporarily cannot query one of the configured Event Viewer logs.
             core.db("INSERT INTO windows_event_state(state_key,value,updated_at) VALUES('baseline_complete','1',?) "
                     "ON CONFLICT(state_key) DO UPDATE SET value='1',updated_at=excluded.updated_at",
                     (time.time(),))
