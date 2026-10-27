@@ -70,6 +70,7 @@ def _evidence_packet() -> dict[str, Any]:
         text = re.sub(r"(?i)(password|token|secret|api[_ -]?key)\s*[:=]\s*\S+", r"\1=[REDACTED]", text)
         text = re.sub(r"(?i)[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}", "[EMAIL]", text)
         text = re.sub(r"(?i)([A-Z]:\\Users\\)[^\\\s]+", r"\1[USER]", text)
+        text = re.sub(r"(?i)\b[A-Z0-9._-]+\\[A-Z0-9._-]+\b", "[ACCOUNT]", text)
         return text[:limit]
 
     def numeric(row: dict, *keys: str):
@@ -122,7 +123,7 @@ def _evidence_packet() -> dict[str, Any]:
     for raw in raw_processes:
         if not isinstance(raw, dict):
             continue
-        name = clean(raw.get("name") or str(raw.get("exe") or "").replace("\\\\", "/").rsplit("/", 1)[-1] or "unknown", 90)
+        name = clean(raw.get("name") or "unknown", 90)
         item: dict[str, Any] = {"id": "process." + str(raw.get("pid", len(processes) + 1)),
                                 "name": name}
         for target, choices in (
@@ -135,7 +136,9 @@ def _evidence_packet() -> dict[str, Any]:
                 item[target] = value
         for field in ("pid", "session_id", "visible_windows", "onscreen_windows", "foreground", "bg", "thr", "handles"):
             value = raw.get(field)
-            if isinstance(value, (int, float)) and not isinstance(value, bool):
+            if field in ("foreground", "bg") and isinstance(value, bool):
+                item[field] = value
+            elif isinstance(value, (int, float)) and not isinstance(value, bool):
                 item[field] = int(value)
         if isinstance(raw.get("app_kind"), str):
             item["kind"] = clean(raw["app_kind"], 40)
