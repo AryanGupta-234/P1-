@@ -139,6 +139,9 @@ def create_flow(payload: dict[str, Any]) -> dict[str, Any]:
     cooldown = data.get("cooldown_minutes", 30)
     if isinstance(cooldown, bool) or not isinstance(cooldown, int) or not 5 <= cooldown <= 1440:
         raise ValueError("cooldown_minutes must be an integer from 5 to 1440")
+    count = int(core.db("SELECT COUNT(*) FROM automation_flows")[0][0])
+    if count >= 20:
+        raise ValueError("at most 20 local workflows can be active or saved")
     now = time.time()
     latest_event = int(core.db("SELECT COALESCE(MAX(id),0) FROM events")[0][0]) if trigger_type == "event" else 0
     with _LOCK:
@@ -236,13 +239,14 @@ def list_flows() -> dict[str, Any]:
 
 def _event_category(source: str, message: str) -> str | None:
     text = (source + " " + message).casefold()
-    if any(token in text for token in ("application error", "application hang", "windows error reporting", "bugcheck", "1000", "1001", "1002", "1026")):
+    if (any(token in text for token in ("application error", "application hang", "windows error reporting", "bugcheck", ".net runtime failure"))
+            or re.search(r"\\b(?:event\\s*id|eventid)\\s*[:=]?\\s*(?:1000|1001|1002|1026)\\b", text)):
         return "application_crash"
     if any(token in text for token in ("whea", "hardware error", "machine check")):
         return "hardware_error"
     if any(token in text for token in ("kernel-pnp", "windowsupdateclient", "driver install", "device cannot start", "driver failure", "display driver", "nvlddmkm", "amdkmdag")):
         return "driver_error" if any(token in text for token in ("pnp", "driver", "device cannot start", "display")) else "windows_update"
-    if any(token in text for token in ("disk error", "ntfs", "stornvme", "storahci", "disk/storage", "bad block")):
+    if any(token in text for token in ("disk error", "ntfs", "stornvme", "storahci", "microsoft-windows-disk", "disk/storage", "bad block")):
         return "disk_error"
     if "windowsupdateclient" in text or "windows update" in text:
         return "windows_update"
@@ -324,8 +328,11 @@ def _tick_flow(flow: dict[str, Any], now: float) -> bool:
         count = flow["consecutive_count"] + 1 if float(current) > float(trigger["threshold"]) else 0
         core.db("UPDATE automation_flows SET consecutive_count=? WHERE id=?", (count, flow["id"]))
         if count >= int(trigger["consecutive_samples"]):
-            return _run_flow(flow, {"trigger": "metric", "metric": metric, "value": current,
-                                    "threshold": trigger["threshold"], "samples": count})
+            accepted = _run_flow(flow, {"trigger": "metric", "metric": metric, "value": current,
+                                        "threshold": trigger["threshold"], "samples": count})
+            if accepted:
+                core.db("UPDATE automation_flows SET consecutive_count=0 WHERE id=?", (flow["id"],))
+            return accepted
         return False
     rows = core.db(
         "SELECT id,ts,level,src,msg FROM events WHERE id>? ORDER BY id ASC LIMIT 200",
