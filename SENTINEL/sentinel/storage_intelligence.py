@@ -550,6 +550,13 @@ def scan_once(roots: list[tuple[str, str, str]] | None = None,
         defer_reason = ""
         now = time.time()
 
+        def should_yield_scan() -> bool:
+            nonlocal defer_reason
+            permitted, reason = _resources_allow_scan()
+            if not permitted:
+                defer_reason = reason
+            return not permitted
+
         for label, path, category in selected:
             if used_entries >= entry_budget or time.monotonic() >= deadline:
                 partial = True
@@ -567,7 +574,7 @@ def scan_once(roots: list[tuple[str, str, str]] | None = None,
             root_deadline = min(deadline, time.monotonic() + 1.5)
             measured = _measure(
                 path, remaining, root_deadline, category=category,
-                should_yield=(lambda: not _resources_allow_scan()[0]) if automatic else None,
+                should_yield=should_yield_scan if automatic else None,
             )
             used_entries += measured["entries_visited"]
             used_bytes += measured["bytes"]
@@ -580,7 +587,6 @@ def scan_once(roots: list[tuple[str, str, str]] | None = None,
 
             if measured.get("yielded"):
                 deferred, partial = True, True
-                _, defer_reason = _resources_allow_scan()
                 break
             roots_processed += 1
 
@@ -672,7 +678,7 @@ def scan_once(roots: list[tuple[str, str, str]] | None = None,
                 })
 
         next_root_index = (root_offset + roots_processed) % root_count if root_count else 0
-        cycle_completed = bool(automatic and root_count and roots_processed >= root_count and not deferred)
+        cycle_completed = bool(not automatic or not root_count or (roots_processed >= root_count and not deferred))
         if automatic and root_count:
             core.db(
                 "INSERT INTO storage_intelligence_state(state_key,value_json,updated_at) VALUES('next_root_index',?,?) "
