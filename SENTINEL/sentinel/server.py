@@ -2,7 +2,7 @@
 import ctypes, json, os, threading, time, urllib.parse, psutil, platform, sys, hmac
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from . import core, actions, ai, intel, inventory, intelligence, advanced, activity_engine, windows_intelligence
-from . import safeguard, runtime_engine, memory_engine, ai_engine, security_engine, hardware_provider, maintenance, privilege_broker, windows_knowledge, agent_assist, storage_intelligence
+from . import safeguard, runtime_engine, memory_engine, ai_engine, security_engine, hardware_provider, maintenance, privilege_broker, windows_knowledge, agent_assist, storage_intelligence, ui_preferences
 from .core import CFG, STATE, LIVE, HIST, HEART, START, db, log, save_cfg
 
 UI = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "ui")
@@ -268,6 +268,8 @@ class H(BaseHTTPRequestHandler):
         if not self._authed(qs):
             return self._json({"error": "unauthorized"}, 401)
         p = u.path
+        if p == "/api/ui/preferences":
+            return self._json(ui_preferences.settings())
         if p == "/api/maintenance/privilege":
             return self._json(privilege_broker.status())
         if p == "/api/knowledge/status":
@@ -521,6 +523,11 @@ class H(BaseHTTPRequestHandler):
             return self._json({"error": "request body must be valid JSON"}, 400)
         if not isinstance(body, dict):
             return self._json({"error": "request body must be a JSON object"}, 400)
+        if p == "/api/ui/preferences":
+            try:
+                return self._json(ui_preferences.update(body))
+            except (ValueError, TypeError) as exc:
+                return self._json({"error": str(exc)}, 400)
         if p == "/api/agent-assist/settings":
             try:
                 return self._json(agent_assist.update_settings(body))

@@ -220,3 +220,43 @@ def test_proactive_assistant_and_storage_controls_are_agent_backed():
     assert "CREATE TABLE IF NOT EXISTS storage_scan_history" in storage
     assert "def _agent_toast(" in assistant
     assert "Notification.requestPermission" not in assistant
+
+
+
+def test_simple_command_home_keeps_advanced_tools_available_and_agent_backed():
+    html = (ROOT / "ui" / "index.html").read_text(encoding="utf-8")
+    app = (ROOT / "ui" / "app.js").read_text(encoding="utf-8")
+    css = (ROOT / "ui" / "app.css").read_text(encoding="utf-8")
+    server = (ROOT / "sentinel" / "server.py").read_text(encoding="utf-8")
+    preferences = (ROOT / "sentinel" / "ui_preferences.py").read_text(encoding="utf-8")
+
+    assert '<body class="ui-simple">' in html
+    assert 'id="ui-mode-toggle"' in html
+    assert 'id="cmd-agent-list"' in html
+    assert 'id="cmd-agent-count"' in html
+    assert 'id="cmd-agent-refresh"' in html
+    assert 'id="cmd-diagnose-question"' in html
+    assert 'id="cmd-diagnose-run"' in html
+    assert 'id="cmd-diagnose-result"' in html
+    assert 'id="cmd-storage-scan"' in html
+
+    assert 'api("/api/ui/preferences"' in app
+    assert 'apiRetry("/api/ui/preferences"' in app
+    assert "function applyUiPreferences(" in app
+    assert "function setUiNavigationMode(" in app
+    assert "function renderCommandAssistant(" in app
+    assert "function handleCommandAgentAction(" in app
+    assert "function loadCommandAssistantBrief(" in app
+    assert "bindWindowsDiagnosis(\"cmd-diagnose-question\",\"cmd-diagnose-run\",\"cmd-diagnose-result\")" in app
+    assert 'api("/api/storage/scan"' in app
+    assert 'api("/api/agent-assist/notification/respond"' in app
+
+    assert 'body.ui-simple #nav .ng' in css
+    assert 'body.ui-simple #nav button[data-v]' in css
+    assert 'body.ui-simple .command-launchers' in css
+    assert 'body.ui-simple .command-more-metrics' in css
+    assert '"/api/ui/preferences"' in server
+    assert "ui_preferences.settings()" in server
+    assert "ui_preferences.update(body)" in server
+    assert 'CREATE TABLE IF NOT EXISTS ui_preferences' in preferences
+    assert '"navigation_mode": "simple"' in preferences

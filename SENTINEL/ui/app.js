@@ -62,6 +62,7 @@ async function apiRetry(path, attempts = 2) {
 }
 
 const H = {}, MAXH = 300; let S = null, view = "cmd";
+let UI_PREFERENCES = { navigation_mode: "simple" };
 const LOGS = []; let paused = false, lastLogId = 0;
 const lv = { info: 1, ok: 1, warn: 1, error: 1, debug: 1 };
 const fmt = (v, d = 0) => v == null || isNaN(v) ? "--" : (+v).toFixed(d);
@@ -800,6 +801,54 @@ function onTick(d) {
   if (view === "sys") maybeRefreshSystem();
   if (view === "ctl" && !ctlInitialized) { buildCtl(); loadActions(); ctlInitialized = true; }
 }
+function simpleNavigationViews() {
+  return new Set(["cmd", "agent", "sys", "maint"]);
+}
+function applyUiPreferences(preferences) {
+  const mode = preferences?.navigation_mode === "full" ? "full" : "simple";
+  UI_PREFERENCES = { navigation_mode: mode };
+  document.body.classList.toggle("ui-simple", mode === "simple");
+  document.body.classList.toggle("ui-full", mode === "full");
+  const button = document.getElementById("ui-mode-toggle");
+  if (button) {
+    button.textContent = mode === "simple" ? "ALL TOOLS ↗" : "SIMPLE VIEW";
+    button.setAttribute("aria-pressed", mode === "full" ? "true" : "false");
+    button.title = mode === "simple" ? "Show all advanced workspaces" : "Return to the simple everyday interface";
+  }
+}
+async function setUiNavigationMode(mode) {
+  const next = mode === "full" ? "full" : "simple";
+  const button = document.getElementById("ui-mode-toggle");
+  if (button) button.disabled = true;
+  try {
+    const result = await api("/api/ui/preferences", { navigation_mode: next });
+    if (result.error) throw new Error(result.error);
+    applyUiPreferences(result);
+    if (next === "simple" && !simpleNavigationViews().has(view)) show("cmd");
+    toast(next === "simple" ? "Simple navigation enabled · advanced tools remain available" : "All technical workspaces are now visible", "ok");
+  } catch (error) {
+    toast("UI preference could not be saved: " + (error.message || String(error)), "bad");
+  } finally {
+    if (button) button.disabled = false;
+  }
+}
+async function loadUiPreferences() {
+  try {
+    const result = await apiRetry("/api/ui/preferences", 1);
+    if (result.error) throw new Error(result.error);
+    applyUiPreferences(result);
+  } catch (error) {
+    applyUiPreferences(UI_PREFERENCES);
+    console.warn("SENTINEL UI preferences unavailable; using simple navigation", error);
+  }
+}
+function initUiPreferences() {
+  const button = document.getElementById("ui-mode-toggle");
+  if (button) button.onclick = () => setUiNavigationMode(
+    UI_PREFERENCES.navigation_mode === "simple" ? "full" : "simple"
+  );
+}
+
 function show(v) {
   if (!TITLES[v]) return;
   view = v;
@@ -1212,6 +1261,10 @@ async function boot() {
     return;
   }
 
+  const uiPreferencesPromise = apiRetry("/api/ui/preferences", 1).catch(error => {
+    console.warn("SENTINEL UI preference read failed; using the safe default", error);
+    return UI_PREFERENCES;
+  });
   const degradedModules = new Set();
   const markDataFailure = (key, detail) => {
     degradedModules.add(key);
@@ -1236,6 +1289,8 @@ async function boot() {
   }
 
   S = initial;
+  try { applyUiPreferences(await uiPreferencesPromise); }
+  catch (error) { applyUiPreferences(UI_PREFERENCES); console.warn("Using the default simple navigation", error); }
   if (S?.live && typeof S.live === "object") {
     for (const [key, value] of Object.entries(S.live)) {
       if (Number.isFinite(Number(value)) && !(H[key] || []).length) H[key] = [Number(value)];
@@ -1321,8 +1376,22 @@ async function boot() {
     setTimeout(() => URL.revokeObjectURL(link.href), 2000);
     toast("Exported " + LOGS.length + " events", "ok");
   };
-  initPalette(); initNotify(); initFC(); initIntelligence(); initActivityIntelligence();
+  initPalette(); initNotify(); initUiPreferences(); initFC(); initIntelligence(); initActivityIntelligence();
   initAdvanced(); initAgent(); initEngines(); initMaintenance(); initAgentAutomation(); initWindowsKnowledge(); initVoice(); bindJ("#metrics");
+  const commandRefresh = document.getElementById("cmd-agent-refresh");
+  if (commandRefresh) commandRefresh.onclick = loadCommandAssistantBrief;
+  const commandAgentHost = document.getElementById("cmd-agent-list");
+  if (commandAgentHost) commandAgentHost.addEventListener("click", handleCommandAgentAction);
+  const storageScanButton = document.getElementById("cmd-storage-scan");
+  if (storageScanButton) storageScanButton.onclick = async () => {
+    storageScanButton.disabled = true;
+    try {
+      const result = await api("/api/storage/scan", {});
+      if (result.error) throw new Error(result.error);
+      toast(result.message || "Storage scan queued for a safe idle window", "ok");
+    } catch (error) { toast(error.message || String(error), "bad"); }
+    finally { storageScanButton.disabled = false; }
+  };
   $("#e-go").onclick = loadEvi;
   $("#e-csv").onclick = csvExport;
   $("#e-q").onkeydown = event => event.key === "Enter" && loadEvi();
@@ -1359,6 +1428,9 @@ async function boot() {
     if (view === "agent") loadAgent();
   }, 10000);
   setInterval(loadStatus, 15000);
+  setInterval(() => {
+    if (view === "cmd" && document.visibilityState === "visible") loadCommandAssistantBrief();
+  }, 30000);
   setInterval(() => { if (view === "eng") loadEngines(); }, 8000);
 
   bootModuleState("stream", "LOADING", "Opening the local event stream");
@@ -2123,8 +2195,8 @@ async function searchWindowsKnowledge(){
   }catch(error){toast("Knowledge search: "+(error.message||String(error)),"bad");}
   finally{if(button){button.disabled=false;button.textContent="SEARCH LOCAL INDEX";}}
 }
-function renderWindowsSpecialist(result){
-  const host=document.getElementById("ix-win-result");if(!host)return;
+function renderWindowsSpecialist(result, hostId = "ix-win-result"){
+  const host=document.getElementById(hostId);if(!host)return;
   const citations=Array.isArray(result.citations)?result.citations:[];
   const recs=Array.isArray(result.recommendations)?result.recommendations:[];
   const evidence=Array.isArray(result.telemetry_evidence?.metrics)?result.telemetry_evidence.metrics:[];
@@ -2174,6 +2246,66 @@ function renderAgentNotifications(){
       '</div></article>';
   }).join("");
 }
+function renderCommandAssistant(){
+  const host=document.getElementById("cmd-agent-list");
+  const count=document.getElementById("cmd-agent-count");
+  if(!host)return;
+  const rows=Array.isArray(AGENT_NOTIFICATIONS)?AGENT_NOTIFICATIONS.slice(0,3):[];
+  if(count)count.textContent=rows.length?rows.length+" OPEN":"ALL CLEAR";
+  if(!rows.length){
+    host.innerHTML='<div class="command-agent-empty"><span>✓</span><div><b>No unresolved findings</b><small>The background agent is still observing. New questions will appear here.</small></div></div>';
+    return;
+  }
+  host.innerHTML=rows.map(item=>{
+    const id=Number(item.id);
+    const ai=item.ai_diagnosis?.diagnosis;
+    return '<article class="command-agent-item">'+
+      '<div class="command-agent-item-head"><b>'+esc(item.title||"System finding")+'</b><span class="tag '+(item.severity==="high"?"bad":"mu")+'">'+esc(String(item.severity||"normal").toUpperCase())+'</span></div>'+
+      '<p>'+esc(item.question||item.explanation||"The agent has recorded a new finding.")+'</p>'+
+      '<div class="command-agent-fix"><small> SUGGESTED NEXT CHECK </small>'+esc(item.suggested_fix||"Review the evidence in the Agent workspace.")+'</div>'+
+      (ai?'<small class="command-agent-ai">LOCAL AI · '+esc(ai.confidence||"advisory")+' confidence · '+esc(ai.diagnosis)+'</small>':"")+
+      '<div class="command-agent-reply"><input type="text" maxlength="1200" data-command-agent-input="'+id+'" aria-label="Answer the agent follow-up" placeholder="Add a detail for the agent…">'+
+      '<button type="button" class="btn or sm" data-command-agent-reply="'+id+'">REPLY</button>'+
+      '<button type="button" class="btn sm" data-command-agent-dismiss="'+id+'">DISMISS</button></div>'+
+      '</article>';
+  }).join("");
+}
+async function loadCommandAssistantBrief(){
+  if(document.visibilityState!=="visible")return;
+  try{
+    const rows=await api("/api/agent-assist/notifications?limit=20");
+    if(rows.error)throw new Error(rows.error);
+    AGENT_NOTIFICATIONS=Array.isArray(rows)?rows:[];
+    renderCommandAssistant();
+  }catch(error){
+    const host=document.getElementById("cmd-agent-list");
+    if(host&&!AGENT_NOTIFICATIONS.length)host.innerHTML='<div class="empty">Agent inbox temporarily unavailable · '+esc(error.message||String(error))+'</div>';
+  }
+}
+async function handleCommandAgentAction(event){
+  const reply=event.target.closest("[data-command-agent-reply]");
+  const dismiss=event.target.closest("[data-command-agent-dismiss]");
+  const target=reply||dismiss;
+  if(!target)return;
+  const id=Number(target.dataset.commandAgentReply||target.dataset.commandAgentDismiss||0);
+  if(!id)return;
+  const input=target.closest(".command-agent-item")?.querySelector('[data-command-agent-input="'+id+'"]');
+  const answer=dismiss?"":(input?.value.trim()||"");
+  if(reply&&!answer){input?.focus();return toast("Add a short answer before replying","warn");}
+  target.disabled=true;
+  try{
+    const result=await api("/api/agent-assist/notification/respond",{id,answer,dismiss:!!dismiss});
+    if(result.error)throw new Error(result.error);
+    AGENT_NOTIFICATIONS=AGENT_NOTIFICATIONS.filter(item=>Number(item.id)!==id);
+    renderCommandAssistant();
+    renderAgentNotifications();
+    toast(dismiss?"Finding dismissed":"Answer saved to agent history","ok");
+  }catch(error){
+    toast(error.message||String(error),"bad");
+    target.disabled=false;
+  }
+}
+
 function renderStorageIntelligence(){
   const host=document.getElementById("storage-scan-results");
   const state=document.getElementById("storage-scan-state");
@@ -2237,6 +2369,7 @@ async function loadAgentAutomation(){
     const agentState=document.getElementById("agent-assist-state");
     if(agentState)agentState.textContent=AGENT_ASSIST.engine==="agent-owned"?"AGENT-OWNED · "+(AGENT_ASSIST.open_notifications||0)+" OPEN":"AGENT STATUS";
     renderAgentNotifications();
+    renderCommandAssistant();
     const storageSettings=STORAGE_INTELLIGENCE?.settings||{};
     set("storage-scan-enabled",storageSettings.enabled);
     const interval=document.getElementById("storage-scan-interval");
@@ -2306,26 +2439,38 @@ function initAgentAutomation(){
   void loadAgentAutomation();
 }
 
+async function runWindowsDiagnosis(questionId,buttonId,resultId){
+  const question=document.getElementById(questionId);
+  const button=document.getElementById(buttonId);
+  const host=document.getElementById(resultId);
+  const idleLabel=button?(button.dataset.idleLabel||button.textContent.trim()):"DIAGNOSE";
+  if(button)button.dataset.idleLabel=idleLabel;
+  const value=question?.value.trim()||"";
+  if(!value)return toast("Describe the Windows issue first","warn");
+  if(button){button.disabled=true;button.textContent="ANALYSING…";}
+  if(host)host.innerHTML='<div class="empty">Correlating local telemetry with version-matched documentation…</div>';
+  try{
+    const result=await api("/api/windows-intelligence/diagnose",{question:value});
+    if(result.error)throw new Error(result.error);
+    renderWindowsSpecialist(result,resultId);
+    toast("Local Windows specialist analysis complete","ok");
+  }catch(error){
+    if(host)host.innerHTML='<div class="empty">'+esc(error.message||String(error))+'</div>';
+    toast("Windows specialist: "+(error.message||String(error)),"warn");
+  }finally{
+    if(button){button.disabled=false;button.textContent=idleLabel;}
+  }
+}
+function bindWindowsDiagnosis(questionId,buttonId,resultId){
+  const button=document.getElementById(buttonId),question=document.getElementById(questionId);
+  if(button)button.onclick=()=>runWindowsDiagnosis(questionId,buttonId,resultId);
+  if(question)question.addEventListener("keydown",event=>{
+    if(event.key==="Enter"&&!event.shiftKey){event.preventDefault();runWindowsDiagnosis(questionId,buttonId,resultId);}
+  });
+}
 function initWindowsKnowledge(){
-  const diagnose=document.getElementById("ix-win-diagnose"),question=document.getElementById("ix-win-question");
-  const runDiagnosis=async()=>{
-    const value=question?.value.trim()||"";
-    if(!value)return toast("Describe the Windows issue first","warn");
-    if(diagnose){diagnose.disabled=true;diagnose.textContent="ANALYSING…";}
-    const host=document.getElementById("ix-win-result");
-    if(host)host.innerHTML='<div class="empty">Correlating local telemetry with version-matched documentation…</div>';
-    try{
-      const result=await api("/api/windows-intelligence/diagnose",{question:value});
-      if(result.error)throw new Error(result.error);
-      renderWindowsSpecialist(result);
-      toast("Local Windows specialist analysis complete","ok");
-    }catch(error){
-      if(host)host.innerHTML='<div class="empty">'+esc(error.message||String(error))+'</div>';
-      toast("Windows specialist: "+(error.message||String(error)),"warn");
-    }finally{if(diagnose){diagnose.disabled=false;diagnose.textContent="ANALYSE WITH LOCAL MODEL";}}
-  };
-  if(diagnose)diagnose.onclick=runDiagnosis;
-  if(question)question.addEventListener("keydown",event=>{if(event.key==="Enter")runDiagnosis();});
+  bindWindowsDiagnosis("ix-win-question","ix-win-diagnose","ix-win-result");
+  bindWindowsDiagnosis("cmd-diagnose-question","cmd-diagnose-run","cmd-diagnose-result");
   const add=document.getElementById("ix-kb-add"),search=document.getElementById("ix-kb-search");
   if(search)search.onclick=searchWindowsKnowledge;
   const query=document.getElementById("ix-kb-query");

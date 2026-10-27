@@ -1,4 +1,4 @@
-# SENTINEL 1.2.30 — Adaptive Agent Assist and deeper Storage Intelligence
+# SENTINEL 1.2.31 — Simple Command Home and operator-first workflows
 
 SENTINEL's observer, collectors and dashboard run as the signed-in user with a standard token. Administrator-only maintenance is handed to a narrowly scoped helper only after the operator confirms the exact preview and approves Windows UAC. The helper accepts one short-lived SQLite-backed job ID, binds it to the same Windows principal and interactive session, rechecks the kill switch, safeguard and original state, and can execute only a fixed allowlist of maintenance action IDs. It cannot accept arbitrary commands, scripts or paths.
 
@@ -37,6 +37,14 @@ The background agent consumes structured Windows events and diagnostic insights,
 Storage Intelligence adds largest-file evidence, per-extension file counts, versioned Python site-packages, uv/Poetry/PDM/pipx, Go, Composer, Ruby, Conda and environment-overridden package caches. Bounded scan roots rotate through the selected folders so the same early directories do not consume every pass. A scan yields when game/foreground priority changes and resumes from the interrupted root later. Large/old files and package/cache footprints are review candidates only; NTFS last-access metadata is a weak signal, and the agent never deletes files or uninstalls packages.
 
 The Adaptive Runtime treats missing CPU telemetry as unknown rather than idle, and optional diagnosis/storage work remains deferred until telemetry is healthy. These changes shed SENTINEL-owned work; they do not change other applications' priorities, affinity, services, power plan, or anti-cheat state.
+
+## Simple Command Home and guided operator workflows (v1.2.31)
+
+The default HUD opens in **Simple Mode**, keeping the everyday navigation to Command, Agent, System and Maintenance. The header switch reveals **All Tools** in one click; the full set of advanced workspaces remains present and routable through the command palette. The navigation choice is presentation-only and is persisted in the existing local SQLite database (`ui_preferences`).
+
+The Command home now includes a short agent inbox with inline replies/dismissals, the suggested next check, optional local-AI diagnosis output, a direct local Windows specialist diagnosis box, and a one-click read-only storage scan request. The inbox is refreshed only while the Command view is visible; this is a display read, not the event detector or notification scheduler. Detection, AI admission, scanning, native alert delivery and policy remain owned by the background agent.
+
+The simple layout collapses secondary telemetry and legacy detail panels without deleting or disabling their screens. Users can switch to All Tools at any time. The dashboard does not gain authority to execute repairs; all existing preview, approval, Safeguard and rollback gates remain in force.
 
 # SENTINEL
 
