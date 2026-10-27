@@ -181,6 +181,18 @@ These are agent-owned background workers. The HUD is a renderer and configuratio
 - Game and VALORANT guard modes have priority over optional work. SENTINEL slows or defers its own workers instead of changing another process's priority/affinity, Windows power plan, services or security configuration.
 - Assistant settings, storage settings, findings, feedback, cursors, scan snapshots and scan history are persisted in the existing local SQLite database. UI settings changes are written by the agent API and survive restarts.
 
+
+## HUD presentation preferences and Simple Mode (1.2.31)
+
+**Module:** `sentinel/ui_preferences.py`  
+**API:** `GET/POST /api/ui/preferences`
+
+The operator HUD starts in Simple Mode. It exposes the Command, Agent, System and Maintenance workspaces, while All Tools reveals the complete technical navigation. The command palette continues to route to any existing workspace, including when the side navigation is simplified.
+
+The Command home provides a compact agent inbox, answer/dismiss controls, an optional local Windows specialist question, and a queued read-only storage scan action. It reads findings from the persistent agent queue and refreshes the small inbox only while the home view is visible. It does not detect Windows events, run AI, scan directories, send native notifications or execute maintenance.
+
+Only the navigation presentation choice is stored in `ui_preferences` within the existing SQLite database. A settings change does not alter collection cadence, AI policy, alert policy, maintenance approval, Safeguard or any Windows configuration. The full toolset remains available; Simple Mode is a navigation and information-density preference, not a feature lockout.
+
 ## Action lifecycle
 
 All state-changing actions follow this sequence:
