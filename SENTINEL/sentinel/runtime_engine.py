@@ -35,16 +35,16 @@ def evaluate() -> dict[str, Any]:
     pressure = available_gib < 1.8 or (cpu_known and cpu_value >= 92.0)
     if not safety_ready:
         mode = "safety_degraded"
-    elif not cpu_known:
-        # Missing telemetry is not idle telemetry. Keep diagnostics alive, but
-        # defer optional work until the CPU collector has produced a valid sample.
-        mode = "telemetry_degraded"
     elif valorant:
         mode = "valorant_guarded"
     elif pressure:
         mode = "resource_pressure"
     elif playing:
         mode = "game_optimized"
+    elif not cpu_known:
+        # Missing telemetry is not idle telemetry. Keep diagnostics alive, but
+        # defer optional work until the CPU collector has produced a valid sample.
+        mode = "telemetry_degraded"
     else:
         mode = "balanced"
 
