@@ -98,7 +98,7 @@ def test_evidence_packet_fuses_windows_sources_without_private_process_content(m
                          "DriverDate": "2026-01-01", "Manufacturer": "Realtek", "DeviceClass": "NET"}],
             "driver_updates": [{"title": "Realtek - Net - update available", "update_id": "update-guid",
                                 "revision": 2, "reboot_required": False,
-                                "hardware_ids": ["PCI\\\\VEN_10EC&DEV_8821"]}],
+                                "hardware_ids": ["PCI\\VEN_10EC&DEV_8821"]}],
             "system_health": {"findings": [{"code": "memory_pressure", "severity": "medium",
                                              "title": "Memory pressure", "detail": "Working set increased"}]},
         },
