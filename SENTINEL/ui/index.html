@@ -567,6 +567,38 @@
       <div id="storage-scan-results" class="maint-diagnostics"><div class="empty">The agent measures drive capacity, extension mix, hidden-file footprint, Python/.NET/Node/Rust/Java caches and common build outputs. It does not open file contents.</div></div>
     </div></div>
   </div>
+  <div class="panel maint-diagnostics-panel">
+    <div class="ph">Local automation flows<em id="local-automation-state">POWER AUTOMATE-STYLE · LOCAL ONLY</em></div>
+    <div class="pb">
+      <div class="msg"><small>WORKFLOW BUILDER</small>Choose a Windows event, time schedule or sustained resource condition. SENTINEL will run only the selected fixed local action. No cloud account or arbitrary PowerShell is involved.</div>
+      <div class="maint-network-fields">
+        <label>FLOW NAME<input id="flow-name" maxlength="80" value="Crash → AI review"></label>
+        <label>WHEN<select id="flow-trigger"><option value="event">Windows event occurs</option><option value="schedule">Time interval elapses</option><option value="metric">Resource stays above limit</option></select></label>
+        <label>THEN<select id="flow-action"><option value="local_ai_review">Run local Windows AI review</option><option value="read_only_diagnostics">Refresh read-only diagnostics</option><option value="storage_scan">Queue read-only storage scan</option><option value="notify_user">Show Windows notification</option></select></label>
+      </div>
+      <div class="maint-network-fields" id="flow-event-fields">
+        <label>EVENT CATEGORY<select id="flow-event-category"><option value="application_crash">Application crash / hang</option><option value="hardware_error">WHEA / hardware error</option><option value="driver_error">Driver / device failure</option><option value="disk_error">Disk / file-system error</option><option value="windows_update">Windows Update failure</option></select></label>
+      </div>
+      <div class="maint-network-fields" id="flow-schedule-fields" hidden>
+        <label>INTERVAL<select id="flow-schedule-hours"><option value="6">Every 6 hours</option><option value="12" selected>Every 12 hours</option><option value="24">Daily</option><option value="48">Every 2 days</option><option value="168">Weekly</option></select></label>
+      </div>
+      <div class="maint-network-fields" id="flow-metric-fields" hidden>
+        <label>RESOURCE<select id="flow-metric"><option value="cpu">CPU usage</option><option value="mem">Memory usage</option><option value="dlat">Disk latency</option><option value="ping">Network ping</option><option value="gputemp">GPU temperature</option><option value="loss">Packet loss</option></select></label>
+        <label>ABOVE<input id="flow-threshold" type="number" min="1" max="100" step="1" value="90"></label>
+        <label>FOR CONSECUTIVE SAMPLES<select id="flow-samples"><option value="2">2 samples</option><option value="3" selected>3 samples</option><option value="5">5 samples</option><option value="10">10 samples</option></select></label>
+      </div>
+      <div class="maint-network-fields" id="flow-notify-fields" hidden>
+        <label>NOTIFICATION MESSAGE<input id="flow-message" maxlength="180" value="SENTINEL automation condition detected"></label>
+      </div>
+      <div class="maint-network-fields">
+        <label>COOLDOWN<select id="flow-cooldown"><option value="5">5 minutes</option><option value="15">15 minutes</option><option value="30" selected>30 minutes</option><option value="60">1 hour</option><option value="360">6 hours</option><option value="1440">24 hours</option></select></label>
+        <label class="tog"><span>ENABLE AFTER SAVE<small>Flow starts running in background immediately.</small></span><input type="checkbox" class="sw" id="flow-enabled" checked></label>
+      </div>
+      <div class="maint-policy-row"><button class="btn or" id="flow-create">CREATE WORKFLOW</button><button class="btn" id="flow-refresh">REFRESH FLOWS</button><span class="tag" id="flow-count">0 FLOWS</span></div>
+      <div id="local-automation-flows" class="maint-diagnostics"><div class="empty">No workflows created yet. Choose a trigger and action above.</div></div>
+      <div class="msg"><small>EXECUTION BOUNDARY</small>Flows can request AI analysis, notifications and read-only scans. They cannot approve repairs, change drivers, disable services, terminate processes or bypass the Safeguard. Those actions still require a separate preview and explicit operator approval.</div>
+    </div>
+  </div>
   <div class="panel maint-diagnostics-panel"><div class="ph">Windows intelligence map<em id="maint-diag-status">INVENTORY INITIALIZING</em><button class="btn sm" id="maint-inventory-refresh">SCAN INVENTORY</button></div><div class="pb"><div id="maint-health-report" class="maint-health-report"></div><div id="maint-diagnostics" class="maint-diagnostics"><div class="empty">Read-only inventory runs in the background. Driver/WMI scans back off during games and resource pressure.</div></div></div></div>
   <div class="maint-action-grid">
     <div class="panel"><div class="ph">Cleanup engine<em>manual · bounded · irreversible</em></div><div class="pb maint-form">
