@@ -59,7 +59,7 @@ def test_new_event_flow_starts_at_current_event_cursor(monkeypatch):
     inserted = {}
     row = (
         41, "Crash → AI review", 1, "event", '{"category":"application_crash"}',
-        "local_ai_review", "{}", 1800, 900, 0, 0, 1000.0, 1000.0,
+        "local_ai_review", "{}", 1800, 0, 900, 0, 1000.0, 1000.0,
     )
 
     def fake_db(sql, args=(), many=False):
