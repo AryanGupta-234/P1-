@@ -101,6 +101,8 @@ def _clean(value: Any, limit: int = 120) -> str:
     text = " ".join(str(value or "").replace("\x00", " ").split())
     text = re.sub(r"(?i)(password|token|secret|credential|api[_ -]?key)\s*[:=]\s*\S+", "[REDACTED]", text)
     text = re.sub(r"(?i)[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}", "[EMAIL]", text)
+    text = re.sub(r"(?i)([A-Z]:\\Users\\)[^\\\s]+", r"\1[USER]", text)
+    text = re.sub(r"(?i)\b[A-Z0-9._-]+\\[A-Z0-9._-]+\b", "[ACCOUNT]", text)
     return text[:limit]
 
 
