@@ -292,3 +292,179 @@ def test_local_ai_evidence_contains_dependency_graph_and_baseline_candidate_ids(
     assert "binary_path" not in str(evidence)
     assert evidence["operator_component_preferences"][0]["preference"] == "keep"
     assert evidence["operator_component_preferences"][0]["operator_note"] == "Required for hotkeys"
+
+
+
+def test_startup_and_task_component_ids_are_stable_and_do_not_expose_source_paths():
+    from sentinel import launch_provenance as launch
+
+    startup_id = launch.startup_component_id("Registry · Current user", "VendorTray")
+    task_id = launch.task_component_id(r"\Vendor\Maintenance", "VendorUpdater")
+    binary_id = launch.binary_component_id(r"C:\Program Files\Vendor\Updater.exe")
+
+    assert startup_id == launch.startup_component_id("Registry · Current user", "VendorTray")
+    assert startup_id.startswith("startup:")
+    assert task_id.startswith("task:")
+    assert binary_id.startswith("binary:")
+    for identifier in (startup_id, task_id, binary_id):
+        assert r"C:\Program Files" not in identifier
+        assert "Maintenance" not in identifier
+
+
+def test_launch_target_parser_keeps_only_executable_identity(monkeypatch):
+    from sentinel import launch_provenance as launch
+
+    monkeypatch.setattr(
+        launch, "_normal_path",
+        lambda value: str(value).replace("/", "\\").casefold()
+        if str(value).lower().startswith("c:\\") else "",
+    )
+    target = launch._extract_launch_target(
+        '"C:\\Program Files\\Vendor\\agent.exe" --profile private-user --token=secret-value'
+    )
+    assert target["binary_path"] == r"c:\program files\vendor\agent.exe"
+    assert target["binary_name"] == "agent.exe"
+    assert target["launch_kind"] == "direct_executable"
+    assert target["has_arguments"] is True
+    assert "private-user" not in str(target)
+    assert "secret-value" not in str(target)
+
+    wrapper = launch._extract_launch_target(r"C:\Windows\System32\cmd.exe /c vendor.exe")
+    assert wrapper["launch_kind"] == "command_host"
+
+
+def test_launch_graph_links_only_exact_resolved_paths_and_unique_install_roots(monkeypatch):
+    from sentinel import launch_provenance as launch
+
+    def normalize(value):
+        raw = str(value or "").strip().strip('"').replace("/", "\\")
+        return raw.casefold() if raw.lower().startswith("c:\\") else ""
+
+    monkeypatch.setattr(launch, "_normal_path", normalize)
+    monkeypatch.setattr(launch, "_protected_process", lambda *_args: False)
+    monkeypatch.setattr(
+        launch, "_path_under",
+        lambda path, root: bool(path and root and path.startswith(root.rstrip("\\") + "\\")),
+    )
+
+    snapshot = {
+        "startup": [{
+            "name": "VendorTray", "source": "Registry · Current user",
+            "binary_path": r"C:\Program Files\Vendor\Agent.exe",
+            "has_arguments": True, "enabled": True,
+        }],
+        "tasks": [{
+            "name": "VendorUpdater", "task_path": r"\Vendor\Maintenance",
+            "state": "Ready", "enabled": True, "run_level": "HighestAvailable",
+            "logon_type": "Interactive", "actions": [
+                {"binary_path": r"C:\Program Files\Vendor\Updater.exe",
+                 "action_kind": "Exec", "has_arguments": True},
+                {"binary_path": "", "action_kind": "ComHandler", "has_arguments": False},
+            ],
+        }],
+        "startup_complete": True, "tasks_complete": True,
+        "apps_complete": True, "service_graph_complete": True,
+    }
+    services = [{"name": "VendorAgentSvc", "binary_path": r"C:\Program Files\Vendor\Agent.exe"}]
+    apps = [{
+        "name": "Vendor Suite", "publisher": "Vendor Ltd.", "version": "4.2",
+        "location": r"C:\Program Files\Vendor",
+    }]
+
+    graph = launch._build_graph(snapshot, services, apps, now=1700000000.0)
+    serialized = str({
+        "catalog": graph["catalog_rows"], "metadata": graph["metadata_rows"],
+        "edges": graph["relationships"],
+    })
+    relations = {(edge[0], edge[1], edge[2], edge[3]) for edge in graph["relationships"]}
+    startup_id = launch.startup_component_id("Registry · Current user", "VendorTray")
+    task_id = launch.task_component_id(r"\Vendor\Maintenance", "VendorUpdater")
+    agent_id = launch.binary_component_id(r"C:\Program Files\Vendor\Agent.exe")
+    updater_id = launch.binary_component_id(r"C:\Program Files\Vendor\Updater.exe")
+    app_id = launch.app_component_id("Vendor Suite", "Vendor Ltd.", "4.2")
+    service_id = components.service_component_id("VendorAgentSvc")
+
+    assert (startup_id, agent_id, "launches_binary", "path_resolved") in relations
+    assert (task_id, updater_id, "launches_binary", "path_resolved") in relations
+    assert (agent_id, app_id, "installed_under_app", "unique_install_location_prefix") in relations
+    assert (agent_id, service_id, "same_executable_as_service", "exact_executable_path") in relations
+    assert r"C:\Program Files" not in serialized
+    assert "private-user" not in serialized
+    assert "--profile" not in serialized
+    assert "token=secret-value" not in serialized
+    assert graph["metadata_rows"][0][1].find('"has_arguments":true') >= 0
+
+
+def test_ambiguous_app_install_roots_do_not_create_a_guessed_relationship(monkeypatch):
+    from sentinel import launch_provenance as launch
+
+    monkeypatch.setattr(
+        launch, "_normal_path",
+        lambda value: str(value or "").strip().strip('"').replace("/", "\\").casefold()
+        if str(value or "").lower().startswith("c:\\") else "",
+    )
+    monkeypatch.setattr(
+        launch, "_path_under",
+        lambda path, root: bool(path and root and path.startswith(root.rstrip("\\") + "\\")),
+    )
+    snapshot = {
+        "startup": [{
+            "name": "SharedHelper", "source": "Registry · All users",
+            "binary_path": r"C:\Program Files\Shared\Helper.exe", "has_arguments": False,
+        }],
+        "tasks": [], "startup_complete": True, "tasks_complete": True,
+        "apps_complete": True, "service_graph_complete": True,
+    }
+    apps = [
+        {"name": "Product A", "publisher": "A", "version": "1", "location": r"C:\Program Files\Shared"},
+        {"name": "Product B", "publisher": "B", "version": "1", "location": r"C:\Program Files\Shared"},
+    ]
+    graph = launch._build_graph(snapshot, [], apps, now=1700000000.0)
+    assert not any(edge[2] == "installed_under_app" for edge in graph["relationships"])
+
+
+def test_protected_microsoft_and_vanguard_task_names_remain_protected(monkeypatch):
+    from sentinel import launch_provenance as launch
+
+    monkeypatch.setattr(
+        launch, "_normal_path",
+        lambda value: str(value or "").strip().strip('"').replace("/", "\\").casefold()
+        if str(value or "").lower().startswith("c:\\") else "",
+    )
+    monkeypatch.setattr(launch, "_protected_process", lambda *_args: False)
+    snapshot = {
+        "startup": [],
+        "tasks": [
+            {"name": "ScheduleDefrag", "task_path": r"\Microsoft\Windows\Defrag",
+             "state": "Ready", "enabled": True, "actions": []},
+            {"name": "VanguardTray", "task_path": r"\Riot\Vanguard",
+             "state": "Ready", "enabled": True, "actions": []},
+        ],
+        "startup_complete": True, "tasks_complete": True,
+        "apps_complete": True, "service_graph_complete": True,
+    }
+    graph = launch._build_graph(snapshot, [], [], now=1700000000.0)
+    task_rows = {row[3]: bool(row[10]) for row in graph["catalog_rows"] if row[1] == "task"}
+    assert task_rows["ScheduleDefrag"] is True
+    assert task_rows["VanguardTray"] is True
+
+
+def test_signature_batch_rotates_across_process_service_and_launch_binaries(monkeypatch):
+    from sentinel import launch_provenance as launch
+
+    saved = {}
+    monkeypatch.setattr(components, "_load_state", lambda _key: saved.get("rotation", {}))
+    monkeypatch.setattr(components, "_save_state", lambda key, value: saved.update({key: value}))
+    paths = {}
+    for index in range(40):
+        paths["process:" + str(index).zfill(3)] = r"C:\Apps\P" + str(index) + r"\p.exe"
+    for index in range(24):
+        paths["service:" + str(index).zfill(3)] = r"C:\Services\S" + str(index) + r"\s.exe"
+    for index in range(35):
+        paths["binary:" + str(index).zfill(3)] = r"C:\Startup\B" + str(index) + r"\b.exe"
+
+    first = launch.select_signature_batch(paths, 28)
+    second = launch.select_signature_batch(paths, 28)
+    assert len(first) == len(second) == 28
+    assert {key.split(":", 1)[0] for key, _ in first} == {"process", "service", "binary"}
+    assert {key for key, _ in first} != {key for key, _ in second}
