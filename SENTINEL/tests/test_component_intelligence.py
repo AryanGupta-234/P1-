@@ -352,6 +352,7 @@ def test_baseline_confidence_is_a_measurement_coverage_score_not_usefulness_prob
 def test_component_candidate_close_requires_one_unambiguous_gui_instance(monkeypatch):
     exe = r"C:\Program Files\Example\ExampleApp.exe"
     component_id = components.process_component_id(exe)
+    monkeypatch.setattr(components.safeguard, "is_protected_process", lambda *_args: False)
     first = {
         "pid": 301, "create_time": 1700000000.0, "name": "ExampleApp.exe", "exe": exe,
         "path_state": "present", "session_id": 1, "visible_windows": 1, "onscreen_windows": 1,
