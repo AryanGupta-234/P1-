@@ -671,6 +671,7 @@ def report(since: float) -> dict[str, Any]:
             "tasks_complete": bool(state.get("tasks_complete")),
             "apps_complete": bool(state.get("apps_complete")),
             "service_graph_complete": bool(state.get("service_graph_complete")),
+            "binary_targets_truncated": bool(state.get("binary_targets_truncated")),
             "task_truncated": bool(state.get("task_truncated")),
             "source_health": state.get("source_health") if isinstance(state.get("source_health"), dict) else {},
         },
