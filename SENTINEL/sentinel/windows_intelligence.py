@@ -342,6 +342,7 @@ def _evidence_packet() -> dict[str, Any]:
         "component_baseline_coverage": component_evidence.get("component_baseline_coverage", {}),
         "background_process_review_candidates": component_evidence.get("background_process_review_candidates", []),
         "third_party_service_review_candidates": component_evidence.get("third_party_service_review_candidates", []),
+        "service_dependency_graph": component_evidence.get("service_dependency_graph", []),
         "component_evidence_ids": component_evidence.get("component_evidence_ids", []),
         "coverage": coverage, "evidence_ids": evidence_ids + component_evidence.get("component_evidence_ids", []),
         "game_active": bool(core.STATE.get("game")),
@@ -404,6 +405,7 @@ def _model_evidence_packet(evidence: dict[str, Any]) -> dict[str, Any]:
         "component_baseline_coverage": evidence.get("component_baseline_coverage", {}),
         "background_process_review_candidates": rows("background_process_review_candidates", 8, {"name": 70, "publisher": 70, "product_name": 70}),
         "third_party_service_review_candidates": rows("third_party_service_review_candidates", 8, {"name": 70, "publisher": 70, "dependencies": 80, "dependents": 80}),
+        "service_dependency_graph": rows("service_dependency_graph", 18, {"name": 70, "binary_name": 60, "publisher": 70, "dependencies": 70, "dependents": 70}),
         "coverage": evidence.get("coverage", {}),
         "game_active": bool(evidence.get("game_active")),
         "vanguard": evidence.get("vanguard", {}),
@@ -501,6 +503,7 @@ def _fit_prompt_packet(packet: dict[str, Any], limit: int = MAX_CONTEXT_CHARS) -
         ("installed_apps", 8), ("drivers", 8), ("driver_updates", 5),
         ("application_usage_30d", 6), ("maintenance_findings", 5),
         ("background_process_review_candidates", 5), ("third_party_service_review_candidates", 5),
+        ("service_dependency_graph", 8),
         ("top_processes_by_resource", 12),
     ]
     for key, minimum in trim_targets:
