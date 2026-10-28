@@ -206,15 +206,27 @@ try {
     if not isinstance(payload, dict):
         raise RuntimeError("Windows startup/task inventory returned an invalid object.")
     startup, tasks = payload.get("startup", []), payload.get("tasks", [])
-    if isinstance(startup, dict):
-        startup = [startup]
-    if isinstance(tasks, dict):
-        tasks = [tasks]
+    if startup is None: startup = []
+    if tasks is None: tasks = []
+    if isinstance(startup, dict): startup = [startup]
+    if isinstance(tasks, dict): tasks = [tasks]
     if not isinstance(startup, list) or not isinstance(tasks, list):
         raise RuntimeError("Windows startup/task inventory lists were incomplete.")
+    normalized_tasks = []
+    for row in tasks:
+        if not isinstance(row, dict):
+            continue
+        actions = row.get("actions")
+        if actions is None:
+            row["actions"] = []
+        elif isinstance(actions, dict):
+            row["actions"] = [actions]
+        elif not isinstance(actions, list):
+            row["actions"] = []
+        normalized_tasks.append(row)
     return {
         "startup": [row for row in startup if isinstance(row, dict)][: _MAX_ITEMS],
-        "tasks": [row for row in tasks if isinstance(row, dict)][: _MAX_ITEMS],
+        "tasks": normalized_tasks[: _MAX_ITEMS],
         "task_total": int(payload.get("task_total") or 0),
         "startup_complete": payload.get("startup_complete") is True,
         "tasks_complete": payload.get("tasks_complete") is True,
