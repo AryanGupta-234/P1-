@@ -25,6 +25,8 @@ _RETENTION_SECONDS = 30 * 86400
 _BASELINE_MIN_DAYS = 7
 _MAX_PROCESS_ROWS = 36
 _MAX_SIGNATURE_PATHS = 28
+_MAX_LAUNCH_ROWS = 800
+_MAX_LAUNCH_BINARIES = 240
 
 _STOP = threading.Event()
 _LOCK = threading.RLock()
@@ -92,6 +94,19 @@ def ensure_schema() -> None:
         state_key TEXT PRIMARY KEY,
         value_json TEXT NOT NULL,
         updated_at REAL NOT NULL)""")
+    core.db("""CREATE TABLE IF NOT EXISTS component_launch_metadata(
+        component_id TEXT PRIMARY KEY,
+        metadata_json TEXT NOT NULL DEFAULT '{}',
+        captured_at REAL NOT NULL)""")
+    core.db("""CREATE TABLE IF NOT EXISTS component_relationships(
+        source_component_id TEXT NOT NULL,
+        target_component_id TEXT NOT NULL,
+        relation_type TEXT NOT NULL,
+        confidence TEXT NOT NULL,
+        evidence_json TEXT NOT NULL DEFAULT '{}',
+        observed_at REAL NOT NULL,
+        PRIMARY KEY(source_component_id,target_component_id,relation_type))""")
+    core.db("CREATE INDEX IF NOT EXISTS ix_component_relationship_target ON component_relationships(target_component_id,relation_type)")
     core.db("CREATE INDEX IF NOT EXISTS ix_component_samples_component_ts ON component_samples(component_id,ts)")
     core.db("CREATE INDEX IF NOT EXISTS ix_component_samples_ts ON component_samples(ts)")
     core.db("CREATE INDEX IF NOT EXISTS ix_component_catalog_type ON component_catalog(component_type,last_seen)")
