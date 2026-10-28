@@ -1451,10 +1451,64 @@ def _service_graph_rows() -> list[dict[str, Any]]:
     return [row for row in rows if isinstance(row, dict)]
 
 
+def _select_signature_batch(paths_by_id: dict[str, str]) -> list[tuple[str, str]]:
+    """Fairly rotate bounded process, service and launch-binary verification batches."""
+    grouped = {
+        "process": sorted((key, value) for key, value in paths_by_id.items() if key.startswith("process:")),
+        "service": sorted((key, value) for key, value in paths_by_id.items() if key.startswith("service:")),
+        "binary": sorted((key, value) for key, value in paths_by_id.items() if key.startswith("binary:")),
+    }
+    state = _load_state("signature_rotation")
+    quotas = {"process": 12, "service": 8, "binary": 8}
+    selected: list[tuple[str, str]] = []
+    selected_ids: set[str] = set()
+    next_state: dict[str, int] = {}
+    for kind in ("process", "service", "binary"):
+        rows = grouped[kind]
+        if not rows:
+            next_state[kind] = 0
+            continue
+        offset = int(state.get(kind) or 0) % len(rows)
+        count = min(quotas[kind], len(rows))
+        for position in range(count):
+            item = rows[(offset + position) % len(rows)]
+            selected.append(item)
+            selected_ids.add(item[0])
+        next_state[kind] = (offset + count) % len(rows)
+
+    spare = max(0, _MAX_SIGNATURE_PATHS - len(selected))
+    while spare:
+        progressed = False
+        for kind in ("process", "service", "binary"):
+            rows = grouped[kind]
+            if not rows:
+                continue
+            offset = int(next_state.get(kind) or 0) % len(rows)
+            for step in range(len(rows)):
+                position = (offset + step) % len(rows)
+                item = rows[position]
+                if item[0] in selected_ids:
+                    continue
+                selected.append(item)
+                selected_ids.add(item[0])
+                next_state[kind] = (position + 1) % len(rows)
+                spare -= 1
+                progressed = True
+                break
+            if spare <= 0:
+                break
+        if not progressed:
+            break
+    _save_state("signature_rotation", {**next_state, "captured_at": time.time()})
+    return selected[:_MAX_SIGNATURE_PATHS]
+
+
 def _refresh_signatures_from_paths(paths_by_id: dict[str, str]) -> int:
     if not paths_by_id:
         return 0
-    chosen = list(paths_by_id.items())[:_MAX_SIGNATURE_PATHS]
+    chosen = _select_signature_batch(paths_by_id)
+    if not chosen:
+        return 0
     metadata = _authenticode_query([path for _component_id, path in chosen])
     updated = 0
     for index, item in enumerate(metadata):
@@ -1479,14 +1533,15 @@ def _refresh_enrichment(force: bool = False) -> dict[str, Any]:
     permitted, reason = _resource_gate()
     if not permitted:
         return {"ok": False, "deferred": True, "reason": reason}
-    graph = refresh_service_graph(force=force)
-    # Make sure identities exist before the signature result is written back.
+    service_graph = refresh_service_graph(force=force)
+    service_graph_ok = service_graph.get("ok") is True
+
+    # Sample identities first so enrichment always updates known catalog rows.
     sample_processes()
     sample_services()
-    # Service catalog rows are refreshed by the SCM collector; only query signatures
-    # when the dependency map and process sample are available.
+    service_rows = _service_graph_rows() if service_graph_ok else []
     paths = _process_signature_paths(force=force)
-    for row in _service_graph_rows():
+    for row in service_rows:
         path = _normal_path(row.get("binary_path"))
         component_id = service_component_id(row.get("name"))
         if not path or not component_id or _protected_service(row, path) or _is_windows_binary(path):
@@ -1494,9 +1549,76 @@ def _refresh_enrichment(force: bool = False) -> dict[str, Any]:
         existing = core.db("SELECT metadata_checked_at FROM component_catalog WHERE component_id=?", (component_id,))
         if force or not existing or time.time() - float(existing[0][0] or 0) >= _SIGNATURE_REFRESH_SECONDS:
             paths[component_id] = path
-    updated = _refresh_signatures_from_paths(paths)
-    return {"ok": bool(graph.get("ok")), "graph": graph, "signatures_updated": updated}
 
+    try:
+        launch_snapshot = _launch_inventory_query()
+    except Exception as exc:
+        launch_snapshot = {
+            "startup": [], "tasks": [], "task_total": 0,
+            "startup_complete": False, "tasks_complete": False, "task_truncated": False,
+            "source_health": {
+                "startup": {"ok": False, "error": f"{type(exc).__name__}: {_clean(exc, 150)}"},
+                "tasks": {"ok": False, "error": f"{type(exc).__name__}: {_clean(exc, 150)}"},
+            },
+            "captured_at": time.time(),
+        }
+        core.log("component-intelligence", f"startup/task provenance query unavailable: {type(exc).__name__}: {_clean(exc, 150)}", "warn")
+
+    try:
+        from . import inventory
+        inventory_data = inventory.INV if isinstance(inventory.INV, dict) else {}
+    except Exception:
+        inventory_data = {}
+    health = inventory_data.get("health") if isinstance(inventory_data.get("health"), dict) else {}
+    apps_health = health.get("apps") if isinstance(health.get("apps"), dict) else {}
+    launch_snapshot["apps_complete"] = apps_health.get("ok") is True
+    launch_snapshot["service_graph_complete"] = service_graph_ok
+
+    launch_graph = _build_launch_graph(
+        launch_snapshot,
+        service_rows,
+        inventory_data.get("apps") if isinstance(inventory_data.get("apps"), list) else [],
+        now=time.time(),
+    )
+    _persist_launch_graph(launch_graph)
+
+    # Raw executable paths exist only in this bounded in-memory map. Authenticode
+    # returns signer/version metadata; no path or argument string is persisted.
+    for component_id, path in launch_graph.get("binary_paths", {}).items():
+        catalog_row = next((item for item in launch_graph.get("catalog_rows", [])
+                            if item[0] == component_id), None)
+        if not path or catalog_row is None or bool(catalog_row[10]) or _is_windows_binary(path):
+            continue
+        existing = core.db(
+            "SELECT metadata_checked_at FROM component_catalog WHERE component_id=?",
+            (component_id,),
+        )
+        if force or not existing or time.time() - float(existing[0][0] or 0) >= _SIGNATURE_REFRESH_SECONDS:
+            paths[component_id] = path
+
+    updated = _refresh_signatures_from_paths(paths)
+    launch_summary = {
+        "startup_count": len(launch_graph.get("startup_ids") or []),
+        "task_count": len(launch_graph.get("task_ids") or []),
+        "binary_count": len(launch_graph.get("binary_paths") or {}),
+        "startup_complete": bool(launch_graph.get("startup_complete")),
+        "tasks_complete": bool(launch_graph.get("tasks_complete")),
+        "apps_complete": bool(launch_graph.get("apps_complete")),
+        "service_graph_complete": bool(launch_graph.get("service_graph_complete")),
+        "task_inventory_truncated": bool(launch_snapshot.get("task_truncated")),
+    }
+    complete = all(launch_summary[key] for key in (
+        "startup_complete", "tasks_complete", "apps_complete", "service_graph_complete",
+    ))
+    return {
+        "ok": complete, "deferred": not complete,
+        "reason": "" if complete else (
+            "Startup, scheduled-task, installed-app or service provenance coverage is incomplete; "
+            "previous relationships were retained for unavailable sources."
+        ),
+        "graph": service_graph, "launch_inventory": launch_summary,
+        "signatures_updated": updated,
+    }
 
 
 def refresh_now() -> dict[str, Any]:
