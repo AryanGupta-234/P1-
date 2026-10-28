@@ -944,37 +944,56 @@ def _loop() -> None:
     ensure_schema()
     last_process = _last_sample("process")
     last_service = _last_sample("service")
-    last_enrichment = float(_load_state("enrichment").get("captured_at") or 0)
+    enrichment = _load_state("enrichment")
+    last_enrichment = float(enrichment.get("captured_at") or 0)
+    last_enrichment_attempt = float(_load_state("enrichment_attempt").get("attempted_at") or 0)
     last_retention = 0.0
+    last_report = 0.0
+    cached_report: dict[str, Any] = {}
     while not _STOP.is_set():
         now = time.time()
         try:
             if now - last_process >= _PROCESS_SAMPLE_SECONDS and core.STATE.get("procs"):
-                count = sample_processes(now)
-                if count:
-                    last_process = now
+                sample_processes(now)
+                last_process = now
             if now - last_service >= _SERVICE_SAMPLE_SECONDS and core.STATE.get("services_catalog"):
-                count = sample_services(now)
-                if count:
-                    last_service = now
-            if now - last_enrichment >= _GRAPH_REFRESH_SECONDS and core.STATE.get("procs") and core.STATE.get("services_catalog"):
+                sample_services(now)
+                last_service = now
+            if (now - last_enrichment >= _GRAPH_REFRESH_SECONDS
+                    and now - last_enrichment_attempt >= 900
+                    and core.STATE.get("procs") and core.STATE.get("services_catalog")):
+                last_enrichment_attempt = now
                 result = _refresh_enrichment()
+                _save_state("enrichment_attempt", {
+                    "attempted_at": now, "ok": bool(result.get("ok")),
+                    "deferred": bool(result.get("deferred")),
+                    "reason": _clean(result.get("reason"), 160),
+                })
                 if result.get("ok"):
                     last_enrichment = now
-                    _save_state("enrichment", {"captured_at": now, "signatures_updated": result.get("signatures_updated", 0)})
+                    _save_state("enrichment", {
+                        "captured_at": now,
+                        "signatures_updated": int(result.get("signatures_updated") or 0),
+                    })
             if now - last_retention >= 3600:
                 core.db("DELETE FROM component_samples WHERE ts<?", (now - _RETENTION_SECONDS,))
                 core.db("DELETE FROM component_catalog WHERE last_seen<? AND component_id NOT IN "
                         "(SELECT component_id FROM component_preferences)", (now - _RETENTION_SECONDS,))
                 last_retention = now
-            current = report()
-            core.persist_snapshot("components.latest", current)
-            core.heartbeat(
-                "component baselines", 60,
-                f"{current['coverage']['process_components']} process identities · "
-                f"{current['coverage']['service_components']} services · "
-                f"{len(current['process_candidates']) + len(current['service_candidates'])} review candidates",
-            )
+            # Aggregate the 30-day sample store at most once every five minutes;
+            # do not run a full GROUP BY over hundreds of thousands of samples
+            # on every 20-second sampler tick.
+            if now - last_report >= 300:
+                cached_report = report()
+                core.persist_snapshot("components.latest", cached_report)
+                last_report = now
+            if cached_report:
+                core.heartbeat(
+                    "component baselines", 60,
+                    f"{cached_report['coverage']['process_components']} process identities · "
+                    f"{cached_report['coverage']['service_components']} services · "
+                    f"{len(cached_report['process_candidates']) + len(cached_report['service_candidates'])} review candidates",
+                )
         except Exception as exc:
             core.log("component-intelligence", f"baseline cycle failed: {type(exc).__name__}: {_clean(exc, 180)}", "warn")
             core.heartbeat("component baselines", 60, err=f"{type(exc).__name__}: {_clean(exc, 120)}")
