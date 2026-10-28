@@ -1,7 +1,7 @@
 # SENTINEL Implementation Plan
 
 **Target:** Windows 11 x64 · local-first desktop runtime  
-**Plan revision:** 1.3 · **Release baseline:** 1.2.33  
+**Plan revision:** 1.4 · **Release baseline:** 1.2.34  
 **Status:** `[x]` existing capability · `[~]` integration/verification in progress · `[ ]` planned
 
 This is the single consolidated backlog for the next SENTINEL upgrade. It extends the existing collectors, SQLite store, maintenance executor, safeguard, adaptive runtime, AI council, memory engine, rollback journal and dashboard; it does not replace them.
@@ -134,7 +134,7 @@ Make SENTINEL a Windows-specialist, goal-driven performance and reliability assi
 ## P4.3 — Longitudinal component intelligence (implemented in 1.2.33)
 
 - [x] Separate agent-owned sampler for process identities and SCM service state; no second fast telemetry poller.
-- [x] Five-minute process sampling, fifteen-minute service sampling, bounded candidate set and 30-day SQLite retention.
+- [x] Five-minute process sampling, fifteen-minute service sampling, bounded candidate set and 30-day SQLite retention; extra process samples pause in game sessions.
 - [x] Process identities stored as one-way path hashes plus binary basenames; no raw process executable paths in component tables.
 - [x] In-memory bounded service executable paths for Authenticode only; persisted SCM graph strips binary paths and descriptions.
 - [x] Safe-idle, resource-gated Authenticode/file-version metadata and Windows SCM dependency/dependent graph.
@@ -144,7 +144,21 @@ Make SENTINEL a Windows-specialist, goal-driven performance and reliability assi
 - [x] Keep / Not needed / Ask later / note-only user preferences persisted and supplied to later local AI reviews.
 - [x] Exact-instance visible-GUI graceful-close proposal path only; normal Actions approval required; no force termination.
 - [x] Aggregation throttled to five-minute intervals and deferred enrichment retries back off for fifteen minutes.
+- [x] Require low foreground and low historical visible/on-screen GUI-window sample ratios before ranking a process as a background candidate.
+- [x] Separate evidence-coverage confidence, process resource impact, process review priority and service ownership-review scores; publish the formulas and caveats to UI and local AI.
+- [x] Compare PE CompanyName metadata with the Authenticode certificate organization and surface mismatches.
+- [x] Withhold service ownership candidates when the complete SCM dependency graph is missing, stale (>24 hours) or future-dated.
+- [x] Graceful-close proposals require exactly one matching visible, on-screen, interactive process instance; ambiguous multi-instance matches fail closed.
 - [ ] Extend evidence with signed startup-item provenance and task-to-service/app relationships; keep all proposed changes preview/approval gated.
+
+## P4.4 — Evidence-quality and ownership scoring (implemented in 1.2.34)
+
+- [x] Persist historical visible-window and on-screen-window sample ratios; suppress candidates that are not consistently headless/background.
+- [x] Publish an explicit evidence-coverage score, separate process impact score, review-priority heuristic and service ownership-coverage score.
+- [x] Show PE company metadata beside the signer certificate organization and flag mismatches.
+- [x] Hide service candidates unless a complete SCM dependency graph is present and no older than 24 hours.
+- [x] Refuse graceful-close preparation when multiple visible process instances share the same executable identity.
+- [x] Pause the supplementary process sampler during active game sessions.
 
 ## P5 — Windows action library
 
