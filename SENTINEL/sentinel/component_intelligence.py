@@ -782,6 +782,7 @@ def ai_evidence() -> dict[str, Any]:
             "baseline_days": item["active_days"], "samples": item["sample_count"],
             "dependencies": item["dependencies"], "dependents": item["dependents"],
             "evidence_strength": item["evidence_strength"], "operator_intent": item["preference"],
+            "operator_note": item["operator_note"],
         })
     return {
         "component_baseline_coverage": payload["coverage"],
