@@ -600,7 +600,7 @@
     </div>
   </div>
   <div class="panel maint-diagnostics-panel">
-    <div class="ph">Component baselines &amp; review<em id="component-baseline-state">COLLECTING LONGITUDINAL EVIDENCE</em><button class="btn sm" id="component-baseline-refresh">REFRESH SIGNATURES</button></div>
+    <div class="ph">Component baselines &amp; review<em id="component-baseline-state">COLLECTING LONGITUDINAL EVIDENCE</em><button class="btn sm" id="component-baseline-refresh">REFRESH APP / TASK GRAPH</button></div>
     <div class="pb">
       <div class="msg"><small>7-DAY EVIDENCE GATE · 30-DAY LOCAL HISTORY</small>SENTINEL measures background process resource use and service start/dependency relationships over time. Publisher and Authenticode checks run only in safe idle windows. Suggestions ask what you need; they never mean a component is useless or safe to disable.</div>
       <div id="component-baseline-summary" class="maint-mini-grid">
@@ -611,6 +611,10 @@
       <div id="component-process-candidates" class="component-review-list"><div class="empty">The baseline engine needs multiple days of observations before ranking review candidates.</div></div>
       <div class="maint-diagnostics-title" style="margin-top:14px">THIRD-PARTY AUTO-START SERVICES · DEPENDENCY REVIEW</div>
       <div id="component-service-candidates" class="component-review-list"><div class="empty">Service dependency graph and signed publisher inventory are being collected.</div></div>
+      <div class="maint-diagnostics-title" style="margin-top:14px">STARTUP ITEMS · SIGNED EXECUTABLE PROVENANCE</div>
+      <div id="component-startup-provenance" class="component-review-list"><div class="empty">Registry and Startup-folder registrations are being resolved to their exact executable targets.</div></div>
+      <div class="maint-diagnostics-title" style="margin-top:14px">SCHEDULED TASKS · APP / SERVICE RELATIONSHIPS</div>
+      <div id="component-task-provenance" class="component-review-list"><div class="empty">Task actions are being matched against signed binaries, installed applications and service executable identities.</div></div>
       <div class="msg"><small>OPERATOR CONTROL</small>KEEP prevents future review suggestions. NOT NEEDED only records your intent and hides the suggestion; it does not close the app or disable a service. A visible GUI process can receive a separate graceful-close proposal, which still requires approval in Actions.</div>
     </div>
   </div>
