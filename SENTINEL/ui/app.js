@@ -2646,8 +2646,9 @@ async function loadComponentIntelligence(){
     const processCount=Number(coverage.process_components||0);
     const serviceCount=Number(coverage.service_components||0);
     const graphCount=Number(coverage.service_dependency_graph_count||0);
+    const graphFresh=coverage.service_dependency_graph_fresh===true;
     if(state)state.textContent=data.status==="ready"?
-      "BASELINE ACTIVE · "+processCount+" PROCESS / "+serviceCount+" SERVICE":
+      "BASELINE ACTIVE · "+processCount+" PROCESS / "+serviceCount+" SERVICE"+(graphFresh?" · SERVICE GRAPH CURRENT":" · SERVICE GRAPH STALE"):
       "WAITING FOR PROCESS + SERVICE SAMPLES";
     if(summary){
       summary.innerHTML=
@@ -2666,7 +2667,7 @@ async function loadComponentIntelligence(){
     processHost.innerHTML=processes.map(item=>componentReviewCard(item,"process")).join("")||
       '<div class="empty">No background application currently meets the seven-day evidence gate. SENTINEL is still collecting resource, usage and signature history.</div>';
     serviceHost.innerHTML=services.map(item=>componentReviewCard(item,"service")).join("")||
-      '<div class="empty">No third-party service meets the signed-publisher, seven-day history and dependency review criteria yet. Core and protected services are excluded.</div>';
+      '<div class="empty">'+esc(data.service_review_block_reason||"No third-party service currently meets the signed-publisher, seven-day history and dependency review criteria. Core and protected services are excluded.")+'</div>';
   }catch(error){
     if(state)state.textContent="COMPONENT BASELINE UNAVAILABLE";
     processHost.innerHTML='<div class="empty">'+esc(error.message||String(error))+'</div>';
