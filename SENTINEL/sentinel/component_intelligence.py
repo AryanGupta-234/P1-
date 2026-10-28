@@ -874,6 +874,9 @@ def _refresh_enrichment(force: bool = False) -> dict[str, Any]:
     if not permitted:
         return {"ok": False, "deferred": True, "reason": reason}
     graph = refresh_service_graph(force=force)
+    # Make sure identities exist before the signature result is written back.
+    sample_processes()
+    sample_services()
     # Service catalog rows are refreshed by the SCM collector; only query signatures
     # when the dependency map and process sample are available.
     paths = _process_signature_paths(force=force)
@@ -916,7 +919,7 @@ def _loop() -> None:
                 count = sample_services(now)
                 if count:
                     last_service = now
-            if now - last_enrichment >= _GRAPH_REFRESH_SECONDS:
+            if now - last_enrichment >= _GRAPH_REFRESH_SECONDS and core.STATE.get("procs") and core.STATE.get("services_catalog"):
                 result = _refresh_enrichment()
                 if result.get("ok"):
                     last_enrichment = now
