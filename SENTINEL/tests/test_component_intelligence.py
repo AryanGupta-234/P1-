@@ -187,13 +187,15 @@ def test_operator_preference_rejects_unknown_component_and_invalid_state(monkeyp
 
 
 def test_component_close_api_only_creates_a_pending_graceful_close_proposal(monkeypatch):
-    component_id = "process:" + "a" * 40
+    exe = r"C:\Program Files\Example\ExampleApp.exe"
+    component_id = components.process_component_id(exe)
+    assert component_id
     monkeypatch.setattr(core, "db", lambda sql, _args=(), many=False: [(0, "Example App")] if "SELECT protected,name" in sql else [])
     monkeypatch.setattr(core, "STATE", {
         "game": None,
         "procs": [{
             "pid": 2200, "create_time": 1700000000.0,
-            "name": "ExampleApp.exe", "exe": r"C:\Program Files\Example\ExampleApp.exe",
+            "name": "ExampleApp.exe", "exe": exe,
             "path_state": "present", "session_id": 1, "visible_windows": 1,
             "onscreen_windows": 1,
         }],
@@ -209,3 +211,54 @@ def test_component_close_api_only_creates_a_pending_graceful_close_proposal(monk
     assert result["requires_confirmation"] is True
     assert captured["args"][0] == "terminate_process"
     assert captured["kwargs"]["origin"] == "component-intelligence"
+
+
+
+def test_service_dependency_raw_paths_are_not_persisted(monkeypatch):
+    from sentinel import runtime_engine
+
+    raw_path = r"C:\Program Files\ExampleVendor\ServiceHost.exe"
+    graph = {
+        "services": [{
+            "name": "ExampleSvc", "display": "Example Service", "state": "Running",
+            "start": "Auto", "pid": 2400, "binary_name": "ServiceHost.exe",
+            "binary_path": raw_path, "dependencies": ["RpcSs"], "dependents": [],
+        }],
+        "count": 1, "captured_at": 1700000000.0,
+    }
+    persisted = {}
+    monkeypatch.setattr(core, "IS_WIN", True)
+    monkeypatch.setattr(runtime_engine, "admit_optional_work", lambda *_args, **_kwargs: (True, "admitted"))
+    monkeypatch.setattr(components, "_service_graph_query", lambda: graph)
+    monkeypatch.setattr(components, "_save_state", lambda key, value: persisted.update({key: value}))
+
+    result = components.refresh_service_graph(force=True)
+
+    assert result["ok"] is True
+    stored = persisted["service_graph"]
+    assert stored["services"][0]["dependencies"] == ["RpcSs"]
+    assert stored["services"][0]["dependents"] == []
+    assert stored["services"][0]["binary_name"] == "ServiceHost.exe"
+    assert "binary_path" not in stored["services"][0]
+    assert raw_path not in str(stored)
+
+
+def test_local_ai_evidence_contains_dependency_graph_and_baseline_candidate_ids(monkeypatch):
+    rows = [(
+        "service:" + "c" * 40, "ExampleSvc", "ExampleSvc.exe", "Example Corp",
+        "Valid", 0, '["RpcSs"]', '[]', "auto", "running",
+    )]
+
+    def fake_db(sql, args=(), many=False):
+        if "FROM component_catalog WHERE component_type='service'" in sql:
+            return rows
+        return []
+
+    monkeypatch.setattr(core, "db", fake_db)
+    evidence = components.ai_evidence()
+
+    assert len(evidence["service_dependency_graph"]) == 1
+    graph_row = evidence["service_dependency_graph"][0]
+    assert graph_row["id"] == "component-service-graph.1"
+    assert graph_row["dependencies"] == ["RpcSs"]
+    assert "binary_path" not in str(evidence)
