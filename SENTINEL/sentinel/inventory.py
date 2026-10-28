@@ -251,6 +251,24 @@ def scan():
     try:
         from .core import persist_snapshot
         durable = {k: v for k, v in inv.items() if k != "processes"}
+        # Keep raw startup commands and executable paths in the live in-memory
+        # inventory only. They can contain arguments, usernames or private paths.
+        durable["startup"] = [
+            {"name": str(row.get("name") or "")[:120], "where": str(row.get("where") or "")[:100]}
+            for row in inv.get("startup", [])[:800] if isinstance(row, dict)
+        ]
+        durable["apps"] = [
+            {key: row.get(key) for key in ("name", "version", "publisher", "install_date") if row.get(key) is not None}
+            for row in inv.get("apps", [])[:1200] if isinstance(row, dict)
+        ]
+        durable["drivers"] = [
+            {key: row.get(key) for key in ("name", "display", "state", "start", "service_type") if row.get(key) is not None}
+            for row in inv.get("drivers", [])[:1200] if isinstance(row, dict)
+        ]
+        durable["services"] = [
+            {key: row.get(key) for key in ("name", "display", "state", "start", "pid") if row.get(key) is not None}
+            for row in inv.get("services", [])[:1200] if isinstance(row, dict)
+        ]
         persist_snapshot("inventory.latest", durable)
     except Exception as exc:
         log("storage", f"inventory snapshot persistence failed: {type(exc).__name__}: {str(exc)[:160]}", "warn")
