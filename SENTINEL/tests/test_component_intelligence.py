@@ -48,6 +48,16 @@ def test_component_identity_is_repeatable_and_does_not_store_executable_path():
     assert len(component_id.split(":", 1)[1]) == 40
 
 
+def test_component_notes_redact_user_paths_accounts_and_secrets():
+    note = components._clean(
+        r"Touchpad helper under C:\Users\private-user\AppData\Local; DOMAIN\\private-user token=secret-value"
+    )
+    assert "private-user" not in note
+    assert "secret-value" not in note
+    assert "[USER]" in note
+    assert "[ACCOUNT]" in note
+
+
 def test_service_identity_is_stable_and_name_scoped():
     assert components.service_component_id("ExampleSvc") == components.service_component_id("examplesvc")
     assert components.service_component_id("ExampleSvc").startswith("service:")
