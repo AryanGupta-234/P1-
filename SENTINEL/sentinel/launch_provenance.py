@@ -419,10 +419,13 @@ def _build_graph(snapshot: dict[str, Any], service_rows: list[dict[str, Any]],
         process_id = ci.process_component_id(executable)
         if not process_id:
             continue
-        observed = core.db(
-            "SELECT 1 FROM component_catalog WHERE component_id=? AND component_type='process' LIMIT 1",
-            (process_id,),
-        )
+        try:
+            observed = core.db(
+                "SELECT 1 FROM component_catalog WHERE component_id=? AND component_type='process' LIMIT 1",
+                (process_id,),
+            )
+        except Exception:
+            observed = []
         if observed:
             add_edge(binary_id, process_id, "observed_as_process", "exact_normalized_executable_path",
                      {"path_stored": False, "match": "same normalized executable identity"})
@@ -537,26 +540,45 @@ def _component_rows(component_type: str, since: float, limit: int) -> list[dict[
         for link in links:
             binary_id = str(link[0])
             relations = core.db(
-                "SELECT r.relation_type,r.confidence,t.component_type,t.name,t.publisher,t.signature_status,t.service_state,t.protected "
+                "SELECT r.target_component_id,r.relation_type,r.confidence,t.component_type,t.name,t.publisher,t.signature_status,t.service_state,t.protected "
                 "FROM component_relationships r LEFT JOIN component_catalog t ON t.component_id=r.target_component_id "
                 "WHERE r.source_component_id=?",
                 (binary_id,),
             )
             apps, services = [], []
+            process_observation = None
             for rel in relations:
-                detail = {"name": _clean(rel[3], 90), "publisher": _clean(rel[4], 90),
-                          "confidence": str(rel[1]), "signature_status": _clean(rel[5], 24),
-                          "state": _clean(rel[6], 24), "protected": bool(rel[7])}
-                if rel[0] == "installed_under_app" and rel[2] == "app":
+                detail = {"name": _clean(rel[4], 90), "publisher": _clean(rel[5], 90),
+                          "confidence": str(rel[2]), "signature_status": _clean(rel[6], 24),
+                          "state": _clean(rel[7], 24), "protected": bool(rel[8])}
+                if rel[1] == "installed_under_app" and rel[3] == "app":
                     apps.append(detail)
-                elif rel[0] == "same_executable_as_service" and rel[2] == "service":
+                elif rel[1] == "same_executable_as_service" and rel[3] == "service":
                     services.append(detail)
+                elif rel[1] == "observed_as_process" and rel[3] == "process":
+                    sample = core.db(
+                        "SELECT COUNT(*),COUNT(DISTINCT date(ts,'localtime')),AVG(cpu_pct),AVG(memory_mb),"
+                        "AVG(io_mb_s),AVG(CASE WHEN foreground=1 THEN 1.0 ELSE 0.0 END),MAX(ts) "
+                        "FROM component_samples WHERE component_id=? AND ts>=?",
+                        (str(rel[0]), since),
+                    )
+                    values = sample[0] if sample else (0, 0, None, None, None, None, None)
+                    process_observation = {
+                        "samples": int(values[0] or 0), "active_days": int(values[1] or 0),
+                        "average_cpu_pct": round(float(values[2]), 2) if values[2] is not None else None,
+                        "average_memory_mb": round(float(values[3]), 1) if values[3] is not None else None,
+                        "average_io_mb_s": round(float(values[4]), 3) if values[4] is not None else None,
+                        "foreground_sample_pct": round(float(values[5]) * 100, 2) if values[5] is not None else None,
+                        "last_observed_at": float(values[6]) if values[6] is not None else None,
+                        "identity_match": "exact_normalized_executable_path",
+                    }
             targets.append({
                 "binary_name": _clean(link[5], 90), "publisher": _clean(link[6], 100),
                 "product_name": _clean(link[7], 100), "file_version": _clean(link[8], 70),
                 "signature_status": _clean(link[9], 24), "signer": _clean(link[10], 120),
                 "protected": bool(link[11]), "confidence": str(link[2]),
                 "application_matches": apps[:4], "service_matches": services[:8],
+                "process_observation": process_observation,
             })
         pref = core.db("SELECT preference,note,updated_at FROM component_preferences WHERE component_id=?", (cid,))
         preference = str(pref[0][0]) if pref else "unreviewed"
@@ -671,6 +693,15 @@ def ai_evidence(payload: dict[str, Any]) -> dict[str, Any]:
                     "signature": _clean(target.get("signature_status"), 24),
                     "publisher": _clean(target.get("publisher"), 90),
                     "confidence": _clean(target.get("confidence"), 40),
+                    "process_observation": {
+                        "samples": int((target.get("process_observation") or {}).get("samples") or 0),
+                        "active_days": int((target.get("process_observation") or {}).get("active_days") or 0),
+                        "average_cpu_pct": (target.get("process_observation") or {}).get("average_cpu_pct"),
+                        "average_memory_mb": (target.get("process_observation") or {}).get("average_memory_mb"),
+                        "average_io_mb_s": (target.get("process_observation") or {}).get("average_io_mb_s"),
+                        "foreground_sample_pct": (target.get("process_observation") or {}).get("foreground_sample_pct"),
+                        "identity_match": (target.get("process_observation") or {}).get("identity_match"),
+                    } if target.get("process_observation") else None,
                     "application_matches": [
                         {"name": _clean(match.get("name"), 80), "publisher": _clean(match.get("publisher"), 80),
                          "confidence": _clean(match.get("confidence"), 40)}
