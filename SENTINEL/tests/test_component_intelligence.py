@@ -195,7 +195,7 @@ def test_operator_preference_is_persisted_and_clear_is_explicit(monkeypatch):
 
 def test_operator_preference_rejects_unknown_component_and_invalid_state(monkeypatch):
     monkeypatch.setattr(core, "db", lambda *_args, **_kwargs: [])
-    with pytest.raises(ValueError, match="keep/not_needed/review_later/clear"):
+    with pytest.raises(ValueError, match="keep/not_needed/review_later/note_only/clear"):
         components.set_preference("process:" + "a" * 40, "disable")
     with pytest.raises(ValueError, match="not found"):
         components.set_preference("process:" + "a" * 40, "keep")
