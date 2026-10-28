@@ -310,6 +310,18 @@ def _evidence_packet() -> dict[str, Any]:
         "inventory_age_minutes": round(max(0.0, now - float(inventory_data.get("ts") or now)) / 60, 1),
         "inventory_health_known": bool(health_map),
     }
+    component_evidence = {}
+    try:
+        from . import component_intelligence
+        component_evidence = component_intelligence.ai_evidence()
+    except Exception:
+        component_evidence = {
+            "component_baseline_coverage": {"status": "unavailable"},
+            "background_process_review_candidates": [],
+            "third_party_service_review_candidates": [],
+            "component_evidence_ids": [],
+        }
+
     groups = (
         evidence, processes, services, startup, tasks, apps, drivers, driver_updates,
         recent_events, recent_insights, app_usage, source_health, findings, preferences,
@@ -327,7 +339,11 @@ def _evidence_packet() -> dict[str, Any]:
         "recent_events_7d": recent_events, "recent_insights": recent_insights,
         "application_usage_30d": app_usage, "source_health": source_health,
         "maintenance_findings": findings, "prior_user_answers": preferences,
-        "coverage": coverage, "evidence_ids": evidence_ids,
+        "component_baseline_coverage": component_evidence.get("component_baseline_coverage", {}),
+        "background_process_review_candidates": component_evidence.get("background_process_review_candidates", []),
+        "third_party_service_review_candidates": component_evidence.get("third_party_service_review_candidates", []),
+        "component_evidence_ids": component_evidence.get("component_evidence_ids", []),
+        "coverage": coverage, "evidence_ids": evidence_ids + component_evidence.get("component_evidence_ids", []),
         "game_active": bool(core.STATE.get("game")),
         "vanguard": service_state.get("vanguard", {}),
         "privacy_exclusions": ["command_lines", "window_titles", "browser_content",
@@ -385,6 +401,9 @@ def _model_evidence_packet(evidence: dict[str, Any]) -> dict[str, Any]:
         "source_health": rows("source_health", 12, {"source": 40, "error": 80}),
         "maintenance_findings": rows("maintenance_findings", 8, {"title": 100, "detail": 120}),
         "prior_user_answers": rows("prior_user_answers", 8, {"topic": 75, "preference": 120}),
+        "component_baseline_coverage": evidence.get("component_baseline_coverage", {}),
+        "background_process_review_candidates": rows("background_process_review_candidates", 8, {"name": 70, "publisher": 70, "product_name": 70}),
+        "third_party_service_review_candidates": rows("third_party_service_review_candidates", 8, {"name": 70, "publisher": 70, "dependencies": 80, "dependents": 80}),
         "coverage": evidence.get("coverage", {}),
         "game_active": bool(evidence.get("game_active")),
         "vanguard": evidence.get("vanguard", {}),
@@ -481,6 +500,7 @@ def _fit_prompt_packet(packet: dict[str, Any], limit: int = MAX_CONTEXT_CHARS) -
         ("prior_user_answers", 4), ("startup", 6), ("scheduled_tasks", 6),
         ("installed_apps", 8), ("drivers", 8), ("driver_updates", 5),
         ("application_usage_30d", 6), ("maintenance_findings", 5),
+        ("background_process_review_candidates", 5), ("third_party_service_review_candidates", 5),
         ("top_processes_by_resource", 12),
     ]
     for key, minimum in trim_targets:
@@ -569,6 +589,10 @@ def diagnose(question: str) -> dict:
         "A stopped, manual, trigger-started or rarely observed service is not evidence that it should be disabled; inspect dependencies and ask the operator about intent. " 
         "Never recommend disabling Windows core, security, Defender, firewall, update, accessibility, backup, storage, network, hardware, Riot Vanguard or VALORANT components. " 
         "Ask before recommending closure or startup changes for a user application. "
+        "Longitudinal component baselines cover only observed samples, not complete process uptime or user intent. " 
+        "A valid Authenticode signature identifies a trusted signer status, not proof that software is needed or harmless. " 
+        "A service with no SCM dependents may still be required by applications, scheduled tasks or users; never propose disablement from that graph alone. " 
+        "Use baseline candidate evidence to ask the operator about the component; do not infer that it is useless or automatically close/disable it. " 
         "Never recommend moving Steam/Epic game folders directly, changing OEM fan registers, BIOS, Secure Boot, Defender or Vanguard. "
         "Return only the required JSON object."
     )
