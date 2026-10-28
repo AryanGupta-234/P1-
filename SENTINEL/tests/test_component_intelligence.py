@@ -268,6 +268,8 @@ def test_local_ai_evidence_contains_dependency_graph_and_baseline_candidate_ids(
     def fake_db(sql, args=(), many=False):
         if "FROM component_catalog WHERE component_type='service'" in sql:
             return rows
+        if "FROM component_preferences p JOIN component_catalog c" in sql:
+            return [("process:" + "d" * 40, "process", "VendorTray.exe", "Vendor Inc.", "keep", "Required for hotkeys", 1700000000.0)]
         return []
 
     monkeypatch.setattr(core, "db", fake_db)
@@ -278,3 +280,5 @@ def test_local_ai_evidence_contains_dependency_graph_and_baseline_candidate_ids(
     assert graph_row["id"] == "component-service-graph.1"
     assert graph_row["dependencies"] == ["RpcSs"]
     assert "binary_path" not in str(evidence)
+    assert evidence["operator_component_preferences"][0]["preference"] == "keep"
+    assert evidence["operator_component_preferences"][0]["operator_note"] == "Required for hotkeys"
