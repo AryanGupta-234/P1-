@@ -9,32 +9,36 @@ from sentinel import core, actions
 
 def _process_summary(component_id=None, *, samples=900, days=12, span_hours=288,
                     signature="Valid", publisher="Example Software Ltd.",
-                    protected=0, cpu=0.75, memory=360.0, io_rate=0.65,
-                    foreground=0.002, visible=0.0, dependents="[]"):
+                    signer="CN=Example Software Ltd.", protected=0, cpu=0.75,
+                    memory=360.0, io_rate=0.65, foreground=0.002, visible=0.0,
+                    visible_ratio=0.0, onscreen_ratio=0.0, dependents="[]"):
     now = time.time()
     return (
         component_id or ("process:" + "a" * 40),
         "process", "Example Helper", "ExampleHelper.exe", publisher,
-        "Example Helper", "2.4.1", signature, "CN=Example Software Ltd.",
+        "Example Helper", "2.4.1", signature, signer,
         protected, "[]", dependents, "", "running",
         now - span_hours * 3600, now, samples, days,
         now - span_hours * 3600, now,
         cpu, 8.5, memory, 520.0, io_rate, foreground, visible, visible, 1.0, now,
+        visible_ratio, onscreen_ratio,
     )
 
 
 def _service_summary(component_id=None, *, samples=520, days=9, span_hours=216,
                      signature="Valid", publisher="Example Software Ltd.",
-                     protected=0, start_mode="auto", state="running", dependents="[]"):
+                     signer="CN=Example Software Ltd.", protected=0,
+                     start_mode="auto", state="running", dependents="[]"):
     now = time.time()
     return (
         component_id or ("service:" + "b" * 40),
         "service", "ExampleVendorService", "ExampleService.exe", publisher,
-        "Example Product", "3.2.0", signature, "CN=Example Software Ltd.",
+        "Example Product", "3.2.0", signature, signer,
         protected, '["RpcSs"]', dependents, start_mode, state,
         now - span_hours * 3600, now, samples, days,
         now - span_hours * 3600, now,
         None, None, None, None, None, None, None, None, 1.0, now,
+        0.0, 0.0,
     )
 
 
@@ -72,6 +76,12 @@ def test_process_review_candidate_requires_signed_history_and_measured_backgroun
     assert candidate["active_days"] == 12
     assert candidate["average_memory_mb"] == 360.0
     assert candidate["signature_status"] == "Valid"
+    assert candidate["publisher_consistency"] == "consistent"
+    assert candidate["certificate_organization"] == "Example Software Ltd."
+    assert candidate["evidence_confidence_score"] >= 80
+    assert candidate["resource_impact_score"] > 0
+    assert candidate["review_priority_score"] > 0
+    assert candidate["visible_window_sample_pct"] == 0
     assert candidate["requires_user_intent"] is True
     assert "no stop/disable action is implied" in candidate["recommendation"]
     noted = components._process_candidate(_process_summary(), {"note": "Required for touchpad hotkeys"}, [])
@@ -272,7 +282,7 @@ def test_service_dependency_raw_paths_are_not_persisted(monkeypatch):
 def test_local_ai_evidence_contains_dependency_graph_and_baseline_candidate_ids(monkeypatch):
     rows = [(
         "service:" + "c" * 40, "ExampleSvc", "ExampleSvc.exe", "Example Corp",
-        "Valid", 0, '["RpcSs"]', '[]', "auto", "running",
+        "Valid", "CN=Example Corp", 0, '["RpcSs"]', '[]', "auto", "running",
     )]
 
     def fake_db(sql, args=(), many=False):
@@ -289,6 +299,45 @@ def test_local_ai_evidence_contains_dependency_graph_and_baseline_candidate_ids(
     graph_row = evidence["service_dependency_graph"][0]
     assert graph_row["id"] == "component-service-graph.1"
     assert graph_row["dependencies"] == ["RpcSs"]
+    assert graph_row["publisher_consistency"] == "consistent"
     assert "binary_path" not in str(evidence)
     assert evidence["operator_component_preferences"][0]["preference"] == "keep"
     assert evidence["operator_component_preferences"][0]["operator_note"] == "Required for hotkeys"
+
+
+
+@pytest.mark.parametrize("kwargs", [
+    {"visible_ratio": 0.08},
+    {"onscreen_ratio": 0.03},
+])
+def test_process_candidate_rejects_historically_visible_gui_apps(kwargs):
+    assert components._process_candidate(_process_summary(**kwargs), {}, []) is None
+
+
+def test_process_candidate_exposes_metadata_vs_certificate_identity_mismatch():
+    candidate = components._process_candidate(
+        _process_summary(publisher="Example Helper Corporation", signer="CN=Different Signing LLC"),
+        {}, [],
+    )
+    assert candidate is not None
+    assert candidate["publisher_consistency"] == "different"
+    assert candidate["evidence_confidence_score"] < 85
+    assert candidate["certificate_organization"] == "Different Signing LLC"
+
+
+def test_publisher_identity_prefers_certificate_organization_over_file_metadata():
+    assert components._certificate_organization(
+        "CN=Example Signing Certificate, O=Example Software Ltd., C=US"
+    ) == "Example Software Ltd."
+    assert components._publisher_consistency(
+        "Example Software Ltd.", "CN=Example Signing Certificate, O=Example Software Ltd., C=US"
+    ) == "consistent"
+    assert components._publisher_consistency("File Company", "CN=Signing Entity") == "different"
+    assert components._publisher_consistency("", "CN=Signing Entity") == "unknown"
+
+
+def test_baseline_confidence_is_a_measurement_coverage_score_not_usefulness_probability():
+    assert components._baseline_confidence(900, 14, 336, "Valid", "consistent") == 100.0
+    partial = components._baseline_confidence(120, 7, 168, "Valid", "consistent")
+    assert 50 <= partial < 60
+    assert components._baseline_confidence(900, 14, 336, "Valid", "different") < 100
