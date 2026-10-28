@@ -557,7 +557,9 @@ def _aggregate_rows(component_type: str, since: float) -> list[tuple]:
         "COUNT(DISTINCT date(s.ts,'unixepoch')),MIN(s.ts),MAX(s.ts),"
         "AVG(s.cpu_pct),MAX(s.cpu_pct),AVG(s.memory_mb),MAX(s.memory_mb),AVG(s.io_mb_s),"
         "AVG(s.foreground),AVG(s.visible_windows),AVG(s.onscreen_windows),"
-        "AVG(s.running),c.metadata_checked_at "
+        "AVG(s.running),c.metadata_checked_at,"
+        "AVG(CASE WHEN s.visible_windows>0 THEN 1.0 ELSE 0.0 END),"
+        "AVG(CASE WHEN s.onscreen_windows>0 THEN 1.0 ELSE 0.0 END) "
         "FROM component_catalog c JOIN component_samples s ON s.component_id=c.component_id "
         "WHERE c.component_type=? AND s.ts>=? GROUP BY c.component_id ORDER BY c.name COLLATE NOCASE",
         (component_type, since),
@@ -572,11 +574,83 @@ def _preference_map() -> dict[str, dict[str, Any]]:
     }
 
 
+def _certificate_organization(subject: Any) -> str:
+    """Prefer the organization identity in the signing certificate over file metadata."""
+    text = str(subject or "")
+    fields = {}
+    for part in re.split(r"(?<!\\),", text):
+        if "=" not in part:
+            continue
+        key, value = part.split("=", 1)
+        fields[key.strip().casefold()] = value.strip().replace(r"\,", ",")
+    return _clean(fields.get("o") or fields.get("cn") or "", 140)
+
+
+def _publisher_consistency(file_company: Any, signer_subject: Any) -> str:
+    """Compare mutable PE company metadata with the signed certificate identity."""
+    company = str(file_company or "").strip()
+    organization = _certificate_organization(signer_subject)
+    if not company or not organization:
+        return "unknown"
+    normalize = lambda value: re.sub(r"[^a-z0-9]", "", str(value).casefold())
+    left, right = normalize(company), normalize(organization)
+    if left and right and (left == right or left in right or right in left):
+        return "consistent"
+    return "different"
+
+
+def _baseline_confidence(samples: Any, active_days: Any, span_hours: Any,
+                         signature_status: str, publisher_consistency: str = "unknown") -> float:
+    """Measurement coverage score, not a probability that a component is unnecessary."""
+    sample_coverage = min(1.0, max(0.0, float(samples or 0) / 500.0))
+    day_coverage = min(1.0, max(0.0, float(active_days or 0) / 14.0))
+    span_coverage = min(1.0, max(0.0, float(span_hours or 0) / (14.0 * 24.0)))
+    signature_coverage = 1.0 if signature_status == "Valid" else 0.0
+    score = 30.0 * sample_coverage + 25.0 * day_coverage + 25.0 * span_coverage + 20.0 * signature_coverage
+    if publisher_consistency == "different":
+        score -= 8.0
+    elif publisher_consistency != "consistent":
+        score -= 3.0
+    return round(min(100.0, max(0.0, score)), 1)
+
+
+def _evidence_strength(score: float) -> str:
+    if score >= 80.0:
+        return "high"
+    if score >= 60.0:
+        return "medium"
+    return "low"
+
+
+def _current_interactive_instance(component_id: str, rows: list[dict[str, Any]]) -> dict[str, Any] | None:
+    """Return one unambiguous visible GUI process instance; never pick by PID alone."""
+    matches = []
+    for row in rows:
+        if not isinstance(row, dict) or process_component_id(row.get("exe")) != component_id:
+            continue
+        if safeguard.is_protected_process(row.get("name"), row.get("exe")):
+            continue
+        try:
+            valid = (
+                int(row.get("pid") or 0) > 4
+                and float(row.get("create_time") or 0) > 0
+                and int(row.get("session_id") or 0) > 0
+                and int(row.get("visible_windows") or 0) > 0
+                and int(row.get("onscreen_windows") or 0) > 0
+                and row.get("path_state") == "present"
+            )
+        except (TypeError, ValueError):
+            valid = False
+        if valid:
+            matches.append(row)
+    return matches[0] if len(matches) == 1 else None
+
+
 def _process_candidate(row: tuple, pref: dict[str, Any], current_rows: list[dict[str, Any]]) -> dict[str, Any] | None:
     (component_id, _kind, name, binary_name, publisher, product, version, signature, signer,
      protected, _deps, _dependents, _start, _state, first_seen, last_seen, samples, active_days,
      min_ts, max_ts, avg_cpu, max_cpu, avg_mem, max_mem, avg_io, foreground_ratio,
-     visible_avg, onscreen_avg, _running_ratio, metadata_at) = row
+     visible_avg, onscreen_avg, _running_ratio, metadata_at, visible_sample_ratio, onscreen_sample_ratio) = row
     if protected or pref.get("preference") in ("keep", "not_needed"):
         return None
     if pref.get("preference") == "review_later" and time.time() - float(pref.get("updated_at") or 0) < 7 * 86400:
@@ -591,6 +665,8 @@ def _process_candidate(row: tuple, pref: dict[str, Any], current_rows: list[dict
     io_rate = float(avg_io or 0)
     fg = float(foreground_ratio or 0)
     visible = float(visible_avg or 0)
+    visible_ratio = float(visible_sample_ratio or 0)
+    onscreen_ratio = float(onscreen_sample_ratio or 0)
     resource_reasons = []
     if cpu >= 0.35:
         resource_reasons.append(f"mean CPU {cpu:.2f}% while sampled")
@@ -598,21 +674,39 @@ def _process_candidate(row: tuple, pref: dict[str, Any], current_rows: list[dict
         resource_reasons.append(f"mean working set {memory:.0f} MB")
     if io_rate >= 0.25:
         resource_reasons.append(f"mean process I/O {io_rate:.2f} MB/s")
-    if not resource_reasons or fg > 0.02:
+    # Foreground AND historically visible-window samples are required to be low.
+    # Minimized/behind-other-windows apps should not be mislabeled as headless helpers.
+    if not resource_reasons or fg > 0.02 or visible_ratio > 0.05 or onscreen_ratio > 0.02:
         return None
-    current = next((item for item in current_rows if process_component_id(item.get("exe")) == component_id), None)
+    publisher_consistency = _publisher_consistency(publisher, signer)
+    confidence_score = _baseline_confidence(samples, active_days, span_hours, signature, publisher_consistency)
+    cpu_impact = min(100.0, max(0.0, cpu / 5.0 * 100.0))
+    memory_impact = min(100.0, max(0.0, memory / 1024.0 * 100.0))
+    io_impact = min(100.0, max(0.0, io_rate / 5.0 * 100.0))
+    resource_impact_score = round(cpu_impact * 0.35 + memory_impact * 0.45 + io_impact * 0.20, 1)
+    background_sample_pct = round(max(0.0, 1.0 - max(fg, visible_ratio, onscreen_ratio)) * 100.0, 1)
+    review_priority_score = round((resource_impact_score * confidence_score) ** 0.5 * background_sample_pct / 100.0, 1)
+    current = _current_interactive_instance(component_id, current_rows)
     candidate = {
         "id": component_id, "component_type": "process",
         "name": _clean(name, 100), "binary_name": _clean(binary_name, 100),
         "publisher": _clean(publisher, 140), "product_name": _clean(product, 120),
         "file_version": _clean(version, 80), "signature_status": signature, "signer": _clean(signer, 180),
-        "evidence_strength": "high" if int(active_days or 0) >= 10 and int(samples or 0) >= 500 else "medium",
+        "certificate_organization": _certificate_organization(signer),
+        "publisher_consistency": publisher_consistency,
+        "evidence_confidence_score": confidence_score,
+        "evidence_strength": _evidence_strength(confidence_score),
+        "resource_impact_score": resource_impact_score,
+        "background_sample_pct": background_sample_pct,
+        "review_priority_score": review_priority_score,
         "sample_count": int(samples or 0), "active_days": int(active_days or 0),
         "baseline_span_hours": round(span_hours, 1),
         "average_cpu_pct": round(cpu, 3), "peak_cpu_pct": round(float(max_cpu or 0), 2),
         "average_memory_mb": round(memory, 1), "peak_memory_mb": round(float(max_mem or 0), 1),
         "average_io_mb_s": round(io_rate, 3),
         "foreground_sample_pct": round(fg * 100, 2),
+        "visible_window_sample_pct": round(visible_ratio * 100.0, 2),
+        "onscreen_window_sample_pct": round(onscreen_ratio * 100.0, 2),
         "average_visible_windows": round(visible, 2),
         "resource_reasons": resource_reasons,
         "requires_user_intent": True,
@@ -635,7 +729,8 @@ def _service_candidate(row: tuple, pref: dict[str, Any]) -> dict[str, Any] | Non
     (component_id, _kind, name, binary_name, publisher, product, version, signature, signer,
      protected, dependencies_json, dependents_json, start_mode, service_state, first_seen,
      last_seen, samples, active_days, min_ts, max_ts, _avg_cpu, _max_cpu, _avg_mem, _max_mem,
-     _avg_io, _foreground, _visible, _onscreen, running_ratio, metadata_at) = row
+     _avg_io, _foreground, _visible, _onscreen, running_ratio, metadata_at,
+     _visible_sample_ratio, _onscreen_sample_ratio) = row
     if protected or pref.get("preference") in ("keep", "not_needed"):
         return None
     if pref.get("preference") == "review_later" and time.time() - float(pref.get("updated_at") or 0) < 7 * 86400:
@@ -656,12 +751,17 @@ def _service_candidate(row: tuple, pref: dict[str, Any]) -> dict[str, Any] | Non
     span_hours = max(0.0, (float(max_ts or 0) - float(min_ts or 0)) / 3600.0)
     if int(samples or 0) < 250 or int(active_days or 0) < _BASELINE_MIN_DAYS or span_hours < _BASELINE_MIN_DAYS * 24:
         return None
+    publisher_consistency = _publisher_consistency(publisher, signer)
+    confidence_score = _baseline_confidence(samples, active_days, span_hours, signature, publisher_consistency)
     return {
         "id": component_id, "component_type": "service",
         "name": _clean(name, 100), "binary_name": _clean(binary_name, 100),
         "publisher": _clean(publisher, 140), "product_name": _clean(product, 120),
         "file_version": _clean(version, 80), "signature_status": signature,
-        "signer": _clean(signer, 180), "evidence_strength": "medium",
+        "signer": _clean(signer, 180), "certificate_organization": _certificate_organization(signer),
+        "publisher_consistency": publisher_consistency,
+        "evidence_confidence_score": confidence_score, "evidence_strength": _evidence_strength(confidence_score),
+        "ownership_review_score": confidence_score,
         "sample_count": int(samples or 0), "active_days": int(active_days or 0),
         "baseline_span_hours": round(span_hours, 1),
         "start_mode": start_mode, "service_state": service_state,
@@ -691,15 +791,9 @@ def report() -> dict[str, Any]:
         item for row in service_rows
         if (item := _service_candidate(row, preferences.get(str(row[0]), {}))) is not None
     ]
-    process_candidates.sort(
-        key=lambda item: (
-            item["average_cpu_pct"] * 2.0
-            + item["average_memory_mb"] / 160.0
-            + item["average_io_mb_s"] * 4.0
-        ),
-        reverse=True,
-    )
-    service_candidates.sort(key=lambda item: (item["active_days"], item["sample_count"]), reverse=True)
+    process_candidates.sort(key=lambda item: item["review_priority_score"], reverse=True)
+    # This is an ownership-review ordering score, not measured resource impact.
+    service_candidates.sort(key=lambda item: item["ownership_review_score"], reverse=True)
 
     state_graph = _load_state("service_graph")
     signature_state = _load_state("signature_refresh")
@@ -746,6 +840,13 @@ def ai_evidence() -> dict[str, Any]:
             "samples": item["sample_count"], "average_cpu_pct": item["average_cpu_pct"],
             "average_memory_mb": item["average_memory_mb"], "average_io_mb_s": item["average_io_mb_s"],
             "foreground_sample_pct": item["foreground_sample_pct"],
+            "visible_window_sample_pct": item["visible_window_sample_pct"],
+            "onscreen_window_sample_pct": item["onscreen_window_sample_pct"],
+            "resource_impact_score": item["resource_impact_score"],
+            "review_priority_score": item["review_priority_score"],
+            "evidence_confidence_score": item["evidence_confidence_score"],
+            "publisher_consistency": item["publisher_consistency"],
+            "certificate_organization": item["certificate_organization"],
             "reasons": item["resource_reasons"],
             "evidence_strength": item["evidence_strength"], "operator_intent": item["preference"],
             "operator_note": item["operator_note"],
@@ -753,13 +854,13 @@ def ai_evidence() -> dict[str, Any]:
     service_graph = []
     try:
         rows = core.db(
-            "SELECT component_id,name,binary_name,publisher,signature_status,protected,dependencies_json,dependents_json,start_mode,service_state "
+            "SELECT component_id,name,binary_name,publisher,signature_status,signer,protected,dependencies_json,dependents_json,start_mode,service_state "
             "FROM component_catalog WHERE component_type='service' ORDER BY name COLLATE NOCASE LIMIT 18"
         )
         for index, row in enumerate(rows):
             try:
-                dependencies = json.loads(row[6] or "[]")
-                dependents = json.loads(row[7] or "[]")
+                dependencies = json.loads(row[7] or "[]")
+                dependents = json.loads(row[8] or "[]")
             except (TypeError, ValueError):
                 dependencies, dependents = [], []
             evidence_id = "component-service-graph." + str(index + 1)
@@ -767,9 +868,10 @@ def ai_evidence() -> dict[str, Any]:
             service_graph.append({
                 "id": evidence_id, "name": _clean(row[1], 80), "binary_name": _clean(row[2], 80),
                 "publisher": _clean(row[3], 100), "signature": _clean(row[4], 30),
-                "protected": bool(row[5]), "dependencies": [_clean(value, 70) for value in dependencies[:12]],
+                "signer": _clean(row[5], 180), "publisher_consistency": _publisher_consistency(row[3], row[5]),
+                "protected": bool(row[6]), "dependencies": [_clean(value, 70) for value in dependencies[:12]],
                 "dependents": [_clean(value, 70) for value in dependents[:12]],
-                "start_mode": _clean(row[8], 24), "state": _clean(row[9], 24),
+                "start_mode": _clean(row[9], 24), "state": _clean(row[10], 24),
             })
     except Exception:
         service_graph = []
@@ -849,15 +951,9 @@ def propose_graceful_close(component_id: str) -> dict[str, Any]:
     if not rows or bool(rows[0][0]):
         raise ValueError("This component is protected or has no verified baseline.")
     current_rows = core.STATE.get("procs") if isinstance(core.STATE.get("procs"), list) else []
-    current = next((row for row in current_rows if process_component_id(row.get("exe")) == component_id), None)
+    current = _current_interactive_instance(component_id, current_rows)
     if not current:
-        raise RuntimeError("The observed process instance is no longer running; refresh the baseline.")
-    if safeguard.is_protected_process(current.get("name"), current.get("exe")):
-        raise PermissionError("Safeguard protects this process.")
-    if int(current.get("visible_windows") or 0) <= 0 or int(current.get("onscreen_windows") or 0) <= 0:
-        raise ValueError("Graceful close requires a currently visible on-screen GUI window.")
-    if int(current.get("session_id") or 0) <= 0 or current.get("path_state") != "present":
-        raise ValueError("Process identity or interactive session is not sufficiently verified.")
+        raise RuntimeError("A single, unambiguous visible GUI process instance is required. Refresh the process list and retry.")
     from . import actions
     action_id = actions.propose(
         "terminate_process",
