@@ -372,6 +372,57 @@ def _model_evidence_packet(evidence: dict[str, Any]) -> dict[str, Any]:
             output.append(item)
         return output
 
+    launch_provenance = []
+    source_launch = evidence.get("startup_and_task_provenance")
+    if isinstance(source_launch, list):
+        for raw in source_launch[:20]:
+            if not isinstance(raw, dict) or not isinstance(raw.get("id"), str):
+                continue
+            targets = []
+            for binary in (raw.get("binary_targets") or [])[:3]:
+                if not isinstance(binary, dict):
+                    continue
+                targets.append({
+                    "binary_name": str(binary.get("binary_name") or "")[:80],
+                    "signature": str(binary.get("signature") or "Unknown")[:24],
+                    "publisher": str(binary.get("publisher") or "")[:90],
+                    "launch_kind": str(binary.get("launch_kind") or "")[:32],
+                    "confidence": str(binary.get("confidence") or "")[:40],
+                    "application_matches": [
+                        {"name": str(match.get("name") or "")[:80],
+                         "publisher": str(match.get("publisher") or "")[:80],
+                         "confidence": str(match.get("confidence") or "")[:40]}
+                        for match in (binary.get("application_matches") or [])[:2]
+                        if isinstance(match, dict)
+                    ],
+                    "service_matches": [
+                        {"name": str(match.get("name") or "")[:80],
+                         "publisher": str(match.get("publisher") or "")[:80],
+                         "signature": str(match.get("signature_status") or "Unknown")[:24],
+                         "state": str(match.get("state") or "")[:24],
+                         "confidence": str(match.get("confidence") or "")[:40]}
+                        for match in (binary.get("service_matches") or [])[:2]
+                        if isinstance(match, dict)
+                    ],
+                })
+            launch_provenance.append({
+                "id": raw["id"], "component_type": str(raw.get("component_type") or "")[:16],
+                "name": str(raw.get("name") or "")[:90],
+                "source": str(raw.get("source") or "")[:70],
+                "state": str(raw.get("state") or "")[:24],
+                "enabled": bool(raw.get("enabled")),
+                "launch_kind": str(raw.get("launch_kind") or "unresolved")[:32],
+                "run_level": str(raw.get("run_level") or "")[:20],
+                "logon_type": str(raw.get("logon_type") or "")[:24],
+                "action_count": int(raw.get("action_count") or 0),
+                "has_arguments": bool(raw.get("has_arguments")),
+                "provenance_status": str(raw.get("provenance_status") or "unresolved")[:28],
+                "protected": bool(raw.get("protected")),
+                "operator_intent": str(raw.get("preference") or "unreviewed")[:24],
+                "operator_note": str(raw.get("operator_note") or "")[:100],
+                "binary_targets": targets,
+            })
+
     service_data = evidence.get("services") if isinstance(evidence.get("services"), dict) else {}
     rows_from_service = service_data.get("rows")
     if not isinstance(rows_from_service, list):
@@ -410,6 +461,7 @@ def _model_evidence_packet(evidence: dict[str, Any]) -> dict[str, Any]:
         "third_party_service_review_candidates": rows("third_party_service_review_candidates", 8, {"name": 70, "publisher": 70, "dependencies": 80, "dependents": 80, "operator_note": 120}),
         "service_dependency_graph": rows("service_dependency_graph", 18, {"name": 70, "binary_name": 60, "publisher": 70, "dependencies": 70, "dependents": 70}),
         "operator_component_preferences": rows("operator_component_preferences", 16, {"name": 70, "publisher": 70, "preference": 24, "operator_note": 120}),
+        "startup_and_task_provenance": launch_provenance,
         "coverage": evidence.get("coverage", {}),
         "game_active": bool(evidence.get("game_active")),
         "vanguard": evidence.get("vanguard", {}),
@@ -594,6 +646,8 @@ def diagnose(question: str) -> dict:
         "All maintenance changes remain manual-only, require a fresh preview and explicit user confirmation. " 
         "Treat inventory and app-usage summaries as partial observations, not proof that an application or service is useless. " 
         "A stopped, manual, trigger-started or rarely observed service is not evidence that it should be disabled; inspect dependencies and ask the operator about intent. " 
+        "A Startup registry entry or scheduled task proves only that a launch registration exists, not that it is currently used, needed, safe to disable, or responsible for a service. " 
+        "Distinguish exact executable-path associations from name similarity; unresolved COM handlers, script hosts, wrappers and task actions must remain unresolved rather than guessed. " 
         "Never recommend disabling Windows core, security, Defender, firewall, update, accessibility, backup, storage, network, hardware, Riot Vanguard or VALORANT components. " 
         "Ask before recommending closure or startup changes for a user application. "
         "Longitudinal component baselines cover only observed samples, not complete process uptime or user intent. " 
