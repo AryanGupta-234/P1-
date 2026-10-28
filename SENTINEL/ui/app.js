@@ -2630,11 +2630,64 @@ function componentReviewCard(item, kind){
     closeButton+'</div></article>';
 }
 
+function componentProvenanceCard(item){
+  const kind=item.component_type==="task"?"SCHEDULED TASK":"STARTUP ITEM";
+  const metadata=item.metadata||{};
+  const targets=Array.isArray(item.binary_targets)?item.binary_targets:[];
+  const targetHtml=targets.map(target=>{
+    const apps=(target.application_matches||[]).map(match=>
+      '<span class="tag">APP · '+esc(match.name)+' · '+esc(match.publisher||"publisher unknown")+
+      ' · '+esc(match.confidence)+'</span>').join(" ");
+    const services=(target.service_matches||[]).map(match=>
+      '<span class="tag">SERVICE · '+esc(match.name)+' · '+esc(match.publisher||"publisher unknown")+
+      ' · '+esc(match.signature_status||"unknown")+' · '+esc(match.state||"unknown")+
+      ' · '+esc(match.confidence)+'</span>').join(" ");
+    return '<div class="component-provenance-target">'+
+      '<b>'+esc(target.binary_name||"Executable target")+'</b>'+
+      '<small>'+esc(target.publisher||"Publisher unknown")+' · Authenticode '+esc(target.signature_status||"unknown")+
+      ' · '+esc(target.confidence||"unresolved path")+'</small>'+
+      '<div class="component-provenance-links">'+(apps||'<span class="tag">NO UNIQUE INSTALLED-APP MATCH</span>')+
+      (services||'<span class="tag">NO EXACT SERVICE-BINARY MATCH</span>')+'</div></div>';
+  }).join("");
+  const details=[
+    item.source||"source unknown",
+    item.launch_kind||"launch mechanism unresolved",
+    item.state||"state unknown",
+    metadata.enabled===false?"disabled":"enabled / present",
+    metadata.has_arguments?"launch arguments exist (not retained)":"no arguments detected",
+    item.component_type==="task"?(Number(metadata.action_count||0)+" configured action(s)"):"registry / startup entry"
+  ].join(" · ");
+  const locked=item.protected===true;
+  const options=locked
+    ? '<button class="btn sm" data-component-pref="'+esc(item.id)+'" data-pref="keep">KEEP</button>'
+    : '<button class="btn sm" data-component-pref="'+esc(item.id)+'" data-pref="keep">KEEP</button>'+
+      '<button class="btn sm" data-component-pref="'+esc(item.id)+'" data-pref="not_needed">NOT NEEDED</button>'+
+      '<button class="btn sm" data-component-pref="'+esc(item.id)+'" data-pref="review_later">ASK LATER</button>';
+  return '<article class="component-review-card">'+
+    '<div class="component-review-head"><div><b>'+esc(item.name)+'</b>'+
+    '<small>'+kind+' · '+esc(item.provenance_status||"provenance pending")+
+    (locked?" · PROTECTED":"")+'</small></div><span class="tag">'+
+    (targets.length?"TARGET RESOLVED":"UNRESOLVED")+'</span></div>'+
+    '<small class="component-review-detail">'+esc(details)+'</small>'+
+    (targetHtml||'<div class="component-provenance-target"><small>No executable target was resolved. COM handlers, wrappers, scripts and unusual launch formats are not guessed.</small></div>')+
+    '<small class="component-review-disclaimer">'+esc(item.recommendation||"Registration provenance only; this is not evidence of use or non-use.")+
+    ' No command line, launch arguments, account name or executable path is stored.</small>'+
+    '<label class="component-review-note"><span>DO YOU USE THIS STARTUP / TASK ENTRY?</span>'+
+    '<textarea maxlength="180" rows="2" data-component-note="'+esc(item.id)+'" placeholder="e.g. required for touchpad hotkeys, audio console or scheduled backup">'+
+    esc(item.operator_note||"")+'</textarea></label>'+
+    '<div class="component-review-actions">'+options+
+    '<button class="btn sm" data-component-pref="'+esc(item.id)+'" data-pref="note_only">SAVE NOTE</button></div></article>';
+}
+
 async function loadComponentIntelligence(){
   const state=document.getElementById("component-baseline-state");
   const summary=document.getElementById("component-baseline-summary");
   const processHost=document.getElementById("component-process-candidates");
   const serviceHost=document.getElementById("component-service-candidates");
+  const startupHost=document.getElementById("component-startup-provenance");
+  const taskHost=document.getElementById("component-task-provenance");
+  const startupHost=document.getElementById("component-startup-provenance");
+  const taskHost=document.getElementById("component-task-provenance");
   if(!processHost||!serviceHost)return;
   try{
     const data=await api("/api/components/intelligence");
@@ -2643,9 +2696,12 @@ async function loadComponentIntelligence(){
     const processCount=Number(coverage.process_components||0);
     const serviceCount=Number(coverage.service_components||0);
     const graphCount=Number(coverage.service_dependency_graph_count||0);
-    if(state)state.textContent=data.status==="ready"?
-      "BASELINE ACTIVE · "+processCount+" PROCESS / "+serviceCount+" SERVICE":
-      "WAITING FOR PROCESS + SERVICE SAMPLES";
+    const startupCount=Number(coverage.startup_items_observed||0);
+    const taskCount=Number(coverage.scheduled_tasks_observed||0);
+    const launchComplete=coverage.startup_inventory_complete&&coverage.task_inventory_complete;
+    if(state)state.textContent=(data.status==="ready"?"BASELINE ACTIVE":"BASELINE COLLECTING")+
+      " · "+processCount+" PROCESS / "+serviceCount+" SERVICE · "+
+      (launchComplete?"STARTUP / TASK GRAPH READY":"STARTUP / TASK COVERAGE PARTIAL");
     if(summary){
       summary.innerHTML=
         '<div class="maint-mini-stat"><small>PROCESS IDENTITIES</small><b>'+processCount+'</b><span>'+
@@ -2655,19 +2711,33 @@ async function loadComponentIntelligence(){
         '<div class="maint-mini-stat"><small>VERIFIED FILE SIGNATURES</small><b>'+
         (Number(coverage.signed_process_components||0)+Number(coverage.signed_services||0))+
         '</b><span>Process '+Number(coverage.signed_process_components||0)+' · Services '+Number(coverage.signed_services||0)+'</span></div>'+
+        '<div class="maint-mini-stat"><small>STARTUP / TASK REGISTRATIONS</small><b>'+
+        startupCount+' / '+taskCount+'</b><span>Exact-path target graph · arguments excluded</span></div>'+
         '<div class="maint-mini-stat"><small>OPERATOR PREFERENCES</small><b>'+
         Number(coverage.review_preferences_saved||0)+'</b><span>Keep / not-needed / ask later</span></div>';
     }
     const processes=Array.isArray(data.process_candidates)?data.process_candidates:[];
     const services=Array.isArray(data.service_candidates)?data.service_candidates:[];
+    const startup=Array.isArray(data.startup_provenance)?data.startup_provenance:[];
+    const tasks=Array.isArray(data.scheduled_task_provenance)?data.scheduled_task_provenance:[];
     processHost.innerHTML=processes.map(item=>componentReviewCard(item,"process")).join("")||
       '<div class="empty">No background application currently meets the seven-day evidence gate. SENTINEL is still collecting resource, usage and signature history.</div>';
     serviceHost.innerHTML=services.map(item=>componentReviewCard(item,"service")).join("")||
       '<div class="empty">No third-party service meets the signed-publisher, seven-day history and dependency review criteria yet. Core and protected services are excluded.</div>';
+    if(startupHost)startupHost.innerHTML=startup.map(componentProvenanceCard).join("")||
+      '<div class="empty">'+(coverage.startup_inventory_complete?
+        'No startup registrations were returned by the completed inventory.':
+        'Startup inventory is incomplete or has not run yet; SENTINEL will not treat missing entries as absent.')+'</div>';
+    if(taskHost)taskHost.innerHTML=tasks.map(componentProvenanceCard).join("")||
+      '<div class="empty">'+(coverage.task_inventory_complete?
+        'No scheduled tasks were returned by the completed inventory.':
+        'Task Scheduler inventory is incomplete or capped; coverage status remains explicit.')+'</div>';
   }catch(error){
     if(state)state.textContent="COMPONENT BASELINE UNAVAILABLE";
     processHost.innerHTML='<div class="empty">'+esc(error.message||String(error))+'</div>';
     serviceHost.innerHTML='<div class="empty">Service dependency evidence is unavailable.</div>';
+    if(startupHost)startupHost.innerHTML='<div class="empty">Startup provenance is unavailable.</div>';
+    if(taskHost)taskHost.innerHTML='<div class="empty">Scheduled-task provenance is unavailable.</div>';
   }
 }
 
@@ -2680,8 +2750,8 @@ function initComponentIntelligence(){
     try{
       const result=await api("/api/components/refresh",{});
       if(result.error)throw new Error(result.error);
-      if(result.deferred)toast(result.reason||"Metadata refresh deferred by the resource/game governor","warn");
-      else toast("Windows service graph and file signatures refreshed","ok");
+      if(result.deferred)toast(result.reason||"Some provenance sources are incomplete; previous links were kept","warn");
+      else toast("Windows signatures and startup/task provenance refreshed","ok");
       await loadComponentIntelligence();
     }catch(error){toast(error.message||String(error),"bad");}
     finally{refresh.disabled=false;refresh.textContent=label;}
@@ -2731,6 +2801,8 @@ function initComponentIntelligence(){
   };
   if(processHost)processHost.addEventListener("click",handle);
   if(serviceHost)serviceHost.addEventListener("click",handle);
+  if(startupHost)startupHost.addEventListener("click",handle);
+  if(taskHost)taskHost.addEventListener("click",handle);
   void loadComponentIntelligence();
 }
 
