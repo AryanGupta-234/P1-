@@ -841,7 +841,16 @@ def service_loop():
         STATE["services_catalog"] = cur
         STATE["services"] = {"running": running, "total": len(cur), "errors": len(errors),
             "vanguard": {"vgc": states.get("vgc", "n/a"), "vgk": states.get("vgk", "n/a")}}
-        try: core.persist_snapshot("services.latest", {"captured_at": time.time(), "summary": STATE["services"], "rows": cur[:1200], "errors": errors[:50]})
+        try:
+            safe_service_rows = [
+                {key: row.get(key) for key in ("name", "display", "state", "start", "pid") if row.get(key) is not None}
+                for row in cur[:1200] if isinstance(row, dict)
+            ]
+            core.persist_snapshot("services.latest", {
+                "captured_at": time.time(), "summary": STATE["services"],
+                "rows": safe_service_rows, "errors": errors[:50],
+                "excluded_fields": ["binary_path", "command_line", "service_account"],
+            })
         except Exception as store_exc: log("storage", f"SCM snapshot persistence failed: {type(store_exc).__name__}", "warn")
         first = False
         unresolved = [item for item in errors if not item.get("recovered")]
