@@ -616,6 +616,7 @@ def _process_candidate(row: tuple, pref: dict[str, Any], current_rows: list[dict
         "requires_user_intent": True,
         "recommendation": "Background application/helper worth an intent check; no stop/disable action is implied.",
         "preference": pref.get("preference", "unreviewed"),
+        "operator_note": _clean(pref.get("note"), 160),
         "current_instance": None,
     }
     if current and int(current.get("visible_windows") or 0) > 0 and int(current.get("onscreen_windows") or 0) > 0:
@@ -668,6 +669,7 @@ def _service_candidate(row: tuple, pref: dict[str, Any]) -> dict[str, Any] | Non
         "requires_user_intent": True,
         "recommendation": "Third-party auto-start service with no SCM dependents; application dependencies and user intent are not established. Review only.",
         "preference": pref.get("preference", "unreviewed"),
+        "operator_note": _clean(pref.get("note"), 160),
     }
 
 
@@ -744,6 +746,7 @@ def ai_evidence() -> dict[str, Any]:
             "foreground_sample_pct": item["foreground_sample_pct"],
             "reasons": item["resource_reasons"],
             "evidence_strength": item["evidence_strength"], "operator_intent": item["preference"],
+            "operator_note": item["operator_note"],
         })
     service_graph = []
     try:
