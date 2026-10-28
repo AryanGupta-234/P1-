@@ -782,6 +782,14 @@ def report() -> dict[str, Any]:
     preferences = _preference_map()
     process_rows = _aggregate_rows("process", since)
     service_rows = _aggregate_rows("service", since)
+    state_graph = _load_state("service_graph")
+    signature_state = _load_state("signature_refresh")
+    graph_captured_at = float(state_graph.get("captured_at") or 0)
+    graph_age_hours = max(0.0, now - graph_captured_at) / 3600.0 if graph_captured_at else None
+    graph_fresh = bool(state_graph.get("count")) and graph_age_hours is not None and graph_age_hours <= 24.0
+    service_review_block_reason = "" if graph_fresh else (
+        "Waiting for a complete service dependency graph newer than 24 hours; no service ownership candidates are shown."
+    )
     current = core.STATE.get("procs") if isinstance(core.STATE.get("procs"), list) else []
     process_candidates = [
         item for row in process_rows
@@ -796,14 +804,6 @@ def report() -> dict[str, Any]:
     # This is an ownership-review ordering score, not measured resource impact.
     service_candidates.sort(key=lambda item: item["ownership_review_score"], reverse=True)
 
-    state_graph = _load_state("service_graph")
-    signature_state = _load_state("signature_refresh")
-    graph_captured_at = float(state_graph.get("captured_at") or 0)
-    graph_age_hours = max(0.0, now - graph_captured_at) / 3600.0 if graph_captured_at else None
-    graph_fresh = bool(state_graph.get("count")) and graph_age_hours is not None and graph_age_hours <= 24.0
-    service_review_block_reason = "" if graph_fresh else (
-        "Waiting for a complete service dependency graph newer than 24 hours; no service ownership candidates are shown."
-    )
     last_process = _last_sample("process")
     last_service = _last_sample("service")
     process_days = max((int(row[17] or 0) for row in process_rows), default=0)
