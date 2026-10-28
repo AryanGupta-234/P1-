@@ -618,7 +618,7 @@ def _process_candidate(row: tuple, pref: dict[str, Any], current_rows: list[dict
         "preference": pref.get("preference", "unreviewed"),
         "current_instance": None,
     }
-    if current and int(current.get("visible_windows") or 0) > 0:
+    if current and int(current.get("visible_windows") or 0) > 0 and int(current.get("onscreen_windows") or 0) > 0:
         candidate["current_instance"] = {
             "pid": int(current.get("pid") or 0),
             "create_time": float(current.get("create_time") or 0),
@@ -745,6 +745,30 @@ def ai_evidence() -> dict[str, Any]:
             "reasons": item["resource_reasons"],
             "confidence": item["confidence"], "operator_intent": item["preference"],
         })
+    service_graph = []
+    try:
+        rows = core.db(
+            "SELECT component_id,name,binary_name,publisher,signature_status,protected,dependencies_json,dependents_json,start_mode,service_state "
+            "FROM component_catalog WHERE component_type='service' ORDER BY name COLLATE NOCASE LIMIT 18"
+        )
+        for index, row in enumerate(rows):
+            try:
+                dependencies = json.loads(row[6] or "[]")
+                dependents = json.loads(row[7] or "[]")
+            except (TypeError, ValueError):
+                dependencies, dependents = [], []
+            evidence_id = "component-service-graph." + str(index + 1)
+            ids.append(evidence_id)
+            service_graph.append({
+                "id": evidence_id, "name": _clean(row[1], 80), "binary_name": _clean(row[2], 80),
+                "publisher": _clean(row[3], 100), "signature": _clean(row[4], 30),
+                "protected": bool(row[5]), "dependencies": [_clean(value, 70) for value in dependencies[:12]],
+                "dependents": [_clean(value, 70) for value in dependents[:12]],
+                "start_mode": _clean(row[8], 24), "state": _clean(row[9], 24),
+            })
+    except Exception:
+        service_graph = []
+
     services = []
     for index, item in enumerate(payload["service_candidates"][:8]):
         evidence_id = "component-service." + str(index + 1)
@@ -760,6 +784,7 @@ def ai_evidence() -> dict[str, Any]:
         "component_baseline_coverage": payload["coverage"],
         "background_process_review_candidates": processes,
         "third_party_service_review_candidates": services,
+        "service_dependency_graph": service_graph,
         "component_evidence_ids": ids,
         "component_baseline_retention_days": payload["retention_days"],
     }
