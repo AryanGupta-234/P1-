@@ -562,6 +562,8 @@ def _build_launch_graph(snapshot: dict[str, Any], service_rows: list[dict[str, A
         component_id = binary_component_id(executable)
         if not component_id:
             return None
+        if component_id not in binary_paths and len(binary_paths) >= _MAX_LAUNCH_BINARIES:
+            return None
         binary_paths[component_id] = executable
         binary_name = executable.replace("/", "\\").rsplit("\\", 1)[-1]
         protected = _is_windows_binary(executable) or safeguard.is_protected_process(binary_name, executable)
@@ -678,7 +680,7 @@ def _build_launch_graph(snapshot: dict[str, Any], service_rows: list[dict[str, A
     # An executable is associated with an installed application only when its
     # resolved path is under one unique registered install location.
     app_roots = []
-    for app in (apps or [])[:600]:
+    for app in ((apps or [])[:600] if snapshot.get("apps_complete") is True else []):
         if not isinstance(app, dict):
             continue
         root = _normal_path(app.get("location") or app.get("install_location"))
@@ -706,7 +708,7 @@ def _build_launch_graph(snapshot: dict[str, Any], service_rows: list[dict[str, A
                 )
 
     service_paths = {}
-    for service in (service_rows or [])[:800]:
+    for service in ((service_rows or [])[:800] if snapshot.get("service_graph_complete") is True else []):
         if not isinstance(service, dict):
             continue
         path = _normal_path(service.get("binary_path"))
@@ -729,6 +731,8 @@ def _build_launch_graph(snapshot: dict[str, Any], service_rows: list[dict[str, A
         "startup_ids": startup_ids, "task_ids": task_ids,
         "startup_complete": snapshot.get("startup_complete") is True,
         "tasks_complete": snapshot.get("tasks_complete") is True,
+        "apps_complete": snapshot.get("apps_complete") is True,
+        "service_graph_complete": snapshot.get("service_graph_complete") is True,
         "source_health": snapshot.get("source_health") if isinstance(snapshot.get("source_health"), dict) else {},
         "captured_at": timestamp,
     }
@@ -768,11 +772,10 @@ def _persist_launch_graph(graph: dict[str, Any]) -> None:
             "AND source_component_id IN (SELECT component_id FROM component_catalog WHERE component_type=?)",
             (component_type,),
         )
-    if graph.get("startup_complete") is True and graph.get("tasks_complete") is True:
-        core.db(
-            "DELETE FROM component_relationships WHERE relation_type IN "
-            "('installed_under_app','same_executable_as_service')"
-        )
+    if graph.get("apps_complete") is True:
+        core.db("DELETE FROM component_relationships WHERE relation_type='installed_under_app'")
+    if graph.get("service_graph_complete") is True:
+        core.db("DELETE FROM component_relationships WHERE relation_type='same_executable_as_service'")
     relationships = graph.get("relationships") if isinstance(graph.get("relationships"), list) else []
     for batch in _chunks(relationships, 100):
         marks = "(?,?,?,?,?,?)"
@@ -790,6 +793,8 @@ def _persist_launch_graph(graph: dict[str, Any]) -> None:
         "binary_count": len(graph.get("binary_paths") or {}),
         "startup_complete": bool(graph.get("startup_complete")),
         "tasks_complete": bool(graph.get("tasks_complete")),
+        "apps_complete": bool(graph.get("apps_complete")),
+        "service_graph_complete": bool(graph.get("service_graph_complete")),
         "source_health": graph.get("source_health") or {},
     })
 
