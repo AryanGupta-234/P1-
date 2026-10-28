@@ -2642,10 +2642,14 @@ function componentProvenanceCard(item){
       '<span class="tag">SERVICE · '+esc(match.name)+' · '+esc(match.publisher||"publisher unknown")+
       ' · '+esc(match.signature_status||"unknown")+' · '+esc(match.state||"unknown")+
       ' · '+esc(match.confidence)+'</span>').join(" ");
+    const observed=target.process_observation;
+    const processHistory=observed&&Number(observed.samples||0)>0
+      ? '<small>PROCESS OBSERVED · '+Number(observed.samples)+' samples · '+Number(observed.active_days||0)+' days · CPU '+componentMetric(observed.average_cpu_pct,2)+'% · RAM '+componentMetric(observed.average_memory_mb,0)+' MB · I/O '+componentMetric(observed.average_io_mb_s,2)+' MB/s · foreground '+componentMetric(observed.foreground_sample_pct,1)+'%</small>'
+      : '<small>NO MATCHING PROCESS BASELINE YET · exact executable identity has not been observed in retained sampler history</small>';
     return '<div class="component-provenance-target">'+
       '<b>'+esc(target.binary_name||"Executable target")+'</b>'+
       '<small>'+esc(target.publisher||"Publisher unknown")+' · Authenticode '+esc(target.signature_status||"unknown")+
-      ' · '+esc(target.confidence||"unresolved path")+'</small>'+
+      ' · '+esc(target.confidence||"unresolved path")+'</small>'+processHistory+
       '<div class="component-provenance-links">'+(apps||'<span class="tag">NO UNIQUE INSTALLED-APP MATCH</span>')+
       (services||'<span class="tag">NO EXACT SERVICE-BINARY MATCH</span>')+'</div></div>';
   }).join("");
@@ -2686,8 +2690,6 @@ async function loadComponentIntelligence(){
   const serviceHost=document.getElementById("component-service-candidates");
   const startupHost=document.getElementById("component-startup-provenance");
   const taskHost=document.getElementById("component-task-provenance");
-  const startupHost=document.getElementById("component-startup-provenance");
-  const taskHost=document.getElementById("component-task-provenance");
   if(!processHost||!serviceHost)return;
   try{
     const data=await api("/api/components/intelligence");
@@ -2701,7 +2703,8 @@ async function loadComponentIntelligence(){
     const launchComplete=coverage.startup_inventory_complete&&coverage.task_inventory_complete;
     if(state)state.textContent=(data.status==="ready"?"BASELINE ACTIVE":"BASELINE COLLECTING")+
       " · "+processCount+" PROCESS / "+serviceCount+" SERVICE · "+
-      (launchComplete?"STARTUP / TASK GRAPH READY":"STARTUP / TASK COVERAGE PARTIAL");
+      (launchComplete?"STARTUP / TASK GRAPH READY":"STARTUP / TASK COVERAGE PARTIAL")+
+      (coverage.binary_targets_truncated?" · BINARY PROVENANCE QUEUED":"");
     if(summary){
       summary.innerHTML=
         '<div class="maint-mini-stat"><small>PROCESS IDENTITIES</small><b>'+processCount+'</b><span>'+
@@ -2713,6 +2716,9 @@ async function loadComponentIntelligence(){
         '</b><span>Process '+Number(coverage.signed_process_components||0)+' · Services '+Number(coverage.signed_services||0)+'</span></div>'+
         '<div class="maint-mini-stat"><small>STARTUP / TASK REGISTRATIONS</small><b>'+
         startupCount+' / '+taskCount+'</b><span>Exact-path target graph · arguments excluded</span></div>'+
+        '<div class="maint-mini-stat"><small>PROVENANCE CAPACITY</small><b>'+
+        Number(coverage.launch_binary_targets||0)+'</b><span>'+
+        (coverage.binary_targets_truncated?"More executable targets queued for later verification":"Bounded executable target graph")+'</span></div>'+
         '<div class="maint-mini-stat"><small>OPERATOR PREFERENCES</small><b>'+
         Number(coverage.review_preferences_saved||0)+'</b><span>Keep / not-needed / ask later</span></div>';
     }
