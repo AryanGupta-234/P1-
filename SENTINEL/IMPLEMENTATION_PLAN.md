@@ -1,7 +1,7 @@
 # SENTINEL Implementation Plan
 
 **Target:** Windows 11 x64 · local-first desktop runtime  
-**Plan revision:** 1.2 · **Release baseline:** 1.2.32  
+**Plan revision:** 1.3 · **Release baseline:** 1.2.33  
 **Status:** `[x]` existing capability · `[~]` integration/verification in progress · `[ ]` planned
 
 This is the single consolidated backlog for the next SENTINEL upgrade. It extends the existing collectors, SQLite store, maintenance executor, safeguard, adaptive runtime, AI council, memory engine, rollback journal and dashboard; it does not replace them.
@@ -130,6 +130,21 @@ Make SENTINEL a Windows-specialist, goal-driven performance and reliability assi
 - [x] User answers are reused as bounded local context; stopped/manual/rarely observed services are not assumed useless.
 - [x] Privacy exclusions for command lines, window titles, browser content, credentials, file contents, accounts and remote addresses.
 - [~] Expand service-dependency, publisher/signature and per-app user-intent evidence before any ranking of background-service changes.
+
+## P4.3 — Longitudinal component intelligence (implemented in 1.2.33)
+
+- [x] Separate agent-owned sampler for process identities and SCM service state; no second fast telemetry poller.
+- [x] Five-minute process sampling, fifteen-minute service sampling, bounded candidate set and 30-day SQLite retention.
+- [x] Process identities stored as one-way path hashes plus binary basenames; no raw process executable paths in component tables.
+- [x] In-memory bounded service executable paths for Authenticode only; persisted SCM graph strips binary paths and descriptions.
+- [x] Safe-idle, resource-gated Authenticode/file-version metadata and Windows SCM dependency/dependent graph.
+- [x] Seven-day minimum baseline, observed-day and sample gates; signed publisher requirement; process resource/foreground thresholds.
+- [x] Review only third-party running auto-start services with no SCM dependents; this is not proof of application/user independence.
+- [x] Protected Windows/security/Vanguard components excluded; no service disable or uninstall action.
+- [x] Keep / Not needed / Ask later / note-only user preferences persisted and supplied to later local AI reviews.
+- [x] Exact-instance visible-GUI graceful-close proposal path only; normal Actions approval required; no force termination.
+- [x] Aggregation throttled to five-minute intervals and deferred enrichment retries back off for fifteen minutes.
+- [ ] Extend evidence with signed startup-item provenance and task-to-service/app relationships; keep all proposed changes preview/approval gated.
 
 ## P5 — Windows action library
 
