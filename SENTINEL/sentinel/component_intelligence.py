@@ -30,6 +30,7 @@ _STOP = threading.Event()
 _LOCK = threading.RLock()
 _STARTED = False
 _THREAD: threading.Thread | None = None
+_SERVICE_GRAPH_CACHE: dict[str, Any] = {}
 
 _PROTECTED_SERVICES = frozenset({
     "vgc", "vgk", "windefend", "wscsvc", "mpssvc", "bfe", "sense",
@@ -354,12 +355,14 @@ def _load_state(key: str) -> dict[str, Any]:
 
 
 def refresh_service_graph(force: bool = False) -> dict[str, Any]:
+    global _SERVICE_GRAPH_CACHE
     ensure_schema()
     if not core.IS_WIN:
         return {"ok": False, "reason": "Windows SCM is unavailable on this platform."}
     previous = _load_state("service_graph")
     last = float(previous.get("captured_at") or 0)
-    if not force and time.time() - last < _GRAPH_REFRESH_SECONDS:
+    cache_ready = bool(_SERVICE_GRAPH_CACHE.get("services"))
+    if not force and cache_ready and time.time() - last < _GRAPH_REFRESH_SECONDS:
         return {"ok": True, "cached": True, "count": int(previous.get("count") or 0), "captured_at": last}
     try:
         from . import runtime_engine
@@ -369,7 +372,14 @@ def refresh_service_graph(force: bool = False) -> dict[str, Any]:
         if not permitted:
             return {"ok": False, "deferred": True, "reason": reason}
         graph = _service_graph_query()
-        _save_state("service_graph", graph)
+        _SERVICE_GRAPH_CACHE = graph
+        # Raw executable paths are temporary inputs to Authenticode. Do not persist them.
+        safe_graph = {
+            "services": [{key: value for key, value in row.items() if key != "binary_path"}
+                         for row in graph["services"] if isinstance(row, dict)],
+            "count": graph["count"], "captured_at": graph["captured_at"],
+        }
+        _save_state("service_graph", safe_graph)
         return {"ok": True, "cached": False, "count": graph["count"], "captured_at": graph["captured_at"]}
     except Exception as exc:
         core.log("component-intelligence", f"service dependency inventory unavailable: {type(exc).__name__}: {_clean(exc, 180)}", "warn")
@@ -840,6 +850,9 @@ def _process_signature_paths(force: bool = False) -> dict[str, str]:
 
 
 def _service_graph_rows() -> list[dict[str, Any]]:
+    raw_rows = _SERVICE_GRAPH_CACHE.get("services")
+    if isinstance(raw_rows, list) and raw_rows:
+        return [row for row in raw_rows if isinstance(row, dict)]
     graph = _load_state("service_graph")
     rows = graph.get("services") if isinstance(graph.get("services"), list) else []
     return [row for row in rows if isinstance(row, dict)]
