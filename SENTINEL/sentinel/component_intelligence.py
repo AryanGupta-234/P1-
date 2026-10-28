@@ -1245,6 +1245,9 @@ def report() -> dict[str, Any]:
 
     state_graph = _load_state("service_graph")
     signature_state = _load_state("signature_refresh")
+    launch_state = _load_state("launch_inventory")
+    startup_provenance = _launch_component_rows("startup", since, 36)
+    task_provenance = _launch_component_rows("task", since, 48)
     last_process = _last_sample("process")
     last_service = _last_sample("service")
     process_days = max((int(row[17] or 0) for row in process_rows), default=0)
@@ -1265,12 +1268,33 @@ def report() -> dict[str, Any]:
             "signature_refresh_at": signature_state.get("captured_at"),
             "signature_refresh_count": int(signature_state.get("count") or 0),
             "review_preferences_saved": preferences_count,
+            "startup_items_observed": len(startup_provenance),
+            "scheduled_tasks_observed": len(task_provenance),
+            "launch_binary_targets": int(launch_state.get("binary_count") or 0),
+            "launch_inventory_at": launch_state.get("captured_at"),
+            "startup_inventory_complete": bool(launch_state.get("startup_complete")),
+            "task_inventory_complete": bool(launch_state.get("tasks_complete")),
+            "installed_app_links_complete": bool(launch_state.get("apps_complete")),
+            "service_binary_links_complete": bool(launch_state.get("service_graph_complete")),
             "signed_process_components": sum(1 for row in process_rows if row[7] == "Valid"),
             "signed_services": sum(1 for row in service_rows if row[7] == "Valid"),
         },
         "process_candidates": process_candidates[:12],
         "service_candidates": service_candidates[:12],
-        "review_boundary": "Candidates are questions for the operator. Nothing is closed, disabled, removed, or changed automatically.",
+        "startup_provenance": startup_provenance,
+        "scheduled_task_provenance": task_provenance,
+        "launch_inventory": {
+            "captured_at": launch_state.get("captured_at"),
+            "startup_count": int(launch_state.get("startup_count") or 0),
+            "task_count": int(launch_state.get("task_count") or 0),
+            "binary_count": int(launch_state.get("binary_count") or 0),
+            "startup_complete": bool(launch_state.get("startup_complete")),
+            "tasks_complete": bool(launch_state.get("tasks_complete")),
+            "apps_complete": bool(launch_state.get("apps_complete")),
+            "service_graph_complete": bool(launch_state.get("service_graph_complete")),
+            "source_health": launch_state.get("source_health") if isinstance(launch_state.get("source_health"), dict) else {},
+        },
+        "review_boundary": "Launch provenance proves a configured startup/task relationship only; it is not proof of usage or non-usage. Nothing is disabled, closed, removed, or changed automatically.",
     }
 
 
@@ -1328,6 +1352,54 @@ def ai_evidence() -> dict[str, Any]:
             "evidence_strength": item["evidence_strength"], "operator_intent": item["preference"],
             "operator_note": item["operator_note"],
         })
+    launch_provenance = []
+    for component_type, source_key, prefix, limit in (
+        ("startup", "startup_provenance", "component-startup.", 10),
+        ("task", "scheduled_task_provenance", "component-task.", 14),
+    ):
+        for index, item in enumerate(payload.get(source_key, [])[:limit]):
+            evidence_id = prefix + str(index + 1)
+            ids.append(evidence_id)
+            binary_targets = []
+            for binary in (item.get("binary_targets") or [])[:4]:
+                binary_targets.append({
+                    "binary_name": _clean(binary.get("binary_name"), 90),
+                    "signature": _clean(binary.get("signature_status"), 24),
+                    "publisher": _clean(binary.get("publisher"), 100),
+                    "launch_kind": _clean(binary.get("type") or "executable", 24),
+                    "confidence": _clean(binary.get("confidence"), 40),
+                    "application_matches": [
+                        {"name": _clean(match.get("name"), 90),
+                         "publisher": _clean(match.get("publisher"), 90),
+                         "confidence": _clean(match.get("confidence"), 40)}
+                        for match in (binary.get("application_matches") or [])[:2]
+                    ],
+                    "service_matches": [
+                        {"name": _clean(match.get("name"), 90),
+                         "publisher": _clean(match.get("publisher"), 90),
+                         "signature": _clean(match.get("signature_status"), 24),
+                         "state": _clean(match.get("state"), 24),
+                         "confidence": _clean(match.get("confidence"), 40)}
+                        for match in (binary.get("service_matches") or [])[:2]
+                    ],
+                })
+            launch_provenance.append({
+                "id": evidence_id, "component_type": component_type,
+                "name": _clean(item.get("name"), 100),
+                "source": _clean(item.get("source"), 90),
+                "state": _clean(item.get("state"), 32),
+                "enabled": bool((item.get("metadata") or {}).get("enabled", True)),
+                "launch_kind": _clean(item.get("launch_kind"), 36),
+                "run_level": _clean((item.get("metadata") or {}).get("run_level"), 24),
+                "logon_type": _clean((item.get("metadata") or {}).get("logon_type"), 30),
+                "action_count": int((item.get("metadata") or {}).get("action_count") or 0),
+                "has_arguments": bool((item.get("metadata") or {}).get("has_arguments")),
+                "provenance_status": _clean(item.get("provenance_status"), 32),
+                "protected": bool(item.get("protected")),
+                "preference": _clean(item.get("preference"), 24),
+                "operator_note": _clean(item.get("operator_note"), 120),
+                "binary_targets": binary_targets,
+            })
     operator_preferences = []
     try:
         rows = core.db(
@@ -1352,6 +1424,7 @@ def ai_evidence() -> dict[str, Any]:
         "background_process_review_candidates": processes,
         "third_party_service_review_candidates": services,
         "service_dependency_graph": service_graph,
+        "startup_and_task_provenance": launch_provenance,
         "operator_component_preferences": operator_preferences,
         "component_evidence_ids": ids,
         "component_baseline_retention_days": payload["retention_days"],
