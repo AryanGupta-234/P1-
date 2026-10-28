@@ -306,7 +306,7 @@ def test_local_ai_evidence_contains_dependency_graph_and_baseline_candidate_ids(
     assert "binary_path" not in str(evidence)
     assert evidence["operator_component_preferences"][0]["preference"] == "keep"
     assert evidence["operator_component_preferences"][0]["operator_note"] == "Required for hotkeys"
-    assert evidence["component_score_semantics"]["evidence_confidence_score"].startswith("0-100 measurement coverage")
+    assert evidence["component_score_semantics"]["evidence_confidence_score"].startswith("0-100 measurement-coverage heuristic")
     assert "not a probability" in evidence["component_score_semantics"]["evidence_confidence_score"]
 
 
