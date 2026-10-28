@@ -354,7 +354,6 @@ $items=@(Get-CimInstance Win32_Service -ErrorAction Stop | ForEach-Object {
 
 
 def binary_component_id(executable: Any) -> str | None:
-    """Stable local executable identity; the path itself is never a database key."""
     path = _normal_path(executable)
     if not path or not re.match(r"^[a-zA-Z]:[\\/]", path):
         return None
@@ -388,7 +387,7 @@ def app_component_id(name: Any, publisher: Any, version: Any = "") -> str | None
 
 
 def _extract_launch_target(command: Any) -> dict[str, Any]:
-    """Resolve only the executable token; never retain or return the argument tail."""
+    """Resolve only the executable token; discard the argument tail immediately."""
     raw = str(command or "").strip()
     if not raw or len(raw) > 4096:
         return {"binary_path": "", "binary_name": "", "launch_kind": "unresolved",
@@ -405,40 +404,34 @@ def _extract_launch_target(command: Any) -> dict[str, Any]:
     if not match:
         return {"binary_path": "", "binary_name": "", "launch_kind": "unresolved",
                 "has_arguments": False}
-    candidate = match.group(1).strip()
-    path = _normal_path(candidate)
+    path = _normal_path(match.group(1).strip())
     if not path or not re.match(r"^[a-zA-Z]:[\\/]", path):
         return {"binary_path": "", "binary_name": "", "launch_kind": "unresolved",
                 "has_arguments": False}
     binary_name = path.replace("/", "\\").rsplit("\\", 1)[-1]
     wrappers = {
         "cmd.exe", "powershell.exe", "pwsh.exe", "wscript.exe", "cscript.exe",
-        "rundll32.exe", "regsvr32.exe", "mshta.exe", "dllhost.exe",
-        "svchost.exe", "taskhostw.exe", "java.exe", "javaw.exe", "python.exe",
-        "pythonw.exe", "conhost.exe",
+        "rundll32.exe", "regsvr32.exe", "mshta.exe", "dllhost.exe", "svchost.exe",
+        "taskhostw.exe", "java.exe", "javaw.exe", "python.exe", "pythonw.exe", "conhost.exe",
     }
-    launch_kind = "command_host" if binary_name.casefold() in wrappers else "direct_executable"
-    argument_tail = expanded[match.end():].strip()
+    tail = expanded[match.end():].strip()
     return {
-        "binary_path": path,
-        "binary_name": _clean(binary_name, 120),
-        "launch_kind": launch_kind,
-        "has_arguments": bool(argument_tail),
+        "binary_path": path, "binary_name": _clean(binary_name, 120),
+        "launch_kind": "command_host" if binary_name.casefold() in wrappers else "direct_executable",
+        "has_arguments": bool(tail),
     }
 
 
 def _launch_inventory_query() -> dict[str, Any]:
-    """Return startup/task launch provenance with arguments and account names excluded."""
+    """Read startup/task target metadata; only executable tokens leave PowerShell."""
     from .winutil import powershell
 
     script = r"""
 $ErrorActionPreference='Stop'
 function Resolve-LaunchExe([string]$raw) {
   $value=[Environment]::ExpandEnvironmentVariables([string]$raw)
-  $exe=''
-  if($value -match '^\s*"(?<p>[^"]+?\.exe)"(?=\s|$)') { $exe=[string]$matches['p'] }
-  elseif($value -match '^\s*(?<p>.+?\.exe)(?=\s|$)') { $exe=[string]$matches['p'] }
-  if($exe -match '^[A-Za-z]:\\') { return $exe }
+  if($value -match '^\s*"(?<p>[^"]+?\.exe)"(?=\s|$)') { return [string]$matches['p'] }
+  if($value -match '^\s*(?<p>.+?\.exe)(?=\s|$)') { return [string]$matches['p'] }
   return ''
 }
 $startup=@(); $tasks=@()
@@ -454,443 +447,7 @@ try {
     $command=[string]$item.Command
     $exe=Resolve-LaunchExe $command
     $hasArgs=$false
-    if($command -match '^\s*"(?<p>[^"]+?\.exe)"(?<tail>.*)    $startup+=@{
-      name=[string]$item.Name; source=$source; binary_path=$exe
-      has_arguments=[bool]$hasArgs; enabled=$true
-    }
-  }
-} catch { $startupOk=$false; $startupError=$_.Exception.Message }
-try {
-  $allTasks=@(Get-ScheduledTask -ErrorAction Stop)
-  $taskTotal=$allTasks.Count
-  $limit=[Math]::Min($taskTotal,800)
-  for($i=0;$i -lt $limit;$i++) {
-    $task=$allTasks[$i]
-    $actions=@()
-    foreach($action in @($task.Actions)) {
-      $rawExe=[string]$action.Execute
-      $exe=Resolve-LaunchExe $rawExe
-      $kind='Unknown'
-      if($rawExe) { $kind='Exec' }
-      elseif($action.ClassId) { $kind='ComHandler' }
-      $actions+=@{
-        binary_path=$exe; action_kind=$kind
-        has_arguments=[bool]([string]$action.Arguments)
-      }
-    }
-    $taskPath=[string]$task.TaskPath
-    $tasks+=@{
-      name=[string]$task.TaskName; task_path=$taskPath
-      state=[string]$task.State; enabled=[bool]$task.Settings.Enabled
-      run_level=[string]$task.Principal.RunLevel
-      logon_type=[string]$task.Principal.LogonType
-      actions=@($actions)
-    }
-  }
-} catch { $tasksOk=$false; $tasksError=$_.Exception.Message }
-@{
-  startup=$startup; tasks=$tasks; task_total=$taskTotal
-  startup_complete=$startupOk; tasks_complete=($tasksOk -and $taskTotal -le 800)
-  task_truncated=($tasksOk -and $taskTotal -gt 800)
-  source_health=@{
-    startup=@{ok=$startupOk;error=$startupError}
-    tasks=@{ok=$tasksOk;error=$tasksError;count=$taskTotal}
-  }
-} | ConvertTo-Json -Depth 7 -Compress
-"""
-    result = powershell(script, timeout=60)
-    if result.returncode != 0:
-        raise RuntimeError((result.stderr or result.stdout or "Startup/task inventory failed")[:220])
-    payload = json.loads((result.stdout or "").strip().lstrip("\ufeff"))
-    if not isinstance(payload, dict):
-        raise RuntimeError("Startup/task inventory returned an invalid object")
-    startup = payload.get("startup", [])
-    tasks = payload.get("tasks", [])
-    if isinstance(startup, dict):
-        startup = [startup]
-    if isinstance(tasks, dict):
-        tasks = [tasks]
-    if not isinstance(startup, list) or not isinstance(tasks, list):
-        raise RuntimeError("Startup/task inventory lists were incomplete")
-    return {
-        "startup": [row for row in startup if isinstance(row, dict)][:800],
-        "tasks": [row for row in tasks if isinstance(row, dict)][:800],
-        "task_total": int(payload.get("task_total") or 0),
-        "startup_complete": payload.get("startup_complete") is True,
-        "tasks_complete": payload.get("tasks_complete") is True,
-        "task_truncated": payload.get("task_truncated") is True,
-        "source_health": payload.get("source_health") if isinstance(payload.get("source_health"), dict) else {},
-        "captured_at": time.time(),
-    }
-
-
-def _catalog_tuple(component_id: str, component_type: str, name: str, *,
-                   binary_name: str = "", publisher: str = "", product_name: str = "",
-                   version: str = "", protected: bool = False, source: str = "",
-                   start_mode: str = "", state: str = "", now: float) -> tuple:
-    identity_hash = component_id.split(":", 1)[1]
-    return (
-        component_id, component_type, identity_hash, _clean(name, 140),
-        _clean(binary_name, 120), _clean(publisher, 140), _clean(product_name, 140),
-        _clean(version, 80), "Unknown", "", int(bool(protected)), _clean(source, 120),
-        "[]", "[]", _clean(start_mode, 40), _clean(state, 40),
-        now, now, 0.0,
-    )
-
-
-def _path_under(path: str, root: str) -> bool:
-    try:
-        return bool(path and root and os.path.commonpath((path, root)) == root and path != root)
-    except (OSError, ValueError):
-        return False
-
-
-def _build_launch_graph(snapshot: dict[str, Any], service_rows: list[dict[str, Any]],
-                        apps: list[dict[str, Any]], now: float | None = None) -> dict[str, Any]:
-    """Build safe catalog rows and exact-path edges; raw paths stay in this return's memory map."""
-    timestamp = float(now or time.time())
-    catalog_rows: dict[str, tuple] = {}
-    metadata_rows: dict[str, tuple] = {}
-    relationships: dict[tuple[str, str, str], tuple] = {}
-    binary_paths: dict[str, str] = {}
-    startup_ids: list[str] = []
-    task_ids: list[str] = []
-
-    def add_binary(path: str) -> str | None:
-        executable = _normal_path(path)
-        component_id = binary_component_id(executable)
-        if not component_id:
-            return None
-        if component_id not in binary_paths and len(binary_paths) >= _MAX_LAUNCH_BINARIES:
-            return None
-        binary_paths[component_id] = executable
-        binary_name = executable.replace("/", "\\").rsplit("\\", 1)[-1]
-        protected = _is_windows_binary(executable) or safeguard.is_protected_process(binary_name, executable)
-        catalog_rows[component_id] = _catalog_tuple(
-            component_id, "binary", binary_name, binary_name=binary_name,
-            protected=protected, source="Startup/task/service executable provenance",
-            now=timestamp,
-        )
-        return component_id
-
-    def add_relationship(source_id: str, target_id: str, relation: str,
-                         confidence: str, evidence: dict[str, Any]) -> None:
-        key = (source_id, target_id, relation)
-        relationships[key] = (
-            source_id, target_id, relation, confidence,
-            json.dumps(evidence, ensure_ascii=False, separators=(",", ":")),
-            timestamp,
-        )
-
-    for raw in (snapshot.get("startup") or [])[:800]:
-        if not isinstance(raw, dict):
-            continue
-        name = _clean(raw.get("name"), 120)
-        source = _clean(raw.get("source") or "Windows startup", 70)
-        component_id = startup_component_id(source, name)
-        if not component_id:
-            continue
-        target = _extract_launch_target(raw.get("binary_path") or raw.get("command"))
-        binary_id = add_binary(target["binary_path"]) if target.get("binary_path") else None
-        binary_name = target.get("binary_name") or ""
-        protected = bool(
-            binary_id and _is_windows_binary(target["binary_path"])
-            or binary_name and safeguard.is_protected_process(binary_name, target.get("binary_path", ""))
-            or any(token in (name + " " + source).casefold() for token in (
-                "sentinel", "riot", "vanguard", "valorant", "windows security", "defender",
-            ))
-        )
-        catalog_rows[component_id] = _catalog_tuple(
-            component_id, "startup", name, binary_name=binary_name,
-            protected=protected, source=source,
-            start_mode=target.get("launch_kind") or "unresolved",
-            state="present", now=timestamp,
-        )
-        metadata = {
-            "source": source, "launch_kind": target.get("launch_kind", "unresolved"),
-            "has_arguments": bool(raw.get("has_arguments") or target.get("has_arguments")),
-            "target_resolved": bool(binary_id), "enabled": bool(raw.get("enabled", True)),
-        }
-        metadata_rows[component_id] = (
-            component_id, json.dumps(metadata, ensure_ascii=False, separators=(",", ":")), timestamp,
-        )
-        startup_ids.append(component_id)
-        if binary_id:
-            add_relationship(
-                component_id, binary_id, "launches_binary", "path_resolved",
-                {"launch_kind": target.get("launch_kind"), "has_arguments": metadata["has_arguments"]},
-            )
-
-    for raw in (snapshot.get("tasks") or [])[:800]:
-        if not isinstance(raw, dict):
-            continue
-        name = _clean(raw.get("name"), 120)
-        task_path = _clean(raw.get("task_path") or "\\", 140)
-        component_id = task_component_id(task_path, name)
-        if not component_id:
-            continue
-        protected_task = task_path.casefold().startswith("\\microsoft\\") or any(
-            token in (task_path + " " + name).casefold()
-            for token in ("sentinel", "riot", "vanguard", "valorant", "defender", "windows security")
-        )
-        actions = raw.get("actions") if isinstance(raw.get("actions"), list) else []
-        action_targets = []
-        for index, action in enumerate(actions[:16]):
-            if not isinstance(action, dict):
-                continue
-            target = _extract_launch_target(action.get("binary_path") or action.get("execute"))
-            if target.get("binary_path"):
-                binary_id = add_binary(target["binary_path"])
-                if binary_id:
-                    action_targets.append({
-                        "binary_id": binary_id, "binary_name": target.get("binary_name") or "",
-                        "action_index": index, "action_kind": _clean(action.get("action_kind") or "Exec", 32),
-                        "has_arguments": bool(action.get("has_arguments") or target.get("has_arguments")),
-                    })
-        first_binary = action_targets[0]["binary_name"] if action_targets else ""
-        protected = protected_task or any(
-            safeguard.is_protected_process(item["binary_name"], binary_paths[item["binary_id"]])
-            or _is_windows_binary(binary_paths[item["binary_id"]])
-            for item in action_targets
-        )
-        state = _clean(raw.get("state") or "unknown", 30)
-        enabled = bool(raw.get("enabled"))
-        catalog_rows[component_id] = _catalog_tuple(
-            component_id, "task", name, binary_name=first_binary, protected=protected,
-            source="Task Scheduler · " + ("Built-in" if protected_task else "Third-party"),
-            start_mode=_clean(raw.get("run_level") or "unknown", 30),
-            state=state if enabled else "disabled", now=timestamp,
-        )
-        metadata = {
-            "task_folder_depth": max(0, len([part for part in task_path.split("\\\\") if part])),
-            "microsoft_namespace": task_path.casefold().startswith("\\microsoft\\"),
-            "enabled": enabled, "run_level": _clean(raw.get("run_level"), 24),
-            "logon_type": _clean(raw.get("logon_type"), 32),
-            "action_count": len(actions), "resolved_executable_actions": len(action_targets),
-            "unresolved_action_count": max(0, len(actions) - len(action_targets)),
-            "launch_kind": "multi_action" if len(action_targets) > 1 else (
-                action_targets[0]["action_kind"] if action_targets else "opaque_or_unresolved"
-            ),
-        }
-        metadata_rows[component_id] = (
-            component_id, json.dumps(metadata, ensure_ascii=False, separators=(",", ":")), timestamp,
-        )
-        task_ids.append(component_id)
-        for item in action_targets:
-            add_relationship(
-                component_id, item["binary_id"], "launches_binary", "path_resolved",
-                {"action_index": item["action_index"], "action_kind": item["action_kind"],
-                 "has_arguments": item["has_arguments"]},
-            )
-
-    # An executable is associated with an installed application only when its
-    # resolved path is under one unique registered install location.
-    app_roots = []
-    for app in ((apps or [])[:600] if snapshot.get("apps_complete") is True else []):
-        if not isinstance(app, dict):
-            continue
-        root = _normal_path(app.get("location") or app.get("install_location"))
-        app_id = app_component_id(app.get("name"), app.get("publisher"), app.get("version"))
-        if not root or not app_id:
-            continue
-        app_roots.append((root, app_id, app))
-    matched_app_ids: set[str] = set()
-    for binary_id, executable in list(binary_paths.items())[:_MAX_LAUNCH_BINARIES]:
-        matches = [(len(root), app_id, app) for root, app_id, app in app_roots if _path_under(executable, root)]
-        if matches:
-            longest = max(row[0] for row in matches)
-            best = [row for row in matches if row[0] == longest]
-            if len(best) == 1:
-                _length, app_id, app = best[0]
-                matched_app_ids.add(app_id)
-                catalog_rows[app_id] = _catalog_tuple(
-                    app_id, "app", _clean(app.get("name"), 140), publisher=app.get("publisher") or "",
-                    product_name=app.get("name") or "", version=app.get("version") or "",
-                    source="Installed application inventory", now=timestamp,
-                )
-                add_relationship(
-                    binary_id, app_id, "installed_under_app", "unique_install_location_prefix",
-                    {"path_stored": False, "match": "executable under one unique install location"},
-                )
-
-    service_paths = {}
-    for service in ((service_rows or [])[:800] if snapshot.get("service_graph_complete") is True else []):
-        if not isinstance(service, dict):
-            continue
-        path = _normal_path(service.get("binary_path"))
-        service_id = service_component_id(service.get("name"))
-        if path and service_id:
-            service_paths[path] = service_id
-    for binary_id, executable in list(binary_paths.items())[:_MAX_LAUNCH_BINARIES]:
-        service_id = service_paths.get(executable)
-        if service_id:
-            add_relationship(
-                binary_id, service_id, "same_executable_as_service", "exact_executable_path",
-                {"match": "exact normalized executable path", "path_stored": False},
-            )
-
-    return {
-        "catalog_rows": list(catalog_rows.values()),
-        "metadata_rows": list(metadata_rows.values()),
-        "relationships": list(relationships.values()),
-        "binary_paths": dict(list(binary_paths.items())[:_MAX_LAUNCH_BINARIES]),
-        "startup_ids": startup_ids, "task_ids": task_ids,
-        "startup_complete": snapshot.get("startup_complete") is True,
-        "tasks_complete": snapshot.get("tasks_complete") is True,
-        "apps_complete": snapshot.get("apps_complete") is True,
-        "service_graph_complete": snapshot.get("service_graph_complete") is True,
-        "source_health": snapshot.get("source_health") if isinstance(snapshot.get("source_health"), dict) else {},
-        "captured_at": timestamp,
-    }
-
-
-def _persist_launch_graph(graph: dict[str, Any]) -> None:
-    catalog_rows = graph.get("catalog_rows") if isinstance(graph.get("catalog_rows"), list) else []
-    _bulk_catalog(catalog_rows)
-    metadata_rows = graph.get("metadata_rows") if isinstance(graph.get("metadata_rows"), list) else []
-    for component_id, metadata_json, captured_at in metadata_rows:
-        core.db(
-            "INSERT INTO component_launch_metadata(component_id,metadata_json,captured_at) VALUES(?,?,?) "
-            "ON CONFLICT(component_id) DO UPDATE SET metadata_json=excluded.metadata_json,captured_at=excluded.captured_at",
-            (component_id, metadata_json, captured_at),
-        )
-    for component_type, complete, ids in (
-        ("startup", graph.get("startup_complete") is True, graph.get("startup_ids") or []),
-        ("task", graph.get("tasks_complete") is True, graph.get("task_ids") or []),
-    ):
-        if not complete:
-            continue
-        all_rows = core.db("SELECT component_id FROM component_catalog WHERE component_type=?", (component_type,))
-        seen = set(str(value) for value in ids)
-        stale = [str(row[0]) for row in all_rows if str(row[0]) not in seen]
-        if stale:
-            for start in range(0, len(stale), 300):
-                batch = stale[start:start + 300]
-                marks = ",".join("?" for _ in batch)
-                core.db(
-                    f"UPDATE component_catalog SET service_state='not_present' WHERE component_id IN ({marks})",
-                    tuple(batch),
-                )
-                core.db(f"DELETE FROM component_relationships WHERE source_component_id IN ({marks})",
-                        tuple(batch))
-        core.db(
-            "DELETE FROM component_relationships WHERE relation_type='launches_binary' "
-            "AND source_component_id IN (SELECT component_id FROM component_catalog WHERE component_type=?)",
-            (component_type,),
-        )
-    if graph.get("apps_complete") is True:
-        core.db("DELETE FROM component_relationships WHERE relation_type='installed_under_app'")
-    if graph.get("service_graph_complete") is True:
-        core.db("DELETE FROM component_relationships WHERE relation_type='same_executable_as_service'")
-    relationships = graph.get("relationships") if isinstance(graph.get("relationships"), list) else []
-    for batch in _chunks(relationships, 100):
-        marks = "(?,?,?,?,?,?)"
-        sql = (
-            "INSERT INTO component_relationships(source_component_id,target_component_id,relation_type,confidence,evidence_json,observed_at) VALUES "
-            + ",".join(marks for _ in batch)
-            + " ON CONFLICT(source_component_id,target_component_id,relation_type) DO UPDATE SET "
-            "confidence=excluded.confidence,evidence_json=excluded.evidence_json,observed_at=excluded.observed_at"
-        )
-        core.db(sql, tuple(value for row in batch for value in row))
-    _save_state("launch_inventory", {
-        "captured_at": float(graph.get("captured_at") or time.time()),
-        "startup_count": len(graph.get("startup_ids") or []),
-        "task_count": len(graph.get("task_ids") or []),
-        "binary_count": len(graph.get("binary_paths") or {}),
-        "startup_complete": bool(graph.get("startup_complete")),
-        "tasks_complete": bool(graph.get("tasks_complete")),
-        "apps_complete": bool(graph.get("apps_complete")),
-        "service_graph_complete": bool(graph.get("service_graph_complete")),
-        "source_health": graph.get("source_health") or {},
-    })
-
-
-def _launch_component_rows(component_type: str, since: float, limit: int = 40) -> list[dict[str, Any]]:
-    if component_type not in ("startup", "task"):
-        return []
-    rows = core.db(
-        "SELECT component_id,name,binary_name,protected,source,start_mode,service_state,last_seen "
-        "FROM component_catalog WHERE component_type=? AND last_seen>=? AND service_state<>'not_present' "
-        "ORDER BY name COLLATE NOCASE LIMIT ?",
-        (component_type, since, max(1, min(100, int(limit)))),
-    )
-    output = []
-    for row in rows:
-        component_id = str(row[0])
-        meta_rows = core.db("SELECT metadata_json FROM component_launch_metadata WHERE component_id=?", (component_id,))
-        try:
-            metadata = json.loads(meta_rows[0][0] or "{}") if meta_rows else {}
-        except (TypeError, ValueError):
-            metadata = {}
-        links = core.db(
-            "SELECT r.target_component_id,r.relation_type,r.confidence,r.evidence_json,"
-            "t.component_type,t.name,t.binary_name,t.publisher,t.product_name,t.file_version,"
-            "t.signature_status,t.signer,t.start_mode,t.service_state,t.protected "
-            "FROM component_relationships r LEFT JOIN component_catalog t ON t.component_id=r.target_component_id "
-            "WHERE r.source_component_id=? ORDER BY r.relation_type,t.name COLLATE NOCASE",
-            (component_id,),
-        )
-        binaries, apps, services = [], [], []
-        for link in links:
-            target = {
-                "id": str(link[0]), "type": str(link[4] or ""), "name": _clean(link[5], 100),
-                "binary_name": _clean(link[6], 100), "publisher": _clean(link[7], 120),
-                "product_name": _clean(link[8], 100), "version": _clean(link[9], 70),
-                "signature_status": _clean(link[10], 32), "signer": _clean(link[11], 140),
-                "start_mode": _clean(link[12], 24), "state": _clean(link[13], 24),
-                "protected": bool(link[14]), "relation": str(link[1]), "confidence": str(link[2]),
-            }
-            if link[1] == "launches_binary":
-                binary_edges = core.db(
-                    "SELECT r.target_component_id,r.relation_type,r.confidence,"
-                    "t.component_type,t.name,t.publisher,t.signature_status,t.start_mode,t.service_state "
-                    "FROM component_relationships r LEFT JOIN component_catalog t ON t.component_id=r.target_component_id "
-                    "WHERE r.source_component_id=?",
-                    (target["id"],),
-                )
-                target["application_matches"] = [
-                    {"id": str(edge[0]), "name": _clean(edge[4], 100), "publisher": _clean(edge[5], 120),
-                     "confidence": str(edge[2])}
-                    for edge in binary_edges if edge[1] == "installed_under_app" and edge[3] == "app"
-                ]
-                target["service_matches"] = [
-                    {"id": str(edge[0]), "name": _clean(edge[4], 100), "publisher": _clean(edge[5], 120),
-                     "signature_status": _clean(edge[6], 32), "start_mode": _clean(edge[7], 24),
-                     "state": _clean(edge[8], 24), "confidence": str(edge[2])}
-                    for edge in binary_edges if edge[1] == "same_executable_as_service" and edge[3] == "service"
-                ]
-                binaries.append(target)
-            elif link[1] == "installed_under_app":
-                apps.append(target)
-            elif link[1] == "same_executable_as_service":
-                services.append(target)
-        pref_rows = core.db(
-            "SELECT preference,note,updated_at FROM component_preferences WHERE component_id=?",
-            (component_id,),
-        )
-        preference = str(pref_rows[0][0]) if pref_rows else "unreviewed"
-        note = _clean(pref_rows[0][1], 160) if pref_rows else ""
-        if preference in ("keep", "not_needed"):
-            continue
-        if preference == "review_later" and pref_rows and time.time() - float(pref_rows[0][2] or 0) < 7 * 86400:
-            continue
-        output.append({
-            "id": component_id, "component_id": component_id, "component_type": component_type,
-            "name": _clean(row[1], 120), "binary_name": _clean(row[2], 100),
-            "protected": bool(row[3]), "source": _clean(row[4], 120),
-            "launch_kind": _clean(metadata.get("launch_kind") or row[5], 40), "state": _clean(row[6], 40),
-            "last_seen": float(row[7] or 0), "metadata": metadata,
-            "binary_targets": binaries, "application_matches": apps, "service_matches": services,
-            "preference": preference, "operator_note": note, "requires_user_intent": True,
-            "provenance_status": "verified_target" if any(
-                binary.get("signature_status") == "Valid" for binary in binaries
-            ) else ("target_resolved" if binaries else "unresolved_target"),
-            "recommendation": "Provenance and exact-path associations only. Presence in Startup or Task Scheduler does not prove this entry is unnecessary.",
-        })
-    return output
-
-def _save_state(key: str, value: dict[str, Any]) -> None:
-    core.db(
+    if($command -match '^\s*"(?<p>[^"]+?\.exe)"(?<tail>.*)    core.db(
         "INSERT INTO component_intelligence_state(state_key,value_json,updated_at) VALUES(?,?,?) "
         "ON CONFLICT(state_key) DO UPDATE SET value_json=excluded.value_json,updated_at=excluded.updated_at",
         (key, json.dumps(value, ensure_ascii=False, separators=(",", ":"), default=str), time.time()),
@@ -1278,8 +835,8 @@ def report() -> dict[str, Any]:
             "signature_refresh_at": signature_state.get("captured_at"),
             "signature_refresh_count": int(signature_state.get("count") or 0),
             "review_preferences_saved": preferences_count,
-            "startup_items_observed": len(startup_provenance),
-            "scheduled_tasks_observed": len(task_provenance),
+            "startup_items_observed": int(launch_state.get("startup_count") or 0),
+            "scheduled_tasks_observed": int(launch_state.get("task_count") or 0),
             "launch_binary_targets": int(launch_state.get("binary_count") or 0),
             "launch_inventory_at": launch_state.get("captured_at"),
             "startup_inventory_complete": bool(launch_state.get("startup_complete")),
@@ -1304,7 +861,7 @@ def report() -> dict[str, Any]:
             "service_graph_complete": bool(launch_state.get("service_graph_complete")),
             "source_health": launch_state.get("source_health") if isinstance(launch_state.get("source_health"), dict) else {},
         },
-        "review_boundary": "Launch provenance proves a configured startup/task relationship only; it is not proof of usage or non-usage. Nothing is disabled, closed, removed, or changed automatically.",
+        "review_boundary": "Launch provenance proves a configured registration only. It does not prove use, non-use, necessity or permission to disable; nothing is changed automatically.",
     }
 
 
@@ -1371,22 +928,21 @@ def ai_evidence() -> dict[str, Any]:
             evidence_id = prefix + str(index + 1)
             ids.append(evidence_id)
             binary_targets = []
-            for binary in (item.get("binary_targets") or [])[:4]:
+            for binary in (item.get("binary_targets") or [])[:3]:
                 binary_targets.append({
-                    "binary_name": _clean(binary.get("binary_name"), 90),
+                    "binary_name": _clean(binary.get("binary_name"), 80),
                     "signature": _clean(binary.get("signature_status"), 24),
-                    "publisher": _clean(binary.get("publisher"), 100),
-                    "launch_kind": _clean(item.get("launch_kind") or "unresolved", 36),
+                    "publisher": _clean(binary.get("publisher"), 90),
                     "confidence": _clean(binary.get("confidence"), 40),
                     "application_matches": [
-                        {"name": _clean(match.get("name"), 90),
-                         "publisher": _clean(match.get("publisher"), 90),
+                        {"name": _clean(match.get("name"), 80),
+                         "publisher": _clean(match.get("publisher"), 80),
                          "confidence": _clean(match.get("confidence"), 40)}
                         for match in (binary.get("application_matches") or [])[:2]
                     ],
                     "service_matches": [
-                        {"name": _clean(match.get("name"), 90),
-                         "publisher": _clean(match.get("publisher"), 90),
+                        {"name": _clean(match.get("name"), 80),
+                         "publisher": _clean(match.get("publisher"), 80),
                          "signature": _clean(match.get("signature_status"), 24),
                          "state": _clean(match.get("state"), 24),
                          "confidence": _clean(match.get("confidence"), 40)}
@@ -1394,20 +950,19 @@ def ai_evidence() -> dict[str, Any]:
                     ],
                 })
             launch_provenance.append({
-                "id": evidence_id, "component_type": component_type,
-                "name": _clean(item.get("name"), 100),
-                "source": _clean(item.get("source"), 90),
-                "state": _clean(item.get("state"), 32),
-                "enabled": bool((item.get("metadata") or {}).get("enabled", True)),
-                "launch_kind": _clean(item.get("launch_kind"), 36),
-                "run_level": _clean((item.get("metadata") or {}).get("run_level"), 24),
-                "logon_type": _clean((item.get("metadata") or {}).get("logon_type"), 30),
+                "id": evidence_id, "component_type": _clean(item.get("component_type"), 16),
+                "name": _clean(item.get("name"), 90), "source": _clean(item.get("source"), 70),
+                "state": _clean(item.get("state"), 24),
+                "enabled": bool((item.get("metadata") or {}).get("enabled")),
+                "launch_kind": _clean(item.get("launch_kind") or "unresolved", 32),
+                "run_level": _clean((item.get("metadata") or {}).get("run_level"), 20),
+                "logon_type": _clean((item.get("metadata") or {}).get("logon_type"), 24),
                 "action_count": int((item.get("metadata") or {}).get("action_count") or 0),
                 "has_arguments": bool((item.get("metadata") or {}).get("has_arguments")),
-                "provenance_status": _clean(item.get("provenance_status"), 32),
+                "provenance_status": _clean(item.get("provenance_status"), 28),
                 "protected": bool(item.get("protected")),
-                "preference": _clean(item.get("preference"), 24),
-                "operator_note": _clean(item.get("operator_note"), 120),
+                "operator_intent": _clean(item.get("preference"), 24),
+                "operator_note": _clean(item.get("operator_note"), 100),
                 "binary_targets": binary_targets,
             })
     operator_preferences = []
@@ -1535,30 +1090,29 @@ def _service_graph_rows() -> list[dict[str, Any]]:
 
 
 def _select_signature_batch(paths_by_id: dict[str, str]) -> list[tuple[str, str]]:
-    """Fairly rotate bounded process, service and launch-binary verification batches."""
+    """Rotate a bounded Authenticode queue so process, service and launch binaries progress."""
     grouped = {
         "process": sorted((key, value) for key, value in paths_by_id.items() if key.startswith("process:")),
         "service": sorted((key, value) for key, value in paths_by_id.items() if key.startswith("service:")),
         "binary": sorted((key, value) for key, value in paths_by_id.items() if key.startswith("binary:")),
     }
-    state = _load_state("signature_rotation")
+    previous = _load_state("signature_rotation")
     quotas = {"process": 12, "service": 8, "binary": 8}
     selected: list[tuple[str, str]] = []
-    selected_ids: set[str] = set()
-    next_state: dict[str, int] = {}
+    used: set[str] = set()
+    next_offsets: dict[str, int] = {}
     for kind in ("process", "service", "binary"):
         rows = grouped[kind]
         if not rows:
-            next_state[kind] = 0
+            next_offsets[kind] = 0
             continue
-        offset = int(state.get(kind) or 0) % len(rows)
+        offset = int(previous.get(kind) or 0) % len(rows)
         count = min(quotas[kind], len(rows))
-        for position in range(count):
-            item = rows[(offset + position) % len(rows)]
+        for step in range(count):
+            item = rows[(offset + step) % len(rows)]
             selected.append(item)
-            selected_ids.add(item[0])
-        next_state[kind] = (offset + count) % len(rows)
-
+            used.add(item[0])
+        next_offsets[kind] = (offset + count) % len(rows)
     spare = max(0, _MAX_SIGNATURE_PATHS - len(selected))
     while spare:
         progressed = False
@@ -1566,15 +1120,15 @@ def _select_signature_batch(paths_by_id: dict[str, str]) -> list[tuple[str, str]
             rows = grouped[kind]
             if not rows:
                 continue
-            offset = int(next_state.get(kind) or 0) % len(rows)
+            offset = int(next_offsets.get(kind) or 0) % len(rows)
             for step in range(len(rows)):
                 position = (offset + step) % len(rows)
                 item = rows[position]
-                if item[0] in selected_ids:
+                if item[0] in used:
                     continue
                 selected.append(item)
-                selected_ids.add(item[0])
-                next_state[kind] = (position + 1) % len(rows)
+                used.add(item[0])
+                next_offsets[kind] = (position + 1) % len(rows)
                 spare -= 1
                 progressed = True
                 break
@@ -1582,7 +1136,7 @@ def _select_signature_batch(paths_by_id: dict[str, str]) -> list[tuple[str, str]
                 break
         if not progressed:
             break
-    _save_state("signature_rotation", {**next_state, "captured_at": time.time()})
+    _save_state("signature_rotation", {**next_offsets, "captured_at": time.time()})
     return selected[:_MAX_SIGNATURE_PATHS]
 
 
@@ -1618,8 +1172,6 @@ def _refresh_enrichment(force: bool = False) -> dict[str, Any]:
         return {"ok": False, "deferred": True, "reason": reason}
     service_graph = refresh_service_graph(force=force)
     service_graph_ok = service_graph.get("ok") is True
-
-    # Sample identities first so enrichment always updates known catalog rows.
     sample_processes()
     sample_services()
     service_rows = _service_graph_rows() if service_graph_ok else []
@@ -1654,33 +1206,28 @@ def _refresh_enrichment(force: bool = False) -> dict[str, Any]:
         inventory_data = {}
     health = inventory_data.get("health") if isinstance(inventory_data.get("health"), dict) else {}
     apps_health = health.get("apps") if isinstance(health.get("apps"), dict) else {}
-    launch_snapshot["apps_complete"] = apps_health.get("ok") is True
+    inventory_fresh = bool(inventory_data.get("ts")) and time.time() - float(inventory_data.get("ts") or 0) <= 6 * 3600
+    launch_snapshot["apps_complete"] = apps_health.get("ok") is True and inventory_fresh
     launch_snapshot["service_graph_complete"] = service_graph_ok
 
     launch_graph = _build_launch_graph(
-        launch_snapshot,
-        service_rows,
+        launch_snapshot, service_rows,
         inventory_data.get("apps") if isinstance(inventory_data.get("apps"), list) else [],
         now=time.time(),
     )
     _persist_launch_graph(launch_graph)
 
-    # Raw executable paths exist only in this bounded in-memory map. Authenticode
-    # returns signer/version metadata; no path or argument string is persisted.
+    # Raw executable paths stay in this temporary map for a local signature read only.
     for component_id, path in launch_graph.get("binary_paths", {}).items():
-        catalog_row = next((item for item in launch_graph.get("catalog_rows", [])
-                            if item[0] == component_id), None)
-        if not path or catalog_row is None or bool(catalog_row[10]) or _is_windows_binary(path):
+        raw_catalog = next((row for row in launch_graph.get("catalog_rows", []) if row[0] == component_id), None)
+        if not path or raw_catalog is None or bool(raw_catalog[10]) or _is_windows_binary(path):
             continue
-        existing = core.db(
-            "SELECT metadata_checked_at FROM component_catalog WHERE component_id=?",
-            (component_id,),
-        )
+        existing = core.db("SELECT metadata_checked_at FROM component_catalog WHERE component_id=?", (component_id,))
         if force or not existing or time.time() - float(existing[0][0] or 0) >= _SIGNATURE_REFRESH_SECONDS:
             paths[component_id] = path
 
     updated = _refresh_signatures_from_paths(paths)
-    launch_summary = {
+    summary = {
         "startup_count": len(launch_graph.get("startup_ids") or []),
         "task_count": len(launch_graph.get("task_ids") or []),
         "binary_count": len(launch_graph.get("binary_paths") or {}),
@@ -1690,17 +1237,16 @@ def _refresh_enrichment(force: bool = False) -> dict[str, Any]:
         "service_graph_complete": bool(launch_graph.get("service_graph_complete")),
         "task_inventory_truncated": bool(launch_snapshot.get("task_truncated")),
     }
-    complete = all(launch_summary[key] for key in (
+    complete = all(summary[key] for key in (
         "startup_complete", "tasks_complete", "apps_complete", "service_graph_complete",
     ))
     return {
         "ok": complete, "deferred": not complete,
         "reason": "" if complete else (
-            "Startup, scheduled-task, installed-app or service provenance coverage is incomplete; "
-            "previous relationships were retained for unavailable sources."
+            "Startup, Task Scheduler, installed-app or service provenance coverage is incomplete. "
+            "SENTINEL retained prior edges for sources it could not verify."
         ),
-        "graph": service_graph, "launch_inventory": launch_summary,
-        "signatures_updated": updated,
+        "graph": service_graph, "launch_inventory": summary, "signatures_updated": updated,
     }
 
 
@@ -1790,432 +1336,7 @@ def shutdown() -> None:
         _THREAD.join(timeout=3.0)
 ) {
       $hasArgs=([string]$matches['tail']).Trim().Length -gt 0
-    } elseif($command -match '^\s*(?<p>.+?\.exe)(?<tail>\s.*)?    $startup+=@{
-      name=[string]$item.Name; source=$source; binary_path=$exe
-      has_arguments=[bool]$hasArgs; enabled=$true
-    }
-  }
-} catch { $startupOk=$false; $startupError=$_.Exception.Message }
-try {
-  $allTasks=@(Get-ScheduledTask -ErrorAction Stop)
-  $taskTotal=$allTasks.Count
-  $limit=[Math]::Min($taskTotal,800)
-  for($i=0;$i -lt $limit;$i++) {
-    $task=$allTasks[$i]
-    $actions=@()
-    foreach($action in @($task.Actions)) {
-      $rawExe=[string]$action.Execute
-      $exe=Resolve-LaunchExe $rawExe
-      $kind='Unknown'
-      if($rawExe) { $kind='Exec' }
-      elseif($action.ClassId) { $kind='ComHandler' }
-      $actions+=@{
-        binary_path=$exe; action_kind=$kind
-        has_arguments=[bool]([string]$action.Arguments)
-      }
-    }
-    $taskPath=[string]$task.TaskPath
-    $tasks+=@{
-      name=[string]$task.TaskName; task_path=$taskPath
-      state=[string]$task.State; enabled=[bool]$task.Settings.Enabled
-      run_level=[string]$task.Principal.RunLevel
-      logon_type=[string]$task.Principal.LogonType
-      actions=@($actions)
-    }
-  }
-} catch { $tasksOk=$false; $tasksError=$_.Exception.Message }
-@{
-  startup=$startup; tasks=$tasks; task_total=$taskTotal
-  startup_complete=$startupOk; tasks_complete=($tasksOk -and $taskTotal -le 800)
-  task_truncated=($tasksOk -and $taskTotal -gt 800)
-  source_health=@{
-    startup=@{ok=$startupOk;error=$startupError}
-    tasks=@{ok=$tasksOk;error=$tasksError;count=$taskTotal}
-  }
-} | ConvertTo-Json -Depth 7 -Compress
-"""
-    result = powershell(script, timeout=60)
-    if result.returncode != 0:
-        raise RuntimeError((result.stderr or result.stdout or "Startup/task inventory failed")[:220])
-    payload = json.loads((result.stdout or "").strip().lstrip("\ufeff"))
-    if not isinstance(payload, dict):
-        raise RuntimeError("Startup/task inventory returned an invalid object")
-    startup = payload.get("startup", [])
-    tasks = payload.get("tasks", [])
-    if isinstance(startup, dict):
-        startup = [startup]
-    if isinstance(tasks, dict):
-        tasks = [tasks]
-    if not isinstance(startup, list) or not isinstance(tasks, list):
-        raise RuntimeError("Startup/task inventory lists were incomplete")
-    return {
-        "startup": [row for row in startup if isinstance(row, dict)][:800],
-        "tasks": [row for row in tasks if isinstance(row, dict)][:800],
-        "task_total": int(payload.get("task_total") or 0),
-        "startup_complete": payload.get("startup_complete") is True,
-        "tasks_complete": payload.get("tasks_complete") is True,
-        "task_truncated": payload.get("task_truncated") is True,
-        "source_health": payload.get("source_health") if isinstance(payload.get("source_health"), dict) else {},
-        "captured_at": time.time(),
-    }
-
-
-def _catalog_tuple(component_id: str, component_type: str, name: str, *,
-                   binary_name: str = "", publisher: str = "", product_name: str = "",
-                   version: str = "", protected: bool = False, source: str = "",
-                   start_mode: str = "", state: str = "", now: float) -> tuple:
-    identity_hash = component_id.split(":", 1)[1]
-    return (
-        component_id, component_type, identity_hash, _clean(name, 140),
-        _clean(binary_name, 120), _clean(publisher, 140), _clean(product_name, 140),
-        _clean(version, 80), "Unknown", "", int(bool(protected)), _clean(source, 120),
-        "[]", "[]", _clean(start_mode, 40), _clean(state, 40),
-        now, now, 0.0,
-    )
-
-
-def _path_under(path: str, root: str) -> bool:
-    try:
-        return bool(path and root and os.path.commonpath((path, root)) == root and path != root)
-    except (OSError, ValueError):
-        return False
-
-
-def _build_launch_graph(snapshot: dict[str, Any], service_rows: list[dict[str, Any]],
-                        apps: list[dict[str, Any]], now: float | None = None) -> dict[str, Any]:
-    """Build safe catalog rows and exact-path edges; raw paths stay in this return's memory map."""
-    timestamp = float(now or time.time())
-    catalog_rows: dict[str, tuple] = {}
-    metadata_rows: dict[str, tuple] = {}
-    relationships: dict[tuple[str, str, str], tuple] = {}
-    binary_paths: dict[str, str] = {}
-    startup_ids: list[str] = []
-    task_ids: list[str] = []
-
-    def add_binary(path: str) -> str | None:
-        executable = _normal_path(path)
-        component_id = binary_component_id(executable)
-        if not component_id:
-            return None
-        if component_id not in binary_paths and len(binary_paths) >= _MAX_LAUNCH_BINARIES:
-            return None
-        binary_paths[component_id] = executable
-        binary_name = executable.replace("/", "\\").rsplit("\\", 1)[-1]
-        protected = _is_windows_binary(executable) or safeguard.is_protected_process(binary_name, executable)
-        catalog_rows[component_id] = _catalog_tuple(
-            component_id, "binary", binary_name, binary_name=binary_name,
-            protected=protected, source="Startup/task/service executable provenance",
-            now=timestamp,
-        )
-        return component_id
-
-    def add_relationship(source_id: str, target_id: str, relation: str,
-                         confidence: str, evidence: dict[str, Any]) -> None:
-        key = (source_id, target_id, relation)
-        relationships[key] = (
-            source_id, target_id, relation, confidence,
-            json.dumps(evidence, ensure_ascii=False, separators=(",", ":")),
-            timestamp,
-        )
-
-    for raw in (snapshot.get("startup") or [])[:800]:
-        if not isinstance(raw, dict):
-            continue
-        name = _clean(raw.get("name"), 120)
-        source = _clean(raw.get("source") or "Windows startup", 70)
-        component_id = startup_component_id(source, name)
-        if not component_id:
-            continue
-        target = _extract_launch_target(raw.get("binary_path") or raw.get("command"))
-        binary_id = add_binary(target["binary_path"]) if target.get("binary_path") else None
-        binary_name = target.get("binary_name") or ""
-        protected = bool(
-            binary_id and _is_windows_binary(target["binary_path"])
-            or binary_name and safeguard.is_protected_process(binary_name, target.get("binary_path", ""))
-            or any(token in (name + " " + source).casefold() for token in ("sentinel", "riot vanguard", "windows security"))
-        )
-        catalog_rows[component_id] = _catalog_tuple(
-            component_id, "startup", name, binary_name=binary_name,
-            protected=protected, source=source,
-            start_mode=target.get("launch_kind") or "unresolved",
-            state="present", now=timestamp,
-        )
-        metadata = {
-            "source": source, "launch_kind": target.get("launch_kind", "unresolved"),
-            "has_arguments": bool(raw.get("has_arguments") or target.get("has_arguments")),
-            "target_resolved": bool(binary_id), "enabled": bool(raw.get("enabled", True)),
-        }
-        metadata_rows[component_id] = (
-            component_id, json.dumps(metadata, ensure_ascii=False, separators=(",", ":")), timestamp,
-        )
-        startup_ids.append(component_id)
-        if binary_id:
-            add_relationship(
-                component_id, binary_id, "launches_binary", "path_resolved",
-                {"launch_kind": target.get("launch_kind"), "has_arguments": metadata["has_arguments"]},
-            )
-
-    for raw in (snapshot.get("tasks") or [])[:800]:
-        if not isinstance(raw, dict):
-            continue
-        name = _clean(raw.get("name"), 120)
-        task_path = _clean(raw.get("task_path") or "\\", 140)
-        component_id = task_component_id(task_path, name)
-        if not component_id:
-            continue
-        protected_task = task_path.casefold().startswith("\\microsoft\\") or "sentinel" in name.casefold()
-        actions = raw.get("actions") if isinstance(raw.get("actions"), list) else []
-        action_targets = []
-        for index, action in enumerate(actions[:16]):
-            if not isinstance(action, dict):
-                continue
-            target = _extract_launch_target(action.get("binary_path") or action.get("execute"))
-            if target.get("binary_path"):
-                binary_id = add_binary(target["binary_path"])
-                if binary_id:
-                    action_targets.append({
-                        "binary_id": binary_id, "binary_name": target.get("binary_name") or "",
-                        "action_index": index, "action_kind": _clean(action.get("action_kind") or "Exec", 32),
-                        "has_arguments": bool(action.get("has_arguments") or target.get("has_arguments")),
-                    })
-        first_binary = action_targets[0]["binary_name"] if action_targets else ""
-        protected = protected_task or any(
-            safeguard.is_protected_process(item["binary_name"], binary_paths[item["binary_id"]])
-            or _is_windows_binary(binary_paths[item["binary_id"]])
-            for item in action_targets
-        )
-        state = _clean(raw.get("state") or "unknown", 30)
-        enabled = bool(raw.get("enabled"))
-        catalog_rows[component_id] = _catalog_tuple(
-            component_id, "task", name, binary_name=first_binary, protected=protected,
-            source="Task Scheduler · " + task_path,
-            start_mode=_clean(raw.get("run_level") or "unknown", 30),
-            state=state if enabled else "disabled", now=timestamp,
-        )
-        metadata = {
-            "task_path": task_path, "enabled": enabled, "run_level": _clean(raw.get("run_level"), 24),
-            "logon_type": _clean(raw.get("logon_type"), 32),
-            "action_count": len(actions), "resolved_executable_actions": len(action_targets),
-            "unresolved_action_count": max(0, len(actions) - len(action_targets)),
-            "launch_kind": "multi_action" if len(action_targets) > 1 else (
-                action_targets[0]["action_kind"] if action_targets else "opaque_or_unresolved"
-            ),
-        }
-        metadata_rows[component_id] = (
-            component_id, json.dumps(metadata, ensure_ascii=False, separators=(",", ":")), timestamp,
-        )
-        task_ids.append(component_id)
-        for item in action_targets:
-            add_relationship(
-                component_id, item["binary_id"], "launches_binary", "path_resolved",
-                {"action_index": item["action_index"], "action_kind": item["action_kind"],
-                 "has_arguments": item["has_arguments"]},
-            )
-
-    # An executable is associated with an installed application only when its
-    # resolved path is under one unique registered install location.
-    app_roots = []
-    for app in ((apps or [])[:600] if snapshot.get("apps_complete") is True else []):
-        if not isinstance(app, dict):
-            continue
-        root = _normal_path(app.get("location") or app.get("install_location"))
-        app_id = app_component_id(app.get("name"), app.get("publisher"), app.get("version"))
-        if not root or not app_id:
-            continue
-        app_roots.append((root, app_id, app))
-    matched_app_ids: set[str] = set()
-    for binary_id, executable in list(binary_paths.items())[:_MAX_LAUNCH_BINARIES]:
-        matches = [(len(root), app_id, app) for root, app_id, app in app_roots if _path_under(executable, root)]
-        if matches:
-            longest = max(row[0] for row in matches)
-            best = [row for row in matches if row[0] == longest]
-            if len(best) == 1:
-                _length, app_id, app = best[0]
-                matched_app_ids.add(app_id)
-                catalog_rows[app_id] = _catalog_tuple(
-                    app_id, "app", _clean(app.get("name"), 140), publisher=app.get("publisher") or "",
-                    product_name=app.get("name") or "", version=app.get("version") or "",
-                    source="Installed application inventory", now=timestamp,
-                )
-                add_relationship(
-                    binary_id, app_id, "installed_under_app", "unique_install_location_prefix",
-                    {"path_stored": False, "match": "executable under one unique install location"},
-                )
-
-    service_paths = {}
-    for service in ((service_rows or [])[:800] if snapshot.get("service_graph_complete") is True else []):
-        if not isinstance(service, dict):
-            continue
-        path = _normal_path(service.get("binary_path"))
-        service_id = service_component_id(service.get("name"))
-        if path and service_id:
-            service_paths[path] = service_id
-    for binary_id, executable in list(binary_paths.items())[:_MAX_LAUNCH_BINARIES]:
-        service_id = service_paths.get(executable)
-        if service_id:
-            add_relationship(
-                binary_id, service_id, "same_executable_as_service", "exact_executable_path",
-                {"match": "exact normalized executable path", "path_stored": False},
-            )
-
-    return {
-        "catalog_rows": list(catalog_rows.values()),
-        "metadata_rows": list(metadata_rows.values()),
-        "relationships": list(relationships.values()),
-        "binary_paths": dict(list(binary_paths.items())[:_MAX_LAUNCH_BINARIES]),
-        "startup_ids": startup_ids, "task_ids": task_ids,
-        "startup_complete": snapshot.get("startup_complete") is True,
-        "tasks_complete": snapshot.get("tasks_complete") is True,
-        "apps_complete": snapshot.get("apps_complete") is True,
-        "service_graph_complete": snapshot.get("service_graph_complete") is True,
-        "source_health": snapshot.get("source_health") if isinstance(snapshot.get("source_health"), dict) else {},
-        "captured_at": timestamp,
-    }
-
-
-def _persist_launch_graph(graph: dict[str, Any]) -> None:
-    catalog_rows = graph.get("catalog_rows") if isinstance(graph.get("catalog_rows"), list) else []
-    _bulk_catalog(catalog_rows)
-    metadata_rows = graph.get("metadata_rows") if isinstance(graph.get("metadata_rows"), list) else []
-    for component_id, metadata_json, captured_at in metadata_rows:
-        core.db(
-            "INSERT INTO component_launch_metadata(component_id,metadata_json,captured_at) VALUES(?,?,?) "
-            "ON CONFLICT(component_id) DO UPDATE SET metadata_json=excluded.metadata_json,captured_at=excluded.captured_at",
-            (component_id, metadata_json, captured_at),
-        )
-    for component_type, complete, ids in (
-        ("startup", graph.get("startup_complete") is True, graph.get("startup_ids") or []),
-        ("task", graph.get("tasks_complete") is True, graph.get("task_ids") or []),
-    ):
-        if not complete:
-            continue
-        all_rows = core.db("SELECT component_id FROM component_catalog WHERE component_type=?", (component_type,))
-        seen = set(str(value) for value in ids)
-        stale = [str(row[0]) for row in all_rows if str(row[0]) not in seen]
-        if stale:
-            for start in range(0, len(stale), 300):
-                batch = stale[start:start + 300]
-                marks = ",".join("?" for _ in batch)
-                core.db(
-                    f"UPDATE component_catalog SET service_state='not_present' WHERE component_id IN ({marks})",
-                    tuple(batch),
-                )
-                core.db(f"DELETE FROM component_relationships WHERE source_component_id IN ({marks})",
-                        tuple(batch))
-        core.db(
-            "DELETE FROM component_relationships WHERE relation_type='launches_binary' "
-            "AND source_component_id IN (SELECT component_id FROM component_catalog WHERE component_type=?)",
-            (component_type,),
-        )
-    if graph.get("apps_complete") is True:
-        core.db("DELETE FROM component_relationships WHERE relation_type='installed_under_app'")
-    if graph.get("service_graph_complete") is True:
-        core.db("DELETE FROM component_relationships WHERE relation_type='same_executable_as_service'")
-    relationships = graph.get("relationships") if isinstance(graph.get("relationships"), list) else []
-    for batch in _chunks(relationships, 100):
-        marks = "(?,?,?,?,?,?)"
-        sql = (
-            "INSERT INTO component_relationships(source_component_id,target_component_id,relation_type,confidence,evidence_json,observed_at) VALUES "
-            + ",".join(marks for _ in batch)
-            + " ON CONFLICT(source_component_id,target_component_id,relation_type) DO UPDATE SET "
-            "confidence=excluded.confidence,evidence_json=excluded.evidence_json,observed_at=excluded.observed_at"
-        )
-        core.db(sql, tuple(value for row in batch for value in row))
-    _save_state("launch_inventory", {
-        "captured_at": float(graph.get("captured_at") or time.time()),
-        "startup_count": len(graph.get("startup_ids") or []),
-        "task_count": len(graph.get("task_ids") or []),
-        "binary_count": len(graph.get("binary_paths") or {}),
-        "startup_complete": bool(graph.get("startup_complete")),
-        "tasks_complete": bool(graph.get("tasks_complete")),
-        "apps_complete": bool(graph.get("apps_complete")),
-        "service_graph_complete": bool(graph.get("service_graph_complete")),
-        "source_health": graph.get("source_health") or {},
-    })
-
-
-def _launch_component_rows(component_type: str, since: float, limit: int = 40) -> list[dict[str, Any]]:
-    if component_type not in ("startup", "task"):
-        return []
-    rows = core.db(
-        "SELECT component_id,name,binary_name,protected,source,start_mode,service_state,last_seen "
-        "FROM component_catalog WHERE component_type=? AND last_seen>=? AND service_state<>'not_present' "
-        "ORDER BY name COLLATE NOCASE LIMIT ?",
-        (component_type, since, max(1, min(100, int(limit)))),
-    )
-    output = []
-    for row in rows:
-        component_id = str(row[0])
-        meta_rows = core.db("SELECT metadata_json FROM component_launch_metadata WHERE component_id=?", (component_id,))
-        try:
-            metadata = json.loads(meta_rows[0][0] or "{}") if meta_rows else {}
-        except (TypeError, ValueError):
-            metadata = {}
-        links = core.db(
-            "SELECT r.target_component_id,r.relation_type,r.confidence,r.evidence_json,"
-            "t.component_type,t.name,t.binary_name,t.publisher,t.product_name,t.file_version,"
-            "t.signature_status,t.signer,t.start_mode,t.service_state,t.protected "
-            "FROM component_relationships r LEFT JOIN component_catalog t ON t.component_id=r.target_component_id "
-            "WHERE r.source_component_id=? ORDER BY r.relation_type,t.name COLLATE NOCASE",
-            (component_id,),
-        )
-        binaries, apps, services = [], [], []
-        for link in links:
-            target = {
-                "id": str(link[0]), "type": str(link[4] or ""), "name": _clean(link[5], 100),
-                "binary_name": _clean(link[6], 100), "publisher": _clean(link[7], 120),
-                "product_name": _clean(link[8], 100), "version": _clean(link[9], 70),
-                "signature_status": _clean(link[10], 32), "signer": _clean(link[11], 140),
-                "start_mode": _clean(link[12], 24), "state": _clean(link[13], 24),
-                "protected": bool(link[14]), "relation": str(link[1]), "confidence": str(link[2]),
-            }
-            if link[1] == "launches_binary":
-                binary_edges = core.db(
-                    "SELECT r.target_component_id,r.relation_type,r.confidence,"
-                    "t.component_type,t.name,t.publisher,t.signature_status,t.start_mode,t.service_state "
-                    "FROM component_relationships r LEFT JOIN component_catalog t ON t.component_id=r.target_component_id "
-                    "WHERE r.source_component_id=?",
-                    (target["id"],),
-                )
-                target["application_matches"] = [
-                    {"id": str(edge[0]), "name": _clean(edge[4], 100), "publisher": _clean(edge[5], 120),
-                     "confidence": str(edge[2])}
-                    for edge in binary_edges if edge[1] == "installed_under_app" and edge[3] == "app"
-                ]
-                target["service_matches"] = [
-                    {"id": str(edge[0]), "name": _clean(edge[4], 100), "publisher": _clean(edge[5], 120),
-                     "signature_status": _clean(edge[6], 32), "start_mode": _clean(edge[7], 24),
-                     "state": _clean(edge[8], 24), "confidence": str(edge[2])}
-                    for edge in binary_edges if edge[1] == "same_executable_as_service" and edge[3] == "service"
-                ]
-                binaries.append(target)
-            elif link[1] == "installed_under_app":
-                apps.append(target)
-            elif link[1] == "same_executable_as_service":
-                services.append(target)
-        pref_rows = core.db(
-            "SELECT preference,note,updated_at FROM component_preferences WHERE component_id=?",
-            (component_id,),
-        )
-        preference = str(pref_rows[0][0]) if pref_rows else "unreviewed"
-        note = _clean(pref_rows[0][1], 160) if pref_rows else ""
-        output.append({
-            "id": component_id, "component_id": component_id, "component_type": component_type,
-            "name": _clean(row[1], 120), "binary_name": _clean(row[2], 100),
-            "protected": bool(row[3]), "source": _clean(row[4], 120),
-            "launch_kind": _clean(row[5], 40), "state": _clean(row[6], 40),
-            "last_seen": float(row[7] or 0), "metadata": metadata,
-            "binary_targets": binaries, "application_matches": apps, "service_matches": services,
-            "preference": preference, "operator_note": note, "requires_user_intent": True,
-            "provenance_status": "verified_target" if any(
-                binary.get("signature_status") == "Valid" for binary in binaries
-            ) else ("target_resolved" if binaries else "unresolved_target"),
-            "recommendation": "Provenance and exact-path associations only. Presence in Startup or Task Scheduler does not prove this entry is unnecessary.",
-        })
-    return output
-
-def _save_state(key: str, value: dict[str, Any]) -> None:
-    core.db(
+    } elseif($command -match '^\s*(?<p>.+?\.exe)(?<tail>\s.*)?    core.db(
         "INSERT INTO component_intelligence_state(state_key,value_json,updated_at) VALUES(?,?,?) "
         "ON CONFLICT(state_key) DO UPDATE SET value_json=excluded.value_json,updated_at=excluded.updated_at",
         (key, json.dumps(value, ensure_ascii=False, separators=(",", ":"), default=str), time.time()),
@@ -2580,9 +1701,6 @@ def report() -> dict[str, Any]:
 
     state_graph = _load_state("service_graph")
     signature_state = _load_state("signature_refresh")
-    launch_state = _load_state("launch_inventory")
-    startup_provenance = _launch_component_rows("startup", since, 36)
-    task_provenance = _launch_component_rows("task", since, 48)
     last_process = _last_sample("process")
     last_service = _last_sample("service")
     process_days = max((int(row[17] or 0) for row in process_rows), default=0)
@@ -2603,33 +1721,12 @@ def report() -> dict[str, Any]:
             "signature_refresh_at": signature_state.get("captured_at"),
             "signature_refresh_count": int(signature_state.get("count") or 0),
             "review_preferences_saved": preferences_count,
-            "startup_items_observed": len(startup_provenance),
-            "scheduled_tasks_observed": len(task_provenance),
-            "launch_binary_targets": int(launch_state.get("binary_count") or 0),
-            "launch_inventory_at": launch_state.get("captured_at"),
-            "startup_inventory_complete": bool(launch_state.get("startup_complete")),
-            "task_inventory_complete": bool(launch_state.get("tasks_complete")),
-            "installed_app_links_complete": bool(launch_state.get("apps_complete")),
-            "service_binary_links_complete": bool(launch_state.get("service_graph_complete")),
             "signed_process_components": sum(1 for row in process_rows if row[7] == "Valid"),
             "signed_services": sum(1 for row in service_rows if row[7] == "Valid"),
         },
         "process_candidates": process_candidates[:12],
         "service_candidates": service_candidates[:12],
-        "startup_provenance": startup_provenance,
-        "scheduled_task_provenance": task_provenance,
-        "launch_inventory": {
-            "captured_at": launch_state.get("captured_at"),
-            "startup_count": int(launch_state.get("startup_count") or 0),
-            "task_count": int(launch_state.get("task_count") or 0),
-            "binary_count": int(launch_state.get("binary_count") or 0),
-            "startup_complete": bool(launch_state.get("startup_complete")),
-            "tasks_complete": bool(launch_state.get("tasks_complete")),
-            "apps_complete": bool(launch_state.get("apps_complete")),
-            "service_graph_complete": bool(launch_state.get("service_graph_complete")),
-            "source_health": launch_state.get("source_health") if isinstance(launch_state.get("source_health"), dict) else {},
-        },
-        "review_boundary": "Launch provenance proves a configured startup/task relationship only; it is not proof of usage or non-usage. Nothing is disabled, closed, removed, or changed automatically.",
+        "review_boundary": "Candidates are questions for the operator. Nothing is closed, disabled, removed, or changed automatically.",
     }
 
 
@@ -2687,54 +1784,6 @@ def ai_evidence() -> dict[str, Any]:
             "evidence_strength": item["evidence_strength"], "operator_intent": item["preference"],
             "operator_note": item["operator_note"],
         })
-    launch_provenance = []
-    for component_type, source_key, prefix, limit in (
-        ("startup", "startup_provenance", "component-startup.", 10),
-        ("task", "scheduled_task_provenance", "component-task.", 14),
-    ):
-        for index, item in enumerate(payload.get(source_key, [])[:limit]):
-            evidence_id = prefix + str(index + 1)
-            ids.append(evidence_id)
-            binary_targets = []
-            for binary in (item.get("binary_targets") or [])[:4]:
-                binary_targets.append({
-                    "binary_name": _clean(binary.get("binary_name"), 90),
-                    "signature": _clean(binary.get("signature_status"), 24),
-                    "publisher": _clean(binary.get("publisher"), 100),
-                    "launch_kind": _clean(item.get("launch_kind") or "unresolved", 36),
-                    "confidence": _clean(binary.get("confidence"), 40),
-                    "application_matches": [
-                        {"name": _clean(match.get("name"), 90),
-                         "publisher": _clean(match.get("publisher"), 90),
-                         "confidence": _clean(match.get("confidence"), 40)}
-                        for match in (binary.get("application_matches") or [])[:2]
-                    ],
-                    "service_matches": [
-                        {"name": _clean(match.get("name"), 90),
-                         "publisher": _clean(match.get("publisher"), 90),
-                         "signature": _clean(match.get("signature_status"), 24),
-                         "state": _clean(match.get("state"), 24),
-                         "confidence": _clean(match.get("confidence"), 40)}
-                        for match in (binary.get("service_matches") or [])[:2]
-                    ],
-                })
-            launch_provenance.append({
-                "id": evidence_id, "component_type": component_type,
-                "name": _clean(item.get("name"), 100),
-                "source": _clean(item.get("source"), 90),
-                "state": _clean(item.get("state"), 32),
-                "enabled": bool((item.get("metadata") or {}).get("enabled", True)),
-                "launch_kind": _clean(item.get("launch_kind"), 36),
-                "run_level": _clean((item.get("metadata") or {}).get("run_level"), 24),
-                "logon_type": _clean((item.get("metadata") or {}).get("logon_type"), 30),
-                "action_count": int((item.get("metadata") or {}).get("action_count") or 0),
-                "has_arguments": bool((item.get("metadata") or {}).get("has_arguments")),
-                "provenance_status": _clean(item.get("provenance_status"), 32),
-                "protected": bool(item.get("protected")),
-                "preference": _clean(item.get("preference"), 24),
-                "operator_note": _clean(item.get("operator_note"), 120),
-                "binary_targets": binary_targets,
-            })
     operator_preferences = []
     try:
         rows = core.db(
@@ -2759,7 +1808,6 @@ def ai_evidence() -> dict[str, Any]:
         "background_process_review_candidates": processes,
         "third_party_service_review_candidates": services,
         "service_dependency_graph": service_graph,
-        "startup_and_task_provenance": launch_provenance,
         "operator_component_preferences": operator_preferences,
         "component_evidence_ids": ids,
         "component_baseline_retention_days": payload["retention_days"],
@@ -2859,64 +1907,10 @@ def _service_graph_rows() -> list[dict[str, Any]]:
     return [row for row in rows if isinstance(row, dict)]
 
 
-def _select_signature_batch(paths_by_id: dict[str, str]) -> list[tuple[str, str]]:
-    """Fairly rotate bounded process, service and launch-binary verification batches."""
-    grouped = {
-        "process": sorted((key, value) for key, value in paths_by_id.items() if key.startswith("process:")),
-        "service": sorted((key, value) for key, value in paths_by_id.items() if key.startswith("service:")),
-        "binary": sorted((key, value) for key, value in paths_by_id.items() if key.startswith("binary:")),
-    }
-    state = _load_state("signature_rotation")
-    quotas = {"process": 12, "service": 8, "binary": 8}
-    selected: list[tuple[str, str]] = []
-    selected_ids: set[str] = set()
-    next_state: dict[str, int] = {}
-    for kind in ("process", "service", "binary"):
-        rows = grouped[kind]
-        if not rows:
-            next_state[kind] = 0
-            continue
-        offset = int(state.get(kind) or 0) % len(rows)
-        count = min(quotas[kind], len(rows))
-        for position in range(count):
-            item = rows[(offset + position) % len(rows)]
-            selected.append(item)
-            selected_ids.add(item[0])
-        next_state[kind] = (offset + count) % len(rows)
-
-    spare = max(0, _MAX_SIGNATURE_PATHS - len(selected))
-    while spare:
-        progressed = False
-        for kind in ("process", "service", "binary"):
-            rows = grouped[kind]
-            if not rows:
-                continue
-            offset = int(next_state.get(kind) or 0) % len(rows)
-            for step in range(len(rows)):
-                position = (offset + step) % len(rows)
-                item = rows[position]
-                if item[0] in selected_ids:
-                    continue
-                selected.append(item)
-                selected_ids.add(item[0])
-                next_state[kind] = (position + 1) % len(rows)
-                spare -= 1
-                progressed = True
-                break
-            if spare <= 0:
-                break
-        if not progressed:
-            break
-    _save_state("signature_rotation", {**next_state, "captured_at": time.time()})
-    return selected[:_MAX_SIGNATURE_PATHS]
-
-
 def _refresh_signatures_from_paths(paths_by_id: dict[str, str]) -> int:
     if not paths_by_id:
         return 0
-    chosen = _select_signature_batch(paths_by_id)
-    if not chosen:
-        return 0
+    chosen = list(paths_by_id.items())[:_MAX_SIGNATURE_PATHS]
     metadata = _authenticode_query([path for _component_id, path in chosen])
     updated = 0
     for index, item in enumerate(metadata):
@@ -2941,15 +1935,14 @@ def _refresh_enrichment(force: bool = False) -> dict[str, Any]:
     permitted, reason = _resource_gate()
     if not permitted:
         return {"ok": False, "deferred": True, "reason": reason}
-    service_graph = refresh_service_graph(force=force)
-    service_graph_ok = service_graph.get("ok") is True
-
-    # Sample identities first so enrichment always updates known catalog rows.
+    graph = refresh_service_graph(force=force)
+    # Make sure identities exist before the signature result is written back.
     sample_processes()
     sample_services()
-    service_rows = _service_graph_rows() if service_graph_ok else []
+    # Service catalog rows are refreshed by the SCM collector; only query signatures
+    # when the dependency map and process sample are available.
     paths = _process_signature_paths(force=force)
-    for row in service_rows:
+    for row in _service_graph_rows():
         path = _normal_path(row.get("binary_path"))
         component_id = service_component_id(row.get("name"))
         if not path or not component_id or _protected_service(row, path) or _is_windows_binary(path):
@@ -2957,76 +1950,9 @@ def _refresh_enrichment(force: bool = False) -> dict[str, Any]:
         existing = core.db("SELECT metadata_checked_at FROM component_catalog WHERE component_id=?", (component_id,))
         if force or not existing or time.time() - float(existing[0][0] or 0) >= _SIGNATURE_REFRESH_SECONDS:
             paths[component_id] = path
-
-    try:
-        launch_snapshot = _launch_inventory_query()
-    except Exception as exc:
-        launch_snapshot = {
-            "startup": [], "tasks": [], "task_total": 0,
-            "startup_complete": False, "tasks_complete": False, "task_truncated": False,
-            "source_health": {
-                "startup": {"ok": False, "error": f"{type(exc).__name__}: {_clean(exc, 150)}"},
-                "tasks": {"ok": False, "error": f"{type(exc).__name__}: {_clean(exc, 150)}"},
-            },
-            "captured_at": time.time(),
-        }
-        core.log("component-intelligence", f"startup/task provenance query unavailable: {type(exc).__name__}: {_clean(exc, 150)}", "warn")
-
-    try:
-        from . import inventory
-        inventory_data = inventory.INV if isinstance(inventory.INV, dict) else {}
-    except Exception:
-        inventory_data = {}
-    health = inventory_data.get("health") if isinstance(inventory_data.get("health"), dict) else {}
-    apps_health = health.get("apps") if isinstance(health.get("apps"), dict) else {}
-    launch_snapshot["apps_complete"] = apps_health.get("ok") is True
-    launch_snapshot["service_graph_complete"] = service_graph_ok
-
-    launch_graph = _build_launch_graph(
-        launch_snapshot,
-        service_rows,
-        inventory_data.get("apps") if isinstance(inventory_data.get("apps"), list) else [],
-        now=time.time(),
-    )
-    _persist_launch_graph(launch_graph)
-
-    # Raw executable paths exist only in this bounded in-memory map. Authenticode
-    # returns signer/version metadata; no path or argument string is persisted.
-    for component_id, path in launch_graph.get("binary_paths", {}).items():
-        catalog_row = next((item for item in launch_graph.get("catalog_rows", [])
-                            if item[0] == component_id), None)
-        if not path or catalog_row is None or bool(catalog_row[10]) or _is_windows_binary(path):
-            continue
-        existing = core.db(
-            "SELECT metadata_checked_at FROM component_catalog WHERE component_id=?",
-            (component_id,),
-        )
-        if force or not existing or time.time() - float(existing[0][0] or 0) >= _SIGNATURE_REFRESH_SECONDS:
-            paths[component_id] = path
-
     updated = _refresh_signatures_from_paths(paths)
-    launch_summary = {
-        "startup_count": len(launch_graph.get("startup_ids") or []),
-        "task_count": len(launch_graph.get("task_ids") or []),
-        "binary_count": len(launch_graph.get("binary_paths") or {}),
-        "startup_complete": bool(launch_graph.get("startup_complete")),
-        "tasks_complete": bool(launch_graph.get("tasks_complete")),
-        "apps_complete": bool(launch_graph.get("apps_complete")),
-        "service_graph_complete": bool(launch_graph.get("service_graph_complete")),
-        "task_inventory_truncated": bool(launch_snapshot.get("task_truncated")),
-    }
-    complete = all(launch_summary[key] for key in (
-        "startup_complete", "tasks_complete", "apps_complete", "service_graph_complete",
-    ))
-    return {
-        "ok": complete, "deferred": not complete,
-        "reason": "" if complete else (
-            "Startup, scheduled-task, installed-app or service provenance coverage is incomplete; "
-            "previous relationships were retained for unavailable sources."
-        ),
-        "graph": service_graph, "launch_inventory": launch_summary,
-        "signatures_updated": updated,
-    }
+    return {"ok": bool(graph.get("ok")), "graph": graph, "signatures_updated": updated}
+
 
 
 def refresh_now() -> dict[str, Any]:
@@ -3140,9 +2066,8 @@ try {
         has_arguments=[bool]([string]$action.Arguments)
       }
     }
-    $taskPath=[string]$task.TaskPath
     $tasks+=@{
-      name=[string]$task.TaskName; task_path=$taskPath
+      name=[string]$task.TaskName; task_path=[string]$task.TaskPath
       state=[string]$task.State; enabled=[bool]$task.Settings.Enabled
       run_level=[string]$task.Principal.RunLevel
       logon_type=[string]$task.Principal.LogonType
@@ -3175,8 +2100,8 @@ try {
     if not isinstance(startup, list) or not isinstance(tasks, list):
         raise RuntimeError("Startup/task inventory lists were incomplete")
     return {
-        "startup": [row for row in startup if isinstance(row, dict)][:800],
-        "tasks": [row for row in tasks if isinstance(row, dict)][:800],
+        "startup": [row for row in startup if isinstance(row, dict)][: _MAX_LAUNCH_ROWS],
+        "tasks": [row for row in tasks if isinstance(row, dict)][: _MAX_LAUNCH_ROWS],
         "task_total": int(payload.get("task_total") or 0),
         "startup_complete": payload.get("startup_complete") is True,
         "tasks_complete": payload.get("tasks_complete") is True,
@@ -3209,7 +2134,7 @@ def _path_under(path: str, root: str) -> bool:
 
 def _build_launch_graph(snapshot: dict[str, Any], service_rows: list[dict[str, Any]],
                         apps: list[dict[str, Any]], now: float | None = None) -> dict[str, Any]:
-    """Build safe catalog rows and exact-path edges; raw paths stay in this return's memory map."""
+    """Build safe component rows and exact-path edges; paths remain memory-only."""
     timestamp = float(now or time.time())
     catalog_rows: dict[str, tuple] = {}
     metadata_rows: dict[str, tuple] = {}
@@ -3229,9 +2154,8 @@ def _build_launch_graph(snapshot: dict[str, Any], service_rows: list[dict[str, A
         binary_name = executable.replace("/", "\\").rsplit("\\", 1)[-1]
         protected = _is_windows_binary(executable) or safeguard.is_protected_process(binary_name, executable)
         catalog_rows[component_id] = _catalog_tuple(
-            component_id, "binary", binary_name, binary_name=binary_name,
-            protected=protected, source="Startup/task/service executable provenance",
-            now=timestamp,
+            component_id, "binary", binary_name, binary_name=binary_name, protected=protected,
+            source="Startup/task executable provenance", now=timestamp,
         )
         return component_id
 
@@ -3240,11 +2164,10 @@ def _build_launch_graph(snapshot: dict[str, Any], service_rows: list[dict[str, A
         key = (source_id, target_id, relation)
         relationships[key] = (
             source_id, target_id, relation, confidence,
-            json.dumps(evidence, ensure_ascii=False, separators=(",", ":")),
-            timestamp,
+            json.dumps(evidence, ensure_ascii=False, separators=(",", ":")), timestamp,
         )
 
-    for raw in (snapshot.get("startup") or [])[:800]:
+    for raw in (snapshot.get("startup") or [])[:_MAX_LAUNCH_ROWS]:
         if not isinstance(raw, dict):
             continue
         name = _clean(raw.get("name"), 120)
@@ -3256,40 +2179,42 @@ def _build_launch_graph(snapshot: dict[str, Any], service_rows: list[dict[str, A
         binary_id = add_binary(target["binary_path"]) if target.get("binary_path") else None
         binary_name = target.get("binary_name") or ""
         protected = bool(
-            binary_id and _is_windows_binary(target["binary_path"])
-            or binary_name and safeguard.is_protected_process(binary_name, target.get("binary_path", ""))
-            or any(token in (name + " " + source).casefold() for token in ("sentinel", "riot vanguard", "windows security"))
+            (binary_id and _is_windows_binary(target["binary_path"]))
+            or (binary_name and safeguard.is_protected_process(binary_name, target.get("binary_path", "")))
+            or any(token in (name + " " + source).casefold() for token in (
+                "sentinel", "riot", "vanguard", "valorant", "windows security", "defender"))
         )
         catalog_rows[component_id] = _catalog_tuple(
-            component_id, "startup", name, binary_name=binary_name,
-            protected=protected, source=source,
-            start_mode=target.get("launch_kind") or "unresolved",
+            component_id, "startup", name, binary_name=binary_name, protected=protected,
+            source=source, start_mode=target.get("launch_kind") or "unresolved",
             state="present", now=timestamp,
         )
+        has_args = bool(raw.get("has_arguments") or target.get("has_arguments"))
         metadata = {
             "source": source, "launch_kind": target.get("launch_kind", "unresolved"),
-            "has_arguments": bool(raw.get("has_arguments") or target.get("has_arguments")),
-            "target_resolved": bool(binary_id), "enabled": bool(raw.get("enabled", True)),
+            "has_arguments": has_args, "target_resolved": bool(binary_id),
+            "enabled": bool(raw.get("enabled", True)),
         }
         metadata_rows[component_id] = (
             component_id, json.dumps(metadata, ensure_ascii=False, separators=(",", ":")), timestamp,
         )
         startup_ids.append(component_id)
         if binary_id:
-            add_relationship(
-                component_id, binary_id, "launches_binary", "path_resolved",
-                {"launch_kind": target.get("launch_kind"), "has_arguments": metadata["has_arguments"]},
-            )
+            add_relationship(component_id, binary_id, "launches_binary", "path_resolved",
+                             {"launch_kind": target.get("launch_kind"), "has_arguments": has_args})
 
-    for raw in (snapshot.get("tasks") or [])[:800]:
+    for raw in (snapshot.get("tasks") or [])[:_MAX_LAUNCH_ROWS]:
         if not isinstance(raw, dict):
             continue
         name = _clean(raw.get("name"), 120)
-        task_path = _clean(raw.get("task_path") or "\\", 140)
+        task_path = str(raw.get("task_path") or "\\").strip()
         component_id = task_component_id(task_path, name)
         if not component_id:
             continue
-        protected_task = task_path.casefold().startswith("\\microsoft\\") or "sentinel" in name.casefold()
+        protected_task = task_path.casefold().startswith("\\microsoft\\") or any(
+            token in (task_path + " " + name).casefold()
+            for token in ("sentinel", "riot", "vanguard", "valorant", "defender", "windows security")
+        )
         actions = raw.get("actions") if isinstance(raw.get("actions"), list) else []
         action_targets = []
         for index, action in enumerate(actions[:16]):
@@ -3310,85 +2235,81 @@ def _build_launch_graph(snapshot: dict[str, Any], service_rows: list[dict[str, A
             or _is_windows_binary(binary_paths[item["binary_id"]])
             for item in action_targets
         )
-        state = _clean(raw.get("state") or "unknown", 30)
         enabled = bool(raw.get("enabled"))
+        state = _clean(raw.get("state") or "unknown", 30)
         catalog_rows[component_id] = _catalog_tuple(
             component_id, "task", name, binary_name=first_binary, protected=protected,
-            source="Task Scheduler · " + task_path,
+            source="Task Scheduler · " + ("Built-in" if protected_task else "Third-party"),
             start_mode=_clean(raw.get("run_level") or "unknown", 30),
             state=state if enabled else "disabled", now=timestamp,
         )
         metadata = {
-            "task_path": task_path, "enabled": enabled, "run_level": _clean(raw.get("run_level"), 24),
+            "task_folder_depth": max(0, len([part for part in task_path.split(chr(92)) if part])),
+            "microsoft_namespace": task_path.casefold().startswith("\\microsoft\\"),
+            "enabled": enabled, "run_level": _clean(raw.get("run_level"), 24),
             "logon_type": _clean(raw.get("logon_type"), 32),
             "action_count": len(actions), "resolved_executable_actions": len(action_targets),
             "unresolved_action_count": max(0, len(actions) - len(action_targets)),
             "launch_kind": "multi_action" if len(action_targets) > 1 else (
-                action_targets[0]["action_kind"] if action_targets else "opaque_or_unresolved"
-            ),
+                action_targets[0]["action_kind"] if action_targets else "opaque_or_unresolved"),
         }
         metadata_rows[component_id] = (
             component_id, json.dumps(metadata, ensure_ascii=False, separators=(",", ":")), timestamp,
         )
         task_ids.append(component_id)
         for item in action_targets:
-            add_relationship(
-                component_id, item["binary_id"], "launches_binary", "path_resolved",
-                {"action_index": item["action_index"], "action_kind": item["action_kind"],
-                 "has_arguments": item["has_arguments"]},
-            )
+            add_relationship(component_id, item["binary_id"], "launches_binary", "path_resolved", {
+                "action_index": item["action_index"], "action_kind": item["action_kind"],
+                "has_arguments": item["has_arguments"],
+            })
 
-    # An executable is associated with an installed application only when its
-    # resolved path is under one unique registered install location.
     app_roots = []
-    for app in ((apps or [])[:600] if snapshot.get("apps_complete") is True else []):
-        if not isinstance(app, dict):
-            continue
-        root = _normal_path(app.get("location") or app.get("install_location"))
-        app_id = app_component_id(app.get("name"), app.get("publisher"), app.get("version"))
-        if not root or not app_id:
-            continue
-        app_roots.append((root, app_id, app))
-    matched_app_ids: set[str] = set()
-    for binary_id, executable in list(binary_paths.items())[:_MAX_LAUNCH_BINARIES]:
+    if snapshot.get("apps_complete") is True:
+        for app in (apps or [])[:600]:
+            if not isinstance(app, dict):
+                continue
+            root = _normal_path(app.get("location") or app.get("install_location"))
+            app_id = app_component_id(app.get("name"), app.get("publisher"), app.get("version"))
+            if root and app_id:
+                app_roots.append((root, app_id, app))
+
+    for binary_id, executable in list(binary_paths.items()):
         matches = [(len(root), app_id, app) for root, app_id, app in app_roots if _path_under(executable, root)]
         if matches:
             longest = max(row[0] for row in matches)
             best = [row for row in matches if row[0] == longest]
+            # Ambiguous equal-depth install locations do not create a guessed association.
             if len(best) == 1:
                 _length, app_id, app = best[0]
-                matched_app_ids.add(app_id)
                 catalog_rows[app_id] = _catalog_tuple(
                     app_id, "app", _clean(app.get("name"), 140), publisher=app.get("publisher") or "",
                     product_name=app.get("name") or "", version=app.get("version") or "",
                     source="Installed application inventory", now=timestamp,
                 )
-                add_relationship(
-                    binary_id, app_id, "installed_under_app", "unique_install_location_prefix",
-                    {"path_stored": False, "match": "executable under one unique install location"},
-                )
+                add_relationship(binary_id, app_id, "installed_under_app",
+                                 "unique_install_location_prefix", {"path_stored": False})
 
-    service_paths = {}
-    for service in ((service_rows or [])[:800] if snapshot.get("service_graph_complete") is True else []):
-        if not isinstance(service, dict):
-            continue
-        path = _normal_path(service.get("binary_path"))
-        service_id = service_component_id(service.get("name"))
-        if path and service_id:
-            service_paths[path] = service_id
-    for binary_id, executable in list(binary_paths.items())[:_MAX_LAUNCH_BINARIES]:
-        service_id = service_paths.get(executable)
-        if service_id:
-            add_relationship(
-                binary_id, service_id, "same_executable_as_service", "exact_executable_path",
-                {"match": "exact normalized executable path", "path_stored": False},
-            )
+    if snapshot.get("service_graph_complete") is True:
+        service_paths = {}
+        for service in (service_rows or [])[:_MAX_LAUNCH_ROWS]:
+            if not isinstance(service, dict):
+                continue
+            service_path = _normal_path(service.get("binary_path"))
+            service_id = service_component_id(service.get("name"))
+            if service_path and service_id:
+                service_paths.setdefault(service_path, set()).add(service_id)
+        for binary_id, executable in list(binary_paths.items()):
+            matches = sorted(service_paths.get(executable, set()))
+            # Shared service hosts can map to more than one service. Keep all exact matches.
+            for service_id in matches[:8]:
+                add_relationship(binary_id, service_id, "same_executable_as_service",
+                                 "exact_executable_path", {"path_stored": False})
 
     return {
         "catalog_rows": list(catalog_rows.values()),
         "metadata_rows": list(metadata_rows.values()),
         "relationships": list(relationships.values()),
-        "binary_paths": dict(list(binary_paths.items())[:_MAX_LAUNCH_BINARIES]),
+        "binary_paths": dict(binary_paths),
         "startup_ids": startup_ids, "task_ids": task_ids,
         "startup_complete": snapshot.get("startup_complete") is True,
         "tasks_complete": snapshot.get("tasks_complete") is True,
@@ -3400,49 +2321,43 @@ def _build_launch_graph(snapshot: dict[str, Any], service_rows: list[dict[str, A
 
 
 def _persist_launch_graph(graph: dict[str, Any]) -> None:
-    catalog_rows = graph.get("catalog_rows") if isinstance(graph.get("catalog_rows"), list) else []
-    _bulk_catalog(catalog_rows)
-    metadata_rows = graph.get("metadata_rows") if isinstance(graph.get("metadata_rows"), list) else []
-    for component_id, metadata_json, captured_at in metadata_rows:
+    _bulk_catalog(graph.get("catalog_rows") if isinstance(graph.get("catalog_rows"), list) else [])
+    for component_id, metadata_json, captured_at in (graph.get("metadata_rows") or []):
         core.db(
             "INSERT INTO component_launch_metadata(component_id,metadata_json,captured_at) VALUES(?,?,?) "
             "ON CONFLICT(component_id) DO UPDATE SET metadata_json=excluded.metadata_json,captured_at=excluded.captured_at",
             (component_id, metadata_json, captured_at),
         )
-    for component_type, complete, ids in (
+
+    for kind, complete, ids in (
         ("startup", graph.get("startup_complete") is True, graph.get("startup_ids") or []),
         ("task", graph.get("tasks_complete") is True, graph.get("task_ids") or []),
     ):
         if not complete:
             continue
-        all_rows = core.db("SELECT component_id FROM component_catalog WHERE component_type=?", (component_type,))
-        seen = set(str(value) for value in ids)
-        stale = [str(row[0]) for row in all_rows if str(row[0]) not in seen]
-        if stale:
-            for start in range(0, len(stale), 300):
-                batch = stale[start:start + 300]
-                marks = ",".join("?" for _ in batch)
-                core.db(
-                    f"UPDATE component_catalog SET service_state='not_present' WHERE component_id IN ({marks})",
-                    tuple(batch),
-                )
-                core.db(f"DELETE FROM component_relationships WHERE source_component_id IN ({marks})",
-                        tuple(batch))
+        existing = core.db("SELECT component_id FROM component_catalog WHERE component_type=?", (kind,))
+        seen = {str(value) for value in ids}
+        stale = [str(row[0]) for row in existing if str(row[0]) not in seen]
+        for offset in range(0, len(stale), 300):
+            batch = stale[offset:offset + 300]
+            marks = ",".join("?" for _ in batch)
+            core.db(f"UPDATE component_catalog SET service_state='not_present' WHERE component_id IN ({marks})", tuple(batch))
+            core.db(f"DELETE FROM component_relationships WHERE source_component_id IN ({marks})", tuple(batch))
         core.db(
             "DELETE FROM component_relationships WHERE relation_type='launches_binary' "
             "AND source_component_id IN (SELECT component_id FROM component_catalog WHERE component_type=?)",
-            (component_type,),
+            (kind,),
         )
     if graph.get("apps_complete") is True:
         core.db("DELETE FROM component_relationships WHERE relation_type='installed_under_app'")
     if graph.get("service_graph_complete") is True:
         core.db("DELETE FROM component_relationships WHERE relation_type='same_executable_as_service'")
+
     relationships = graph.get("relationships") if isinstance(graph.get("relationships"), list) else []
     for batch in _chunks(relationships, 100):
-        marks = "(?,?,?,?,?,?)"
         sql = (
             "INSERT INTO component_relationships(source_component_id,target_component_id,relation_type,confidence,evidence_json,observed_at) VALUES "
-            + ",".join(marks for _ in batch)
+            + ",".join("(?,?,?,?,?,?)" for _ in batch)
             + " ON CONFLICT(source_component_id,target_component_id,relation_type) DO UPDATE SET "
             "confidence=excluded.confidence,evidence_json=excluded.evidence_json,observed_at=excluded.observed_at"
         )
@@ -3485,58 +2400,62 @@ def _launch_component_rows(component_type: str, since: float, limit: int = 40) -
             "WHERE r.source_component_id=? ORDER BY r.relation_type,t.name COLLATE NOCASE",
             (component_id,),
         )
-        binaries, apps, services = [], [], []
+        binaries = []
         for link in links:
-            target = {
-                "id": str(link[0]), "type": str(link[4] or ""), "name": _clean(link[5], 100),
-                "binary_name": _clean(link[6], 100), "publisher": _clean(link[7], 120),
-                "product_name": _clean(link[8], 100), "version": _clean(link[9], 70),
-                "signature_status": _clean(link[10], 32), "signer": _clean(link[11], 140),
-                "start_mode": _clean(link[12], 24), "state": _clean(link[13], 24),
-                "protected": bool(link[14]), "relation": str(link[1]), "confidence": str(link[2]),
-            }
-            if link[1] == "launches_binary":
-                binary_edges = core.db(
-                    "SELECT r.target_component_id,r.relation_type,r.confidence,"
-                    "t.component_type,t.name,t.publisher,t.signature_status,t.start_mode,t.service_state "
-                    "FROM component_relationships r LEFT JOIN component_catalog t ON t.component_id=r.target_component_id "
-                    "WHERE r.source_component_id=?",
-                    (target["id"],),
-                )
-                target["application_matches"] = [
-                    {"id": str(edge[0]), "name": _clean(edge[4], 100), "publisher": _clean(edge[5], 120),
-                     "confidence": str(edge[2])}
-                    for edge in binary_edges if edge[1] == "installed_under_app" and edge[3] == "app"
-                ]
-                target["service_matches"] = [
-                    {"id": str(edge[0]), "name": _clean(edge[4], 100), "publisher": _clean(edge[5], 120),
-                     "signature_status": _clean(edge[6], 32), "start_mode": _clean(edge[7], 24),
-                     "state": _clean(edge[8], 24), "confidence": str(edge[2])}
-                    for edge in binary_edges if edge[1] == "same_executable_as_service" and edge[3] == "service"
-                ]
-                binaries.append(target)
-            elif link[1] == "installed_under_app":
-                apps.append(target)
-            elif link[1] == "same_executable_as_service":
-                services.append(target)
+            if link[1] != "launches_binary":
+                continue
+            binary_id = str(link[0])
+            binary_edges = core.db(
+                "SELECT r.target_component_id,r.relation_type,r.confidence,"
+                "t.component_type,t.name,t.publisher,t.signature_status,t.start_mode,t.service_state,t.protected "
+                "FROM component_relationships r LEFT JOIN component_catalog t ON t.component_id=r.target_component_id "
+                "WHERE r.source_component_id=?",
+                (binary_id,),
+            )
+            applications, services = [], []
+            for edge in binary_edges:
+                association = {
+                    "id": str(edge[0]), "name": _clean(edge[4], 100),
+                    "publisher": _clean(edge[5], 100), "confidence": str(edge[2]),
+                    "signature_status": _clean(edge[6], 32), "start_mode": _clean(edge[7], 24),
+                    "state": _clean(edge[8], 24), "protected": bool(edge[9]),
+                }
+                if edge[1] == "installed_under_app" and edge[3] == "app":
+                    applications.append(association)
+                elif edge[1] == "same_executable_as_service" and edge[3] == "service":
+                    services.append(association)
+            binaries.append({
+                "id": binary_id, "binary_name": _clean(link[6], 100),
+                "publisher": _clean(link[7], 120), "product_name": _clean(link[8], 100),
+                "file_version": _clean(link[9], 70), "signature_status": _clean(link[10], 32),
+                "signer": _clean(link[11], 140), "protected": bool(link[14]),
+                "confidence": str(link[2]), "application_matches": applications[:4],
+                "service_matches": services[:8],
+            })
         pref_rows = core.db(
             "SELECT preference,note,updated_at FROM component_preferences WHERE component_id=?",
             (component_id,),
         )
         preference = str(pref_rows[0][0]) if pref_rows else "unreviewed"
         note = _clean(pref_rows[0][1], 160) if pref_rows else ""
+        updated_at = float(pref_rows[0][2] or 0) if pref_rows else 0.0
+        if preference in ("keep", "not_needed"):
+            continue
+        if preference == "review_later" and time.time() - updated_at < 7 * 86400:
+            continue
+        launch_kind = _clean(metadata.get("launch_kind") or row[5], 40)
         output.append({
-            "id": component_id, "component_id": component_id, "component_type": component_type,
+            "id": component_id, "component_type": component_type,
             "name": _clean(row[1], 120), "binary_name": _clean(row[2], 100),
-            "protected": bool(row[3]), "source": _clean(row[4], 120),
-            "launch_kind": _clean(row[5], 40), "state": _clean(row[6], 40),
+            "protected": bool(row[3]), "source": _clean(row[4], 80),
+            "launch_kind": launch_kind, "state": _clean(row[6], 40),
             "last_seen": float(row[7] or 0), "metadata": metadata,
-            "binary_targets": binaries, "application_matches": apps, "service_matches": services,
-            "preference": preference, "operator_note": note, "requires_user_intent": True,
+            "binary_targets": binaries, "preference": preference,
+            "operator_note": note, "requires_user_intent": True,
             "provenance_status": "verified_target" if any(
                 binary.get("signature_status") == "Valid" for binary in binaries
             ) else ("target_resolved" if binaries else "unresolved_target"),
-            "recommendation": "Provenance and exact-path associations only. Presence in Startup or Task Scheduler does not prove this entry is unnecessary.",
+            "recommendation": "This is a configured launch registration. It does not establish foreground use, necessity or permission to disable it.",
         })
     return output
 
@@ -3906,9 +2825,6 @@ def report() -> dict[str, Any]:
 
     state_graph = _load_state("service_graph")
     signature_state = _load_state("signature_refresh")
-    launch_state = _load_state("launch_inventory")
-    startup_provenance = _launch_component_rows("startup", since, 36)
-    task_provenance = _launch_component_rows("task", since, 48)
     last_process = _last_sample("process")
     last_service = _last_sample("service")
     process_days = max((int(row[17] or 0) for row in process_rows), default=0)
@@ -3929,33 +2845,12 @@ def report() -> dict[str, Any]:
             "signature_refresh_at": signature_state.get("captured_at"),
             "signature_refresh_count": int(signature_state.get("count") or 0),
             "review_preferences_saved": preferences_count,
-            "startup_items_observed": len(startup_provenance),
-            "scheduled_tasks_observed": len(task_provenance),
-            "launch_binary_targets": int(launch_state.get("binary_count") or 0),
-            "launch_inventory_at": launch_state.get("captured_at"),
-            "startup_inventory_complete": bool(launch_state.get("startup_complete")),
-            "task_inventory_complete": bool(launch_state.get("tasks_complete")),
-            "installed_app_links_complete": bool(launch_state.get("apps_complete")),
-            "service_binary_links_complete": bool(launch_state.get("service_graph_complete")),
             "signed_process_components": sum(1 for row in process_rows if row[7] == "Valid"),
             "signed_services": sum(1 for row in service_rows if row[7] == "Valid"),
         },
         "process_candidates": process_candidates[:12],
         "service_candidates": service_candidates[:12],
-        "startup_provenance": startup_provenance,
-        "scheduled_task_provenance": task_provenance,
-        "launch_inventory": {
-            "captured_at": launch_state.get("captured_at"),
-            "startup_count": int(launch_state.get("startup_count") or 0),
-            "task_count": int(launch_state.get("task_count") or 0),
-            "binary_count": int(launch_state.get("binary_count") or 0),
-            "startup_complete": bool(launch_state.get("startup_complete")),
-            "tasks_complete": bool(launch_state.get("tasks_complete")),
-            "apps_complete": bool(launch_state.get("apps_complete")),
-            "service_graph_complete": bool(launch_state.get("service_graph_complete")),
-            "source_health": launch_state.get("source_health") if isinstance(launch_state.get("source_health"), dict) else {},
-        },
-        "review_boundary": "Launch provenance proves a configured startup/task relationship only; it is not proof of usage or non-usage. Nothing is disabled, closed, removed, or changed automatically.",
+        "review_boundary": "Candidates are questions for the operator. Nothing is closed, disabled, removed, or changed automatically.",
     }
 
 
@@ -4013,54 +2908,6 @@ def ai_evidence() -> dict[str, Any]:
             "evidence_strength": item["evidence_strength"], "operator_intent": item["preference"],
             "operator_note": item["operator_note"],
         })
-    launch_provenance = []
-    for component_type, source_key, prefix, limit in (
-        ("startup", "startup_provenance", "component-startup.", 10),
-        ("task", "scheduled_task_provenance", "component-task.", 14),
-    ):
-        for index, item in enumerate(payload.get(source_key, [])[:limit]):
-            evidence_id = prefix + str(index + 1)
-            ids.append(evidence_id)
-            binary_targets = []
-            for binary in (item.get("binary_targets") or [])[:4]:
-                binary_targets.append({
-                    "binary_name": _clean(binary.get("binary_name"), 90),
-                    "signature": _clean(binary.get("signature_status"), 24),
-                    "publisher": _clean(binary.get("publisher"), 100),
-                    "launch_kind": _clean(item.get("launch_kind") or "unresolved", 36),
-                    "confidence": _clean(binary.get("confidence"), 40),
-                    "application_matches": [
-                        {"name": _clean(match.get("name"), 90),
-                         "publisher": _clean(match.get("publisher"), 90),
-                         "confidence": _clean(match.get("confidence"), 40)}
-                        for match in (binary.get("application_matches") or [])[:2]
-                    ],
-                    "service_matches": [
-                        {"name": _clean(match.get("name"), 90),
-                         "publisher": _clean(match.get("publisher"), 90),
-                         "signature": _clean(match.get("signature_status"), 24),
-                         "state": _clean(match.get("state"), 24),
-                         "confidence": _clean(match.get("confidence"), 40)}
-                        for match in (binary.get("service_matches") or [])[:2]
-                    ],
-                })
-            launch_provenance.append({
-                "id": evidence_id, "component_type": component_type,
-                "name": _clean(item.get("name"), 100),
-                "source": _clean(item.get("source"), 90),
-                "state": _clean(item.get("state"), 32),
-                "enabled": bool((item.get("metadata") or {}).get("enabled", True)),
-                "launch_kind": _clean(item.get("launch_kind"), 36),
-                "run_level": _clean((item.get("metadata") or {}).get("run_level"), 24),
-                "logon_type": _clean((item.get("metadata") or {}).get("logon_type"), 30),
-                "action_count": int((item.get("metadata") or {}).get("action_count") or 0),
-                "has_arguments": bool((item.get("metadata") or {}).get("has_arguments")),
-                "provenance_status": _clean(item.get("provenance_status"), 32),
-                "protected": bool(item.get("protected")),
-                "preference": _clean(item.get("preference"), 24),
-                "operator_note": _clean(item.get("operator_note"), 120),
-                "binary_targets": binary_targets,
-            })
     operator_preferences = []
     try:
         rows = core.db(
@@ -4085,7 +2932,6 @@ def ai_evidence() -> dict[str, Any]:
         "background_process_review_candidates": processes,
         "third_party_service_review_candidates": services,
         "service_dependency_graph": service_graph,
-        "startup_and_task_provenance": launch_provenance,
         "operator_component_preferences": operator_preferences,
         "component_evidence_ids": ids,
         "component_baseline_retention_days": payload["retention_days"],
@@ -4185,64 +3031,10 @@ def _service_graph_rows() -> list[dict[str, Any]]:
     return [row for row in rows if isinstance(row, dict)]
 
 
-def _select_signature_batch(paths_by_id: dict[str, str]) -> list[tuple[str, str]]:
-    """Fairly rotate bounded process, service and launch-binary verification batches."""
-    grouped = {
-        "process": sorted((key, value) for key, value in paths_by_id.items() if key.startswith("process:")),
-        "service": sorted((key, value) for key, value in paths_by_id.items() if key.startswith("service:")),
-        "binary": sorted((key, value) for key, value in paths_by_id.items() if key.startswith("binary:")),
-    }
-    state = _load_state("signature_rotation")
-    quotas = {"process": 12, "service": 8, "binary": 8}
-    selected: list[tuple[str, str]] = []
-    selected_ids: set[str] = set()
-    next_state: dict[str, int] = {}
-    for kind in ("process", "service", "binary"):
-        rows = grouped[kind]
-        if not rows:
-            next_state[kind] = 0
-            continue
-        offset = int(state.get(kind) or 0) % len(rows)
-        count = min(quotas[kind], len(rows))
-        for position in range(count):
-            item = rows[(offset + position) % len(rows)]
-            selected.append(item)
-            selected_ids.add(item[0])
-        next_state[kind] = (offset + count) % len(rows)
-
-    spare = max(0, _MAX_SIGNATURE_PATHS - len(selected))
-    while spare:
-        progressed = False
-        for kind in ("process", "service", "binary"):
-            rows = grouped[kind]
-            if not rows:
-                continue
-            offset = int(next_state.get(kind) or 0) % len(rows)
-            for step in range(len(rows)):
-                position = (offset + step) % len(rows)
-                item = rows[position]
-                if item[0] in selected_ids:
-                    continue
-                selected.append(item)
-                selected_ids.add(item[0])
-                next_state[kind] = (position + 1) % len(rows)
-                spare -= 1
-                progressed = True
-                break
-            if spare <= 0:
-                break
-        if not progressed:
-            break
-    _save_state("signature_rotation", {**next_state, "captured_at": time.time()})
-    return selected[:_MAX_SIGNATURE_PATHS]
-
-
 def _refresh_signatures_from_paths(paths_by_id: dict[str, str]) -> int:
     if not paths_by_id:
         return 0
-    chosen = _select_signature_batch(paths_by_id)
-    if not chosen:
-        return 0
+    chosen = list(paths_by_id.items())[:_MAX_SIGNATURE_PATHS]
     metadata = _authenticode_query([path for _component_id, path in chosen])
     updated = 0
     for index, item in enumerate(metadata):
@@ -4267,15 +3059,14 @@ def _refresh_enrichment(force: bool = False) -> dict[str, Any]:
     permitted, reason = _resource_gate()
     if not permitted:
         return {"ok": False, "deferred": True, "reason": reason}
-    service_graph = refresh_service_graph(force=force)
-    service_graph_ok = service_graph.get("ok") is True
-
-    # Sample identities first so enrichment always updates known catalog rows.
+    graph = refresh_service_graph(force=force)
+    # Make sure identities exist before the signature result is written back.
     sample_processes()
     sample_services()
-    service_rows = _service_graph_rows() if service_graph_ok else []
+    # Service catalog rows are refreshed by the SCM collector; only query signatures
+    # when the dependency map and process sample are available.
     paths = _process_signature_paths(force=force)
-    for row in service_rows:
+    for row in _service_graph_rows():
         path = _normal_path(row.get("binary_path"))
         component_id = service_component_id(row.get("name"))
         if not path or not component_id or _protected_service(row, path) or _is_windows_binary(path):
@@ -4283,76 +3074,9 @@ def _refresh_enrichment(force: bool = False) -> dict[str, Any]:
         existing = core.db("SELECT metadata_checked_at FROM component_catalog WHERE component_id=?", (component_id,))
         if force or not existing or time.time() - float(existing[0][0] or 0) >= _SIGNATURE_REFRESH_SECONDS:
             paths[component_id] = path
-
-    try:
-        launch_snapshot = _launch_inventory_query()
-    except Exception as exc:
-        launch_snapshot = {
-            "startup": [], "tasks": [], "task_total": 0,
-            "startup_complete": False, "tasks_complete": False, "task_truncated": False,
-            "source_health": {
-                "startup": {"ok": False, "error": f"{type(exc).__name__}: {_clean(exc, 150)}"},
-                "tasks": {"ok": False, "error": f"{type(exc).__name__}: {_clean(exc, 150)}"},
-            },
-            "captured_at": time.time(),
-        }
-        core.log("component-intelligence", f"startup/task provenance query unavailable: {type(exc).__name__}: {_clean(exc, 150)}", "warn")
-
-    try:
-        from . import inventory
-        inventory_data = inventory.INV if isinstance(inventory.INV, dict) else {}
-    except Exception:
-        inventory_data = {}
-    health = inventory_data.get("health") if isinstance(inventory_data.get("health"), dict) else {}
-    apps_health = health.get("apps") if isinstance(health.get("apps"), dict) else {}
-    launch_snapshot["apps_complete"] = apps_health.get("ok") is True
-    launch_snapshot["service_graph_complete"] = service_graph_ok
-
-    launch_graph = _build_launch_graph(
-        launch_snapshot,
-        service_rows,
-        inventory_data.get("apps") if isinstance(inventory_data.get("apps"), list) else [],
-        now=time.time(),
-    )
-    _persist_launch_graph(launch_graph)
-
-    # Raw executable paths exist only in this bounded in-memory map. Authenticode
-    # returns signer/version metadata; no path or argument string is persisted.
-    for component_id, path in launch_graph.get("binary_paths", {}).items():
-        catalog_row = next((item for item in launch_graph.get("catalog_rows", [])
-                            if item[0] == component_id), None)
-        if not path or catalog_row is None or bool(catalog_row[10]) or _is_windows_binary(path):
-            continue
-        existing = core.db(
-            "SELECT metadata_checked_at FROM component_catalog WHERE component_id=?",
-            (component_id,),
-        )
-        if force or not existing or time.time() - float(existing[0][0] or 0) >= _SIGNATURE_REFRESH_SECONDS:
-            paths[component_id] = path
-
     updated = _refresh_signatures_from_paths(paths)
-    launch_summary = {
-        "startup_count": len(launch_graph.get("startup_ids") or []),
-        "task_count": len(launch_graph.get("task_ids") or []),
-        "binary_count": len(launch_graph.get("binary_paths") or {}),
-        "startup_complete": bool(launch_graph.get("startup_complete")),
-        "tasks_complete": bool(launch_graph.get("tasks_complete")),
-        "apps_complete": bool(launch_graph.get("apps_complete")),
-        "service_graph_complete": bool(launch_graph.get("service_graph_complete")),
-        "task_inventory_truncated": bool(launch_snapshot.get("task_truncated")),
-    }
-    complete = all(launch_summary[key] for key in (
-        "startup_complete", "tasks_complete", "apps_complete", "service_graph_complete",
-    ))
-    return {
-        "ok": complete, "deferred": not complete,
-        "reason": "" if complete else (
-            "Startup, scheduled-task, installed-app or service provenance coverage is incomplete; "
-            "previous relationships were retained for unavailable sources."
-        ),
-        "graph": service_graph, "launch_inventory": launch_summary,
-        "signatures_updated": updated,
-    }
+    return {"ok": bool(graph.get("ok")), "graph": graph, "signatures_updated": updated}
+
 
 
 def refresh_now() -> dict[str, Any]:
