@@ -380,3 +380,30 @@ def test_process_sampling_pauses_during_game_sessions(monkeypatch):
     monkeypatch.setattr(core, "STATE", {"game": {"name": "VALORANT"}, "procs": []})
     monkeypatch.setattr(core, "off", lambda _name: False)
     assert components.sample_processes() == 0
+
+
+
+@pytest.mark.parametrize("graph_age_hours,expected_candidates", [
+    (None, 0),
+    (25, 0),
+    (12, 1),
+])
+def test_service_ownership_candidates_require_a_complete_recent_graph(monkeypatch, graph_age_hours, expected_candidates):
+    monkeypatch.setattr(components, "ensure_schema", lambda: None)
+    monkeypatch.setattr(components, "_preference_map", lambda: {})
+    monkeypatch.setattr(components, "_aggregate_rows", lambda kind, _since: (
+        [_service_summary()] if kind == "service" else []
+    ))
+    graph = {} if graph_age_hours is None else {
+        "count": 200, "captured_at": time.time() - graph_age_hours * 3600,
+    }
+    monkeypatch.setattr(components, "_load_state", lambda key: graph if key == "service_graph" else {})
+    monkeypatch.setattr(components, "_last_sample", lambda _kind: 0.0)
+    monkeypatch.setattr(core, "STATE", {})
+
+    result = components.report()
+
+    assert len(result["service_candidates"]) == expected_candidates
+    assert result["coverage"]["service_dependency_graph_fresh"] is (expected_candidates == 1)
+    if expected_candidates == 0:
+        assert "newer than 24 hours" in result["service_review_block_reason"]
