@@ -50,7 +50,7 @@ def test_component_identity_is_repeatable_and_does_not_store_executable_path():
 
 def test_component_notes_redact_user_paths_accounts_and_secrets():
     note = components._clean(
-        r"Touchpad helper under C:\Users\private-user\AppData\Local; DOMAIN\\private-user token=secret-value"
+        r"Touchpad helper under C:\Users\private-user\AppData\Local; DOMAIN\private-user token=secret-value"
     )
     assert "private-user" not in note
     assert "secret-value" not in note
