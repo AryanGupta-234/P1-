@@ -213,6 +213,24 @@ A durable cursor schedules one broad review every 12 hours by default, configura
 
 **Service and process interpretation:** stopped/manual/trigger-started state, low foreground use, or absence from a short sample is not proof of disuse. The specialist must state dependencies/coverage limits and ask the operator about required helper apps or services before suggesting closure, startup changes or service changes. Windows core, security, Defender, firewall, update, accessibility, backup, storage, network, hardware and Riot Vanguard/VALORANT components remain protected.
 
+## Longitudinal component baselines (1.2.33)
+
+**Module:** sentinel/component_intelligence.py  
+**API:** GET /api/components/intelligence, POST /api/components/preference, POST /api/components/refresh, POST /api/components/propose-close  
+**Tables:** component_catalog, component_samples, component_preferences, component_intelligence_state
+
+The agent samples a bounded resource-ranked set of process instances every 300 seconds and the existing Windows service catalogue every 900 seconds. The component store retains 30 days. A seven-day minimum span and seven distinct observed days are required before a component can enter the review queue. Process candidates additionally require a valid Authenticode signature/publisher, low sampled foreground ratio, and sustained measured CPU, working-set or I/O impact. This is an observation sample, not complete uptime accounting; process rows outside the bounded selection are not claimed to have been idle.
+
+The SCM enrichment reads ServicesDependedOn and DependentServices. A service can be considered for operator review only when it is third-party, auto-start, currently running, signed with a valid publisher, has at least seven days of samples, and has no SCM dependents. An empty SCM dependent list does not establish that applications, tasks or users do not rely on that service. Stopped/manual/trigger-started services are never ranked for removal on that basis.
+
+Signature and file-version queries are capped to a small batch and admitted by the shared resource governor (available-memory/CPU limits) while game sessions are suppressed. Process identity is a stable SHA-256 digest of the normalized executable path plus component type. The database retains that digest, basename, publisher, product/version, signature state, signer and telemetry; it does not retain process executable paths. Service executable paths are held only in a bounded in-memory refresh cache for Authenticode calls. The persisted dependency graph removes binary_path and service descriptions; it retains service names, basenames, signatures, start/state metadata and dependency names. No file contents or window titles are read.
+
+The Maintenance UI shows evidence strength, not a probability that a component is unnecessary. Operators may mark Keep, Not needed, Ask later, or save a note without changing the review state. These preferences are stored locally against the hashed/service identity and supplied to the specialist as bounded operator context. Notes are untrusted input and never grant action permission. Keep/Not needed suppress ranking; Ask later snoozes a candidate for seven days; note-only leaves it eligible for future review.
+
+**Action boundary:** the component engine has no terminate/disable/uninstall API. A visible, on-screen GUI process can only create the existing exact-PID/creation-time/executable-bound terminate_process proposal with the normal Actions approval. It is paused during game sessions, rechecks Safeguard and never escalates from WM_CLOSE to forced termination. Service disablement, driver installation, startup changes and repairs remain separate preview/approval workflows. Windows core, Defender, firewall, Windows Update, accessibility, backup, storage, networking, hardware and Riot Vanguard remain protected.
+
+**Performance boundary:** process/service sampling is bounded; metadata refresh uses the runtime gate; 30-day aggregation and snapshot persistence run at most every five minutes; deferred enrichment backs off for at least fifteen minutes. The component worker does not launch a second high-frequency process/service collector.
+
 ### Automation boundary
 
 **Module:** `sentinel/workflow_engine.py`  

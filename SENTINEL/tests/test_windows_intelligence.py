@@ -68,7 +68,7 @@ def test_specialist_rejects_non_string_action_identifier():
 
 
 def test_evidence_packet_fuses_windows_sources_without_private_process_content(monkeypatch):
-    from sentinel import core, inventory
+    from sentinel import core, inventory, component_intelligence
 
     monkeypatch.setattr(core, "LIVE", {
         "cpu": 42.5, "mem": 67.0, "mem_free_mb": 4096.0, "swap": 12.0,
@@ -111,6 +111,34 @@ def test_evidence_packet_fuses_windows_sources_without_private_process_content(m
         "apps": [{"name": "Brave Browser", "version": "1.0", "publisher": "Brave"}],
         "tasks": [{"name": "VendorUpdater", "state": "Ready", "path": r"\Vendor\Updater"}],
     })
+    monkeypatch.setattr(component_intelligence, "ai_evidence", lambda: {
+        "component_baseline_coverage": {"process_components": 18, "service_components": 205},
+        "background_process_review_candidates": [{
+            "id": "component-process.1", "name": "VendorTray.exe", "publisher": "Vendor Inc.",
+            "evidence_strength": "high", "operator_intent": "keep",
+            "operator_note": "Required for touchpad hotkeys",
+        }],
+        "third_party_service_review_candidates": [{
+            "id": "component-service.1", "name": "VendorHelper", "publisher": "Vendor Inc.",
+            "evidence_strength": "medium", "operator_intent": "unreviewed",
+            "operator_note": "Audio control panel service",
+            "dependencies": ["RpcSs"], "dependents": [],
+        }],
+        "service_dependency_graph": [{
+            "id": "component-service-graph.1", "name": "VendorHelper",
+            "dependencies": ["RpcSs"], "dependents": [], "protected": False,
+        }],
+        "operator_component_preferences": [{
+            "id": "component-preference.1", "component_type": "service",
+            "name": "AudioConsoleSvc", "preference": "keep",
+            "operator_note": "Required for my audio control panel",
+        }],
+        "component_evidence_ids": [
+            "component-process.1", "component-service.1", "component-service-graph.1",
+            "component-preference.1",
+        ],
+        "component_baseline_retention_days": 30,
+    })
 
     def fake_db(sql, args=(), many=False):
         if "SELECT id,ts,level,src,msg FROM events" in sql:
@@ -148,6 +176,16 @@ def test_evidence_packet_fuses_windows_sources_without_private_process_content(m
     assert "super-secret" not in serialized
     assert "vendor.exe --token" not in serialized
     assert "DOMAIN" not in serialized
+    assert packet["component_baseline_coverage"]["service_components"] == 205
+    assert packet["background_process_review_candidates"][0]["operator_note"] == "Required for touchpad hotkeys"
+    assert packet["third_party_service_review_candidates"][0]["dependencies"] == ["RpcSs"]
+    assert "component-process.1" in packet["evidence_ids"]
+    assert "component-service-graph.1" in packet["evidence_ids"]
+    model_packet = specialist._model_evidence_packet(packet)
+    assert "component-process.1" in specialist._packet_evidence_ids(model_packet)
+    assert model_packet["background_process_review_candidates"][0]["operator_note"] == "Required for touchpad hotkeys"
+    assert "component-preference.1" in specialist._packet_evidence_ids(model_packet)
+    assert model_packet["operator_component_preferences"][0]["operator_note"] == "Required for my audio control panel"
 
 
 def test_specialist_accepts_cross_subsystem_evidence_ids():

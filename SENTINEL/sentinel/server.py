@@ -2,7 +2,7 @@
 import ctypes, json, os, threading, time, urllib.parse, psutil, platform, sys, hmac
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from . import core, actions, ai, intel, inventory, intelligence, advanced, activity_engine, windows_intelligence
-from . import safeguard, runtime_engine, memory_engine, ai_engine, security_engine, hardware_provider, maintenance, privilege_broker, windows_knowledge, agent_assist, storage_intelligence, ui_preferences, workflow_engine
+from . import safeguard, runtime_engine, memory_engine, ai_engine, security_engine, hardware_provider, maintenance, privilege_broker, windows_knowledge, agent_assist, storage_intelligence, ui_preferences, workflow_engine, component_intelligence
 from .core import CFG, STATE, LIVE, HIST, HEART, START, db, log, save_cfg
 
 UI = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "ui")
@@ -294,6 +294,11 @@ class H(BaseHTTPRequestHandler):
             return self._json(storage_intelligence.status())
         if p == "/api/automation/flows":
             return self._json(workflow_engine.list_flows())
+        if p == "/api/components/intelligence":
+            try: return self._json(component_intelligence.report())
+            except Exception as exc:
+                log("component-intelligence", f"component report unavailable: {type(exc).__name__}: {str(exc)[:180]}", "warn")
+                return self._json({"status": "unavailable", "error": f"{type(exc).__name__}: {str(exc)[:160]}"}, 503)
         if p == "/api/maintenance/status":
             try: return self._json(maintenance.status(refresh=(qs.get("refresh") or ["0"])[0] == "1"))
             except Exception as exc: return self._json({"error": f"{type(exc).__name__}: {str(exc)[:240]}"}, 503)
@@ -558,6 +563,28 @@ class H(BaseHTTPRequestHandler):
                 return self._json(workflow_engine.delete_flow(int(body.get("id", 0))))
             except (ValueError, TypeError) as exc:
                 return self._json({"error": str(exc)}, 400)
+        if p == "/api/components/preference":
+            try:
+                return self._json(component_intelligence.set_preference(
+                    str(body.get("component_id") or ""), str(body.get("preference") or ""),
+                    str(body.get("note") or ""),
+                ))
+            except (ValueError, TypeError) as exc:
+                return self._json({"error": str(exc)}, 400)
+        if p == "/api/components/propose-close":
+            try:
+                return self._json(component_intelligence.propose_graceful_close(
+                    str(body.get("component_id") or ""),
+                ), 201)
+            except (ValueError, TypeError) as exc:
+                return self._json({"error": str(exc)}, 400)
+            except (RuntimeError, PermissionError) as exc:
+                return self._json({"error": str(exc)}, 409)
+        if p == "/api/components/refresh":
+            try:
+                return self._json(component_intelligence.refresh_now())
+            except Exception as exc:
+                return self._json({"error": f"{type(exc).__name__}: {str(exc)[:180]}"}, 503)
         if p == "/api/agent-assist/notification/respond":
             try:
                 return self._json(agent_assist.respond(

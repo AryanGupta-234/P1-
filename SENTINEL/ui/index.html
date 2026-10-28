@@ -1,8 +1,8 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>SENTINEL &middot; 1.2.32</title>
+<title>SENTINEL &middot; 1.2.33</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cpath d='M32 4l24 14v28L32 60 8 46V18z' fill='none' stroke='%238fd69d' stroke-width='4'/%3E%3Ccircle cx='32' cy='32' r='8' fill='%23a31c1b'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="app.css?v=1.2.32"></head>
+<link rel="stylesheet" href="app.css?v=1.2.33"></head>
 <body class="ui-simple"><div class="ambient"></div><canvas id="starfield"></canvas>
 <div class="boot" id="boot" role="status" aria-live="polite" aria-label="SENTINEL Windows node initialization">
   <div class="boot-grid" aria-hidden="true"></div><div class="boot-scanline" aria-hidden="true"></div>
@@ -22,7 +22,7 @@
         <div class="boot-signal-label"><i></i> COLLECTORS RUNNING IN BACKGROUND</div>
       </div>
       <div class="boot-content">
-        <div class="boot-eyebrow"><span>BOOT SEQUENCE / 1.2.32</span><span>LOCAL INTELLIGENCE</span></div>
+        <div class="boot-eyebrow"><span>BOOT SEQUENCE / 1.2.33</span><span>LOCAL INTELLIGENCE</span></div>
         <div class="boot-title">SENTINEL<span class="boot-title-cursor"></span></div>
         <div class="boot-sub">SENSE THE SYSTEM. SHAPE THE RESPONSE.</div>
         <div class="boot-lanes" aria-hidden="true"><div><i></i><span>SESSION</span></div><div><i></i><span>PROCESS</span></div><div><i></i><span>SYSTEM</span></div><div><i></i><span>NETWORK</span></div><div><i></i><span>THERMAL</span></div><div><i></i><span>LIVE LINK</span></div></div>
@@ -599,6 +599,21 @@
       <div class="msg"><small>EXECUTION BOUNDARY</small>Flows can request AI analysis, notifications and read-only scans. They cannot approve repairs, change drivers, disable services, terminate processes or bypass the Safeguard. Those actions still require a separate preview and explicit operator approval.</div>
     </div>
   </div>
+  <div class="panel maint-diagnostics-panel">
+    <div class="ph">Component baselines &amp; review<em id="component-baseline-state">COLLECTING LONGITUDINAL EVIDENCE</em><button class="btn sm" id="component-baseline-refresh">REFRESH SIGNATURES</button></div>
+    <div class="pb">
+      <div class="msg"><small>7-DAY EVIDENCE GATE · 30-DAY LOCAL HISTORY</small>SENTINEL measures background process resource use and service start/dependency relationships over time. Publisher and Authenticode checks run only in safe idle windows. Suggestions ask what you need; they never mean a component is useless or safe to disable.</div>
+      <div id="component-baseline-summary" class="maint-mini-grid">
+        <div class="maint-mini-stat"><small>PROCESS IDENTITIES</small><b>--</b><span>Waiting for samples</span></div>
+        <div class="maint-mini-stat"><small>SERVICE GRAPH</small><b>--</b><span>Waiting for SCM dependency scan</span></div>
+      </div>
+      <div class="maint-diagnostics-title">BACKGROUND APPLICATIONS · RESOURCE REVIEW</div>
+      <div id="component-process-candidates" class="component-review-list"><div class="empty">The baseline engine needs multiple days of observations before ranking review candidates.</div></div>
+      <div class="maint-diagnostics-title" style="margin-top:14px">THIRD-PARTY AUTO-START SERVICES · DEPENDENCY REVIEW</div>
+      <div id="component-service-candidates" class="component-review-list"><div class="empty">Service dependency graph and signed publisher inventory are being collected.</div></div>
+      <div class="msg"><small>OPERATOR CONTROL</small>KEEP prevents future review suggestions. NOT NEEDED only records your intent and hides the suggestion; it does not close the app or disable a service. A visible GUI process can receive a separate graceful-close proposal, which still requires approval in Actions.</div>
+    </div>
+  </div>
   <div class="panel maint-diagnostics-panel"><div class="ph">Windows intelligence map<em id="maint-diag-status">INVENTORY INITIALIZING</em><button class="btn sm" id="maint-inventory-refresh">SCAN INVENTORY</button></div><div class="pb"><div id="maint-health-report" class="maint-health-report"></div><div id="maint-diagnostics" class="maint-diagnostics"><div class="empty">Read-only inventory runs in the background. Driver/WMI scans back off during games and resource pressure.</div></div></div></div>
   <div class="maint-action-grid">
     <div class="panel"><div class="ph">Cleanup engine<em>manual · bounded · irreversible</em></div><div class="pb maint-form">
@@ -872,4 +887,4 @@
   </div>
 </section>
 </main></div>
-<script src="app.js?v=1.2.26"></script></body></html>
+<script src="app.js?v=1.2.33"></script></body></html>
