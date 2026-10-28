@@ -319,6 +319,8 @@ def _evidence_packet() -> dict[str, Any]:
             "component_baseline_coverage": {"status": "unavailable"},
             "background_process_review_candidates": [],
             "third_party_service_review_candidates": [],
+            "service_dependency_graph": [],
+            "operator_component_preferences": [],
             "component_evidence_ids": [],
         }
 
@@ -343,6 +345,7 @@ def _evidence_packet() -> dict[str, Any]:
         "background_process_review_candidates": component_evidence.get("background_process_review_candidates", []),
         "third_party_service_review_candidates": component_evidence.get("third_party_service_review_candidates", []),
         "service_dependency_graph": component_evidence.get("service_dependency_graph", []),
+        "operator_component_preferences": component_evidence.get("operator_component_preferences", []),
         "component_evidence_ids": component_evidence.get("component_evidence_ids", []),
         "coverage": coverage, "evidence_ids": evidence_ids + component_evidence.get("component_evidence_ids", []),
         "game_active": bool(core.STATE.get("game")),
