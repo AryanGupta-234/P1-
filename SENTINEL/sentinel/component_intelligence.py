@@ -1366,7 +1366,7 @@ def ai_evidence() -> dict[str, Any]:
                     "binary_name": _clean(binary.get("binary_name"), 90),
                     "signature": _clean(binary.get("signature_status"), 24),
                     "publisher": _clean(binary.get("publisher"), 100),
-                    "launch_kind": _clean(binary.get("type") or "executable", 24),
+                    "launch_kind": _clean(item.get("launch_kind") or "unresolved", 36),
                     "confidence": _clean(binary.get("confidence"), 40),
                     "application_matches": [
                         {"name": _clean(match.get("name"), 90),
