@@ -362,6 +362,7 @@ def test_component_baselines_are_agent_owned_local_and_operator_approved():
         'api("/api/components/refresh"',
         "EVIDENCE STRENGTH",
         "data-component-note",
+        "SAVE NOTE", "EVIDENCE STRENGTH",
         "PREPARE GRACEFUL CLOSE",
     ):
         assert ui_contract in app
@@ -372,6 +373,8 @@ def test_component_baselines_are_agent_owned_local_and_operator_approved():
     assert 'if p == "/api/components/preference":' in server
     assert 'if p == "/api/components/propose-close":' in server
     assert "component_intelligence.propose_graceful_close(" in server
+    assert 'note_only' in engine
+    assert 'operator_component_preferences' in engine
     assert "component_intelligence.start()" in agent
     assert "component_intelligence.shutdown()" in agent
 
