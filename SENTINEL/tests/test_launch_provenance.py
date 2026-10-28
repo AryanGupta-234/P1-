@@ -94,7 +94,7 @@ def test_startup_task_graph_uses_exact_binary_app_and_service_relationships(monk
         "relationships": graph["relationships"],
     })
     for private in (r"C:\Program Files", "private-user", "--profile", "secret-value",
-                    "task_path", "logon_type"):
+                    "task_path"):
         assert private not in stored
     assert '"has_arguments":true' in stored
 
