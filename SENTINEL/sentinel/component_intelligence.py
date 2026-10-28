@@ -789,7 +789,8 @@ def report() -> dict[str, Any]:
     ]
     service_candidates = [
         item for row in service_rows
-        if (item := _service_candidate(row, preferences.get(str(row[0]), {}))) is not None
+        if graph_fresh
+        and (item := _service_candidate(row, preferences.get(str(row[0]), {}))) is not None
     ]
     process_candidates.sort(key=lambda item: item["review_priority_score"], reverse=True)
     # This is an ownership-review ordering score, not measured resource impact.
@@ -797,6 +798,12 @@ def report() -> dict[str, Any]:
 
     state_graph = _load_state("service_graph")
     signature_state = _load_state("signature_refresh")
+    graph_captured_at = float(state_graph.get("captured_at") or 0)
+    graph_age_hours = max(0.0, now - graph_captured_at) / 3600.0 if graph_captured_at else None
+    graph_fresh = bool(state_graph.get("count")) and graph_age_hours is not None and graph_age_hours <= 24.0
+    service_review_block_reason = "" if graph_fresh else (
+        "Waiting for a complete service dependency graph newer than 24 hours; no service ownership candidates are shown."
+    )
     last_process = _last_sample("process")
     last_service = _last_sample("service")
     process_days = max((int(row[17] or 0) for row in process_rows), default=0)
@@ -809,9 +816,9 @@ def report() -> dict[str, Any]:
         "baseline_minimum_days": _BASELINE_MIN_DAYS,
         "sampling": {"process_seconds": _PROCESS_SAMPLE_SECONDS, "service_seconds": _SERVICE_SAMPLE_SECONDS},
         "score_semantics": {
-            "evidence_confidence_score": "0-100 measurement coverage across sample count, observed days, baseline span, signature validity and publisher/certificate consistency; not a probability of disuse.",
-            "resource_impact_score": "0-100 normalized observed average CPU, working-set memory and process I/O impact; only reported for processes.",
-            "review_priority_score": "Sorting heuristic combining measured process impact, evidence coverage and low foreground/visible-window sampling; not an action recommendation.",
+            "evidence_confidence_score": "0-100 measurement-coverage heuristic: 30% sample count (500 cap), 25% observed days (14-day cap), 25% baseline span (14-day cap), 20% valid Authenticode signature; subtract 8 for PE-company/certificate-organization mismatch or 3 when unknown. It is not a probability of disuse.",
+            "resource_impact_score": "0-100 process-only normalized average impact: CPU normalized to 5%, working set to 1024 MB and process I/O to 5 MB/s, weighted 35/45/20. This is a triage scale, not a benchmark or user-value score.",
+            "review_priority_score": "Process sorting heuristic: square-root(resource impact × evidence confidence) scaled by the sampled background share. It does not infer that the app is unnecessary or authorize an action.",
             "ownership_review_score": "Evidence coverage for a signed auto-start service with no listed SCM dependents; no service resource-impact score is claimed.",
         },
         "coverage": {
@@ -820,6 +827,8 @@ def report() -> dict[str, Any]:
             "process_last_sample_at": last_process or None, "service_last_sample_at": last_service or None,
             "service_dependency_graph_at": state_graph.get("captured_at"),
             "service_dependency_graph_count": int(state_graph.get("count") or 0),
+            "service_dependency_graph_age_hours": round(graph_age_hours, 2) if graph_age_hours is not None else None,
+            "service_dependency_graph_fresh": graph_fresh,
             "signature_refresh_at": signature_state.get("captured_at"),
             "signature_refresh_count": int(signature_state.get("count") or 0),
             "review_preferences_saved": preferences_count,
@@ -828,6 +837,7 @@ def report() -> dict[str, Any]:
         },
         "process_candidates": process_candidates[:12],
         "service_candidates": service_candidates[:12],
+        "service_review_block_reason": service_review_block_reason,
         "review_boundary": "Candidates are questions for the operator. Nothing is closed, disabled, removed, or changed automatically.",
     }
 
