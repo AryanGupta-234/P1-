@@ -4,7 +4,7 @@ import time
 import pytest
 
 from sentinel import component_intelligence as components
-from sentinel import core
+from sentinel import core, actions
 
 
 def _process_summary(component_id=None, *, samples=900, days=12, span_hours=288,
@@ -200,7 +200,7 @@ def test_component_close_api_only_creates_a_pending_graceful_close_proposal(monk
     })
     monkeypatch.setattr(components.safeguard, "is_protected_process", lambda *_args: False)
     captured = {}
-    monkeypatch.setattr(components.actions, "propose", lambda *args, **kwargs: captured.update(args=args, kwargs=kwargs) or 73)
+    monkeypatch.setattr(actions, "propose", lambda *args, **kwargs: captured.update(args=args, kwargs=kwargs) or 73)
 
     result = components.propose_graceful_close(component_id)
 
