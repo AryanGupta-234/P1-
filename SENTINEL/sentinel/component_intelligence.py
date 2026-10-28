@@ -255,7 +255,7 @@ def _process_rows() -> list[dict[str, Any]]:
 
 def sample_processes(now: float | None = None) -> int:
     ensure_schema()
-    if not core.IS_WIN or core.off("processes"):
+    if not core.IS_WIN or core.off("processes") or core.STATE.get("game"):
         return 0
     rows = _process_rows()
     if not rows:
@@ -808,6 +808,12 @@ def report() -> dict[str, Any]:
         "retention_days": 30,
         "baseline_minimum_days": _BASELINE_MIN_DAYS,
         "sampling": {"process_seconds": _PROCESS_SAMPLE_SECONDS, "service_seconds": _SERVICE_SAMPLE_SECONDS},
+        "score_semantics": {
+            "evidence_confidence_score": "0-100 measurement coverage across sample count, observed days, baseline span, signature validity and publisher/certificate consistency; not a probability of disuse.",
+            "resource_impact_score": "0-100 normalized observed average CPU, working-set memory and process I/O impact; only reported for processes.",
+            "review_priority_score": "Sorting heuristic combining measured process impact, evidence coverage and low foreground/visible-window sampling; not an action recommendation.",
+            "ownership_review_score": "Evidence coverage for a signed auto-start service with no listed SCM dependents; no service resource-impact score is claimed.",
+        },
         "coverage": {
             "process_components": len(process_rows), "service_components": len(service_rows),
             "process_max_observed_days": process_days, "service_max_observed_days": service_days,
@@ -885,8 +891,12 @@ def ai_evidence() -> dict[str, Any]:
             "signature": item["signature_status"], "start_mode": item["start_mode"],
             "baseline_days": item["active_days"], "samples": item["sample_count"],
             "dependencies": item["dependencies"], "dependents": item["dependents"],
-            "evidence_strength": item["evidence_strength"], "operator_intent": item["preference"],
-            "operator_note": item["operator_note"],
+            "evidence_strength": item["evidence_strength"],
+            "evidence_confidence_score": item["evidence_confidence_score"],
+            "publisher_consistency": item["publisher_consistency"],
+            "certificate_organization": item["certificate_organization"],
+            "ownership_review_score": item["ownership_review_score"],
+            "operator_intent": item["preference"], "operator_note": item["operator_note"],
         })
     operator_preferences = []
     try:
@@ -915,6 +925,7 @@ def ai_evidence() -> dict[str, Any]:
         "operator_component_preferences": operator_preferences,
         "component_evidence_ids": ids,
         "component_baseline_retention_days": payload["retention_days"],
+        "component_score_semantics": payload["score_semantics"],
     }
 
 
