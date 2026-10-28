@@ -824,7 +824,7 @@ def _resource_gate() -> tuple[bool, str]:
         return False, f"Runtime admission unavailable: {type(exc).__name__}"
 
 
-def _process_signature_paths() -> dict[str, str]:
+def _process_signature_paths(force: bool = False) -> dict[str, str]:
     result: dict[str, str] = {}
     for row in _process_rows():
         exe = _normal_path(row.get("exe"))
@@ -834,7 +834,7 @@ def _process_signature_paths() -> dict[str, str]:
         if _is_windows_binary(exe):
             continue
         existing = core.db("SELECT metadata_checked_at FROM component_catalog WHERE component_id=?", (component_id,))
-        if not existing or time.time() - float(existing[0][0] or 0) >= _SIGNATURE_REFRESH_SECONDS:
+        if force or not existing or time.time() - float(existing[0][0] or 0) >= _SIGNATURE_REFRESH_SECONDS:
             result[component_id] = exe
     return result
 
@@ -869,24 +869,34 @@ def _refresh_signatures_from_paths(paths_by_id: dict[str, str]) -> int:
     return updated
 
 
-def _refresh_enrichment() -> dict[str, Any]:
+def _refresh_enrichment(force: bool = False) -> dict[str, Any]:
     permitted, reason = _resource_gate()
     if not permitted:
         return {"ok": False, "deferred": True, "reason": reason}
-    graph = refresh_service_graph()
+    graph = refresh_service_graph(force=force)
     # Service catalog rows are refreshed by the SCM collector; only query signatures
     # when the dependency map and process sample are available.
-    paths = _process_signature_paths()
+    paths = _process_signature_paths(force=force)
     for row in _service_graph_rows():
         path = _normal_path(row.get("binary_path"))
         component_id = service_component_id(row.get("name"))
         if not path or not component_id or _protected_service(row, path) or _is_windows_binary(path):
             continue
         existing = core.db("SELECT metadata_checked_at FROM component_catalog WHERE component_id=?", (component_id,))
-        if not existing or time.time() - float(existing[0][0] or 0) >= _SIGNATURE_REFRESH_SECONDS:
+        if force or not existing or time.time() - float(existing[0][0] or 0) >= _SIGNATURE_REFRESH_SECONDS:
             paths[component_id] = path
     updated = _refresh_signatures_from_paths(paths)
     return {"ok": bool(graph.get("ok")), "graph": graph, "signatures_updated": updated}
+
+
+
+def refresh_now() -> dict[str, Any]:
+    """Operator-triggered dependency/signature refresh; resource/game gates still apply."""
+    result = _refresh_enrichment(force=True)
+    if result.get("ok"):
+        _save_state("enrichment", {"captured_at": time.time(),
+                                    "signatures_updated": int(result.get("signatures_updated") or 0)})
+    return result
 
 
 def _loop() -> None:
