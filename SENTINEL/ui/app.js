@@ -2625,6 +2625,7 @@ function componentReviewCard(item, kind){
     '<div class="component-review-actions">'+
     '<button class="btn sm" data-component-pref="'+esc(item.id)+'" data-pref="keep">KEEP</button>'+
     '<button class="btn sm" data-component-pref="'+esc(item.id)+'" data-pref="not_needed">NOT NEEDED</button>'+
+    '<button class="btn sm" data-component-pref="'+esc(item.id)+'" data-pref="note_only">SAVE NOTE</button>'+
     '<button class="btn sm" data-component-pref="'+esc(item.id)+'" data-pref="review_later">ASK LATER</button>'+
     closeButton+'</div></article>';
 }
@@ -2697,8 +2698,11 @@ function initComponentIntelligence(){
       const prompts={
         keep:"Keep this component. SENTINEL will suppress future review suggestions for it.",
         not_needed:"Mark as not needed. This only records your preference and hides the suggestion; it will NOT close, disable or uninstall anything.",
+        note_only:"Save the explanation as context for future local AI reviews without changing this component's review status.",
         review_later:"Ask me again in seven days. No system change will be made."
       };
+      const noteValue=String((preferenceButton.closest(".component-review-card")||document).querySelector("[data-component-note]")?.value||"").trim();
+      if(preference==="note_only"&&!noteValue){toast("Add a short explanation before saving a note","warn");return;}
       if(!confirm(prompts[preference]||"Save this component preference?"))return;
       preferenceButton.disabled=true;
       try{
