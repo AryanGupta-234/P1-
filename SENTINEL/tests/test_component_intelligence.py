@@ -87,6 +87,11 @@ def test_component_keep_and_not_needed_preferences_suppress_future_candidates():
     component_id = row[0]
     assert components._process_candidate(row, {"preference": "keep"}, []) is None
     assert components._process_candidate(row, {"preference": "not_needed"}, []) is None
+    note_only = components._process_candidate(row, {
+        "preference": "note_only", "note": "Supports vendor touchpad hotkeys",
+    }, [])
+    assert note_only is not None
+    assert note_only["operator_note"] == "Supports vendor touchpad hotkeys"
 
 
 def test_review_later_preference_snoozes_for_seven_days():
@@ -179,6 +184,10 @@ def test_operator_preference_is_persisted_and_clear_is_explicit(monkeypatch):
     assert any("INSERT INTO component_preferences" in sql for sql, _args in statements)
     saved_args = next(args for sql, args in statements if "INSERT INTO component_preferences" in sql)
     assert saved_args[2] == "Required audio helper"
+    noted = components.set_preference("process:" + "a" * 40, "note_only", "Supports device hotkeys")
+    assert noted["preference"] == "note_only"
+    noted_args = [args for sql, args in statements if "INSERT INTO component_preferences" in sql][-1]
+    assert noted_args[1] == "note_only" and noted_args[2] == "Supports device hotkeys"
 
     components.set_preference("process:" + "a" * 40, "clear")
     assert any("DELETE FROM component_preferences" in sql for sql, _args in statements)
