@@ -1,0 +1,211 @@
+import os
+import time
+
+import pytest
+
+from sentinel import component_intelligence as components
+from sentinel import core
+
+
+def _process_summary(component_id=None, *, samples=900, days=12, span_hours=288,
+                    signature="Valid", publisher="Example Software Ltd.",
+                    protected=0, cpu=0.75, memory=360.0, io_rate=0.65,
+                    foreground=0.002, visible=0.0, dependents="[]"):
+    now = time.time()
+    return (
+        component_id or ("process:" + "a" * 40),
+        "process", "Example Helper", "ExampleHelper.exe", publisher,
+        "Example Helper", "2.4.1", signature, "CN=Example Software Ltd.",
+        protected, "[]", dependents, "", "running",
+        now - span_hours * 3600, now, samples, days,
+        now - span_hours * 3600, now,
+        cpu, 8.5, memory, 520.0, io_rate, foreground, visible, visible, 1.0, now,
+    )
+
+
+def _service_summary(component_id=None, *, samples=520, days=9, span_hours=216,
+                     signature="Valid", publisher="Example Software Ltd.",
+                     protected=0, start_mode="auto", state="running", dependents="[]"):
+    now = time.time()
+    return (
+        component_id or ("service:" + "b" * 40),
+        "service", "ExampleVendorService", "ExampleService.exe", publisher,
+        "Example Product", "3.2.0", signature, "CN=Example Software Ltd.",
+        protected, '["RpcSs"]', dependents, start_mode, state,
+        now - span_hours * 3600, now, samples, days,
+        now - span_hours * 3600, now,
+        None, None, None, None, None, None, None, None, 1.0, now,
+    )
+
+
+def test_component_identity_is_repeatable_and_does_not_store_executable_path():
+    path = r"C:\Program Files\Example\ExampleHelper.exe"
+    component_id = components.process_component_id(path)
+    assert component_id
+    assert component_id == components.process_component_id(path)
+    assert component_id.startswith("process:")
+    assert path.casefold() not in component_id.casefold()
+    assert len(component_id.split(":", 1)[1]) == 40
+
+
+def test_service_identity_is_stable_and_name_scoped():
+    assert components.service_component_id("ExampleSvc") == components.service_component_id("examplesvc")
+    assert components.service_component_id("ExampleSvc").startswith("service:")
+    assert components.service_component_id("") is None
+
+
+def test_process_review_candidate_requires_signed_history_and_measured_background_resource_use():
+    candidate = components._process_candidate(_process_summary(), {}, [])
+    assert candidate is not None
+    assert candidate["confidence"] == "high"
+    assert candidate["sample_count"] == 900
+    assert candidate["active_days"] == 12
+    assert candidate["average_memory_mb"] == 360.0
+    assert candidate["signature_status"] == "Valid"
+    assert candidate["requires_user_intent"] is True
+    assert "no stop/disable action is implied" in candidate["recommendation"]
+
+
+@pytest.mark.parametrize("kwargs", [
+    {"signature": "NotSigned"},
+    {"publisher": ""},
+    {"protected": 1},
+    {"samples": 30},
+    {"days": 3},
+    {"span_hours": 48},
+    {"foreground": 0.15},
+    {"cpu": 0.01, "memory": 30, "io_rate": 0.01},
+])
+def test_process_candidate_suppresses_weak_or_user_active_evidence(kwargs):
+    assert components._process_candidate(_process_summary(**kwargs), {}, []) is None
+
+
+def test_component_keep_and_not_needed_preferences_suppress_future_candidates():
+    row = _process_summary()
+    component_id = row[0]
+    assert components._process_candidate(row, {"preference": "keep"}, []) is None
+    assert components._process_candidate(row, {"preference": "not_needed"}, []) is None
+
+
+def test_review_later_preference_snoozes_for_seven_days():
+    row = _process_summary()
+    assert components._process_candidate(
+        row, {"preference": "review_later", "updated_at": time.time()}, []
+    ) is None
+    assert components._process_candidate(
+        row, {"preference": "review_later", "updated_at": time.time() - 8 * 86400}, []
+    ) is not None
+
+
+def test_service_review_candidate_requires_valid_signature_and_dependency_graph():
+    candidate = components._service_candidate(_service_summary(), {})
+    assert candidate is not None
+    assert candidate["start_mode"] == "auto"
+    assert candidate["dependencies"] == ["RpcSs"]
+    assert candidate["dependents"] == []
+    assert candidate["dependent_count"] == 0
+    assert candidate["requires_user_intent"] is True
+    assert "not established" in candidate["recommendation"]
+
+
+@pytest.mark.parametrize("kwargs", [
+    {"signature": "NotSigned"},
+    {"publisher": ""},
+    {"protected": 1},
+    {"start_mode": "manual"},
+    {"state": "stopped"},
+    {"dependents": '["ExampleClient"]'},
+    {"samples": 20},
+    {"days": 2},
+    {"span_hours": 24},
+])
+def test_service_candidate_never_ranks_protected_or_uncertain_service(kwargs):
+    assert components._service_candidate(_service_summary(**kwargs), {}) is None
+
+
+def test_service_graph_protection_covers_vanguard_windows_and_system_binary():
+    assert components._protected_service({"name": "vgc"}, r"C:\Program Files\Riot Vanguard\vgc.exe")
+    assert components._protected_service({"name": "ExampleSvc"}, r"C:\Windows\System32\example.exe")
+    assert not components._protected_service({"name": "VendorSvc"}, r"C:\Program Files\Vendor\svc.exe")
+
+
+def test_process_sampler_uses_fixed_allowlisted_metadata_and_bounded_batch(monkeypatch):
+    captured = []
+    monkeypatch.setattr(core, "IS_WIN", True)
+    monkeypatch.setattr(core, "off", lambda _name: False)
+    monkeypatch.setattr(core, "STATE", {
+        "procs": [{
+            "pid": 2100, "create_time": 1700000000.0, "name": "ExampleHelper.exe",
+            "exe": r"C:\Program Files\Example\ExampleHelper.exe", "path_state": "present",
+            "cpu": 0.8, "mem": 360, "io": 0.3, "foreground": False,
+            "visible_windows": 0, "onscreen_windows": 0, "session_id": 1,
+            "status": "running",
+        }]
+    })
+    monkeypatch.setattr(components.safeguard, "is_protected_process", lambda *_args: False)
+    monkeypatch.setattr(core, "db", lambda sql, args=(), many=False: captured.append((sql, args)) or [])
+
+    count = components.sample_processes(now=1700000300.0)
+
+    assert count == 1
+    sample_calls = [(sql, args) for sql, args in captured if "INSERT INTO component_samples" in sql]
+    catalog_calls = [(sql, args) for sql, args in captured if "INSERT INTO component_catalog" in sql]
+    assert len(sample_calls) == 1 and len(catalog_calls) == 1
+    assert len(sample_calls[0][1]) == 12
+    assert "username" not in catalog_calls[0][0]
+    assert "exe" not in catalog_calls[0][0]
+    assert r"C:\Program Files\Example" not in str(catalog_calls[0][1])
+
+
+def test_operator_preference_is_persisted_and_clear_is_explicit(monkeypatch):
+    statements = []
+
+    def fake_db(sql, args=(), many=False):
+        statements.append((sql, args))
+        if "SELECT component_type,name FROM component_catalog" in sql:
+            return [("process", "Example Helper")]
+        return []
+
+    monkeypatch.setattr(core, "db", fake_db)
+    monkeypatch.setattr(core, "log", lambda *_args, **_kwargs: None)
+
+    saved = components.set_preference("process:" + "a" * 40, "keep", "Required audio helper")
+    assert saved["ok"] is True
+    assert saved["preference"] == "keep"
+    assert any("INSERT INTO component_preferences" in sql for sql, _args in statements)
+
+    components.set_preference("process:" + "a" * 40, "clear")
+    assert any("DELETE FROM component_preferences" in sql for sql, _args in statements)
+
+
+def test_operator_preference_rejects_unknown_component_and_invalid_state(monkeypatch):
+    monkeypatch.setattr(core, "db", lambda *_args, **_kwargs: [])
+    with pytest.raises(ValueError, match="keep/not_needed/review_later/clear"):
+        components.set_preference("process:" + "a" * 40, "disable")
+    with pytest.raises(ValueError, match="not found"):
+        components.set_preference("process:" + "a" * 40, "keep")
+
+
+def test_component_close_api_only_creates_a_pending_graceful_close_proposal(monkeypatch):
+    component_id = "process:" + "a" * 40
+    monkeypatch.setattr(core, "db", lambda sql, _args=(), many=False: [(0, "Example App")] if "SELECT protected,name" in sql else [])
+    monkeypatch.setattr(core, "STATE", {
+        "game": None,
+        "procs": [{
+            "pid": 2200, "create_time": 1700000000.0,
+            "name": "ExampleApp.exe", "exe": r"C:\Program Files\Example\ExampleApp.exe",
+            "path_state": "present", "session_id": 1, "visible_windows": 1,
+            "onscreen_windows": 1,
+        }],
+    })
+    monkeypatch.setattr(components.safeguard, "is_protected_process", lambda *_args: False)
+    captured = {}
+    monkeypatch.setattr(components.actions, "propose", lambda *args, **kwargs: captured.update(args=args, kwargs=kwargs) or 73)
+
+    result = components.propose_graceful_close(component_id)
+
+    assert result["ok"] is True
+    assert result["action_id"] == 73
+    assert result["requires_confirmation"] is True
+    assert captured["args"][0] == "terminate_process"
+    assert captured["kwargs"]["origin"] == "component-intelligence"
