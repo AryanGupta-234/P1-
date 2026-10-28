@@ -2198,3 +2198,8 @@ body.ui-simple .command-gauges{gap:8px}
 .component-review-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:2px}
 .component-review-actions .btn{flex:0 0 auto}
 @media(max-width:860px){.component-review-list{grid-template-columns:1fr}}
+
+.component-review-note{display:grid;gap:5px;min-width:0}
+.component-review-note>span{color:var(--mut);font:9px var(--mo);letter-spacing:.05em}
+.component-review-note textarea{width:100%;min-height:42px;resize:vertical;padding:8px 9px;border:1px solid var(--line);border-radius:8px;background:rgba(0,0,0,.18);color:var(--txt);font:10px/1.45 var(--ui);outline:none}
+.component-review-note textarea:focus{border-color:var(--cy)}
