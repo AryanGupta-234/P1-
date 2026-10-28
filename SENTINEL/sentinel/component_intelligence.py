@@ -818,7 +818,7 @@ def set_preference(component_id: str, preference: str, note: str = "") -> dict[s
     ensure_schema()
     component_id = str(component_id or "").strip()
     preference = str(preference or "").strip().casefold()
-    if not component_id or len(component_id) > 64 or preference not in ("keep", "not_needed", "review_later", "clear"):
+    if not component_id or len(component_id) > 64 or preference not in ("keep", "not_needed", "review_later", "note_only", "clear"):
         raise ValueError("A known component ID and keep/not_needed/review_later/clear preference are required.")
     rows = core.db("SELECT component_type,name FROM component_catalog WHERE component_id=?", (component_id,))
     if not rows:
