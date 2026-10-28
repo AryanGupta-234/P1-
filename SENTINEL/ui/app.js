@@ -1377,7 +1377,7 @@ async function boot() {
     toast("Exported " + LOGS.length + " events", "ok");
   };
   initPalette(); initNotify(); initUiPreferences(); initFC(); initIntelligence(); initActivityIntelligence();
-  initAdvanced(); initAgent(); initEngines(); initMaintenance(); initAgentAutomation(); initLocalAutomation(); initWindowsKnowledge(); initVoice(); bindJ("#metrics");
+  initAdvanced(); initAgent(); initEngines(); initMaintenance(); initAgentAutomation(); initLocalAutomation(); initComponentIntelligence(); initWindowsKnowledge(); initVoice(); bindJ("#metrics");
   const commandRefresh = document.getElementById("cmd-agent-refresh");
   if (commandRefresh) commandRefresh.onclick = loadCommandAssistantBrief;
   const commandAgentHost = document.getElementById("cmd-agent-list");
@@ -1449,6 +1449,7 @@ async function boot() {
     if (view === "cmd" && document.visibilityState === "visible") loadCommandAssistantBrief();
   }, 30000);
   setInterval(() => { if (view === "eng") loadEngines(); }, 8000);
+  setInterval(() => { if (view === "maint") loadComponentIntelligence(); }, 300000);
 
   bootModuleState("stream", "LOADING", "Opening the local event stream");
   const stream = new EventSource("/api/stream?t=" + encodeURIComponent(TOKEN));
@@ -2592,6 +2593,140 @@ function initLocalAutomation(){
     }catch(error){toast(error.message||String(error),"bad");}
   });
   void loadLocalAutomation();
+}
+
+function componentMetric(value, digits=1){
+  const n=Number(value);
+  return Number.isFinite(n)?n.toFixed(digits):"--";
+}
+
+function componentReviewCard(item, kind){
+  const metrics=kind==="process"
+    ? "CPU "+componentMetric(item.average_cpu_pct,2)+"% · RAM "+componentMetric(item.average_memory_mb,0)+" MB · I/O "+componentMetric(item.average_io_mb_s,2)+" MB/s"
+    : "AUTO START · "+(item.dependent_count||0)+" SCM dependents";
+  const confidence=String(item.confidence||"low").toUpperCase();
+  const detail=kind==="process"
+    ? (item.resource_reasons||[]).join(" · ")+" · foreground "+componentMetric(item.foreground_sample_pct,2)+"%"
+    : "Depends on "+((item.dependencies||[]).join(", ")||"no listed SCM dependencies")+" · no SCM dependents observed";
+  const closeButton=item.current_instance
+    ? '<button class="btn sm or" data-component-close="'+esc(item.id)+'">PREPARE GRACEFUL CLOSE</button>'
+    : "";
+  return '<article class="component-review-card">'+
+    '<div class="component-review-head"><div><b>'+esc(item.name)+'</b>'+
+    '<small>'+esc(item.publisher||"Publisher unknown")+' · '+esc(item.binary_name||"binary unknown")+'</small></div>'+
+    '<span class="tag">'+esc(confidence)+' CONFIDENCE</span></div>'+
+    '<div class="component-review-metrics">'+esc(metrics)+'</div>'+
+    '<small class="component-review-detail">'+esc(detail)+'</small>'+
+    '<small class="component-review-detail">SIGNED · '+esc(item.signature_status||"Unknown")+
+    ' · '+Number(item.active_days||0)+' observed days · '+Number(item.sample_count||0)+' samples · '+
+    componentMetric(item.baseline_span_hours,0)+'h baseline</small>'+
+    '<small class="component-review-disclaimer">'+esc(item.recommendation||"Operator review only.")+'</small>'+
+    '<div class="component-review-actions">'+
+    '<button class="btn sm" data-component-pref="'+esc(item.id)+'" data-pref="keep">KEEP</button>'+
+    '<button class="btn sm" data-component-pref="'+esc(item.id)+'" data-pref="not_needed">NOT NEEDED</button>'+
+    '<button class="btn sm" data-component-pref="'+esc(item.id)+'" data-pref="review_later">ASK LATER</button>'+
+    closeButton+'</div></article>';
+}
+
+async function loadComponentIntelligence(){
+  const state=document.getElementById("component-baseline-state");
+  const summary=document.getElementById("component-baseline-summary");
+  const processHost=document.getElementById("component-process-candidates");
+  const serviceHost=document.getElementById("component-service-candidates");
+  if(!processHost||!serviceHost)return;
+  try{
+    const data=await api("/api/components/intelligence");
+    if(data.error)throw new Error(data.error);
+    const coverage=data.coverage||{};
+    const processCount=Number(coverage.process_components||0);
+    const serviceCount=Number(coverage.service_components||0);
+    const graphCount=Number(coverage.service_dependency_graph_count||0);
+    if(state)state.textContent=data.status==="ready"?
+      "BASELINE ACTIVE · "+processCount+" PROCESS / "+serviceCount+" SERVICE":
+      "WAITING FOR PROCESS + SERVICE SAMPLES";
+    if(summary){
+      summary.innerHTML=
+        '<div class="maint-mini-stat"><small>PROCESS IDENTITIES</small><b>'+processCount+'</b><span>'+
+        Number(coverage.process_max_observed_days||0)+' max observed days · 5 min sampling</span></div>'+
+        '<div class="maint-mini-stat"><small>SERVICE GRAPH</small><b>'+graphCount+'</b><span>'+
+        Number(coverage.service_max_observed_days||0)+' max observed days · 15 min sampling</span></div>'+
+        '<div class="maint-mini-stat"><small>VERIFIED FILE SIGNATURES</small><b>'+
+        (Number(coverage.signed_process_components||0)+Number(coverage.signed_services||0))+
+        '</b><span>Process '+Number(coverage.signed_process_components||0)+' · Services '+Number(coverage.signed_services||0)+'</span></div>'+
+        '<div class="maint-mini-stat"><small>OPERATOR PREFERENCES</small><b>'+
+        Number(coverage.review_preferences_saved||0)+'</b><span>Keep / not-needed / ask later</span></div>';
+    }
+    const processes=Array.isArray(data.process_candidates)?data.process_candidates:[];
+    const services=Array.isArray(data.service_candidates)?data.service_candidates:[];
+    processHost.innerHTML=processes.map(item=>componentReviewCard(item,"process")).join("")||
+      '<div class="empty">No background application currently meets the seven-day evidence gate. SENTINEL is still collecting resource, usage and signature history.</div>';
+    serviceHost.innerHTML=services.map(item=>componentReviewCard(item,"service")).join("")||
+      '<div class="empty">No third-party service meets the signed-publisher, seven-day history and dependency review criteria yet. Core and protected services are excluded.</div>';
+  }catch(error){
+    if(state)state.textContent="COMPONENT BASELINE UNAVAILABLE";
+    processHost.innerHTML='<div class="empty">'+esc(error.message||String(error))+'</div>';
+    serviceHost.innerHTML='<div class="empty">Service dependency evidence is unavailable.</div>';
+  }
+}
+
+function initComponentIntelligence(){
+  const refresh=document.getElementById("component-baseline-refresh");
+  if(refresh)refresh.onclick=async()=>{
+    refresh.disabled=true;
+    const label=refresh.textContent;
+    refresh.textContent="CHECKING RESOURCE GATE…";
+    try{
+      const result=await api("/api/components/refresh",{});
+      if(result.error)throw new Error(result.error);
+      if(result.deferred)toast(result.reason||"Metadata refresh deferred by the resource/game governor","warn");
+      else toast("Windows service graph and file signatures refreshed","ok");
+      await loadComponentIntelligence();
+    }catch(error){toast(error.message||String(error),"bad");}
+    finally{refresh.disabled=false;refresh.textContent=label;}
+  };
+  const processHost=document.getElementById("component-process-candidates");
+  const serviceHost=document.getElementById("component-service-candidates");
+  const handle=async event=>{
+    const preferenceButton=event.target.closest("[data-component-pref]");
+    const closeButton=event.target.closest("[data-component-close]");
+    if(!preferenceButton&&!closeButton)return;
+    if(preferenceButton){
+      const componentId=preferenceButton.dataset.componentPref;
+      const preference=preferenceButton.dataset.pref;
+      const prompts={
+        keep:"Keep this component. SENTINEL will suppress future review suggestions for it.",
+        not_needed:"Mark as not needed. This only records your preference and hides the suggestion; it will NOT close, disable or uninstall anything.",
+        review_later:"Ask me again in seven days. No system change will be made."
+      };
+      if(!confirm(prompts[preference]||"Save this component preference?"))return;
+      preferenceButton.disabled=true;
+      try{
+        const result=await api("/api/components/preference",{
+          component_id:componentId,preference,
+          note:preference==="keep"?"Operator marked component as required":
+            preference==="not_needed"?"Operator marked component as not needed":"Operator asked for a later review"
+        });
+        if(result.error)throw new Error(result.error);
+        toast("Component preference saved locally","ok");
+        await loadComponentIntelligence();
+      }catch(error){toast(error.message||String(error),"bad");}
+      finally{preferenceButton.disabled=false;}
+      return;
+    }
+    const componentId=closeButton.dataset.componentClose;
+    if(!confirm("Prepare a graceful WM_CLOSE proposal for this exact visible application instance? It will NOT close until you separately approve the pending action in Actions. Force-kill is never used."))return;
+    closeButton.disabled=true;
+    try{
+      const result=await api("/api/components/propose-close",{component_id:componentId});
+      if(result.error)throw new Error(result.error);
+      toast("Graceful-close proposal #"+result.action_id+" created. Review and approve it in Actions.","ok");
+      if(typeof loadActions==="function")await loadActions();
+    }catch(error){toast(error.message||String(error),"bad");}
+    finally{closeButton.disabled=false;}
+  };
+  if(processHost)processHost.addEventListener("click",handle);
+  if(serviceHost)serviceHost.addEventListener("click",handle);
+  void loadComponentIntelligence();
 }
 
 async function runWindowsDiagnosis(questionId,buttonId,resultId){
