@@ -306,6 +306,8 @@ def test_local_ai_evidence_contains_dependency_graph_and_baseline_candidate_ids(
     assert "binary_path" not in str(evidence)
     assert evidence["operator_component_preferences"][0]["preference"] == "keep"
     assert evidence["operator_component_preferences"][0]["operator_note"] == "Required for hotkeys"
+    assert evidence["component_score_semantics"]["evidence_confidence_score"].startswith("0-100 measurement coverage")
+    assert "not a probability" in evidence["component_score_semantics"]["evidence_confidence_score"]
 
 
 
@@ -360,7 +362,6 @@ def test_component_candidate_close_requires_one_unambiguous_gui_instance(monkeyp
 
 
 def test_component_score_semantics_distinguish_resource_impact_and_service_ownership():
-    monkeypatch_rows = []
     report = {
         "score_semantics": {
             "evidence_confidence_score": "not a probability",
@@ -374,6 +375,7 @@ def test_component_score_semantics_distinguish_resource_impact_and_service_owner
 
 
 def test_process_sampling_pauses_during_game_sessions(monkeypatch):
+    monkeypatch.setattr(components, "ensure_schema", lambda: None)
     monkeypatch.setattr(core, "IS_WIN", True)
     monkeypatch.setattr(core, "STATE", {"game": {"name": "VALORANT"}, "procs": []})
     monkeypatch.setattr(core, "off", lambda _name: False)
