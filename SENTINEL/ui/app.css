@@ -2203,3 +2203,12 @@ body.ui-simple .command-gauges{gap:8px}
 .component-review-note>span{color:var(--mut);font:9px var(--mo);letter-spacing:.05em}
 .component-review-note textarea{width:100%;min-height:42px;resize:vertical;padding:8px 9px;border:1px solid var(--line);border-radius:8px;background:rgba(0,0,0,.18);color:var(--txt);font:10px/1.45 var(--ui);outline:none}
 .component-review-note textarea:focus{border-color:var(--cy)}
+
+
+
+/* SENTINEL 1.2.34 · startup and task provenance */
+.component-provenance-target{display:grid;gap:6px;padding:9px;border:1px solid var(--line);border-radius:9px;background:rgba(0,0,0,.12);min-width:0}
+.component-provenance-target>b{font:11px var(--ui);color:var(--txt);overflow-wrap:anywhere}
+.component-provenance-target>small{font:9px/1.5 var(--mo);color:var(--mut);overflow-wrap:anywhere}
+.component-provenance-links{display:flex;flex-wrap:wrap;gap:5px;min-width:0}
+.component-provenance-links .tag{max-width:100%;white-space:normal;overflow-wrap:anywhere;line-height:1.45}
