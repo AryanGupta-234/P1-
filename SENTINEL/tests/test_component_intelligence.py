@@ -57,13 +57,15 @@ def test_service_identity_is_stable_and_name_scoped():
 def test_process_review_candidate_requires_signed_history_and_measured_background_resource_use():
     candidate = components._process_candidate(_process_summary(), {}, [])
     assert candidate is not None
-    assert candidate["confidence"] == "high"
+    assert candidate["evidence_strength"] == "high"
     assert candidate["sample_count"] == 900
     assert candidate["active_days"] == 12
     assert candidate["average_memory_mb"] == 360.0
     assert candidate["signature_status"] == "Valid"
     assert candidate["requires_user_intent"] is True
     assert "no stop/disable action is implied" in candidate["recommendation"]
+    noted = components._process_candidate(_process_summary(), {"note": "Required for touchpad hotkeys"}, [])
+    assert noted["operator_note"] == "Required for touchpad hotkeys"
 
 
 @pytest.mark.parametrize("kwargs", [
@@ -106,6 +108,8 @@ def test_service_review_candidate_requires_valid_signature_and_dependency_graph(
     assert candidate["dependent_count"] == 0
     assert candidate["requires_user_intent"] is True
     assert "not established" in candidate["recommendation"]
+    noted = components._service_candidate(_service_summary(), {"note": "Vendor update scheduler for audio console"})
+    assert noted["operator_note"] == "Vendor update scheduler for audio console"
 
 
 @pytest.mark.parametrize("kwargs", [
@@ -173,6 +177,8 @@ def test_operator_preference_is_persisted_and_clear_is_explicit(monkeypatch):
     assert saved["ok"] is True
     assert saved["preference"] == "keep"
     assert any("INSERT INTO component_preferences" in sql for sql, _args in statements)
+    saved_args = next(args for sql, args in statements if "INSERT INTO component_preferences" in sql)
+    assert saved_args[2] == "Required audio helper"
 
     components.set_preference("process:" + "a" * 40, "clear")
     assert any("DELETE FROM component_preferences" in sql for sql, _args in statements)
@@ -222,7 +228,7 @@ def test_service_dependency_raw_paths_are_not_persisted(monkeypatch):
         "services": [{
             "name": "ExampleSvc", "display": "Example Service", "state": "Running",
             "start": "Auto", "pid": 2400, "binary_name": "ServiceHost.exe",
-            "binary_path": raw_path, "dependencies": ["RpcSs"], "dependents": [],
+            "binary_path": raw_path, "description": "Service at " + raw_path, "dependencies": ["RpcSs"], "dependents": [],
         }],
         "count": 1, "captured_at": 1700000000.0,
     }
@@ -240,6 +246,7 @@ def test_service_dependency_raw_paths_are_not_persisted(monkeypatch):
     assert stored["services"][0]["dependents"] == []
     assert stored["services"][0]["binary_name"] == "ServiceHost.exe"
     assert "binary_path" not in stored["services"][0]
+    assert "description" not in stored["services"][0]
     assert raw_path not in str(stored)
 
 
