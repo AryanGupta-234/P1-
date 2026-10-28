@@ -2601,23 +2601,26 @@ function componentMetric(value, digits=1){
 }
 
 function componentReviewCard(item, kind){
+  const confidence=Number(item.evidence_confidence_score);
+  const confidenceLabel=Number.isFinite(confidence)?Math.round(confidence)+"/100": "unscored";
   const metrics=kind==="process"
-    ? "CPU "+componentMetric(item.average_cpu_pct,2)+"% · RAM "+componentMetric(item.average_memory_mb,0)+" MB · I/O "+componentMetric(item.average_io_mb_s,2)+" MB/s"
-    : "AUTO START · "+(item.dependent_count||0)+" SCM dependents";
-  const confidence=String(item.evidence_strength||"low").toUpperCase();
+    ? "CPU "+componentMetric(item.average_cpu_pct,2)+"% · RAM "+componentMetric(item.average_memory_mb,0)+" MB · I/O "+componentMetric(item.average_io_mb_s,2)+" MB/s · impact "+componentMetric(item.resource_impact_score,0)+"/100 · review priority "+componentMetric(item.review_priority_score,0)+"/100"
+    : "AUTO START · "+(item.dependent_count||0)+" SCM dependents · ownership review "+componentMetric(item.ownership_review_score,0)+"/100";
   const detail=kind==="process"
-    ? (item.resource_reasons||[]).join(" · ")+" · foreground "+componentMetric(item.foreground_sample_pct,2)+"%"
+    ? (item.resource_reasons||[]).join(" · ")+" · foreground "+componentMetric(item.foreground_sample_pct,2)+"% · visible-window samples "+componentMetric(item.visible_window_sample_pct,2)+"% · on-screen "+componentMetric(item.onscreen_window_sample_pct,2)+"%"
     : "Depends on "+((item.dependencies||[]).join(", ")||"no listed SCM dependencies")+" · no SCM dependents observed";
+  const identityDetail="PE company metadata: "+(item.publisher||"unknown")+" · certificate organization: "+(item.certificate_organization||"unknown")+" · identity: "+(item.publisher_consistency||"unknown");
   const closeButton=item.current_instance
     ? '<button class="btn sm or" data-component-close="'+esc(item.id)+'">PREPARE GRACEFUL CLOSE</button>'
     : "";
   return '<article class="component-review-card">'+
     '<div class="component-review-head"><div><b>'+esc(item.name)+'</b>'+
     '<small>'+esc(item.publisher||"Publisher unknown")+' · '+esc(item.binary_name||"binary unknown")+'</small></div>'+
-    '<span class="tag">'+esc(confidence)+' EVIDENCE STRENGTH</span></div>'+
+    '<span class="tag">'+esc(confidenceLabel)+' EVIDENCE COVERAGE</span></div>'+
     '<div class="component-review-metrics">'+esc(metrics)+'</div>'+
     '<small class="component-review-detail">'+esc(detail)+'</small>'+
-    '<small class="component-review-detail">SIGNED · '+esc(item.signature_status||"Unknown")+
+    '<small class="component-review-detail">'+esc(identityDetail)+'</small>'+
+    '<small class="component-review-detail">AUTHENTICODE · '+esc(item.signature_status||"Unknown")+
     ' · '+Number(item.active_days||0)+' observed days · '+Number(item.sample_count||0)+' samples · '+
     componentMetric(item.baseline_span_hours,0)+'h baseline</small>'+
     '<small class="component-review-disclaimer">'+esc(item.recommendation||"Operator review only.")+'</small>'+
