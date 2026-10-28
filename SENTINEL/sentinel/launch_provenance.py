@@ -339,17 +339,25 @@ def _build_graph(snapshot: dict[str, Any], service_rows: list[dict[str, Any]],
                                           for token in protected_tokens)
         actions = raw.get("actions") if isinstance(raw.get("actions"), list) else []
         targets = []
+        unresolved_action_count = 0
+        budget_deferred_actions = 0
         for index, action in enumerate(actions[:16]):
             if not isinstance(action, dict):
+                unresolved_action_count += 1
                 continue
             target = _extract_launch_target(action.get("binary_path") or action.get("execute"))
-            bid = add_binary(target["binary_path"]) if target.get("binary_path") else None
-            if bid:
-                targets.append({
-                    "binary_id": bid, "binary_name": target.get("binary_name") or "",
-                    "action_index": index, "action_kind": _clean(action.get("action_kind") or "Exec", 30),
-                    "has_arguments": bool(action.get("has_arguments") or target.get("has_arguments")),
-                })
+            if not target.get("binary_path"):
+                unresolved_action_count += 1
+                continue
+            bid = add_binary(target["binary_path"])
+            if not bid:
+                budget_deferred_actions += 1
+                continue
+            targets.append({
+                "binary_id": bid, "binary_name": target.get("binary_name") or "",
+                "action_index": index, "action_kind": _clean(action.get("action_kind") or "Exec", 30),
+                "has_arguments": bool(action.get("has_arguments") or target.get("has_arguments")),
+            })
         protected = protected_task or any(
             _protected_process(row["binary_name"], binary_paths[row["binary_id"]])
             or _is_windows_binary(binary_paths[row["binary_id"]])
@@ -370,11 +378,9 @@ def _build_graph(snapshot: dict[str, Any], service_rows: list[dict[str, Any]],
             "run_level": _clean(raw.get("run_level"), 24),
             "logon_type": _clean(raw.get("logon_type"), 32),
             "action_count": len(actions), "resolved_executable_actions": len(targets),
-            "unresolved_action_count": sum(1 for action in actions[:16] if isinstance(action, dict)
-                                           and not _extract_launch_target(action.get("binary_path") or action.get("execute")).get("binary_path")),
-            "budget_deferred_actions": max(0, len(actions) - len(targets) - sum(
-                1 for action in actions[:16] if isinstance(action, dict)
-                and not _extract_launch_target(action.get("binary_path") or action.get("execute")).get("binary_path"))),
+            "unresolved_action_count": unresolved_action_count,
+            "budget_deferred_actions": budget_deferred_actions,
+            "unprocessed_action_count": max(0, len(actions) - 16),
             "launch_kind": "multi_action" if len(targets) > 1 else (
                 targets[0]["action_kind"] if targets else "opaque_or_unresolved"),
         }
