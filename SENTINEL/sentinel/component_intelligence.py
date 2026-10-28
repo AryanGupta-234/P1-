@@ -188,13 +188,9 @@ def _bulk_catalog(rows: list[tuple]) -> None:
 def _bulk_samples(rows: list[tuple]) -> None:
     if not rows:
         return
-    columns = 13
+    columns = 12
     for batch in _chunks(rows, max(1, 900 // columns)):
         marks = "(" + ",".join("?" for _ in range(columns)) + ")"
-        sql = (
-            "INSERT INTO component_samples(component_id,ts,state,cpu_pct,memory_mb,io_mb_s,"
-            "foreground,visible_windows,onscreen_windows,session_id,running,start_mode,ts) VALUES "
-        )
         # Keep the row shape explicit while using one SQLite commit per batch.
         sql = (
             "INSERT INTO component_samples(component_id,ts,state,cpu_pct,memory_mb,io_mb_s,"
@@ -571,6 +567,8 @@ def _process_candidate(row: tuple, pref: dict[str, Any], current_rows: list[dict
      visible_avg, onscreen_avg, _running_ratio, metadata_at) = row
     if protected or pref.get("preference") in ("keep", "not_needed"):
         return None
+    if pref.get("preference") == "review_later" and time.time() - float(pref.get("updated_at") or 0) < 7 * 86400:
+        return None
     span_hours = max(0.0, (float(max_ts or 0) - float(min_ts or 0)) / 3600.0)
     if signature != "Valid" or not publisher:
         return None
@@ -626,6 +624,8 @@ def _service_candidate(row: tuple, pref: dict[str, Any]) -> dict[str, Any] | Non
      last_seen, samples, active_days, min_ts, max_ts, _avg_cpu, _max_cpu, _avg_mem, _max_mem,
      _avg_io, _foreground, _visible, _onscreen, running_ratio, metadata_at) = row
     if protected or pref.get("preference") in ("keep", "not_needed"):
+        return None
+    if pref.get("preference") == "review_later" and time.time() - float(pref.get("updated_at") or 0) < 7 * 86400:
         return None
     if start_mode not in ("auto", "automatic") or service_state != "running":
         return None
