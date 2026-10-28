@@ -2614,13 +2614,14 @@ function componentReviewCard(item, kind){
   return '<article class="component-review-card">'+
     '<div class="component-review-head"><div><b>'+esc(item.name)+'</b>'+
     '<small>'+esc(item.publisher||"Publisher unknown")+' · '+esc(item.binary_name||"binary unknown")+'</small></div>'+
-    '<span class="tag">'+esc(confidence)+' CONFIDENCE</span></div>'+
+    '<span class="tag">'+esc(confidence)+' EVIDENCE STRENGTH</span></div>'+
     '<div class="component-review-metrics">'+esc(metrics)+'</div>'+
     '<small class="component-review-detail">'+esc(detail)+'</small>'+
     '<small class="component-review-detail">SIGNED · '+esc(item.signature_status||"Unknown")+
     ' · '+Number(item.active_days||0)+' observed days · '+Number(item.sample_count||0)+' samples · '+
     componentMetric(item.baseline_span_hours,0)+'h baseline</small>'+
     '<small class="component-review-disclaimer">'+esc(item.recommendation||"Operator review only.")+'</small>'+
+    '<label class="component-review-note"><span>WHAT DOES THIS SUPPORT / DO YOU NEED IT?</span><textarea maxlength="180" rows="2" data-component-note="'+esc(item.id)+'" placeholder="Tell SENTINEL what this component is used for…">'+esc(item.operator_note||"")+'</textarea></label>'+
     '<div class="component-review-actions">'+
     '<button class="btn sm" data-component-pref="'+esc(item.id)+'" data-pref="keep">KEEP</button>'+
     '<button class="btn sm" data-component-pref="'+esc(item.id)+'" data-pref="not_needed">NOT NEEDED</button>'+
@@ -2701,10 +2702,10 @@ function initComponentIntelligence(){
       if(!confirm(prompts[preference]||"Save this component preference?"))return;
       preferenceButton.disabled=true;
       try{
+        const noteInput=(preferenceButton.closest(".component-review-card")||document).querySelector("[data-component-note]");
         const result=await api("/api/components/preference",{
           component_id:componentId,preference,
-          note:preference==="keep"?"Operator marked component as required":
-            preference==="not_needed"?"Operator marked component as not needed":"Operator asked for a later review"
+          note:String(noteInput?.value||"").trim().slice(0,180)
         });
         if(result.error)throw new Error(result.error);
         toast("Component preference saved locally","ok");
