@@ -334,3 +334,62 @@ def test_local_automation_builder_uses_typed_allowlisted_windows_flows():
     assert "last_event_id" in engine and "cooldown_seconds" in engine
     assert "arbitrary commands and scripts are not accepted" in engine
     assert "subprocess" not in engine and "Popen(" not in engine
+
+
+
+def test_component_baselines_are_agent_owned_local_and_operator_approved():
+    html = (ROOT / "ui" / "index.html").read_text(encoding="utf-8")
+    app = (ROOT / "ui" / "app.js").read_text(encoding="utf-8")
+    css = (ROOT / "ui" / "app.css").read_text(encoding="utf-8")
+    server = (ROOT / "sentinel" / "server.py").read_text(encoding="utf-8")
+    agent = (ROOT / "agent.py").read_text(encoding="utf-8")
+    engine = (ROOT / "sentinel" / "component_intelligence.py").read_text(encoding="utf-8")
+    specialist = (ROOT / "sentinel" / "windows_intelligence.py").read_text(encoding="utf-8")
+
+    for element_id in (
+        "component-baseline-state", "component-baseline-refresh",
+        "component-baseline-summary", "component-process-candidates",
+        "component-service-candidates",
+    ):
+        assert f'id="{element_id}"' in html
+
+    for ui_contract in (
+        "function componentReviewCard", "function loadComponentIntelligence",
+        "function initComponentIntelligence", 'initComponentIntelligence();',
+        'api("/api/components/intelligence")',
+        'api("/api/components/preference"',
+        'api("/api/components/propose-close"',
+        'api("/api/components/refresh"',
+        "EVIDENCE STRENGTH",
+        "data-component-note",
+        "PREPARE GRACEFUL CLOSE",
+    ):
+        assert ui_contract in app
+
+    assert ".component-review-card" in css
+    assert ".component-review-note" in css
+    assert 'if p == "/api/components/intelligence":' in server
+    assert 'if p == "/api/components/preference":' in server
+    assert 'if p == "/api/components/propose-close":' in server
+    assert "component_intelligence.propose_graceful_close(" in server
+    assert "component_intelligence.start()" in agent
+    assert "component_intelligence.shutdown()" in agent
+
+    assert "_PROCESS_SAMPLE_SECONDS = 300" in engine
+    assert "_SERVICE_SAMPLE_SECONDS = 900" in engine
+    assert "_RETENTION_SECONDS = 30 * 86400" in engine
+    assert "_BASELINE_MIN_DAYS = 7" in engine
+    assert "Get-AuthenticodeSignature" in engine
+    assert "ServicesDependedOn" in engine and "DependentServices" in engine
+    assert "binary_path" in engine
+    assert 'if key not in ("binary_path", "description")' in engine
+    assert "process_component_id" in engine and "hashlib.sha256" in engine
+    assert "def set_preference(" in engine
+    assert "def propose_graceful_close(" in engine
+    assert 'actions.propose(\n        "terminate_process"' in engine
+    assert "TerminateProcess" not in engine
+    assert "process.close" not in engine
+    assert "ai_evidence()" in specialist
+    assert "service_dependency_graph" in specialist
+    assert "operator_note" in specialist
+    assert "Longitudinal component baselines" in specialist
