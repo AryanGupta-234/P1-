@@ -129,7 +129,7 @@ def test_maintenance_workspace_is_in_full_boot_queue_and_preview_gated():
     assert 'await loadMaintenance(false)' in app
     assert "function maintenancePreview(" in app
     assert 'api("/api/maintenance/execute"' in app
-    assert "initMaintenance(); initAgentAutomation(); initLocalAutomation(); initWindowsKnowledge(); initVoice();" in app
+    assert "initMaintenance(); initAgentAutomation(); initLocalAutomation(); initComponentIntelligence(); initWindowsKnowledge(); initVoice();" in app
     assert "await runPool(jobs)" in app and "await runPool(secondaryJobs)" in app
 
 
