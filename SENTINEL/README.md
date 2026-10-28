@@ -1,4 +1,4 @@
-# SENTINEL 1.2.32 — Windows Intelligence Fusion and proactive AI review
+# SENTINEL 1.2.33 — Longitudinal component intelligence and operator intent
 
 SENTINEL's observer, collectors and dashboard run as the signed-in user with a standard token. Administrator-only maintenance is handed to a narrowly scoped helper only after the operator confirms the exact preview and approves Windows UAC. The helper accepts one short-lived SQLite-backed job ID, binds it to the same Windows principal and interactive session, rechecks the kill switch, safeguard and original state, and can execute only a fixed allowlist of maintenance action IDs. It cannot accept arbitrary commands, scripts or paths.
 
@@ -57,6 +57,16 @@ Event Viewer monitoring now parses allowlisted crash/fault metadata from System,
 Driver offers are read from Windows Update and matched to installed-device evidence where available. The agent may explain candidate updates and propose the existing allowlisted driver workflow, but it does not install, roll back or replace drivers automatically. Likewise, process closure, startup changes, service changes and repairs still require the existing identity checks, fresh preview, explicit approval, Safeguard and rollback contract. SENTINEL does not disable Windows, Defender, firewall, accessibility, backup, storage, update or Vanguard components.
 
 The local workflow builder provides Power Automate-style automation without a cloud account: create an event, schedule or sustained-resource trigger and select a fixed action (local AI review, read-only diagnostics, storage scan or Windows notification). Flow definitions, cooldowns, trigger cursors and bounded run history persist in SQLite. It does not run arbitrary scripts, approve maintenance or connect to Microsoft's Power Automate cloud. Driver installation, service/startup changes, process closure and repair remain explicit separate approval workflows.
+
+## Longitudinal component intelligence (v1.2.33)
+
+SENTINEL now maintains 30 days of local process/service observations in SQLite. It samples bounded, resource-ranked process identities every five minutes and the Windows Service Control Manager inventory every fifteen minutes. Process identity uses a one-way hash of the normalized executable path; the component baseline tables retain the hash and executable basename, not the original process path. Raw service binary paths are held only in the worker's bounded in-memory Authenticode query cache and are removed, along with service descriptions, before the dependency graph is persisted.
+
+In safe idle windows, the existing runtime governor admits small batches of Get-AuthenticodeSignature and file-version queries. Service relationships come from ServicesDependedOn and DependentServices. Windows/system/security/Vanguard components are protected. Optional review candidates require at least seven distinct observed days, a seven-day time span, a valid signature and publisher, and measured resource or service metadata. Process candidates also require low sampled foreground use and sustained CPU, memory or I/O impact. Service candidates are limited to running third-party auto-start services with no SCM dependents; this does not prove that no application, task or user relies on them.
+
+The Maintenance workspace shows evidence strength, sample count, observed days, resource measurements, publisher/signature state and service dependencies. You can record Keep, Not needed, Ask later, or a free-text explanation without changing Windows. Notes and preferences stay local and are included as bounded context in subsequent local AI reviews. Not needed hides a candidate; it does not uninstall, stop or disable it. A visible process may receive a separate graceful-close proposal, but it remains open until the operator approves the existing Actions item. Force termination is never used.
+
+The baseline worker throttles its 30-day aggregation to five-minute intervals and retries resource-deferred metadata enrichment no more often than every fifteen minutes. The feature does not train model weights; it improves later reasoning through explicit local evidence and operator intent. A high evidence-strength label means the observations are stronger, not that a component is unnecessary.
 
 # SENTINEL
 
