@@ -362,17 +362,19 @@ def test_component_candidate_close_requires_one_unambiguous_gui_instance(monkeyp
     assert components._current_interactive_instance(component_id, [first, second]) is None
 
 
-def test_component_score_semantics_distinguish_resource_impact_and_service_ownership():
-    report = {
-        "score_semantics": {
-            "evidence_confidence_score": "not a probability",
-            "resource_impact_score": "processes only",
-            "ownership_review_score": "services only",
-        }
-    }
-    assert "not a probability" in report["score_semantics"]["evidence_confidence_score"]
-    assert "processes only" in report["score_semantics"]["resource_impact_score"]
-    assert "services only" in report["score_semantics"]["ownership_review_score"]
+def test_component_score_semantics_distinguish_resource_impact_and_service_ownership(monkeypatch):
+    monkeypatch.setattr(components, "ensure_schema", lambda: None)
+    monkeypatch.setattr(components, "_preference_map", lambda: {})
+    monkeypatch.setattr(components, "_aggregate_rows", lambda _kind, _since: [])
+    monkeypatch.setattr(components, "_load_state", lambda _key: {})
+    monkeypatch.setattr(components, "_last_sample", lambda _kind: 0.0)
+    monkeypatch.setattr(core, "STATE", {})
+    report = components.report()
+    semantics = report["score_semantics"]
+    assert "not a probability" in semantics["evidence_confidence_score"]
+    assert "weighted 35/45/20" in semantics["resource_impact_score"]
+    assert "sorting heuristic" in semantics["review_priority_score"]
+    assert "no service resource-impact score" in semantics["ownership_review_score"]
 
 
 def test_process_sampling_pauses_during_game_sessions(monkeypatch):
