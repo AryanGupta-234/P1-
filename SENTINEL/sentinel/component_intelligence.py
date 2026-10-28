@@ -352,6 +352,528 @@ $items=@(Get-CimInstance Win32_Service -ErrorAction Stop | ForEach-Object {
     return {"services": services, "count": count, "captured_at": time.time()}
 
 
+
+def binary_component_id(executable: Any) -> str | None:
+    """Stable local executable identity; the path itself is never a database key."""
+    path = _normal_path(executable)
+    if not path or not re.match(r"^[a-zA-Z]:[\\/]", path):
+        return None
+    return "binary:" + _identity_hash("binary", path)
+
+
+def startup_component_id(source: Any, name: Any) -> str | None:
+    source_text = str(source or "").strip().casefold()
+    name_text = str(name or "").strip().casefold()
+    if not source_text or not name_text or len(name_text) > 240:
+        return None
+    return "startup:" + _identity_hash("startup", source_text + "\0" + name_text)
+
+
+def task_component_id(task_path: Any, name: Any) -> str | None:
+    path_text = str(task_path or "\\").strip().casefold()
+    name_text = str(name or "").strip().casefold()
+    if not name_text or len(name_text) > 240 or len(path_text) > 500:
+        return None
+    return "task:" + _identity_hash("task", path_text + "\0" + name_text)
+
+
+def app_component_id(name: Any, publisher: Any, version: Any = "") -> str | None:
+    name_text = str(name or "").strip()
+    publisher_text = str(publisher or "").strip()
+    if not name_text or len(name_text) > 180:
+        return None
+    identity = "\0".join((name_text.casefold(), publisher_text.casefold(),
+                          str(version or "").strip().casefold()))
+    return "app:" + _identity_hash("app", identity)
+
+
+def _extract_launch_target(command: Any) -> dict[str, Any]:
+    """Resolve only the executable token; never retain or return the argument tail."""
+    raw = str(command or "").strip()
+    if not raw or len(raw) > 4096:
+        return {"binary_path": "", "binary_name": "", "launch_kind": "unresolved",
+                "has_arguments": False}
+    expanded = os.path.expandvars(raw)
+    expanded = re.sub(
+        r"%([^%]+)%",
+        lambda match: os.environ.get(match.group(1), match.group(0)),
+        expanded,
+    )
+    match = re.match(r'^\s*"([^"]+?\.exe)"(?=\s|$)', expanded, re.IGNORECASE)
+    if not match:
+        match = re.match(r"^\s*(.+?\.exe)(?=\s|$)", expanded, re.IGNORECASE)
+    if not match:
+        return {"binary_path": "", "binary_name": "", "launch_kind": "unresolved",
+                "has_arguments": False}
+    candidate = match.group(1).strip()
+    path = _normal_path(candidate)
+    if not path or not re.match(r"^[a-zA-Z]:[\\/]", path):
+        return {"binary_path": "", "binary_name": "", "launch_kind": "unresolved",
+                "has_arguments": False}
+    binary_name = path.replace("/", "\\").rsplit("\\", 1)[-1]
+    wrappers = {
+        "cmd.exe", "powershell.exe", "pwsh.exe", "wscript.exe", "cscript.exe",
+        "rundll32.exe", "regsvr32.exe", "mshta.exe", "dllhost.exe",
+        "svchost.exe", "taskhostw.exe", "java.exe", "javaw.exe", "python.exe",
+        "pythonw.exe", "conhost.exe",
+    }
+    launch_kind = "command_host" if binary_name.casefold() in wrappers else "direct_executable"
+    argument_tail = expanded[match.end():].strip()
+    return {
+        "binary_path": path,
+        "binary_name": _clean(binary_name, 120),
+        "launch_kind": launch_kind,
+        "has_arguments": bool(argument_tail),
+    }
+
+
+def _launch_inventory_query() -> dict[str, Any]:
+    """Return startup/task launch provenance with arguments and account names excluded."""
+    from .winutil import powershell
+
+    script = r"""
+$ErrorActionPreference='Stop'
+function Resolve-LaunchExe([string]$raw) {
+  $value=[Environment]::ExpandEnvironmentVariables([string]$raw)
+  $exe=''
+  if($value -match '^\s*"(?<p>[^"]+?\.exe)"(?=\s|$)') { $exe=[string]$matches['p'] }
+  elseif($value -match '^\s*(?<p>.+?\.exe)(?=\s|$)') { $exe=[string]$matches['p'] }
+  if($exe -match '^[A-Za-z]:\\') { return $exe }
+  return ''
+}
+$startup=@(); $tasks=@()
+$startupOk=$true; $startupError=''
+$tasksOk=$true; $tasksError=''; $taskTotal=0
+try {
+  foreach($item in @(Get-CimInstance Win32_StartupCommand -ErrorAction Stop)) {
+    $location=[string]$item.Location
+    $source='Windows startup'
+    if($location -match '(?i)HKLM|HKEY_LOCAL_MACHINE') { $source='Registry · All users' }
+    elseif($location -match '(?i)HKCU|HKEY_CURRENT_USER') { $source='Registry · Current user' }
+    elseif($location -match '(?i)Startup') { $source='Startup folder' }
+    $command=[string]$item.Command
+    $exe=Resolve-LaunchExe $command
+    $hasArgs=$false
+    if($exe -and $command.Length -gt $exe.Length) { $hasArgs=$true }
+    $startup+=@{
+      name=[string]$item.Name; source=$source; binary_path=$exe
+      has_arguments=[bool]$hasArgs; enabled=$true
+    }
+  }
+} catch { $startupOk=$false; $startupError=$_.Exception.Message }
+try {
+  $allTasks=@(Get-ScheduledTask -ErrorAction Stop)
+  $taskTotal=$allTasks.Count
+  $limit=[Math]::Min($taskTotal,800)
+  for($i=0;$i -lt $limit;$i++) {
+    $task=$allTasks[$i]
+    $actions=@()
+    foreach($action in @($task.Actions)) {
+      $rawExe=[string]$action.Execute
+      $exe=Resolve-LaunchExe $rawExe
+      $kind='Unknown'
+      if($rawExe) { $kind='Exec' }
+      elseif($action.ClassId) { $kind='ComHandler' }
+      $actions+=@{
+        binary_path=$exe; action_kind=$kind
+        has_arguments=[bool]([string]$action.Arguments)
+      }
+    }
+    $taskPath=[string]$task.TaskPath
+    $tasks+=@{
+      name=[string]$task.TaskName; task_path=$taskPath
+      state=[string]$task.State; enabled=[bool]$task.Settings.Enabled
+      run_level=[string]$task.Principal.RunLevel
+      logon_type=[string]$task.Principal.LogonType
+      actions=@($actions)
+    }
+  }
+} catch { $tasksOk=$false; $tasksError=$_.Exception.Message }
+@{
+  startup=$startup; tasks=$tasks; task_total=$taskTotal
+  startup_complete=$startupOk; tasks_complete=($tasksOk -and $taskTotal -le 800)
+  task_truncated=($tasksOk -and $taskTotal -gt 800)
+  source_health=@{
+    startup=@{ok=$startupOk;error=$startupError}
+    tasks=@{ok=$tasksOk;error=$tasksError;count=$taskTotal}
+  }
+} | ConvertTo-Json -Depth 7 -Compress
+"""
+    result = powershell(script, timeout=60)
+    if result.returncode != 0:
+        raise RuntimeError((result.stderr or result.stdout or "Startup/task inventory failed")[:220])
+    payload = json.loads((result.stdout or "").strip().lstrip("\ufeff"))
+    if not isinstance(payload, dict):
+        raise RuntimeError("Startup/task inventory returned an invalid object")
+    startup = payload.get("startup", [])
+    tasks = payload.get("tasks", [])
+    if isinstance(startup, dict):
+        startup = [startup]
+    if isinstance(tasks, dict):
+        tasks = [tasks]
+    if not isinstance(startup, list) or not isinstance(tasks, list):
+        raise RuntimeError("Startup/task inventory lists were incomplete")
+    return {
+        "startup": [row for row in startup if isinstance(row, dict)][:800],
+        "tasks": [row for row in tasks if isinstance(row, dict)][:800],
+        "task_total": int(payload.get("task_total") or 0),
+        "startup_complete": payload.get("startup_complete") is True,
+        "tasks_complete": payload.get("tasks_complete") is True,
+        "task_truncated": payload.get("task_truncated") is True,
+        "source_health": payload.get("source_health") if isinstance(payload.get("source_health"), dict) else {},
+        "captured_at": time.time(),
+    }
+
+
+def _catalog_tuple(component_id: str, component_type: str, name: str, *,
+                   binary_name: str = "", publisher: str = "", product_name: str = "",
+                   version: str = "", protected: bool = False, source: str = "",
+                   start_mode: str = "", state: str = "", now: float) -> tuple:
+    identity_hash = component_id.split(":", 1)[1]
+    return (
+        component_id, component_type, identity_hash, _clean(name, 140),
+        _clean(binary_name, 120), _clean(publisher, 140), _clean(product_name, 140),
+        _clean(version, 80), "Unknown", "", int(bool(protected)), _clean(source, 120),
+        "[]", "[]", _clean(start_mode, 40), _clean(state, 40),
+        now, now, 0.0,
+    )
+
+
+def _path_under(path: str, root: str) -> bool:
+    try:
+        return bool(path and root and os.path.commonpath((path, root)) == root and path != root)
+    except (OSError, ValueError):
+        return False
+
+
+def _build_launch_graph(snapshot: dict[str, Any], service_rows: list[dict[str, Any]],
+                        apps: list[dict[str, Any]], now: float | None = None) -> dict[str, Any]:
+    """Build safe catalog rows and exact-path edges; raw paths stay in this return's memory map."""
+    timestamp = float(now or time.time())
+    catalog_rows: dict[str, tuple] = {}
+    metadata_rows: dict[str, tuple] = {}
+    relationships: dict[tuple[str, str, str], tuple] = {}
+    binary_paths: dict[str, str] = {}
+    startup_ids: list[str] = []
+    task_ids: list[str] = []
+
+    def add_binary(path: str) -> str | None:
+        executable = _normal_path(path)
+        component_id = binary_component_id(executable)
+        if not component_id:
+            return None
+        binary_paths[component_id] = executable
+        binary_name = executable.replace("/", "\\").rsplit("\\", 1)[-1]
+        protected = _is_windows_binary(executable) or safeguard.is_protected_process(binary_name, executable)
+        catalog_rows[component_id] = _catalog_tuple(
+            component_id, "binary", binary_name, binary_name=binary_name,
+            protected=protected, source="Startup/task/service executable provenance",
+            now=timestamp,
+        )
+        return component_id
+
+    def add_relationship(source_id: str, target_id: str, relation: str,
+                         confidence: str, evidence: dict[str, Any]) -> None:
+        key = (source_id, target_id, relation)
+        relationships[key] = (
+            source_id, target_id, relation, confidence,
+            json.dumps(evidence, ensure_ascii=False, separators=(",", ":")),
+            timestamp,
+        )
+
+    for raw in (snapshot.get("startup") or [])[:800]:
+        if not isinstance(raw, dict):
+            continue
+        name = _clean(raw.get("name"), 120)
+        source = _clean(raw.get("source") or "Windows startup", 70)
+        component_id = startup_component_id(source, name)
+        if not component_id:
+            continue
+        target = _extract_launch_target(raw.get("binary_path") or raw.get("command"))
+        binary_id = add_binary(target["binary_path"]) if target.get("binary_path") else None
+        binary_name = target.get("binary_name") or ""
+        protected = bool(
+            binary_id and _is_windows_binary(target["binary_path"])
+            or binary_name and safeguard.is_protected_process(binary_name, target.get("binary_path", ""))
+            or any(token in (name + " " + source).casefold() for token in ("sentinel", "riot vanguard", "windows security"))
+        )
+        catalog_rows[component_id] = _catalog_tuple(
+            component_id, "startup", name, binary_name=binary_name,
+            protected=protected, source=source,
+            start_mode=target.get("launch_kind") or "unresolved",
+            state="present", now=timestamp,
+        )
+        metadata = {
+            "source": source, "launch_kind": target.get("launch_kind", "unresolved"),
+            "has_arguments": bool(raw.get("has_arguments") or target.get("has_arguments")),
+            "target_resolved": bool(binary_id), "enabled": bool(raw.get("enabled", True)),
+        }
+        metadata_rows[component_id] = (
+            component_id, json.dumps(metadata, ensure_ascii=False, separators=(",", ":")), timestamp,
+        )
+        startup_ids.append(component_id)
+        if binary_id:
+            add_relationship(
+                component_id, binary_id, "launches_binary", "path_resolved",
+                {"launch_kind": target.get("launch_kind"), "has_arguments": metadata["has_arguments"]},
+            )
+
+    for raw in (snapshot.get("tasks") or [])[:800]:
+        if not isinstance(raw, dict):
+            continue
+        name = _clean(raw.get("name"), 120)
+        task_path = _clean(raw.get("task_path") or "\\", 140)
+        component_id = task_component_id(task_path, name)
+        if not component_id:
+            continue
+        protected_task = task_path.casefold().startswith("\\microsoft\\") or "sentinel" in name.casefold()
+        actions = raw.get("actions") if isinstance(raw.get("actions"), list) else []
+        action_targets = []
+        for index, action in enumerate(actions[:16]):
+            if not isinstance(action, dict):
+                continue
+            target = _extract_launch_target(action.get("binary_path") or action.get("execute"))
+            if target.get("binary_path"):
+                binary_id = add_binary(target["binary_path"])
+                if binary_id:
+                    action_targets.append({
+                        "binary_id": binary_id, "binary_name": target.get("binary_name") or "",
+                        "action_index": index, "action_kind": _clean(action.get("action_kind") or "Exec", 32),
+                        "has_arguments": bool(action.get("has_arguments") or target.get("has_arguments")),
+                    })
+        first_binary = action_targets[0]["binary_name"] if action_targets else ""
+        protected = protected_task or any(
+            safeguard.is_protected_process(item["binary_name"], binary_paths[item["binary_id"]])
+            or _is_windows_binary(binary_paths[item["binary_id"]])
+            for item in action_targets
+        )
+        state = _clean(raw.get("state") or "unknown", 30)
+        enabled = bool(raw.get("enabled"))
+        catalog_rows[component_id] = _catalog_tuple(
+            component_id, "task", name, binary_name=first_binary, protected=protected,
+            source="Task Scheduler · " + task_path,
+            start_mode=_clean(raw.get("run_level") or "unknown", 30),
+            state=state if enabled else "disabled", now=timestamp,
+        )
+        metadata = {
+            "task_path": task_path, "enabled": enabled, "run_level": _clean(raw.get("run_level"), 24),
+            "logon_type": _clean(raw.get("logon_type"), 32),
+            "action_count": len(actions), "resolved_executable_actions": len(action_targets),
+            "unresolved_action_count": max(0, len(actions) - len(action_targets)),
+            "launch_kind": "multi_action" if len(action_targets) > 1 else (
+                action_targets[0]["action_kind"] if action_targets else "opaque_or_unresolved"
+            ),
+        }
+        metadata_rows[component_id] = (
+            component_id, json.dumps(metadata, ensure_ascii=False, separators=(",", ":")), timestamp,
+        )
+        task_ids.append(component_id)
+        for item in action_targets:
+            add_relationship(
+                component_id, item["binary_id"], "launches_binary", "path_resolved",
+                {"action_index": item["action_index"], "action_kind": item["action_kind"],
+                 "has_arguments": item["has_arguments"]},
+            )
+
+    # An executable is associated with an installed application only when its
+    # resolved path is under one unique registered install location.
+    app_roots = []
+    for app in (apps or [])[:600]:
+        if not isinstance(app, dict):
+            continue
+        root = _normal_path(app.get("location") or app.get("install_location"))
+        app_id = app_component_id(app.get("name"), app.get("publisher"), app.get("version"))
+        if not root or not app_id:
+            continue
+        app_roots.append((root, app_id, app))
+    matched_app_ids: set[str] = set()
+    for binary_id, executable in list(binary_paths.items())[:_MAX_LAUNCH_BINARIES]:
+        matches = [(len(root), app_id, app) for root, app_id, app in app_roots if _path_under(executable, root)]
+        if matches:
+            longest = max(row[0] for row in matches)
+            best = [row for row in matches if row[0] == longest]
+            if len(best) == 1:
+                _length, app_id, app = best[0]
+                matched_app_ids.add(app_id)
+                catalog_rows[app_id] = _catalog_tuple(
+                    app_id, "app", _clean(app.get("name"), 140), publisher=app.get("publisher") or "",
+                    product_name=app.get("name") or "", version=app.get("version") or "",
+                    source="Installed application inventory", now=timestamp,
+                )
+                add_relationship(
+                    binary_id, app_id, "installed_under_app", "unique_install_location_prefix",
+                    {"path_stored": False, "match": "executable under one unique install location"},
+                )
+
+    service_paths = {}
+    for service in (service_rows or [])[:800]:
+        if not isinstance(service, dict):
+            continue
+        path = _normal_path(service.get("binary_path"))
+        service_id = service_component_id(service.get("name"))
+        if path and service_id:
+            service_paths[path] = service_id
+    for binary_id, executable in list(binary_paths.items())[:_MAX_LAUNCH_BINARIES]:
+        service_id = service_paths.get(executable)
+        if service_id:
+            add_relationship(
+                binary_id, service_id, "same_executable_as_service", "exact_executable_path",
+                {"match": "exact normalized executable path", "path_stored": False},
+            )
+
+    return {
+        "catalog_rows": list(catalog_rows.values()),
+        "metadata_rows": list(metadata_rows.values()),
+        "relationships": list(relationships.values()),
+        "binary_paths": dict(list(binary_paths.items())[:_MAX_LAUNCH_BINARIES]),
+        "startup_ids": startup_ids, "task_ids": task_ids,
+        "startup_complete": snapshot.get("startup_complete") is True,
+        "tasks_complete": snapshot.get("tasks_complete") is True,
+        "source_health": snapshot.get("source_health") if isinstance(snapshot.get("source_health"), dict) else {},
+        "captured_at": timestamp,
+    }
+
+
+def _persist_launch_graph(graph: dict[str, Any]) -> None:
+    catalog_rows = graph.get("catalog_rows") if isinstance(graph.get("catalog_rows"), list) else []
+    _bulk_catalog(catalog_rows)
+    metadata_rows = graph.get("metadata_rows") if isinstance(graph.get("metadata_rows"), list) else []
+    for component_id, metadata_json, captured_at in metadata_rows:
+        core.db(
+            "INSERT INTO component_launch_metadata(component_id,metadata_json,captured_at) VALUES(?,?,?) "
+            "ON CONFLICT(component_id) DO UPDATE SET metadata_json=excluded.metadata_json,captured_at=excluded.captured_at",
+            (component_id, metadata_json, captured_at),
+        )
+    for component_type, complete, ids in (
+        ("startup", graph.get("startup_complete") is True, graph.get("startup_ids") or []),
+        ("task", graph.get("tasks_complete") is True, graph.get("task_ids") or []),
+    ):
+        if not complete:
+            continue
+        all_rows = core.db("SELECT component_id FROM component_catalog WHERE component_type=?", (component_type,))
+        seen = set(str(value) for value in ids)
+        stale = [str(row[0]) for row in all_rows if str(row[0]) not in seen]
+        if stale:
+            for start in range(0, len(stale), 300):
+                batch = stale[start:start + 300]
+                marks = ",".join("?" for _ in batch)
+                core.db(
+                    f"UPDATE component_catalog SET service_state='not_present' WHERE component_id IN ({marks})",
+                    tuple(batch),
+                )
+                core.db(f"DELETE FROM component_relationships WHERE source_component_id IN ({marks})",
+                        tuple(batch))
+        core.db(
+            "DELETE FROM component_relationships WHERE relation_type='launches_binary' "
+            "AND source_component_id IN (SELECT component_id FROM component_catalog WHERE component_type=?)",
+            (component_type,),
+        )
+    if graph.get("startup_complete") is True and graph.get("tasks_complete") is True:
+        core.db(
+            "DELETE FROM component_relationships WHERE relation_type IN "
+            "('installed_under_app','same_executable_as_service')"
+        )
+    relationships = graph.get("relationships") if isinstance(graph.get("relationships"), list) else []
+    for batch in _chunks(relationships, 100):
+        marks = "(?,?,?,?,?,?)"
+        sql = (
+            "INSERT INTO component_relationships(source_component_id,target_component_id,relation_type,confidence,evidence_json,observed_at) VALUES "
+            + ",".join(marks for _ in batch)
+            + " ON CONFLICT(source_component_id,target_component_id,relation_type) DO UPDATE SET "
+            "confidence=excluded.confidence,evidence_json=excluded.evidence_json,observed_at=excluded.observed_at"
+        )
+        core.db(sql, tuple(value for row in batch for value in row))
+    _save_state("launch_inventory", {
+        "captured_at": float(graph.get("captured_at") or time.time()),
+        "startup_count": len(graph.get("startup_ids") or []),
+        "task_count": len(graph.get("task_ids") or []),
+        "binary_count": len(graph.get("binary_paths") or {}),
+        "startup_complete": bool(graph.get("startup_complete")),
+        "tasks_complete": bool(graph.get("tasks_complete")),
+        "source_health": graph.get("source_health") or {},
+    })
+
+
+def _launch_component_rows(component_type: str, since: float, limit: int = 40) -> list[dict[str, Any]]:
+    if component_type not in ("startup", "task"):
+        return []
+    rows = core.db(
+        "SELECT component_id,name,binary_name,protected,source,start_mode,service_state,last_seen "
+        "FROM component_catalog WHERE component_type=? AND last_seen>=? AND service_state<>'not_present' "
+        "ORDER BY name COLLATE NOCASE LIMIT ?",
+        (component_type, since, max(1, min(100, int(limit)))),
+    )
+    output = []
+    for row in rows:
+        component_id = str(row[0])
+        meta_rows = core.db("SELECT metadata_json FROM component_launch_metadata WHERE component_id=?", (component_id,))
+        try:
+            metadata = json.loads(meta_rows[0][0] or "{}") if meta_rows else {}
+        except (TypeError, ValueError):
+            metadata = {}
+        links = core.db(
+            "SELECT r.target_component_id,r.relation_type,r.confidence,r.evidence_json,"
+            "t.component_type,t.name,t.binary_name,t.publisher,t.product_name,t.file_version,"
+            "t.signature_status,t.signer,t.start_mode,t.service_state,t.protected "
+            "FROM component_relationships r LEFT JOIN component_catalog t ON t.component_id=r.target_component_id "
+            "WHERE r.source_component_id=? ORDER BY r.relation_type,t.name COLLATE NOCASE",
+            (component_id,),
+        )
+        binaries, apps, services = [], [], []
+        for link in links:
+            target = {
+                "id": str(link[0]), "type": str(link[4] or ""), "name": _clean(link[5], 100),
+                "binary_name": _clean(link[6], 100), "publisher": _clean(link[7], 120),
+                "product_name": _clean(link[8], 100), "version": _clean(link[9], 70),
+                "signature_status": _clean(link[10], 32), "signer": _clean(link[11], 140),
+                "start_mode": _clean(link[12], 24), "state": _clean(link[13], 24),
+                "protected": bool(link[14]), "relation": str(link[1]), "confidence": str(link[2]),
+            }
+            if link[1] == "launches_binary":
+                binary_edges = core.db(
+                    "SELECT r.target_component_id,r.relation_type,r.confidence,"
+                    "t.component_type,t.name,t.publisher,t.signature_status,t.start_mode,t.service_state "
+                    "FROM component_relationships r LEFT JOIN component_catalog t ON t.component_id=r.target_component_id "
+                    "WHERE r.source_component_id=?",
+                    (target["id"],),
+                )
+                target["application_matches"] = [
+                    {"id": str(edge[0]), "name": _clean(edge[4], 100), "publisher": _clean(edge[5], 120),
+                     "confidence": str(edge[2])}
+                    for edge in binary_edges if edge[1] == "installed_under_app" and edge[3] == "app"
+                ]
+                target["service_matches"] = [
+                    {"id": str(edge[0]), "name": _clean(edge[4], 100), "publisher": _clean(edge[5], 120),
+                     "signature_status": _clean(edge[6], 32), "start_mode": _clean(edge[7], 24),
+                     "state": _clean(edge[8], 24), "confidence": str(edge[2])}
+                    for edge in binary_edges if edge[1] == "same_executable_as_service" and edge[3] == "service"
+                ]
+                binaries.append(target)
+            elif link[1] == "installed_under_app":
+                apps.append(target)
+            elif link[1] == "same_executable_as_service":
+                services.append(target)
+        pref_rows = core.db(
+            "SELECT preference,note,updated_at FROM component_preferences WHERE component_id=?",
+            (component_id,),
+        )
+        preference = str(pref_rows[0][0]) if pref_rows else "unreviewed"
+        note = _clean(pref_rows[0][1], 160) if pref_rows else ""
+        output.append({
+            "id": component_id, "component_id": component_id, "component_type": component_type,
+            "name": _clean(row[1], 120), "binary_name": _clean(row[2], 100),
+            "protected": bool(row[3]), "source": _clean(row[4], 120),
+            "launch_kind": _clean(row[5], 40), "state": _clean(row[6], 40),
+            "last_seen": float(row[7] or 0), "metadata": metadata,
+            "binary_targets": binaries, "application_matches": apps, "service_matches": services,
+            "preference": preference, "operator_note": note, "requires_user_intent": True,
+            "provenance_status": "verified_target" if any(
+                binary.get("signature_status") == "Valid" for binary in binaries
+            ) else ("target_resolved" if binaries else "unresolved_target"),
+            "recommendation": "Provenance and exact-path associations only. Presence in Startup or Task Scheduler does not prove this entry is unnecessary.",
+        })
+    return output
+
 def _save_state(key: str, value: dict[str, Any]) -> None:
     core.db(
         "INSERT INTO component_intelligence_state(state_key,value_json,updated_at) VALUES(?,?,?) "
