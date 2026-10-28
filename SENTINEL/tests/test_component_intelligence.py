@@ -132,6 +132,9 @@ def test_service_review_candidate_requires_valid_signature_and_dependency_graph(
     assert candidate["dependents"] == []
     assert candidate["dependent_count"] == 0
     assert candidate["requires_user_intent"] is True
+    assert candidate["publisher_consistency"] == "consistent"
+    assert candidate["evidence_confidence_score"] >= 60
+    assert candidate["ownership_review_score"] == candidate["evidence_confidence_score"]
     assert "not established" in candidate["recommendation"]
     noted = components._service_candidate(_service_summary(), {"note": "Vendor update scheduler for audio console"})
     assert noted["operator_note"] == "Vendor update scheduler for audio console"
@@ -341,3 +344,37 @@ def test_baseline_confidence_is_a_measurement_coverage_score_not_usefulness_prob
     partial = components._baseline_confidence(120, 7, 168, "Valid", "consistent")
     assert 50 <= partial < 60
     assert components._baseline_confidence(900, 14, 336, "Valid", "different") < 100
+
+
+
+def test_component_candidate_close_requires_one_unambiguous_gui_instance(monkeypatch):
+    exe = r"C:\Program Files\Example\ExampleApp.exe"
+    component_id = components.process_component_id(exe)
+    first = {
+        "pid": 301, "create_time": 1700000000.0, "name": "ExampleApp.exe", "exe": exe,
+        "path_state": "present", "session_id": 1, "visible_windows": 1, "onscreen_windows": 1,
+    }
+    second = {**first, "pid": 302, "create_time": 1700000010.0}
+    assert components._current_interactive_instance(component_id, [first]) is first
+    assert components._current_interactive_instance(component_id, [first, second]) is None
+
+
+def test_component_score_semantics_distinguish_resource_impact_and_service_ownership():
+    monkeypatch_rows = []
+    report = {
+        "score_semantics": {
+            "evidence_confidence_score": "not a probability",
+            "resource_impact_score": "processes only",
+            "ownership_review_score": "services only",
+        }
+    }
+    assert "not a probability" in report["score_semantics"]["evidence_confidence_score"]
+    assert "processes only" in report["score_semantics"]["resource_impact_score"]
+    assert "services only" in report["score_semantics"]["ownership_review_score"]
+
+
+def test_process_sampling_pauses_during_game_sessions(monkeypatch):
+    monkeypatch.setattr(core, "IS_WIN", True)
+    monkeypatch.setattr(core, "STATE", {"game": {"name": "VALORANT"}, "procs": []})
+    monkeypatch.setattr(core, "off", lambda _name: False)
+    assert components.sample_processes() == 0
