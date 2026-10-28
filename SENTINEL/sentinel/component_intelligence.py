@@ -375,7 +375,7 @@ def refresh_service_graph(force: bool = False) -> dict[str, Any]:
         _SERVICE_GRAPH_CACHE = graph
         # Raw executable paths are temporary inputs to Authenticode. Do not persist them.
         safe_graph = {
-            "services": [{key: value for key, value in row.items() if key != "binary_path"}
+            "services": [{key: value for key, value in row.items() if key not in ("binary_path", "description")}
                          for row in graph["services"] if isinstance(row, dict)],
             "count": graph["count"], "captured_at": graph["captured_at"],
         }
@@ -604,7 +604,7 @@ def _process_candidate(row: tuple, pref: dict[str, Any], current_rows: list[dict
         "name": _clean(name, 100), "binary_name": _clean(binary_name, 100),
         "publisher": _clean(publisher, 140), "product_name": _clean(product, 120),
         "file_version": _clean(version, 80), "signature_status": signature, "signer": _clean(signer, 180),
-        "confidence": "high" if int(active_days or 0) >= 10 and int(samples or 0) >= 500 else "medium",
+        "evidence_strength": "high" if int(active_days or 0) >= 10 and int(samples or 0) >= 500 else "medium",
         "sample_count": int(samples or 0), "active_days": int(active_days or 0),
         "baseline_span_hours": round(span_hours, 1),
         "average_cpu_pct": round(cpu, 3), "peak_cpu_pct": round(float(max_cpu or 0), 2),
@@ -658,7 +658,7 @@ def _service_candidate(row: tuple, pref: dict[str, Any]) -> dict[str, Any] | Non
         "name": _clean(name, 100), "binary_name": _clean(binary_name, 100),
         "publisher": _clean(publisher, 140), "product_name": _clean(product, 120),
         "file_version": _clean(version, 80), "signature_status": signature,
-        "signer": _clean(signer, 180), "confidence": "medium",
+        "signer": _clean(signer, 180), "evidence_strength": "medium",
         "sample_count": int(samples or 0), "active_days": int(active_days or 0),
         "baseline_span_hours": round(span_hours, 1),
         "start_mode": start_mode, "service_state": service_state,
@@ -743,7 +743,7 @@ def ai_evidence() -> dict[str, Any]:
             "average_memory_mb": item["average_memory_mb"], "average_io_mb_s": item["average_io_mb_s"],
             "foreground_sample_pct": item["foreground_sample_pct"],
             "reasons": item["resource_reasons"],
-            "confidence": item["confidence"], "operator_intent": item["preference"],
+            "evidence_strength": item["evidence_strength"], "operator_intent": item["preference"],
         })
     service_graph = []
     try:
@@ -778,7 +778,7 @@ def ai_evidence() -> dict[str, Any]:
             "signature": item["signature_status"], "start_mode": item["start_mode"],
             "baseline_days": item["active_days"], "samples": item["sample_count"],
             "dependencies": item["dependencies"], "dependents": item["dependents"],
-            "confidence": item["confidence"], "operator_intent": item["preference"],
+            "evidence_strength": item["evidence_strength"], "operator_intent": item["preference"],
         })
     return {
         "component_baseline_coverage": payload["coverage"],
