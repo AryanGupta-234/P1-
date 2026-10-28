@@ -269,12 +269,16 @@ def _build_graph(snapshot: dict[str, Any], service_rows: list[dict[str, Any]],
     metadata_rows = []
     edges: dict[tuple[str, str, str], tuple] = {}
     binary_paths: dict[str, str] = {}
+    binary_overflow = [False]
     startup_ids, task_ids = [], []
 
     def add_binary(raw_path: str) -> str | None:
         path = _normal_path(raw_path)
         cid = binary_component_id(path)
-        if not cid or (cid not in binary_paths and len(binary_paths) >= _MAX_BINARIES):
+        if not cid:
+            return None
+        if cid not in binary_paths and len(binary_paths) >= _MAX_BINARIES:
+            binary_overflow[0] = True
             return None
         binary_paths[cid] = path
         name = path.replace("/", "\\").rsplit("\\", 1)[-1]
@@ -314,6 +318,7 @@ def _build_graph(snapshot: dict[str, Any], service_rows: list[dict[str, Any]],
         has_args = bool(raw.get("has_arguments") or target.get("has_arguments"))
         meta = {"source": source, "launch_kind": target.get("launch_kind", "unresolved"),
                 "has_arguments": has_args, "target_resolved": bool(bid),
+                "budget_deferred": bool(target.get("binary_path") and not bid),
                 "enabled": bool(raw.get("enabled", True))}
         metadata_rows.append((cid, json.dumps(meta, separators=(",", ":")), timestamp))
         startup_ids.append(cid)
@@ -365,7 +370,11 @@ def _build_graph(snapshot: dict[str, Any], service_rows: list[dict[str, Any]],
             "run_level": _clean(raw.get("run_level"), 24),
             "logon_type": _clean(raw.get("logon_type"), 32),
             "action_count": len(actions), "resolved_executable_actions": len(targets),
-            "unresolved_action_count": max(0, len(actions) - len(targets)),
+            "unresolved_action_count": sum(1 for action in actions[:16] if isinstance(action, dict)
+                                           and not _extract_launch_target(action.get("binary_path") or action.get("execute")).get("binary_path")),
+            "budget_deferred_actions": max(0, len(actions) - len(targets) - sum(
+                1 for action in actions[:16] if isinstance(action, dict)
+                and not _extract_launch_target(action.get("binary_path") or action.get("execute")).get("binary_path"))),
             "launch_kind": "multi_action" if len(targets) > 1 else (
                 targets[0]["action_kind"] if targets else "opaque_or_unresolved"),
         }
@@ -402,6 +411,22 @@ def _build_graph(snapshot: dict[str, Any], service_rows: list[dict[str, Any]],
                 add_edge(binary_id, app_id, "installed_under_app",
                          "unique_install_location_prefix", {"path_stored": False})
 
+    # Link a launch binary to the longitudinal process component only when the
+    # exact normalized executable identity has already been sampled. Component
+    # IDs are domain-separated hashes, but both are derived from the same path.
+    ci = _ci()
+    for binary_id, executable in binary_paths.items():
+        process_id = ci.process_component_id(executable)
+        if not process_id:
+            continue
+        observed = core.db(
+            "SELECT 1 FROM component_catalog WHERE component_id=? AND component_type='process' LIMIT 1",
+            (process_id,),
+        )
+        if observed:
+            add_edge(binary_id, process_id, "observed_as_process", "exact_normalized_executable_path",
+                     {"path_stored": False, "match": "same normalized executable identity"})
+
     if snapshot.get("service_graph_complete") is True:
         service_paths: dict[str, set[str]] = {}
         for service in (service_rows or [])[:_MAX_ITEMS]:
@@ -424,6 +449,7 @@ def _build_graph(snapshot: dict[str, Any], service_rows: list[dict[str, Any]],
         "tasks_complete": snapshot.get("tasks_complete") is True,
         "apps_complete": snapshot.get("apps_complete") is True,
         "service_graph_complete": snapshot.get("service_graph_complete") is True,
+        "binary_targets_truncated": bool(binary_overflow[0]),
         "source_health": snapshot.get("source_health") if isinstance(snapshot.get("source_health"), dict) else {},
         "captured_at": timestamp,
     }
@@ -452,14 +478,15 @@ def _persist_graph(graph: dict[str, Any]) -> None:
             marks = ",".join("?" for _ in batch)
             core.db(f"UPDATE component_catalog SET service_state='not_present' WHERE component_id IN ({marks})", tuple(batch))
             core.db(f"DELETE FROM component_relationships WHERE source_component_id IN ({marks})", tuple(batch))
-        core.db(
-            "DELETE FROM component_relationships WHERE relation_type='launches_binary' "
-            "AND source_component_id IN (SELECT component_id FROM component_catalog WHERE component_type=?)",
-            (kind,),
-        )
-    if graph.get("apps_complete") is True:
+        if not graph.get("binary_targets_truncated"):
+            core.db(
+                "DELETE FROM component_relationships WHERE relation_type='launches_binary' "
+                "AND source_component_id IN (SELECT component_id FROM component_catalog WHERE component_type=?)",
+                (kind,),
+            )
+    if graph.get("apps_complete") is True and not graph.get("binary_targets_truncated"):
         core.db("DELETE FROM component_relationships WHERE relation_type='installed_under_app'")
-    if graph.get("service_graph_complete") is True:
+    if graph.get("service_graph_complete") is True and not graph.get("binary_targets_truncated"):
         core.db("DELETE FROM component_relationships WHERE relation_type='same_executable_as_service'")
     for batch in ci._chunks(graph.get("relationships") or [], 100):
         sql = (
@@ -478,6 +505,7 @@ def _persist_graph(graph: dict[str, Any]) -> None:
         "tasks_complete": bool(graph.get("tasks_complete")),
         "apps_complete": bool(graph.get("apps_complete")),
         "service_graph_complete": bool(graph.get("service_graph_complete")),
+        "binary_targets_truncated": bool(graph.get("binary_targets_truncated")),
         "task_truncated": bool(graph.get("task_truncated")),
         "source_health": graph.get("source_health") or {},
     })
@@ -584,7 +612,7 @@ def refresh(*, service_graph_ok: bool, service_rows: list[dict[str, Any]],
         signature_paths[cid] = executable
     complete = all(graph.get(key) is True for key in (
         "startup_complete", "tasks_complete", "apps_complete", "service_graph_complete",
-    ))
+    )) and not graph.get("binary_targets_truncated")
     summary = {
         "captured_at": graph.get("captured_at"),
         "startup_count": len(graph.get("startup_ids") or []),
@@ -594,6 +622,7 @@ def refresh(*, service_graph_ok: bool, service_rows: list[dict[str, Any]],
         "tasks_complete": bool(graph.get("tasks_complete")),
         "apps_complete": bool(graph.get("apps_complete")),
         "service_graph_complete": bool(graph.get("service_graph_complete")),
+        "binary_targets_truncated": bool(graph.get("binary_targets_truncated")),
         "task_truncated": bool(snapshot.get("task_truncated")),
         "source_health": graph.get("source_health") or {},
     }
@@ -664,6 +693,8 @@ def ai_evidence(payload: dict[str, Any]) -> dict[str, Any]:
                 "logon_type": _clean((item.get("metadata") or {}).get("logon_type"), 24),
                 "action_count": int((item.get("metadata") or {}).get("action_count") or 0),
                 "has_arguments": bool((item.get("metadata") or {}).get("has_arguments")),
+                "budget_deferred": bool((item.get("metadata") or {}).get("budget_deferred")),
+                "budget_deferred_actions": int((item.get("metadata") or {}).get("budget_deferred_actions") or 0),
                 "provenance_status": _clean(item.get("provenance_status"), 28),
                 "protected": bool(item.get("protected")),
                 "operator_intent": _clean(item.get("preference"), 24),
