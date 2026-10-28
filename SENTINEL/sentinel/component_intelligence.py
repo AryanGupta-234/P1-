@@ -596,7 +596,9 @@ def _build_launch_graph(snapshot: dict[str, Any], service_rows: list[dict[str, A
         protected = bool(
             binary_id and _is_windows_binary(target["binary_path"])
             or binary_name and safeguard.is_protected_process(binary_name, target.get("binary_path", ""))
-            or any(token in (name + " " + source).casefold() for token in ("sentinel", "riot vanguard", "windows security"))
+            or any(token in (name + " " + source).casefold() for token in (
+                "sentinel", "riot", "vanguard", "valorant", "windows security", "defender",
+            ))
         )
         catalog_rows[component_id] = _catalog_tuple(
             component_id, "startup", name, binary_name=binary_name,
@@ -627,7 +629,10 @@ def _build_launch_graph(snapshot: dict[str, Any], service_rows: list[dict[str, A
         component_id = task_component_id(task_path, name)
         if not component_id:
             continue
-        protected_task = task_path.casefold().startswith("\\microsoft\\") or "sentinel" in name.casefold()
+        protected_task = task_path.casefold().startswith("\\microsoft\\") or any(
+            token in (task_path + " " + name).casefold()
+            for token in ("sentinel", "riot", "vanguard", "valorant", "defender", "windows security")
+        )
         actions = raw.get("actions") if isinstance(raw.get("actions"), list) else []
         action_targets = []
         for index, action in enumerate(actions[:16]):
@@ -652,12 +657,14 @@ def _build_launch_graph(snapshot: dict[str, Any], service_rows: list[dict[str, A
         enabled = bool(raw.get("enabled"))
         catalog_rows[component_id] = _catalog_tuple(
             component_id, "task", name, binary_name=first_binary, protected=protected,
-            source="Task Scheduler · " + task_path,
+            source="Task Scheduler · " + ("Built-in" if protected_task else "Third-party"),
             start_mode=_clean(raw.get("run_level") or "unknown", 30),
             state=state if enabled else "disabled", now=timestamp,
         )
         metadata = {
-            "task_path": task_path, "enabled": enabled, "run_level": _clean(raw.get("run_level"), 24),
+            "task_folder_depth": max(0, len([part for part in task_path.split("\\\\") if part])),
+            "microsoft_namespace": task_path.casefold().startswith("\\microsoft\\"),
+            "enabled": enabled, "run_level": _clean(raw.get("run_level"), 24),
             "logon_type": _clean(raw.get("logon_type"), 32),
             "action_count": len(actions), "resolved_executable_actions": len(action_targets),
             "unresolved_action_count": max(0, len(actions) - len(action_targets)),
@@ -863,11 +870,15 @@ def _launch_component_rows(component_type: str, since: float, limit: int = 40) -
         )
         preference = str(pref_rows[0][0]) if pref_rows else "unreviewed"
         note = _clean(pref_rows[0][1], 160) if pref_rows else ""
+        if preference in ("keep", "not_needed"):
+            continue
+        if preference == "review_later" and pref_rows and time.time() - float(pref_rows[0][2] or 0) < 7 * 86400:
+            continue
         output.append({
             "id": component_id, "component_id": component_id, "component_type": component_type,
             "name": _clean(row[1], 120), "binary_name": _clean(row[2], 100),
             "protected": bool(row[3]), "source": _clean(row[4], 120),
-            "launch_kind": _clean(row[5], 40), "state": _clean(row[6], 40),
+            "launch_kind": _clean(metadata.get("launch_kind") or row[5], 40), "state": _clean(row[6], 40),
             "last_seen": float(row[7] or 0), "metadata": metadata,
             "binary_targets": binaries, "application_matches": apps, "service_matches": services,
             "preference": preference, "operator_note": note, "requires_user_intent": True,
