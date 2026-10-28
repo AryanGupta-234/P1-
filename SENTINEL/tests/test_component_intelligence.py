@@ -9,32 +9,36 @@ from sentinel import core, actions
 
 def _process_summary(component_id=None, *, samples=900, days=12, span_hours=288,
                     signature="Valid", publisher="Example Software Ltd.",
-                    protected=0, cpu=0.75, memory=360.0, io_rate=0.65,
-                    foreground=0.002, visible=0.0, dependents="[]"):
+                    signer="CN=Example Software Ltd.", protected=0, cpu=0.75,
+                    memory=360.0, io_rate=0.65, foreground=0.002, visible=0.0,
+                    visible_ratio=0.0, onscreen_ratio=0.0, dependents="[]"):
     now = time.time()
     return (
         component_id or ("process:" + "a" * 40),
         "process", "Example Helper", "ExampleHelper.exe", publisher,
-        "Example Helper", "2.4.1", signature, "CN=Example Software Ltd.",
+        "Example Helper", "2.4.1", signature, signer,
         protected, "[]", dependents, "", "running",
         now - span_hours * 3600, now, samples, days,
         now - span_hours * 3600, now,
         cpu, 8.5, memory, 520.0, io_rate, foreground, visible, visible, 1.0, now,
+        visible_ratio, onscreen_ratio,
     )
 
 
 def _service_summary(component_id=None, *, samples=520, days=9, span_hours=216,
                      signature="Valid", publisher="Example Software Ltd.",
-                     protected=0, start_mode="auto", state="running", dependents="[]"):
+                     signer="CN=Example Software Ltd.", protected=0,
+                     start_mode="auto", state="running", dependents="[]"):
     now = time.time()
     return (
         component_id or ("service:" + "b" * 40),
         "service", "ExampleVendorService", "ExampleService.exe", publisher,
-        "Example Product", "3.2.0", signature, "CN=Example Software Ltd.",
+        "Example Product", "3.2.0", signature, signer,
         protected, '["RpcSs"]', dependents, start_mode, state,
         now - span_hours * 3600, now, samples, days,
         now - span_hours * 3600, now,
         None, None, None, None, None, None, None, None, 1.0, now,
+        0.0, 0.0,
     )
 
 
@@ -72,6 +76,12 @@ def test_process_review_candidate_requires_signed_history_and_measured_backgroun
     assert candidate["active_days"] == 12
     assert candidate["average_memory_mb"] == 360.0
     assert candidate["signature_status"] == "Valid"
+    assert candidate["publisher_consistency"] == "consistent"
+    assert candidate["certificate_organization"] == "Example Software Ltd."
+    assert candidate["evidence_confidence_score"] >= 80
+    assert candidate["resource_impact_score"] > 0
+    assert candidate["review_priority_score"] > 0
+    assert candidate["visible_window_sample_pct"] == 0
     assert candidate["requires_user_intent"] is True
     assert "no stop/disable action is implied" in candidate["recommendation"]
     noted = components._process_candidate(_process_summary(), {"note": "Required for touchpad hotkeys"}, [])
@@ -122,6 +132,9 @@ def test_service_review_candidate_requires_valid_signature_and_dependency_graph(
     assert candidate["dependents"] == []
     assert candidate["dependent_count"] == 0
     assert candidate["requires_user_intent"] is True
+    assert candidate["publisher_consistency"] == "consistent"
+    assert candidate["evidence_confidence_score"] >= 60
+    assert candidate["ownership_review_score"] == candidate["evidence_confidence_score"]
     assert "not established" in candidate["recommendation"]
     noted = components._service_candidate(_service_summary(), {"note": "Vendor update scheduler for audio console"})
     assert noted["operator_note"] == "Vendor update scheduler for audio console"
@@ -272,7 +285,7 @@ def test_service_dependency_raw_paths_are_not_persisted(monkeypatch):
 def test_local_ai_evidence_contains_dependency_graph_and_baseline_candidate_ids(monkeypatch):
     rows = [(
         "service:" + "c" * 40, "ExampleSvc", "ExampleSvc.exe", "Example Corp",
-        "Valid", 0, '["RpcSs"]', '[]', "auto", "running",
+        "Valid", "CN=Example Corp", 0, '["RpcSs"]', '[]', "auto", "running",
     )]
 
     def fake_db(sql, args=(), many=False):
@@ -289,6 +302,111 @@ def test_local_ai_evidence_contains_dependency_graph_and_baseline_candidate_ids(
     graph_row = evidence["service_dependency_graph"][0]
     assert graph_row["id"] == "component-service-graph.1"
     assert graph_row["dependencies"] == ["RpcSs"]
+    assert graph_row["publisher_consistency"] == "consistent"
     assert "binary_path" not in str(evidence)
     assert evidence["operator_component_preferences"][0]["preference"] == "keep"
     assert evidence["operator_component_preferences"][0]["operator_note"] == "Required for hotkeys"
+    assert evidence["component_score_semantics"]["evidence_confidence_score"].startswith("0-100 measurement-coverage heuristic")
+    assert "not a probability" in evidence["component_score_semantics"]["evidence_confidence_score"]
+
+
+
+@pytest.mark.parametrize("kwargs", [
+    {"visible_ratio": 0.08},
+    {"onscreen_ratio": 0.03},
+])
+def test_process_candidate_rejects_historically_visible_gui_apps(kwargs):
+    assert components._process_candidate(_process_summary(**kwargs), {}, []) is None
+
+
+def test_process_candidate_exposes_metadata_vs_certificate_identity_mismatch():
+    candidate = components._process_candidate(
+        _process_summary(publisher="Example Helper Corporation", signer="CN=Different Signing LLC"),
+        {}, [],
+    )
+    assert candidate is not None
+    assert candidate["publisher_consistency"] == "different"
+    assert candidate["evidence_confidence_score"] < 85
+    assert candidate["certificate_organization"] == "Different Signing LLC"
+
+
+def test_publisher_identity_prefers_certificate_organization_over_file_metadata():
+    assert components._certificate_organization(
+        "CN=Example Signing Certificate, O=Example Software Ltd., C=US"
+    ) == "Example Software Ltd."
+    assert components._publisher_consistency(
+        "Example Software Ltd.", "CN=Example Signing Certificate, O=Example Software Ltd., C=US"
+    ) == "consistent"
+    assert components._publisher_consistency("File Company", "CN=Signing Entity") == "different"
+    assert components._publisher_consistency("", "CN=Signing Entity") == "unknown"
+
+
+def test_baseline_confidence_is_a_measurement_coverage_score_not_usefulness_probability():
+    assert components._baseline_confidence(900, 14, 336, "Valid", "consistent") == 100.0
+    partial = components._baseline_confidence(120, 7, 168, "Valid", "consistent")
+    assert 50 <= partial < 60
+    assert components._baseline_confidence(900, 14, 336, "Valid", "different") < 100
+
+
+
+def test_component_candidate_close_requires_one_unambiguous_gui_instance(monkeypatch):
+    exe = r"C:\Program Files\Example\ExampleApp.exe"
+    component_id = components.process_component_id(exe)
+    monkeypatch.setattr(components.safeguard, "is_protected_process", lambda *_args: False)
+    first = {
+        "pid": 301, "create_time": 1700000000.0, "name": "ExampleApp.exe", "exe": exe,
+        "path_state": "present", "session_id": 1, "visible_windows": 1, "onscreen_windows": 1,
+    }
+    second = {**first, "pid": 302, "create_time": 1700000010.0}
+    assert components._current_interactive_instance(component_id, [first]) is first
+    assert components._current_interactive_instance(component_id, [first, second]) is None
+
+
+def test_component_score_semantics_distinguish_resource_impact_and_service_ownership(monkeypatch):
+    monkeypatch.setattr(components, "ensure_schema", lambda: None)
+    monkeypatch.setattr(components, "_preference_map", lambda: {})
+    monkeypatch.setattr(components, "_aggregate_rows", lambda _kind, _since: [])
+    monkeypatch.setattr(components, "_load_state", lambda _key: {})
+    monkeypatch.setattr(components, "_last_sample", lambda _kind: 0.0)
+    monkeypatch.setattr(core, "STATE", {})
+    report = components.report()
+    semantics = report["score_semantics"]
+    assert "not a probability" in semantics["evidence_confidence_score"]
+    assert "weighted 35/45/20" in semantics["resource_impact_score"]
+    assert "sorting heuristic" in semantics["review_priority_score"]
+    assert "no service resource-impact score" in semantics["ownership_review_score"]
+
+
+def test_process_sampling_pauses_during_game_sessions(monkeypatch):
+    monkeypatch.setattr(components, "ensure_schema", lambda: None)
+    monkeypatch.setattr(core, "IS_WIN", True)
+    monkeypatch.setattr(core, "STATE", {"game": {"name": "VALORANT"}, "procs": []})
+    monkeypatch.setattr(core, "off", lambda _name: False)
+    assert components.sample_processes() == 0
+
+
+
+@pytest.mark.parametrize("graph_age_hours,expected_candidates", [
+    (None, 0),
+    (25, 0),
+    (12, 1),
+])
+def test_service_ownership_candidates_require_a_complete_recent_graph(monkeypatch, graph_age_hours, expected_candidates):
+    monkeypatch.setattr(components, "ensure_schema", lambda: None)
+    monkeypatch.setattr(components, "_preference_map", lambda: {})
+    monkeypatch.setattr(components, "_aggregate_rows", lambda kind, _since: (
+        [_service_summary()] if kind == "service" else []
+    ))
+    graph = {} if graph_age_hours is None else {
+        "count": 200, "captured_at": time.time() - graph_age_hours * 3600,
+    }
+    monkeypatch.setattr(components, "_load_state", lambda key: graph if key == "service_graph" else {})
+    monkeypatch.setattr(components, "_last_sample", lambda _kind: 0.0)
+    monkeypatch.setattr(core, "STATE", {})
+
+    result = components.report()
+
+    assert len(result["service_candidates"]) == expected_candidates
+    assert result["coverage"]["service_dependency_graph_fresh"] is (expected_candidates == 1)
+    if expected_candidates == 0:
+        assert "newer than 24 hours" in result["service_review_block_reason"]

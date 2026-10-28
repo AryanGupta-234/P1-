@@ -2185,7 +2185,7 @@ body.ui-simple .command-gauges{gap:8px}
 }
 
 
-/* SENTINEL 1.2.33 · longitudinal component review */
+/* SENTINEL 1.2.34 · confidence-aware component review */
 .component-review-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:8px 0 14px}
 .component-review-card{display:grid;gap:8px;min-width:0;padding:12px;border:1px solid var(--line);border-radius:11px;background:rgba(0,0,0,.14)}
 .component-review-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;min-width:0}

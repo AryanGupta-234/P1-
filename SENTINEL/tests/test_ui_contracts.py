@@ -360,9 +360,9 @@ def test_component_baselines_are_agent_owned_local_and_operator_approved():
         'api("/api/components/preference"',
         'api("/api/components/propose-close"',
         'api("/api/components/refresh"',
-        "EVIDENCE STRENGTH",
+        "EVIDENCE COVERAGE",
         "data-component-note",
-        "SAVE NOTE", "EVIDENCE STRENGTH",
+        "SAVE NOTE", "EVIDENCE COVERAGE",
         "PREPARE GRACEFUL CLOSE",
     ):
         assert ui_contract in app
@@ -382,6 +382,16 @@ def test_component_baselines_are_agent_owned_local_and_operator_approved():
     assert "_SERVICE_SAMPLE_SECONDS = 900" in engine
     assert "_RETENTION_SECONDS = 30 * 86400" in engine
     assert "_BASELINE_MIN_DAYS = 7" in engine
+    assert "visible_sample_ratio" in engine and "onscreen_sample_ratio" in engine
+    assert "visible_ratio > 0.05 or onscreen_ratio > 0.02" in engine
+    assert "evidence_confidence_score" in engine
+    assert "resource_impact_score" in engine and "review_priority_score" in engine
+    assert "publisher_consistency" in engine and "_certificate_organization" in engine
+    assert "def _current_interactive_instance" in engine
+    assert "or core.STATE.get(\"game\")" in engine
+    assert "component_score_semantics" in specialist
+    assert "not a probability" in engine
+    assert "not a probability" in html
     assert "Get-AuthenticodeSignature" in engine
     assert "ServicesDependedOn" in engine and "DependentServices" in engine
     assert "binary_path" in engine
