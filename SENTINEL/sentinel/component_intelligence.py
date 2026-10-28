@@ -572,7 +572,7 @@ def _process_candidate(row: tuple, pref: dict[str, Any], current_rows: list[dict
     span_hours = max(0.0, (float(max_ts or 0) - float(min_ts or 0)) / 3600.0)
     if signature != "Valid" or not publisher:
         return None
-    if int(samples or 0) < 120 or int(active_days or 0) < 5 or span_hours < 120:
+    if int(samples or 0) < 120 or int(active_days or 0) < _BASELINE_MIN_DAYS or span_hours < _BASELINE_MIN_DAYS * 24:
         return None
     cpu = float(avg_cpu or 0)
     memory = float(avg_mem or 0)
@@ -641,7 +641,7 @@ def _service_candidate(row: tuple, pref: dict[str, Any]) -> dict[str, Any] | Non
     if dependents:
         return None
     span_hours = max(0.0, (float(max_ts or 0) - float(min_ts or 0)) / 3600.0)
-    if int(samples or 0) < 100 or int(active_days or 0) < 5 or span_hours < 120:
+    if int(samples or 0) < 250 or int(active_days or 0) < _BASELINE_MIN_DAYS or span_hours < _BASELINE_MIN_DAYS * 24:
         return None
     return {
         "id": component_id, "component_type": "service",
