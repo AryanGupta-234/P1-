@@ -128,8 +128,14 @@ def test_evidence_packet_fuses_windows_sources_without_private_process_content(m
             "id": "component-service-graph.1", "name": "VendorHelper",
             "dependencies": ["RpcSs"], "dependents": [], "protected": False,
         }],
+        "operator_component_preferences": [{
+            "id": "component-preference.1", "component_type": "service",
+            "name": "AudioConsoleSvc", "preference": "keep",
+            "operator_note": "Required for my audio control panel",
+        }],
         "component_evidence_ids": [
             "component-process.1", "component-service.1", "component-service-graph.1",
+            "component-preference.1",
         ],
         "component_baseline_retention_days": 30,
     })
@@ -178,6 +184,8 @@ def test_evidence_packet_fuses_windows_sources_without_private_process_content(m
     model_packet = specialist._model_evidence_packet(packet)
     assert "component-process.1" in specialist._packet_evidence_ids(model_packet)
     assert model_packet["background_process_review_candidates"][0]["operator_note"] == "Required for touchpad hotkeys"
+    assert "component-preference.1" in specialist._packet_evidence_ids(model_packet)
+    assert model_packet["operator_component_preferences"][0]["operator_note"] == "Required for my audio control panel"
 
 
 def test_specialist_accepts_cross_subsystem_evidence_ids():
