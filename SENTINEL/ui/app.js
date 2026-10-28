@@ -2604,7 +2604,7 @@ function componentReviewCard(item, kind){
   const metrics=kind==="process"
     ? "CPU "+componentMetric(item.average_cpu_pct,2)+"% · RAM "+componentMetric(item.average_memory_mb,0)+" MB · I/O "+componentMetric(item.average_io_mb_s,2)+" MB/s"
     : "AUTO START · "+(item.dependent_count||0)+" SCM dependents";
-  const confidence=String(item.confidence||"low").toUpperCase();
+  const confidence=String(item.evidence_strength||"low").toUpperCase();
   const detail=kind==="process"
     ? (item.resource_reasons||[]).join(" · ")+" · foreground "+componentMetric(item.foreground_sample_pct,2)+"%"
     : "Depends on "+((item.dependencies||[]).join(", ")||"no listed SCM dependencies")+" · no SCM dependents observed";
