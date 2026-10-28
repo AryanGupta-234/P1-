@@ -784,11 +784,31 @@ def ai_evidence() -> dict[str, Any]:
             "evidence_strength": item["evidence_strength"], "operator_intent": item["preference"],
             "operator_note": item["operator_note"],
         })
+    operator_preferences = []
+    try:
+        rows = core.db(
+            "SELECT c.component_id,c.component_type,c.name,c.publisher,p.preference,p.note,p.updated_at "
+            "FROM component_preferences p JOIN component_catalog c ON c.component_id=p.component_id "
+            "ORDER BY p.updated_at DESC LIMIT 16"
+        )
+        for index, row in enumerate(rows):
+            evidence_id = "component-preference." + str(index + 1)
+            ids.append(evidence_id)
+            operator_preferences.append({
+                "id": evidence_id, "component_type": _clean(row[1], 20),
+                "name": _clean(row[2], 80), "publisher": _clean(row[3], 80),
+                "preference": _clean(row[4], 24), "operator_note": _clean(row[5], 140),
+                "updated_at": float(row[6] or 0),
+            })
+    except Exception:
+        operator_preferences = []
+
     return {
         "component_baseline_coverage": payload["coverage"],
         "background_process_review_candidates": processes,
         "third_party_service_review_candidates": services,
         "service_dependency_graph": service_graph,
+        "operator_component_preferences": operator_preferences,
         "component_evidence_ids": ids,
         "component_baseline_retention_days": payload["retention_days"],
     }
