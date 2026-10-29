@@ -54,6 +54,37 @@
       if (up && b) b.textContent = up.textContent;
     });
   }
-  function start() { build(); sync(); setInterval(sync, 2000); }
+
+  /* Tone engine: assigns ink / forest / crimson to the cards of the open screen so the
+     three colours cover (roughly) equal area. Banners count as crimson. Existing tones are
+     kept, so cards never flicker when live data changes their height. */
+  var BANNERS = ".nx-banner," + HEADS.map(function (c) { return "." + c; }).join(",");
+  var TONES = ["ink", "forest", "red"];
+  function area(el) { var r = el.getBoundingClientRect(); return r.width * r.height; }
+  function tone() {
+    var view = $(".view.on"); if (!view) return;
+    var sum = { ink: 0, forest: 0, red: 0 };
+    view.querySelectorAll(BANNERS).forEach(function (b) { sum.red += area(b); });
+    var cards = [].slice.call(view.querySelectorAll(".panel, .metrics > *, .signal-strip > *, .engine-pulse-rail > *"))
+      .filter(function (el) { return !(el.parentElement && el.parentElement.closest(".panel")) && el.offsetParent; });
+    cards.forEach(function (el) { TONES.forEach(function (t) { if (el.classList.contains("tone-" + t)) sum[t] += area(el); }); });
+    cards.forEach(function (el) {
+      if (TONES.some(function (t) { return el.classList.contains("tone-" + t); })) return;
+      var a = area(el); if (!a) return;
+      var canRed = !el.querySelector("canvas") && el.getBoundingClientRect().height < 560;
+      var pick = TONES.filter(function (t) { return t !== "red" || canRed; })
+        .sort(function (x, y) { return sum[x] - sum[y]; })[0];
+      sum[pick] += a; el.classList.add("tone-" + pick);
+    });
+  }
+  var timer = 0;
+  function later() { clearTimeout(timer); timer = setTimeout(tone, 260); }
+  function watch() {
+    var main = $("main"); if (!main) return;
+    new MutationObserver(later).observe(main, { childList: true, subtree: true });
+    document.addEventListener("click", later, true);
+    later();
+  }
+  function start() { build(); sync(); watch(); setInterval(sync, 2000); }
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start); else start();
 })();

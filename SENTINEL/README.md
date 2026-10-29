@@ -1,4 +1,4 @@
-# SENTINEL 1.2.31 — Nocturne restyle, instant start
+# SENTINEL 1.2.32 — Nocturne layout system, instant start
 
 SENTINEL's observer, collectors and dashboard run as the signed-in user with a standard token. Administrator-only maintenance is handed to a narrowly scoped helper only after the operator confirms the exact preview and approves Windows UAC. The helper accepts one short-lived SQLite-backed job ID, binds it to the same Windows principal and interactive session, rechecks the kill switch, safeguard and original state, and can execute only a fixed allowlist of maintenance action IDs. It cannot accept arbitrary commands, scripts or paths.
 
@@ -30,9 +30,10 @@ The loader uses a shared four-request asynchronous I/O limit and bounded request
 
 The command workspace is a visual control surface: circular live CPU, RAM, GPU and DPC gauges, a recent multi-signal performance chart, a radar-style node summary and icon-led shortcuts to the main workspaces. Evidence, activity feeds, culprits and secondary telemetry remain available as expandable detail panels. The rest of the UI retains the current glass visual language, with animated page entry, panel highlights, orbital instrumentation and responsive layouts. Reduced-motion preferences are respected.
 
-## Nocturne restyle and instant start (v1.2.31)
+## Nocturne layout system and instant start (v1.2.32)
 
-- Styling only: every screen keeps its logic, layout and separate navigation. `ui/nocturne.css` re-skins the dashboard in ink `#171717`, forest `#06110c` and crimson `#a31c1b`, and leftover navy, mint and cyan tints were remapped into that palette.
+- Layout and styling only: every screen keeps its logic, layout and separate navigation. `ui/nocturne.css` re-skins the dashboard in ink `#171717`, forest `#06110c` and crimson `#a31c1b`, and leftover navy, mint and cyan tints were remapped into that palette.
+- A real layout system on all 18 screens: 24 px spacing scale, KPI row with a wide hero card, balanced two-column card flow instead of stretched rows, and a tone engine in `ui/nocturne.js` that spreads ink, forest and crimson over roughly equal area.
 - One console design language on all 18 screens: a shared crimson banner (`ui/nocturne.js` adds one to screens that lacked a header), rounded cards, segmented meters, pill tabs and row-style tables.
 - The splash is now a minimal ring-and-wordmark animation (its markup and ids are unchanged; detail is hidden, and the full log reappears if startup fails).
 - No dataset gates the splash. The interface appears about 0.3 s after the first snapshot; foundation data and every workspace load underneath it, the saved screen first.

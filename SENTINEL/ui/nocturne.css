@@ -35,7 +35,6 @@ nav button.on::before,nav button.on::after{display:none}
 
 /* panels: ink by default, forest every third, crimson when "hot" */
 .panel{background:var(--ink);border:1px solid var(--line);border-radius:var(--radius)}
-.view .panel:nth-child(3n+2){background:linear-gradient(160deg,#0b2218 0%,var(--forest) 80%);border-color:rgba(157,179,154,.2)}
 .panel.hot,.panel.hot:nth-child(n){background:linear-gradient(160deg,#b52221,var(--crimson) 55%,#7d1413);border-color:rgba(255,255,255,.18);color:#fff}
 .ph{font:700 11px var(--mo);letter-spacing:.16em;color:var(--cy2);border-bottom:1px solid var(--line)}
 .panel.hot .ph,.panel.hot .ph em{color:rgba(255,255,255,.85)}
@@ -44,8 +43,6 @@ nav button.on::before,nav button.on::after{display:none}
 
 /* tiles: the first tile of every grid becomes the crimson hero block */
 .tile{background:rgba(232,235,227,.04);border:1px solid var(--line);border-radius:var(--radius-sm)}
-.tiles .tile:first-child{background:linear-gradient(160deg,#b52221,var(--crimson) 60%,#7d1413);border-color:rgba(255,255,255,.2);color:#fff}
-.tiles .tile:first-child .k,.tiles .tile:first-child .v small{color:rgba(255,255,255,.82)}
 .tile .v{font-family:"Bahnschrift","Segoe UI Variable Display",var(--hd)}
 .tile.warn{border-color:rgba(224,180,140,.55)}.tile.bad{border-color:rgba(210,69,63,.8);background:rgba(163,28,27,.16)}
 .ins,.msg,.act,.node,.ref,.metric{background:rgba(232,235,227,.035);border-color:var(--line);border-radius:var(--radius-sm)}
@@ -127,8 +124,8 @@ a{color:var(--bone)}
   -webkit-mask-image:repeating-linear-gradient(90deg,#000 0 8px,transparent 8px 11px);mask-image:repeating-linear-gradient(90deg,#000 0 8px,transparent 8px 11px)}
 
 /* 4 · pill tabs */
-.adv-tabs{display:flex;flex-direction:column;gap:6px;padding:8px;border-radius:24px;background:rgba(232,235,227,.05);border:1px solid var(--line);width:auto;max-width:100%}
-.adv-tab{border-radius:99px!important;padding:8px 18px;border:0!important;background:transparent!important;color:var(--cy2)}
+.adv-tabs{display:flex!important;flex-direction:row!important;flex-wrap:wrap;gap:6px;padding:6px;height:auto!important;border-radius:99px;background:rgba(232,235,227,.05);border:1px solid var(--line);width:max-content;max-width:100%}
+.adv-tab{width:auto!important;flex:none;border-radius:99px!important;padding:9px 20px;border:0!important;background:transparent!important;color:var(--cy2)}
 .adv-tab.on,.adv-tab[aria-selected="true"]{background:var(--bone)!important;color:var(--forest)!important}
 
 /* 5 · tables become rows */
@@ -137,3 +134,51 @@ th{background:transparent;border-bottom:0}
 td{background:rgba(232,235,227,.035);border-top:0;padding-top:10px;padding-bottom:10px}
 td:first-child{border-radius:14px 0 0 14px}td:last-child{border-radius:0 14px 14px 0}
 tr:hover td{background:rgba(232,235,227,.07)}
+
+
+/* ═════════ Layout v2 — spacing system, card grid, tone blend ═════════ */
+:root{--gap:24px;--pad:22px}
+main{padding:30px 36px 64px!important;max-width:1680px;margin:0 auto;width:100%}
+.view.on{display:grid!important;gap:var(--gap)!important;align-content:start;grid-template-columns:minmax(0,1fr)}
+.view>*{min-width:0;margin:0!important}
+
+/* KPI rows: one big hero card + equal cards, same rhythm everywhere */
+.metrics,.signal-strip,.engine-pulse-rail{display:grid!important;grid-template-columns:repeat(4,minmax(0,1fr))!important;gap:var(--gap)!important}
+.metrics:has(>:nth-child(3):last-child),.signal-strip:has(>:nth-child(3):last-child){grid-template-columns:repeat(3,minmax(0,1fr))!important}
+.metrics:has(>:nth-child(5)),.signal-strip:has(>:nth-child(5)),.engine-pulse-rail:has(>:nth-child(5)){grid-template-columns:1.55fr repeat(4,minmax(0,1fr))!important}
+.metrics:has(>:nth-child(6)),.signal-strip:has(>:nth-child(6)),.engine-pulse-rail:has(>:nth-child(6)){grid-template-columns:repeat(auto-fit,minmax(170px,1fr))!important}
+@media (max-width:1100px){.metrics,.signal-strip,.engine-pulse-rail{grid-template-columns:repeat(2,minmax(0,1fr))!important}}
+.metrics>*,.signal-strip>*,.engine-pulse-rail>*{display:flex!important;flex-direction:column;justify-content:space-between;gap:12px;min-height:120px;padding:20px 22px!important;border-radius:26px!important}
+.metrics .v,.signal-strip .v,.signal-tile b,.tile .v{font-size:clamp(28px,2.7vw,42px)!important;line-height:1.02!important;letter-spacing:-.01em}
+.metrics .k,.signal-tile small,.tile .k{letter-spacing:.16em}
+
+/* card grids: balanced masonry columns instead of stretched rows with holes */
+.cols2,.agent-grid,.engine-grid,.activity-grid,.maint-action-grid{display:block!important;column-count:2;column-gap:var(--gap)}
+.cols2>*,.agent-grid>*,.engine-grid>*,.activity-grid>*,.maint-action-grid>*{break-inside:avoid;width:100%;margin:0 0 var(--gap)!important;display:block}
+@media (max-width:1180px){.cols2,.agent-grid,.engine-grid,.activity-grid,.maint-action-grid{column-count:1}}
+
+/* panels: one radius, one header height, one body padding */
+.panel{border-radius:30px!important;overflow:hidden}
+.ph{padding:18px var(--pad)!important;min-height:58px;align-items:center}
+.pb{padding:var(--pad)!important}
+.panel>.pb>*:first-child{margin-top:0}
+
+/* tones: ink · forest · crimson, balanced by area (assigned in nocturne.js) */
+.tone-ink{background:linear-gradient(165deg,#1d1d1d,#171717 70%)!important;border-color:rgba(232,235,227,.1)!important}
+.tone-forest{background:linear-gradient(160deg,#0e2b1f 0%,#06110c 85%)!important;border-color:rgba(157,179,154,.24)!important}
+.tone-red{background:linear-gradient(150deg,#b82523,#a31c1b 55%,#7a1312)!important;border-color:rgba(255,255,255,.2)!important;color:#fff!important}
+.tone-red,.tone-red *{--tx:#fff;--soft:rgba(255,255,255,.9);--dim:rgba(255,255,255,.74);--mut:rgba(255,255,255,.62);--cy:#fff;--cy2:rgba(255,255,255,.78);--line:rgba(255,255,255,.2);--line2:rgba(255,255,255,.3)}
+.tone-red .ph{color:rgba(255,255,255,.86)!important}
+.tone-red input,.tone-red select,.tone-red textarea{background:rgba(6,17,12,.42)!important;border-color:rgba(255,255,255,.28)!important;color:#fff}
+.tone-red .tile,.tone-red .msg,.tone-red .ins,.tone-red .row,.tone-red .metric,.tone-red td,.tone-red .kv>*{background:rgba(6,17,12,.3)!important}
+.tone-red .btn{border-color:rgba(255,255,255,.65);color:#fff}
+.tone-red .btn:hover{background:#fff;color:var(--crimson)}
+.tone-red .btn.or,.tone-red .btn.primary{background:var(--forest);border-color:var(--forest);color:#fff}
+.tone-red .pill,.tone-red .tag{background:rgba(6,17,12,.4);color:#fff;border-color:rgba(255,255,255,.3)}
+.tone-red .meter{background:rgba(6,17,12,.4)}
+
+/* continuous blend behind the cards */
+body{background:radial-gradient(60% 45% at 100% 0%,rgba(163,28,27,.22),transparent 65%),radial-gradient(55% 45% at 0% 100%,rgba(14,43,31,.95),transparent 65%),linear-gradient(180deg,#06110c,#0a0f0c 60%,#171717)!important}
+
+.signal-tile b,.signal-tile strong{overflow:visible!important;text-overflow:clip!important;white-space:nowrap;font-size:clamp(22px,1.9vw,32px)!important}
+.metrics .v{white-space:normal;overflow-wrap:anywhere}
