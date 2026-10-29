@@ -1002,8 +1002,10 @@ def ai_evidence() -> dict[str, Any]:
     except Exception:
         operator_preferences = []
 
+    startup_task_links = startup_task_relationships()
+    ids.extend(item["id"] for item in startup_task_links if isinstance(item.get("id"), str))
     return {
-        "startup_task_relationships": startup_task_relationships(),
+        "startup_task_relationships": startup_task_links,
         "component_baseline_coverage": payload["coverage"],
         "background_process_review_candidates": processes,
         "third_party_service_review_candidates": services,
