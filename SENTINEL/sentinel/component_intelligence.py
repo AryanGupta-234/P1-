@@ -873,7 +873,8 @@ def startup_task_relationships() -> list[dict[str, Any]]:
         name = _clean(raw.get("name"), 80)
         location = _clean(raw.get("where"), 55)
         command = str(raw.get("cmd") or "")[:1200]
-        match = re.search(r'(?i)([A-Z]:\\\\[^\"\\s]+?\\.exe|[^\\\\/\"\\s]+\\.exe)', command)
+        normalized_command = command.replace("\\", "/")
+        match = re.search(r'(?i)(?:^|/)([^/"\s]+\.exe)(?="|\s|$)', normalized_command)
         binary = _clean(match.group(1), 100) if match else ""
         if not name:
             continue
