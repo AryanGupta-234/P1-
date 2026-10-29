@@ -306,38 +306,6 @@ def loop():
             delay = runtime_engine.inventory_delay(delay)
         except Exception:
             pass
-        time.sleep(delay),''))}catch{$binary=''}}
-      if($binary){$actions+= $binary}
-    }
-    [pscustomobject]@{
-      name=$_.TaskName;state=[string]$_.State;path=$_.TaskPath;author=$_.Author
-      action_binaries=@($actions | Sort-Object -Unique | Select-Object -First 6)
-      action_count=@($_.Actions).Count
-    }
-  })
-  $h.tasks=@{ok=$true;count=$o.tasks.Count}
-} catch {$o.tasks=@();$h.tasks=@{ok=$false;error=$_.Exception.Message}}
-try {
-  $o.drivers=@(Get-CimInstance Win32_SystemDriver -ErrorAction Stop | Select-Object @{n='name';e={$_.Name}},@{n='state';e={$_.State}},@{n='start';e={$_.StartMode}},@{n='display';e={$_.DisplayName}},@{n='path';e={$_.PathName}},@{n='service_type';e={$_.ServiceType}})
-  $h.drivers=@{ok=$true;count=$o.drivers.Count}
-} catch {$o.drivers=@();$h.drivers=@{ok=$false;error=$_.Exception.Message}}
-try {
-  $b=Get-CimInstance Win32_BIOS -ErrorAction Stop
-  $c=Get-CimInstance Win32_Processor -ErrorAction Stop | Select-Object -First 1
-  $os=Get-CimInstance Win32_OperatingSystem -ErrorAction Stop
-  $o.platform=@{os=$os.Caption;build=$os.BuildNumber;version=$os.Version;architecture=$os.OSArchitecture;cpu=$c.Name;bios=$b.SMBIOSBIOSVersion;bios_date="$($b.ReleaseDate)";install_date="$($os.InstallDate)";last_boot="$($os.LastBootUpTime)"}
-  $h.platform=@{ok=$true}
-} catch {$o.platform=@{};$h.platform=@{ok=$false;error=$_.Exception.Message}}
-$sec=@{}
-try {$m=Get-MpComputerStatus -ErrorAction Stop;$sec.defender_rt=[bool]$m.RealTimeProtectionEnabled;$sec.signature_age_days=$m.AntivirusSignatureAge;$sec.antivirus_enabled=[bool]$m.AntivirusEnabled;$h.defender=@{ok=$true}} catch {$h.defender=@{ok=$false;error=$_.Exception.Message}}
-try {$sec.firewall=@(Get-NetFirewallProfile -ErrorAction Stop | ForEach-Object {@{name="$($_.Name)";on=[bool]$_.Enabled}});$h.firewall=@{ok=$true;count=$sec.firewall.Count}} catch {$h.firewall=@{ok=$false;error=$_.Exception.Message}}
-try {$sec.secure_boot=[bool](Confirm-SecureBootUEFI -ErrorAction Stop);$h.secure_boot=@{ok=$true}} catch {$h.secure_boot=@{ok=$false;error=$_.Exception.Message}}
-try {$sec.bitlocker=@(Get-BitLockerVolume -ErrorAction Stop | ForEach-Object {@{mount="$($_.MountPoint)";status="$($_.ProtectionStatus)";volume_status="$($_.VolumeStatus)";encryption="$($_.EncryptionPercentage)"}});$h.bitlocker=@{ok=$true;count=$sec.bitlocker.Count}} catch {$h.bitlocker=@{ok=$false;error=$_.Exception.Message}}
-$o.security=$sec
-try {$o.physical=@(Get-PhysicalDisk -ErrorAction Stop | Select-Object @{n='name';e={$_.FriendlyName}},@{n='health';e={"$($_.HealthStatus)"}},@{n='gb';e={[math]::Round($_.Size/1GB,1)}},@{n='type';e={"$($_.MediaType)"}},@{n='bus';e={"$($_.BusType)"}},@{n='operational';e={($_.OperationalStatus -join ',')}});$h.physical=@{ok=$true;count=$o.physical.Count}} catch {$o.physical=@();$h.physical=@{ok=$false;error=$_.Exception.Message}}
-$o.health=$h
-$o | ConvertTo-Json -Depth 7 -Compress
-"""
 
 
 def _posture(inv):
