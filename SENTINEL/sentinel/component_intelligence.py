@@ -843,6 +843,79 @@ def report() -> dict[str, Any]:
     }
 
 
+def startup_task_relationships() -> list[dict[str, Any]]:
+    """Link startup/task records to known signed binaries without storing raw commands."""
+    try:
+        from . import inventory
+        inv = inventory.INV if isinstance(inventory.INV, dict) else {}
+    except Exception:
+        inv = {}
+    catalog_rows = core.db(
+        "SELECT binary_name,publisher,signature_status,signer,component_type FROM component_catalog "
+        "WHERE binary_name<>'' ORDER BY metadata_checked_at DESC LIMIT 500"
+    )
+    by_binary: dict[str, dict[str, Any]] = {}
+    for row in catalog_rows:
+        key = str(row[0] or "").casefold()
+        if key and key not in by_binary:
+            by_binary[key] = {
+                "publisher": _clean(row[1], 100),
+                "signature": _clean(row[2], 24),
+                "signer": _clean(row[3], 140),
+                "component_type": _clean(row[4], 20),
+            }
+
+    output: list[dict[str, Any]] = []
+    startup = core.STATE.get("startup") if isinstance(core.STATE.get("startup"), list) else []
+    for raw in startup[:24]:
+        if not isinstance(raw, dict):
+            continue
+        name = _clean(raw.get("name"), 80)
+        location = _clean(raw.get("where"), 55)
+        command = str(raw.get("cmd") or "")[:1200]
+        match = re.search(r'(?i)(?:^|[\\\\/])([^\\\\/\"\\s]+\\.exe)(?=\"|\\s|$)', command)
+        binary = _clean(match.group(1), 100) if match else ""
+        if not name:
+            continue
+        linked = by_binary.get(binary.casefold(), {}) if binary else {}
+        output.append({
+            "id": "startup-link." + str(len(output) + 1),
+            "kind": "startup_registry",
+            "name": name, "location": location,
+            "binary_name": binary or "unresolved",
+            "publisher": linked.get("publisher", ""),
+            "signature": linked.get("signature", "Unknown"),
+            "signer": linked.get("signer", ""),
+            "component_type": linked.get("component_type", "unmatched"),
+            "relationship": "matched by executable basename; identity is not guaranteed" if linked else "executable could not be matched to a signed component record",
+            "command_arguments_collected": False,
+        })
+    tasks = inv.get("tasks") if isinstance(inv.get("tasks"), list) else []
+    for raw in tasks[:24]:
+        if not isinstance(raw, dict):
+            continue
+        name = _clean(raw.get("name"), 80)
+        if not name:
+            continue
+        binaries = raw.get("action_binaries") if isinstance(raw.get("action_binaries"), list) else []
+        for binary in binaries[:4]:
+            binary_name = _clean(os.path.basename(str(binary).replace("/", "\\")), 100)
+            linked = by_binary.get(binary_name.casefold(), {})
+            output.append({
+                "id": "task-link." + str(len(output) + 1),
+                "kind": "scheduled_task",
+                "name": name, "location": _clean(raw.get("path"), 100),
+                "binary_name": binary_name or "unresolved",
+                "publisher": linked.get("publisher", ""),
+                "signature": linked.get("signature", "Unknown"),
+                "signer": linked.get("signer", ""),
+                "component_type": linked.get("component_type", "unmatched"),
+                "relationship": "matched by executable basename; identity is not guaranteed" if linked else "no signed component match",
+                "command_arguments_collected": False,
+            })
+    return output[:48]
+
+
 def ai_evidence() -> dict[str, Any]:
     """Compact source-backed baseline evidence for the local Windows specialist."""
     payload = report()
@@ -929,6 +1002,7 @@ def ai_evidence() -> dict[str, Any]:
         operator_preferences = []
 
     return {
+        "startup_task_relationships": startup_task_relationships(),
         "component_baseline_coverage": payload["coverage"],
         "background_process_review_candidates": processes,
         "third_party_service_review_candidates": services,
