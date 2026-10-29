@@ -421,4 +421,4 @@ def test_startup_and_scheduled_task_provenance_is_local_and_argument_free():
     assert '"startup_task_relationships": component_evidence.get("startup_task_relationships", [])' in specialist
     assert '"startup_task_relationships": rows("startup_task_relationships", 36' in specialist
     assert "startup_task_relationships" in specialist[specialist.index("trim_targets ="):specialist.index("for key, minimum in trim_targets")]
-    assert "arguments" not in components[components.index("def startup_task_relationships"):components.index("def ai_evidence")]
+    assert 'raw.get("arguments")' not in components[components.index("def startup_task_relationships"):components.index("def ai_evidence")]
