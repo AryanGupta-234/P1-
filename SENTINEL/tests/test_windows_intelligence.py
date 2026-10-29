@@ -141,7 +141,7 @@ def test_evidence_packet_fuses_windows_sources_without_private_process_content(m
         }],
         "component_evidence_ids": [
             "component-process.1", "component-service.1", "component-service-graph.1",
-            "component-preference.1",
+            "component-preference.1", "startup-link.1",
         ],
         "component_baseline_retention_days": 30,
     })
