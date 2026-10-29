@@ -346,6 +346,7 @@ def _evidence_packet() -> dict[str, Any]:
         "background_process_review_candidates": component_evidence.get("background_process_review_candidates", []),
         "third_party_service_review_candidates": component_evidence.get("third_party_service_review_candidates", []),
         "service_dependency_graph": component_evidence.get("service_dependency_graph", []),
+        "startup_task_relationships": component_evidence.get("startup_task_relationships", []),
         "operator_component_preferences": component_evidence.get("operator_component_preferences", []),
         "component_evidence_ids": component_evidence.get("component_evidence_ids", []),
         "coverage": coverage, "evidence_ids": evidence_ids + component_evidence.get("component_evidence_ids", []),
@@ -411,6 +412,7 @@ def _model_evidence_packet(evidence: dict[str, Any]) -> dict[str, Any]:
         "background_process_review_candidates": rows("background_process_review_candidates", 8, {"name": 70, "publisher": 70, "product_name": 70, "operator_note": 120}),
         "third_party_service_review_candidates": rows("third_party_service_review_candidates", 8, {"name": 70, "publisher": 70, "dependencies": 80, "dependents": 80, "operator_note": 120}),
         "service_dependency_graph": rows("service_dependency_graph", 18, {"name": 70, "binary_name": 60, "publisher": 70, "dependencies": 70, "dependents": 70}),
+        "startup_task_relationships": rows("startup_task_relationships", 36, {"name": 70, "location": 80, "binary_name": 80, "publisher": 70, "signer": 100, "relationship": 110}),
         "operator_component_preferences": rows("operator_component_preferences", 16, {"name": 70, "publisher": 70, "preference": 24, "operator_note": 120}),
         "coverage": evidence.get("coverage", {}),
         "game_active": bool(evidence.get("game_active")),
@@ -509,7 +511,7 @@ def _fit_prompt_packet(packet: dict[str, Any], limit: int = MAX_CONTEXT_CHARS) -
         ("installed_apps", 8), ("drivers", 8), ("driver_updates", 5),
         ("application_usage_30d", 6), ("maintenance_findings", 5),
         ("background_process_review_candidates", 5), ("third_party_service_review_candidates", 5),
-        ("service_dependency_graph", 8), ("operator_component_preferences", 10),
+        ("service_dependency_graph", 8), ("startup_task_relationships", 18), ("operator_component_preferences", 10),
         ("top_processes_by_resource", 12),
     ]
     for key, minimum in trim_targets:

@@ -213,7 +213,14 @@ A durable cursor schedules one broad review every 12 hours by default, configura
 
 **Service and process interpretation:** stopped/manual/trigger-started state, low foreground use, or absence from a short sample is not proof of disuse. The specialist must state dependencies/coverage limits and ask the operator about required helper apps or services before suggesting closure, startup changes or service changes. Windows core, security, Defender, firewall, update, accessibility, backup, storage, network, hardware and Riot Vanguard/VALORANT components remain protected.
 
-## Longitudinal component baselines (1.2.34)
+## Longitudinal component baselines (1.2.35)
+
+
+## Startup and scheduled-task provenance (1.2.35)
+
+The existing inventory collector now includes up to six distinct executable basenames and an action count for each scheduled task. It does not collect task action arguments or principal credentials. Registry autorun command strings are consumed only in memory by the component-intelligence adapter to derive a basename; the command string and arguments are not copied into the AI evidence packet or persisted by this extension.
+
+The adapter links those names to the existing component catalogue to attach publisher and Authenticode status when available. A basename match is explicitly labelled heuristic because different executables can share a filename; an unmatched record remains unresolved. Evidence is bounded to 24 registry entries and 24 tasks, with at most four actions per task and 48 total relationship records. The local specialist receives provenance and uncertainty, not executable paths or command arguments. This is detection and context enrichment only: no startup entry, scheduled task or service is disabled, edited or deleted.
 
 **Module:** sentinel/component_intelligence.py  
 **API:** GET /api/components/intelligence, POST /api/components/preference, POST /api/components/refresh, POST /api/components/propose-close  

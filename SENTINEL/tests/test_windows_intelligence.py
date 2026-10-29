@@ -124,6 +124,12 @@ def test_evidence_packet_fuses_windows_sources_without_private_process_content(m
             "operator_note": "Audio control panel service",
             "dependencies": ["RpcSs"], "dependents": [],
         }],
+        "startup_task_relationships": [{
+            "id": "startup-link.1", "kind": "startup_registry", "name": "Vendor helper",
+            "location": "HKCU Run", "binary_name": "helper.exe", "publisher": "Vendor Ltd.",
+            "signature": "Valid", "signer": "CN=Vendor Ltd.",
+            "relationship": "matched by executable basename", "command_arguments_collected": False,
+        }],
         "service_dependency_graph": [{
             "id": "component-service-graph.1", "name": "VendorHelper",
             "dependencies": ["RpcSs"], "dependents": [], "protected": False,
@@ -135,7 +141,7 @@ def test_evidence_packet_fuses_windows_sources_without_private_process_content(m
         }],
         "component_evidence_ids": [
             "component-process.1", "component-service.1", "component-service-graph.1",
-            "component-preference.1",
+            "component-preference.1", "startup-link.1",
         ],
         "component_baseline_retention_days": 30,
     })
@@ -185,6 +191,8 @@ def test_evidence_packet_fuses_windows_sources_without_private_process_content(m
     assert "component-process.1" in specialist._packet_evidence_ids(model_packet)
     assert model_packet["background_process_review_candidates"][0]["operator_note"] == "Required for touchpad hotkeys"
     assert "component-preference.1" in specialist._packet_evidence_ids(model_packet)
+    assert "startup-link.1" in specialist._packet_evidence_ids(model_packet)
+    assert model_packet["startup_task_relationships"][0]["binary_name"] == "helper.exe"
     assert model_packet["operator_component_preferences"][0]["operator_note"] == "Required for my audio control panel"
 
 

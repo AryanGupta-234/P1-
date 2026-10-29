@@ -1,7 +1,7 @@
 # SENTINEL Implementation Plan
 
 **Target:** Windows 11 x64 · local-first desktop runtime  
-**Plan revision:** 1.4 · **Release baseline:** 1.2.34  
+**Plan revision:** 1.4 · **Release baseline:** 1.2.35  
 **Status:** `[x]` existing capability · `[~]` integration/verification in progress · `[ ]` planned
 
 This is the single consolidated backlog for the next SENTINEL upgrade. It extends the existing collectors, SQLite store, maintenance executor, safeguard, adaptive runtime, AI council, memory engine, rollback journal and dashboard; it does not replace them.
@@ -149,7 +149,7 @@ Make SENTINEL a Windows-specialist, goal-driven performance and reliability assi
 - [x] Compare PE CompanyName metadata with the Authenticode certificate organization and surface mismatches.
 - [x] Withhold service ownership candidates when the complete SCM dependency graph is missing, stale (>24 hours) or future-dated.
 - [x] Graceful-close proposals require exactly one matching visible, on-screen, interactive process instance; ambiguous multi-instance matches fail closed.
-- [ ] Extend evidence with signed startup-item provenance and task-to-service/app relationships; keep all proposed changes preview/approval gated.
+- [x] Route registry autorun and scheduled-task executable basenames into local AI evidence; match only against the signed component catalogue, label basename matches as heuristic, omit task arguments and raw command strings, and make no startup/task changes.\n- [ ] Extend evidence with stronger signed startup-item identity and task-to-service/app relationships; keep all proposed changes preview/approval gated.
 
 ## P4.4 — Evidence-quality and ownership scoring (implemented in 1.2.34)
 

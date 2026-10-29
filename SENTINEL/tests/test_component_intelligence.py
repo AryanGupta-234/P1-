@@ -410,3 +410,42 @@ def test_service_ownership_candidates_require_a_complete_recent_graph(monkeypatc
     assert result["coverage"]["service_dependency_graph_fresh"] is (expected_candidates == 1)
     if expected_candidates == 0:
         assert "newer than 24 hours" in result["service_review_block_reason"]
+
+
+
+def test_startup_and_scheduled_task_links_expose_only_binary_provenance(monkeypatch):
+    from sentinel import inventory
+
+    monkeypatch.setattr(core, "STATE", {
+        "startup": [{
+            "name": "Vendor helper", "where": "HKCU\\Run",
+            "cmd": '"C:\\Program Files\\Vendor\\helper.exe" --profile private-user --token=do-not-store',
+        }]
+    })
+    monkeypatch.setattr(inventory, "INV", {
+        "tasks": [{
+            "name": "Vendor updater", "path": "\\Vendor\\",
+            "action_binaries": ["helper.exe", "updater.exe"],
+            "action_count": 2,
+        }]
+    })
+    monkeypatch.setattr(core, "db", lambda *_args, **_kwargs: [
+        ("helper.exe", "Vendor Ltd.", "Valid", "CN=Vendor Ltd.", "process"),
+        ("updater.exe", "Vendor Ltd.", "Valid", "CN=Vendor Ltd.", "process"),
+    ])
+
+    rows = components.startup_task_relationships()
+
+    assert [row["kind"] for row in rows] == [
+        "startup_registry", "scheduled_task", "scheduled_task",
+    ]
+    assert rows[0]["binary_name"] == "helper.exe"
+    assert rows[0]["signature"] == "Valid"
+    assert rows[1]["binary_name"] == "helper.exe"
+    assert rows[2]["binary_name"] == "updater.exe"
+    serialized = str(rows)
+    assert "private-user" not in serialized
+    assert "do-not-store" not in serialized
+    assert "Program Files" not in serialized
+    assert all("command_arguments_collected" in row for row in rows)
+    assert all("cmd" not in row for row in rows)
