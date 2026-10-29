@@ -406,3 +406,19 @@ def test_component_baselines_are_agent_owned_local_and_operator_approved():
     assert "service_dependency_graph" in specialist
     assert "operator_note" in specialist
     assert "Longitudinal component baselines" in specialist
+
+
+
+def test_startup_and_scheduled_task_provenance_is_local_and_argument_free():
+    inventory = (ROOT / "sentinel" / "inventory.py").read_text(encoding="utf-8")
+    components = (ROOT / "sentinel" / "component_intelligence.py").read_text(encoding="utf-8")
+    specialist = (ROOT / "sentinel" / "windows_intelligence.py").read_text(encoding="utf-8")
+
+    assert "action_binaries=@($actions | Sort-Object -Unique | Select-Object -First 6)" in inventory
+    assert "action_count=@($_.Actions).Count" in inventory
+    assert "startup_task_relationships()" in components
+    assert '"command_arguments_collected": False' in components
+    assert '"startup_task_relationships": component_evidence.get("startup_task_relationships", [])' in specialist
+    assert '"startup_task_relationships": rows("startup_task_relationships", 36' in specialist
+    assert "startup_task_relationships" in specialist[specialist.index("trim_targets ="):specialist.index("for key, minimum in trim_targets")]
+    assert "arguments" not in components[components.index("def startup_task_relationships"):components.index("def ai_evidence")]
