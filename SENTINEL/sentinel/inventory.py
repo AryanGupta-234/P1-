@@ -151,7 +151,16 @@ try {
     foreach($action in @($_.Actions)){
       $execute=[string]$action.Execute
       $binary=''
-      if($execute){try{$binary=[IO.Path]::GetFileName(($execute -replace '^\"|\"  $h.tasks=@{ok=$true;count=$o.tasks.Count}
+      if($execute){try{$binary=[IO.Path]::GetFileName($execute.Trim([char]34))}catch{$binary=''}}
+      if($binary){$actions += $binary}
+    }
+    [pscustomobject]@{
+      name=$_.TaskName;state=[string]$_.State;path=$_.TaskPath;author=$_.Author
+      action_binaries=@($actions | Sort-Object -Unique | Select-Object -First 6)
+      action_count=@($_.Actions).Count
+    }
+  })
+  $h.tasks=@{ok=$true;count=$o.tasks.Count}
 } catch {$o.tasks=@();$h.tasks=@{ok=$false;error=$_.Exception.Message}}
 try {
   $o.drivers=@(Get-CimInstance Win32_SystemDriver -ErrorAction Stop | Select-Object @{n='name';e={$_.Name}},@{n='state';e={$_.State}},@{n='start';e={$_.StartMode}},@{n='display';e={$_.DisplayName}},@{n='path';e={$_.PathName}},@{n='service_type';e={$_.ServiceType}})
