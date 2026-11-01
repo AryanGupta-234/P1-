@@ -2,7 +2,7 @@
 
 > Current project truth. Read before implementation and update with every milestone change.
 
-**Last updated:** 2026-10-19 | **Current integration branch:** `dev` | **Platform:** Windows 10/11 only
+**Last updated:** 2026-11-02 | **Current integration branch:** `dev` | **Platform:** Windows 10/11 only
 
 ## North star
 Build persistent personal intelligence that observes explicitly permitted signals, models context, reasons about goals, learns reusable skills and executes scoped actions safely. AGI remains a research objective, not a capability claim.
@@ -210,3 +210,17 @@ Restart handoff:
 The Feature Control page exposes the auto-restart switch and watcher status; the global header exposes a manual restart action. Manual Stop removes a pending restart marker so a stop request is not unintentionally converted into a restart.
 
 Limits: this is process self-restart after local source/config updates, not an automatic `git pull`, package installation, dependency upgrade or OS reboot. A failed replacement launch is recorded as `restart_failed` in the local worker state and requires operator intervention. Target Windows 11 behaviour still needs desktop validation.
+
+
+## PRIXON native intelligence layer
+
+**Architecture decision:** PRIXON is the AIE-owned model identity and runtime/context layer over an immutable, disclosed upstream foundation. The initial derived-model target is Qwen2.5-7B-Instruct. Its original weights, compatible tokenizer, architecture and provider-managed chat template are preserved; PRIXON identity and behavioural instructions are applied at the request boundary. This does not erase behaviour already learned during upstream instruction tuning.
+
+The first implementation is in `aie/prixon/`:
+- `identity.py` defines PRIXON identity and explicit Qwen foundation lineage.
+- `context.py` retrieves bounded references from the existing AIE memory/knowledge stores only when the caller explicitly enables those sources. Retrieved content is labelled untrusted and retains reference IDs.
+- `runtime.py` packages the PRIXON system message and context into the existing `ModelRequest`, calls the existing model router and returns the actual backend model/provider response.
+
+**Preserved infrastructure:** `aie.models` contracts, Ollama adapter and RAM-aware model router; `aie.memory` SQLite memory/provenance/embedding store; `aie.knowledge` local documentation store; `aie.orchestration` task lifecycle; and `aie.policy` approval/audit/execution boundaries. No parallel store, inference server or execution pathway is introduced.
+
+Training factory, dataset registry, LoRA/QLoRA adapters, model manifest/checksum inventory and regression-promotion gates remain planned. No PRIXON weights have been trained or merged in this milestone. See [PRIXON Native Intelligence](PRIXON_ARCHITECTURE.md) and [ADR 0001](adr/0001-prixon-foundation-and-runtime-boundaries.md).
