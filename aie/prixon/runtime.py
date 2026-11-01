@@ -6,7 +6,7 @@ from typing import Any, Literal, Protocol
 
 from aie.models.base import ChatMessage, ModelRequest, ModelResponse
 from aie.prixon.context import ContextReference, append_references_to_prompt, retrieve_context
-from aie.prixon.identity import DEFAULT_PRIXON_IDENTITY, PRIXONIdentity
+from aie.prixon.identity import (\n    DEFAULT_PRIXON_IDENTITY,\n    PRIXONIdentity,\n    apply_prixon_identity,\n)
 
 
 class ModelGenerator(Protocol):
@@ -71,12 +71,13 @@ class PRIXONRuntime:
             limit=max_context_items,
         )
         user_content = append_references_to_prompt(prompt.strip(), references)
+        messages = apply_prixon_identity(
+            [ChatMessage(role="user", content=user_content)],
+            self.identity,
+        )
         request = ModelRequest(
             task=task,
-            messages=[
-                ChatMessage(role="system", content=self.identity.system_prompt),
-                ChatMessage(role="user", content=user_content),
-            ],
+            messages=messages,
             max_output_tokens=max_output_tokens,
         )
         response = self.model_router.generate(request)
