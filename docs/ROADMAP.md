@@ -4,7 +4,7 @@ Statuses: DONE / IN_PROGRESS / BLOCKED / PLANNED. Mark DONE only with code, test
 
 Development ownership and branch rules are defined in [Development Streams](DEVELOPMENT_STREAMS.md). M1.5 browser/video work is tracked independently on `browser-video-intelligence`; ecosystem and shared-integration work remains on `dev`. The existing browser/video foundation is present in the integrated baseline, but new browser/video progress must stay isolated until a reviewed milestone is ready.
 
-**Last updated:** 2026-10-19 | **Ecosystem branch:** `dev` | **Browser/video branch:** `browser-video-intelligence` | **Stable release:** `main`
+**Last updated:** 2026-11-02 | **Ecosystem branch:** `dev` | **Browser/video branch:** `browser-video-intelligence` | **Stable release:** `main`
 
 | ID | Workstream | Status | Exit criteria |
 |---|---|---|---|
@@ -17,6 +17,7 @@ Development ownership and branch rules are defined in [Development Streams](DEVE
 | M5 | Controlled autonomy | IN_PROGRESS | Capability policy, audit, executor, sandbox and recovery |
 | M6 | Generalization research | PLANNED | Held-out task transfer, robustness and reproducible benchmarks |
 | M7 | Persistent Sentinel experience | IN_PROGRESS | Per-user worker, multi-workspace Titan boot experience, deep system intelligence, searchable event/audit vault, specialist local AI, advanced collector opt-ins and configurable posture automation |
+| M8 | PRIXON native intelligence | IN_PROGRESS | PRIXON identity/runtime over preserved foundation weights and existing AIE memory, knowledge, model, orchestration and policy engines |
 
 ## M0 — Foundation
 - [x] Windows-only architecture and boundaries.
@@ -173,6 +174,21 @@ Development ownership and branch rules are defined in [Development Streams](DEVE
 - [ ] Native desktop history and memory-review interface with pagination and user-controlled filters.
 - [ ] Full desktop dashboard and memory/action history UI after core telemetry and policy APIs stabilize.
 - [x] One-command local agent entry point combining local planning, validation, durable run creation and bounded advancement; policy/input gates stop progression.
+
+## M8 — PRIXON native intelligence
+
+- [x] Record the foundation-preservation and runtime-ownership decision in ADR 0001.
+- [x] Add PRIXON identity and foundation-lineage metadata without modifying upstream model weights, tokenizer, architecture or chat template.
+- [x] Add a PRIXON runtime façade over the existing provider-independent model request/response and local model-router contracts.
+- [x] Add explicit, bounded, provenance-labelled retrieval from the existing AIE MemoryStore and KnowledgeStore; sensitive memories remain excluded by the existing store policy.
+- [x] Return the actual backend model/provider and exact context reference IDs with each PRIXON turn.
+- [ ] Run the new PRIXON tests in hosted Windows CI and validate the package on the target Windows 11 desktop.
+- [ ] Add a checksummed model-lineage manifest and release-time upstream licence/provenance audit.
+- [ ] Build a curated dataset registry with source/licence provenance, privacy review, deduplication, split validation and contamination checks.
+- [ ] Add LoRA/QLoRA adapter training as an explicit offline job; keep source foundation weights immutable.
+- [ ] Add general-capability, specialist, tool/plan, memory-retrieval, safety and catastrophic-forgetting benchmarks with promotion thresholds.
+- [ ] Add multi-source knowledge adapters and ranking only where current AIE retrieval has measured gaps.
+- [ ] Add further inference backends only after functional, security, resource and performance parity with the Ollama baseline.
 
 ## Immediate dev sprint
 1. Validate the native tray, balloon notification behavior, browser/native-host, UIA, Event Log, registry, CIM and elevated ETW on the actual target desktop; hosted CI cannot validate interactive desktop behavior.
