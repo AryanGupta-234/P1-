@@ -16,6 +16,7 @@ The project has two active development tracks:
 - [Video Intelligence](docs/VIDEO_INTELLIGENCE.md)
 - [Sentinel Runtime](docs/SENTINEL.md)
 - [Architecture](docs/ARCHITECTURE.md)
+- [PRIXON Native Intelligence](docs/PRIXON_ARCHITECTURE.md)
 - [Security and Privacy](docs/SECURITY_AND_PRIVACY.md)
 - [Contributing](CONTRIBUTING.md)
 
