@@ -102,3 +102,18 @@ def test_invalid_prompt_and_context_limits_are_rejected():
 
     with pytest.raises(ValueError, match="between 1 and 8"):
         runtime.generate("hello", max_context_items=0)
+
+
+
+def test_identity_helper_preserves_existing_context_messages():
+    from aie.models.base import ChatMessage
+    from aie.prixon.identity import apply_prixon_identity
+
+    existing = [
+        ChatMessage(role="system", content="Existing explicit memory context."),
+        ChatMessage(role="user", content="Explain DNS."),
+    ]
+    result = apply_prixon_identity(existing)
+
+    assert result[0].content.startswith("You are PRIXON")
+    assert result[1:] == existing
