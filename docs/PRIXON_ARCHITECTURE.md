@@ -88,6 +88,7 @@ Implemented in the first PRIXON slice:
 
 - A versioned PRIXON identity and foundation-lineage descriptor.
 - A PRIXON runtime façade that consumes the existing AIE model-router contract.
+- The existing `aie ask` command applies PRIXON identity before request validation while retaining its current explicit memory/activity/session options, local/cloud provider choice and egress confirmation path.
 - Explicit opt-in retrieval from existing MemoryStore and KnowledgeStore interfaces.
 - Bounded, provenance-labelled context references, with retrieved material framed as untrusted.
 - A response envelope that exposes the actual backend model/provider and the references attached to the turn.
