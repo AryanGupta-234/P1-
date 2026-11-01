@@ -59,7 +59,7 @@ def retrieve_context(
 
     if include_memory:
         # MemoryStore.search defaults to excluding sensitive records.
-        for hit in memory_store.search(query, limit=per_source_limit):
+        for hit in memory_store.search(query[:500], limit=per_source_limit):
             if not isinstance(hit, MemorySearchHit):
                 raise ValueError("memory store returned an unsupported search-hit type")
             memory = hit.memory
