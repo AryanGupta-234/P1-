@@ -891,6 +891,9 @@ def ask(
         raise typer.Exit(2) from exc
 
     try:
+        from aie.prixon.identity import apply_prixon_identity
+
+        messages = apply_prixon_identity(messages)
         request = ModelRequest(
             task=task,
             messages=messages,
