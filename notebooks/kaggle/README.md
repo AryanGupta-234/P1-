@@ -13,7 +13,7 @@ train a new foundation model and does **not** upload or modify the original Qwen
 4. Add a Kaggle Dataset containing the reviewed PRIXON JSONL examples. The notebook expects
    `/kaggle/input/prixon-training-data/seed_v1.jsonl`. For a pipeline smoke check only, it can
    fall back to the repository's eight-example synthetic seed set; the notebook blocks a real
-   training run below 100 eligible examples.
+   training run below 125 eligible examples (to leave at least 100 training rows after the 80/10/10 split). Aim for 500 or more total examples.
 5. Run cells from top to bottom. Record the model revision, package versions, configuration,
    data manifest, baseline generations and adapter artifact.
 6. Download the generated adapter ZIP from the Kaggle output panel and retain the accompanying
