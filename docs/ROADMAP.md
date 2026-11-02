@@ -4,7 +4,7 @@ Statuses: DONE / IN_PROGRESS / BLOCKED / PLANNED. Mark DONE only with code, test
 
 Development ownership and branch rules are defined in [Development Streams](DEVELOPMENT_STREAMS.md). M1.5 browser/video work is tracked independently on `browser-video-intelligence`; ecosystem and shared-integration work remains on `dev`. The existing browser/video foundation is present in the integrated baseline, but new browser/video progress must stay isolated until a reviewed milestone is ready.
 
-**Last updated:** 2026-10-19 | **Ecosystem branch:** `dev` | **Browser/video branch:** `browser-video-intelligence` | **Stable release:** `main`
+**Last updated:** 2026-11-02 | **Ecosystem branch:** `dev` | **Browser/video branch:** `browser-video-intelligence` | **Stable release:** `main`
 
 | ID | Workstream | Status | Exit criteria |
 |---|---|---|---|
@@ -17,6 +17,7 @@ Development ownership and branch rules are defined in [Development Streams](DEVE
 | M5 | Controlled autonomy | IN_PROGRESS | Capability policy, audit, executor, sandbox and recovery |
 | M6 | Generalization research | PLANNED | Held-out task transfer, robustness and reproducible benchmarks |
 | M7 | Persistent Sentinel experience | IN_PROGRESS | Per-user worker, multi-workspace Titan boot experience, deep system intelligence, searchable event/audit vault, specialist local AI, advanced collector opt-ins and configurable posture automation |
+| M8 | PRIXON model and assistant | IN_PROGRESS | Immutable Qwen foundation, PRIXON identity, reviewed dataset pipeline, Kaggle QLoRA adapter, regression benchmarks and Windows runtime integration |
 
 ## M0 — Foundation
 - [x] Windows-only architecture and boundaries.
@@ -212,3 +213,34 @@ Implemented on `dev`:
 - Restart status/reason surfaced in worker state and Feature Control.
 
 **Still open:** target Windows 11 validation of source-update detection during a real `git pull`, configuration-triggered restart, manual restart, dashboard reconnect/reload, restart failure recovery and no-restart behaviour while the setting is disabled. The watcher does not fetch or install updates.
+
+## M8 — PRIXON model and assistant
+
+**Objective:** build PRIXON as an independent assistant identity and AIE-integrated runtime on top of an immutable Qwen2.5-7B-Instruct foundation. Do not train a replacement foundation model in this phase.
+
+Implemented in the first rebuild slice on 2 November 2026:
+- [x] PRIXON identity/system prompt separated from foundation weights.
+- [x] Contextual language instruction: understand profanity, slang and offensive vocabulary in context; do not use a blanket banned-word filter for benign discussion.
+- [x] Preserve user-provided system/context messages when applying PRIXON identity.
+- [x] Strict, dependency-free JSONL data validator with provenance, licence, review status, privacy classification and consent checks.
+- [x] Reject private/sensitive data, unapproved samples, unknown licences, duplicate IDs and exact duplicate conversations.
+- [x] Deterministic train/validation/test partitioning and SHA-256 dataset manifest.
+- [x] Synthetic seed examples, first QLoRA config and Kaggle notebook starter.
+- [x] Kaggle notebook resolves and records an immutable Qwen foundation revision and saves a LoRA adapter artifact only.
+- [x] Dataset pipeline unit tests authored.
+
+Still pending:
+- [ ] Run PRIXON dataset tests on Windows CI and fix any failures.
+- [ ] Build and human-review a sufficiently large, licensed dataset; seed examples are not a training corpus.
+- [ ] Run the Kaggle notebook on a selected GPU, record actual package versions, VRAM peak, runtime, loss and adapter hashes.
+- [ ] Capture untouched-foundation baseline and PRIXON adapter outputs on the same held-out evaluation set.
+- [ ] Add general reasoning, coding, maths, planning, structured output, Windows, networking, cybersecurity and troubleshooting regression suites.
+- [ ] Add human review and promotion gates; reject an adapter that materially regresses preserved capabilities.
+- [ ] Integrate PRIXON identity/runtime into every AIE model entry point without duplicating memory, knowledge, routing or policy engines.
+- [ ] Add adapter registry, local Windows inference load/disable/rollback and release packaging.
+- [ ] Validate the adapter on the target Windows 11 device and compare latency/RAM/VRAM with the unmodified local model.
+
+**Training boundary:** initial adapter categories are identity, conversation_style and contextual_language only. General reasoning and specialist knowledge are preservation targets, not initial training targets.
+
+**Execution boundary:** language understanding is context-aware; consequential OS actions remain governed by AIE's independent capability, approval, audit and rollback controls. No model prompt or adapter may bypass that execution policy.
+
