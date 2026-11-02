@@ -886,6 +886,17 @@ def ask(
             memory_ids = memory_context.memory_ids
             if memory_context.content:
                 messages.insert(0, ChatMessage(role="system", content=memory_context.content))
+
+        # Apply PRIXON identity after assembling all explicit context so identity
+        # remains the leading system instruction. Caller-provided context is retained.
+        from aie.prixon.identity import apply_prixon_identity
+
+        messages = [
+            ChatMessage(**item)
+            for item in apply_prixon_identity(
+                [{"role": message.role, "content": message.content} for message in messages]
+            )
+        ]
     except (RuntimeError, ValueError, OSError) as exc:
         console.print(f"[red]Context retrieval unavailable:[/red] {exc}")
         raise typer.Exit(2) from exc
