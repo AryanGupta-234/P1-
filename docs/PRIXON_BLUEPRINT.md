@@ -88,6 +88,8 @@ Release gate:
 
 ## Runtime integration
 
+The primary `aie ask` CLI path now assembles explicitly selected context first and then prepends PRIXON identity, retaining all caller-provided messages. This is the initial runtime integration; Sentinel background inference, desktop Ask modes and other model entry points remain pending.
+
 AIE remains Windows-first. Reuse existing model contracts/router, memory store, knowledge store,
 planning/orchestration, policy broker and audit ledger. Do not introduce duplicate memory stores,
 permission systems or model routers. Local inference remains the default. Cloud egress stays
@@ -95,14 +97,16 @@ explicitly opt-in and auditable.
 
 ## Current implementation state
 
-Implemented in this first rebuild slice:
+Implemented in the initial rebuild slice:
 - PRIXON identity prompt and safe message composition helper.
+- PRIXON identity wired into the primary `aie ask` CLI path after explicit context assembly.
+- Twelve held-out preservation cases and a Kaggle baseline-versus-adapter generation capture.
 - Strict JSONL validation and deterministic dataset splitting.
 - Seed synthetic examples, QLoRA configuration and Kaggle starter notebook.
 - Dataset unit tests.
 
 Not yet implemented or verified:
-- Wiring identity into every AIE inference entry point.
+- Wiring identity into Sentinel background inference, desktop Ask modes and every remaining AIE model entry point.
 - Kaggle execution, GPU compatibility and adapter training.
 - Full baseline/regression benchmark and human evaluation.
 - Adapter registry, Windows Ollama/GGUF export and runtime loading.
