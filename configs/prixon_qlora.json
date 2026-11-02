@@ -1,0 +1,51 @@
+{
+  "config_version": 1,
+  "run_name": "prixon-identity-context-v1",
+  "base_model": "Qwen/Qwen2.5-7B-Instruct",
+  "base_revision": "resolve_and_record_commit_sha_at_run_start",
+  "preserve_foundation": true,
+  "save_base_weights": false,
+  "adapter_type": "LoRA",
+  "training_method": "QLoRA",
+  "quantization": {
+    "load_in_4bit": true,
+    "quant_type": "nf4",
+    "double_quant": true,
+    "compute_dtype": "auto_bf16_else_fp16"
+  },
+  "lora": {
+    "rank": 16,
+    "alpha": 32,
+    "dropout": 0.05,
+    "bias": "none",
+    "target_modules": "all-linear"
+  },
+  "sequence_length": 2048,
+  "per_device_batch_size": 1,
+  "gradient_accumulation_steps": 8,
+  "learning_rate": 0.0001,
+  "epochs": 1,
+  "warmup_ratio": 0.03,
+  "weight_decay": 0.01,
+  "gradient_checkpointing": true,
+  "optimizer": "paged_adamw_8bit",
+  "seed": 2026,
+  "max_train_examples_required": 100,
+  "recommended_train_examples": 500,
+  "initial_training_categories": [
+    "identity",
+    "conversation_style",
+    "contextual_language"
+  ],
+  "excluded_initially": [
+    "general_reasoning",
+    "coding",
+    "mathematics",
+    "windows_internals",
+    "networking",
+    "cybersecurity",
+    "troubleshooting"
+  ],
+  "output": "adapter_only",
+  "promotion_rule": "Never promote unless the untouched foundation remains available and general/specialist regression benchmarks do not materially regress."
+}
