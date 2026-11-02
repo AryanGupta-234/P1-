@@ -2,7 +2,7 @@
 
 > Current project truth. Read before implementation and update with every milestone change.
 
-**Last updated:** 2026-10-19 | **Current integration branch:** `dev` | **Platform:** Windows 10/11 only
+**Last updated:** 2026-11-02 | **Current integration branch:** `dev` | **Platform:** Windows 10/11 only
 
 ## North star
 Build persistent personal intelligence that observes explicitly permitted signals, models context, reasons about goals, learns reusable skills and executes scoped actions safely. AGI remains a research objective, not a capability claim.
@@ -210,3 +210,31 @@ Restart handoff:
 The Feature Control page exposes the auto-restart switch and watcher status; the global header exposes a manual restart action. Manual Stop removes a pending restart marker so a stop request is not unintentionally converted into a restart.
 
 Limits: this is process self-restart after local source/config updates, not an automatic `git pull`, package installation, dependency upgrade or OS reboot. A failed replacement launch is recorded as `restart_failed` in the local worker state and requires operator intervention. Target Windows 11 behaviour still needs desktop validation.
+
+## PRIXON assistant and immutable foundation — 2 November 2026
+
+PRIXON is implemented as an assistant identity and an AIE-integrated model lifecycle, not as a claim that a new foundation model has been trained. The upstream Qwen2.5-7B-Instruct checkpoint, architecture, tokenizer/vocabulary and original chat template are the immutable capability baseline. Every training experiment must pin the exact model commit SHA and save a separate adapter.
+
+**Preserve from Qwen**
+- General reasoning, multi-step problem solving, coding, mathematics, language understanding, planning and structured outputs.
+- Existing Windows internals, networking, cybersecurity and troubleshooting knowledge.
+- Architecture, original checkpoint weights, tokenizer/vocabulary and chat template.
+- An untouched foundation artifact for evaluation, fallback and rollback.
+
+**Replace/build for PRIXON**
+- Assistant name, identity prompt, personality and response conventions.
+- Provenance-aware dataset factory, train/validation/test splits, experiment manifests and adapter lifecycle.
+- PRIXON-specific memory/context composition and integration with existing AIE memory and knowledge stores.
+- Model routing, planning, tools and verification by reusing existing AIE model contracts, orchestration and policy engines.
+- Context-sensitive language understanding: profanity, vulgarity, slang and offensive words may be discussed in legitimate linguistic, educational, analytical, quoted or fictional contexts without blanket word-based refusal.
+
+**First training phase**
+- Only identity, conversation_style and contextual_language examples are eligible.
+- General reasoning, coding, maths and Windows/networking/cybersecurity/troubleshooting are holdout/regression domains.
+- Dataset rows require source, licence, approval status and data classification. User-contributed records require explicit consent. Private/sensitive records and credentials are rejected before Kaggle upload.
+- QLoRA produces a standalone LoRA adapter; it does not update the original foundation checkpoint.
+
+**Independent execution policy**
+Language freedom is not execution authority. Existing AIE capability manifests, approvals, audit ledger, execution gate, kill switch and rollback remain independent of the model. Discussion, quotation or analysis of a subject is not treated as permission to perform an action.
+
+**First rebuild commit:** `f6e1c2b07bec7169d31f3b83526b14301dc93ead` on `dev`. The exact prior PRIXON prototype head is retained on `archive/dev-before-prixon-rebuild-20261102`. Kaggle execution, Windows CI tests and target-machine validation remain pending.
