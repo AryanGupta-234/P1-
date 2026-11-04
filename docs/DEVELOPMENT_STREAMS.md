@@ -1,6 +1,6 @@
 # Development streams
 
-**Effective date:** 2026-10-12  
+**Effective date:** 2026-11-05  
 **Active development tracks:** `dev` and `browser-video-intelligence`  
 **Stable release branch:** `main`
 
@@ -35,9 +35,9 @@ The observer remains opt-in and disabled by default. Do not collect cookies, cre
 
 ## 3. Branch and integration rules
 
-1. Keep the two active workstreams on their respective long-lived branches. Do not create additional persistent feature branches by default.
+1. Keep the two active long-lived workstreams on their respective branches. Do not create additional persistent feature branches by default. The explicitly requested APEX planning/implementation work is a scoped exception on `feature/apex-standalone-assistant-plan`, created from `dev`; it is not a third long-lived integration branch.
 2. Keep `main` stable. Release changes flow from validated `dev`; no development work is performed directly on `main`.
-3. Keep ecosystem-only changes on `dev`. Keep browser/video-only changes on `browser-video-intelligence`.
+3. Keep general ecosystem changes on `dev`, browser/video-only changes on `browser-video-intelligence`, and APEX standalone-assistant work on its scoped feature branch until its milestone is reviewed.
 4. When shared contracts or common infrastructure change on `dev`, fast-forward `browser-video-intelligence` from `dev` after checking that the update is a clean fast-forward. Do not force-push or rewrite either branch.
 5. Integrate browser/video work back into `dev` only at a reviewed milestone through a pull request from `browser-video-intelligence` to `dev`. Keep that pull request in draft until tests and target-desktop checks are complete.
 6. Update the relevant roadmap and architecture notes as part of each milestone. Mark work DONE only when code, tests and validation evidence exist.
@@ -49,3 +49,14 @@ The observer remains opt-in and disabled by default. Do not collect cookies, cre
 - `browser-video-intelligence` starts from that same integrated commit and is the only active branch for further browser/video-specific progress.
 - The first independent browser/video milestone remains target-desktop validation, trace-corpus construction and false-positive/false-negative evaluation. Hosted CI does not replace live Edge/Chrome and native-host testing on the Windows machine.
 - `main` remains the stable branch and is not advanced by this branch reorganization.
+
+
+## 5. APEX standalone assistant exception
+
+The user explicitly requested a new branch for the standalone APEX assistant plan. The branch `feature/apex-standalone-assistant-plan` was created from `dev`.
+
+- APEX is a separate Windows desktop product; it must not be embedded into or coupled to the SENTINEL dashboard.
+- This feature branch contains the APEX implementation plan, TODO backlog and architecture decision record as its initial documentation-only milestone.
+- Future APEX implementation may continue on this scoped feature branch; keep the branch focused on APEX and integrate to `dev` through a reviewed pull request after tests and Windows validation.
+- Reuse existing AIE contracts and infrastructure. Do not duplicate model routing, durable memory, policy, execution or Windows observation.
+- The future APEX desktop UI is explicitly deferred until the headless host/API contracts stabilize.
