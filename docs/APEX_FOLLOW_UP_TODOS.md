@@ -35,7 +35,9 @@ This is the implementation backlog. The current branch is documentation-only: no
 - [ ] Add bounded timeouts/output/context, a single initial local inference slot and serialization with existing AIE consumers.
 - [ ] Record model/provider health, token counts, load time, time-to-first-token, generation time and failures.
 - [ ] Add `apex_get_runtime_manifest` with actual model, provider, tool, permission and availability state.
-- [ ] Ensure normal runtime does not require a visible CMD/PowerShell window or manual `ollama run`; developer mode may use a console.
+- [ ] Ensure normal runtime does not require a visible CMD/PowerShell window or manual `ollama run`; the host must connect to or start the installed Ollama service through a documented Windows mechanism, while developer mode may use a console.
+- [ ] Add regression tests for the exact transcript failures: no false Microsoft creator claim; distinguish APEX host identity from Qwen foundation-model provenance; answer configured creator/operator attribution from metadata; use the approved profile for the user's name; default to `sir`; never claim live access/kernel access without a healthy provider.
+- [ ] Ensure “Can you see my running processes?” calls a real process-inventory capability and returns a timestamped bounded snapshot, or clearly reports why the provider is unavailable.
 
 ### Intent interpretation and tool orchestration
 - [ ] Classify each request as chat, explain, inspect, diagnose, plan or automate without forcing every message into a tool call.
@@ -45,7 +47,12 @@ This is the implementation backlog. The current branch is documentation-only: no
 - [ ] Ask one focused clarification when a target or operation is materially ambiguous; do not guess destructive targets.
 - [ ] Report unsupported, disabled, unavailable and approval-gated capabilities distinctly.
 
-### Whole-Windows automation adapters — required Phase 1 coverage
+### Live Windows baseline and built-in command knowledge — required Phase 1 coverage
+- [ ] Implement live OS/build and device summary, current-session facts from documented APIs, process inventory/details, foreground-window/application metadata, service/startup/task state, adapter/DNS/route state, volume/free-space state and CPU/RAM load.
+- [ ] Return source/provider, observed timestamp, freshness, permission level and coverage for every live result; missing/denied/stale values must never be represented as healthy or zero.
+- [ ] Add a versioned OS-aware catalogue for known `ms-settings:` page URIs, Control Panel `.cpl` applets, MMC `.msc` consoles and approved Windows management entry points.
+- [ ] Add validated lookups/openers for common targets such as Device Manager, Power Options, Network Connections, Programs and Features and other documented applets; check target existence and OS availability before dispatch.
+- [ ] Test exact user questions about Settings URIs, CPL/MSC commands and the difference between opening a page and changing a setting.
 - [ ] **Applications/windows:** enumerate supported app/window metadata; launch registered applications; activate, minimize, maximize and close user-owned windows; test exact-target protection for process/window actions.
 - [ ] **Files/folders:** browse/search user-approved roots; inspect metadata; create folders; copy, move and rename; support Recycle Bin deletion; block permanent deletion, bulk deletion and protected paths by default.
 - [ ] **Settings/personalization:** implement typed read/write handlers for supported volume, brightness, display, power, Wi-Fi, Bluetooth, night-light, focus/notification and accessibility settings. Distinguish opening a Settings page from successfully changing a setting.
@@ -87,11 +94,11 @@ This is the implementation backlog. The current branch is documentation-only: no
 **Exit criteria:** APEX can understand a natural-language Windows request, select and execute a registered typed capability under policy, verify the resulting OS state and report the result honestly. Tested operations must span the Section 9 Windows automation domains; chat-only operation or a tiny Settings-URI allowlist is not sufficient.
 
 ## Phase 2 — Expanded real-time Windows perception
-- [ ] Define versioned provider contracts and normalized evidence envelopes.
+- [ ] Formalize and extend Phase 1 provider contracts and normalized evidence envelopes.
 - [ ] Connect the existing AIE Windows observer/event store.
 - [ ] Build a SENTINEL read-only provider adapter using a documented API/contract.
-- [ ] Expand hardware, CPU/RAM/GPU, process, service/driver, startup/task, storage, network, event and bounded ETW evidence.
-- [ ] Add source health, timestamp, freshness, coverage, permission and event-loss metadata.
+- [ ] Expand beyond Phase 1 baseline into richer GPU/sensor coverage, per-process resource deltas, storage I/O, bounded Windows Event Log metadata and validated ETW event families.
+- [ ] Add deeper source health, timestamp, freshness, coverage, permission and event-loss metadata.
 - [ ] Add adaptive sampling and resource/game-aware load shedding without LLM polling.
 - [ ] Confirm no direct writes to SENTINEL's private SQLite database and no SENTINEL UI dependency.
 - [ ] Make automation handlers consume the same read-only provider contracts for preconditions and verification.
@@ -102,7 +109,8 @@ This is the implementation backlog. The current branch is documentation-only: no
 - [ ] Reuse AIE MemoryStore; avoid a parallel APEX database.
 - [ ] Add APEX namespace/source tags to memory records.
 - [ ] Separate user profile, conversation history, system observations and memories.
-- [ ] Implement explicit onboarding for owner name, salutation, locale and preferences; initialize salutation to `sir`.
+- [ ] Implement explicit onboarding for owner/preferred name, salutation, locale, communication style, device aliases and preferences; initialize salutation to `sir`.
+- [ ] Add optional local indexing of explicitly selected user folders/documents with inspectable paths, retention and deletion; exclude credentials, browser secrets, protected/system folders and unselected locations.
 - [ ] Implement explicit memory capture, review, correction, export and deletion.
 - [ ] Implement relevant, non-sensitive memory retrieval with bounded prompt budget.
 - [ ] Preserve provenance, confidence, sensitivity, verification and expiry.
