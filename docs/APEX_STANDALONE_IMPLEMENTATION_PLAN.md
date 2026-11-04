@@ -420,7 +420,9 @@ This is the first coding milestone. Build the assistant host and the actual Wind
 - Implement streaming, thinking-off by default, bounded context/timeouts, inference metrics and a single resource-admitted local inference slot.
 - Implement the live capability registry, `apex_get_runtime_manifest`, typed tool schemas and host-side multi-turn tool dispatcher.
 - Implement the Windows automation domains listed in Section 9: applications/windows, files/folders, settings, process lifecycle, services/startup/tasks, networking, devices/peripherals, audio/display/power, maintenance/security workflows and allowlisted UI Automation.
-- Implement a minimal set of read-before-write state providers needed for each action, target identity checks, preconditions and independent postcondition verification.
+- Implement a live Windows baseline provider set in Phase 1, not just action handlers: OS/build and device summary; current session identity as exposed by documented Windows APIs; process inventory/details; foreground windows and registered application metadata; service/startup/task state; network adapters/DNS/routes; volume/free-space status; CPU/RAM load; and the specific setting values required by supported setting actions. Every response carries source, observed time, freshness, privilege and coverage. This baseline must answer “Can you see my running processes?” with a real bounded snapshot when the provider is healthy.
+- Add a versioned, OS-aware Windows command catalogue for known `ms-settings:` page URIs, Control Panel `.cpl` applets, MMC `.msc` consoles and approved Windows management entry points. Resolve names such as Device Manager and Power Options through this catalogue; validate that each target exists on the current Windows installation. Never invent a command or claim that opening a page changed a setting.
+- Add self-knowledge and identity regression cases for “what is your name?”, “who made/configured you?”, “what model are you?”, “what tools/providers are connected?”, “can you see my processes?” and Windows settings/CPL lookups. APEX must distinguish its own assistant/host identity, the configured operator/creator attribution, the foundation model and live provider capabilities. If a provenance field is unknown, say unknown; never fabricate Microsoft authorship, kernel access, local visibility or user identity.
 - Reuse AIE policy broker, capability manifests, approval, execution-control, executor and audit ledger. Do not create parallel governance.
 - Add per-action risk tiers, explicit approvals, UAC boundary handling, dry-run/preview, cancellation, rate limits, before-state snapshots, audit and rollback/compensation where feasible.
 - Use fixed typed Windows handlers and reviewed/versioned command recipes. Do not let the model create arbitrary PowerShell/CMD strings or gain a generic administrator terminal.
@@ -429,23 +431,22 @@ This is the first coding milestone. Build the assistant host and the actual Wind
 **Exit:** APEX can receive natural-language Windows requests, select a registered typed capability, show/obtain the required approval, execute supported operations, independently verify outcomes and report unsupported/unavailable operations honestly. Coverage is demonstrated across the Section 9 action domains—not just chat or opening Settings pages. It runs through its own host without `ollama run`, and SENTINEL UI remains untouched.
 
 ### Phase 2 — Expanded real-time Windows perception
-- Define stable provider contracts and normalized evidence envelopes.
-- Connect to AIE observation state/event store.
-- Add the SENTINEL read-only provider adapter through a supported API/contract.
-- Expand coverage across hardware, CPU/RAM/GPU, processes, services/drivers, startup/tasks, storage, networking, events and bounded ETW.
-- Add provenance, freshness, permission, provider-health, coverage and event-loss reporting.
-- Add adaptive collection and gaming/resource-aware sampling without LLM polling.
+- Formalize and extend Phase 1 provider contracts and normalized evidence envelopes.
+- Connect deeply to AIE observation state/event store and add the SENTINEL read-only provider adapter through a supported API/contract.
+- Expand beyond the Phase 1 live baseline into richer hardware/sensor coverage (GPU and supported temperature/power sensors), per-process resource deltas, detailed storage/I/O, bounded Windows Event Log metadata and validated ETW event families.
+- Add richer provenance, freshness, permission, provider-health, coverage and event-loss reporting; distinguish unavailable sensors from zero values.
+- Add adaptive/event-driven collection and gaming/resource-aware sampling without LLM polling.
 
-**Exit:** APEX can answer evidence-backed whole-Windows questions using fresh provider data while the SENTINEL UI remains closed; automation handlers can consume the same read-only evidence contracts.
+**Exit:** APEX has broad, fresh, provenance-aware Windows telemetry and SENTINEL/AIE context. Phase 2 deepens telemetry fidelity; it does not postpone basic process, service, network, storage and system visibility, which are required in Phase 1.
 
 ### Phase 3 — Profile and unified memory
-- Add explicit first-run profile setup and editable salutation/display-name preferences.
-- Default salutation to `sir`.
-- Reuse existing AIE MemoryStore with APEX namespaces and provenance.
+- Add an explicit onboarding interview for display/preferred name, salutation (default `sir`), locale, communication style, device aliases, technical preferences and user-approved goals; never guess a person's name from a Windows folder path.
+- Reuse existing AIE MemoryStore with APEX namespaces and provenance; unify APEX-approved profile facts, conversation summaries, preferences, reviewed incidents and reusable workflows without copying raw telemetry into personal memory.
+- Add user-controlled, local-only indexing of explicitly selected folders/documents as an optional knowledge source. Exclude credentials, browser secrets, protected/system locations and unselected folders; make source paths, indexing state, retention and removal inspectable.
 - Implement explicit save/review/correct/export/delete and relevant-memory retrieval.
-- Implement retention and privacy controls.
+- Add memory conflict/staleness handling and user controls for retention, consent and data deletion.
 
-**Exit:** APEX remembers approved user preferences and relevant validated facts across app restarts, with user controls and no duplicate memory DB.
+**Exit:** APEX can recall the user's explicitly supplied profile and approved information across app restarts, can answer personal-profile questions from that profile, and gives the user inspect/edit/export/delete controls without a duplicate memory DB.
 
 ### Phase 4 — Advanced Windows diagnostic intelligence
 - Add request/task classification and bounded specialist profiles.
