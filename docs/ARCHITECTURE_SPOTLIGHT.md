@@ -255,3 +255,23 @@ Planning documents:
 - [ADR-0015: standalone APEX boundary](adr/0015-apex-standalone-assistant-boundary.md)
 
 The first coding milestone is a headless APEX host and runtime manifest. Desktop UI work is deliberately deferred until the host contracts stabilize. No APEX implementation code or SENTINEL UI changes are included in this planning milestone.
+
+## APEX Phase 1 commitment — whole-Windows automation first
+
+**Status:** Planned only; no APEX implementation code is present in this planning branch.
+
+APEX is a separate Windows assistant, not a SENTINEL dashboard feature. Its first coding phase must include the Windows automation engine rather than postponing action execution to a later milestone.
+
+Phase 1 includes:
+- The standalone local APEX host, existing Ollama model integration, truthful runtime/capability manifest and structured multi-turn tool dispatch.
+- A typed Windows capability catalogue spanning applications/windows, files/folders, supported settings, process lifecycle, services/startup/scheduled tasks, networking, devices/peripherals, audio/display/power and selected maintenance/security workflows.
+- Native Windows/API adapters first, fixed-parameter PowerShell/CIM recipes where needed, and opt-in bounded UI Automation for explicitly allowlisted applications.
+- AIE policy/approval/execution/audit reuse, risk tiers, exact target revalidation, least privilege, before/after evidence, independent postcondition verification and rollback/compensation where feasible.
+- Windows integration tests across each supported action family. A capability is advertised only when its concrete handler and health check are present.
+
+“Whole-Windows automation” means broad, explicit coverage through registered and testable capabilities. It does not mean arbitrary shell strings, unrestricted Administrator access, hidden changes or blanket automation of every third-party application's UI. Unsupported or unavailable actions must be reported as such.
+
+Phase 2 expands live Windows perception and telemetry coverage. It does not introduce the automation engine: Phase 1 already establishes that engine and its initial action coverage. Later phases add memory, advanced diagnostics, bounded background autonomy and the independent APEX desktop UI.
+
+Planning source: [APEX standalone implementation plan](APEX_STANDALONE_IMPLEMENTATION_PLAN.md) and [APEX follow-up TODOs](APEX_FOLLOW_UP_TODOS.md).
+
