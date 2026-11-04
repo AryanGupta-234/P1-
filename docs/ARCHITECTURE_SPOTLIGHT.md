@@ -238,3 +238,20 @@ PRIXON is implemented as an assistant identity and an AIE-integrated model lifec
 Language freedom is not execution authority. Existing AIE capability manifests, approvals, audit ledger, execution gate, kill switch and rollback remain independent of the model. Discussion, quotation or analysis of a subject is not treated as permission to perform an action.
 
 **First rebuild commit:** `f6e1c2b07bec7169d31f3b83526b14301dc93ead` on `dev`. The exact prior PRIXON prototype head is retained on `archive/dev-before-prixon-rebuild-20261102`. Kaggle execution, Windows CI tests and target-machine validation remain pending.
+
+
+## APEX standalone Windows assistant — planning branch
+
+**Status:** Architecture and implementation plan documented; application implementation has not started.  
+**Branch:** `feature/apex-standalone-assistant-plan` (created from `dev`).
+
+APEX is planned as a separate Windows desktop assistant with its own host lifecycle, conversational identity, user profile, unified memory adapter, capability registry and future desktop shell. It is **not** being added to the SENTINEL dashboard.
+
+APEX will reuse existing AIE model contracts/router, memory, planning/orchestration, policy and audit foundations wherever compatible. AIE Windows observation and SENTINEL diagnostics will be consumed through provider contracts; APEX must not duplicate collectors or write directly into SENTINEL's private database. The current Ollama model tag `APEX` is the initial local model target, not the entire assistant runtime.
+
+Planning documents:
+- [APEX standalone implementation plan](APEX_STANDALONE_IMPLEMENTATION_PLAN.md)
+- [APEX follow-up TODO backlog](APEX_FOLLOW_UP_TODOS.md)
+- [ADR-0015: standalone APEX boundary](adr/0015-apex-standalone-assistant-boundary.md)
+
+The first coding milestone is a headless APEX host and runtime manifest. Desktop UI work is deliberately deferred until the host contracts stabilize. No APEX implementation code or SENTINEL UI changes are included in this planning milestone.
