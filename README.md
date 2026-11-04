@@ -543,6 +543,14 @@ aie execution-disable
 
 `aie execution-resume --confirm` clears the kill switch, but does not itself enable execution. Each proposal is single-attempt and receives an append-only execution receipt. A successful `ms-settings:` dispatch is not proof that the requested page reached a specific state. After inspecting the desktop, `aie verify-proposal` appends one explicit human outcome (confirmed or not-confirmed) to the hash-chained audit ledger; it cannot overwrite an earlier result and does not independently inspect Windows UI state. No shell, arbitrary executable, file-write, network or privileged adapter is included.
 
+## APEX standalone Windows assistant (planned)
+
+APEX is planned as a separate Windows desktop assistant for conversation, user profile/memory, whole-PC diagnostics and policy-controlled automation. It is not embedded in the SENTINEL dashboard. The first milestone is a headless host using existing AIE model, memory, planning, Windows-observation and policy components; the standalone UI is deferred until host contracts stabilize.
+
+- [APEX standalone implementation plan](docs/APEX_STANDALONE_IMPLEMENTATION_PLAN.md)
+- [APEX follow-up TODO backlog](docs/APEX_FOLLOW_UP_TODOS.md)
+- [ADR-0015: standalone APEX boundary](docs/adr/0015-apex-standalone-assistant-boundary.md)
+
 ## PRIXON model development
 
 PRIXON preserves the Qwen2.5-7B-Instruct foundation and builds its own identity, reviewed training data and adapter around it. Read [the full PRIXON blueprint](docs/PRIXON_BLUEPRINT.md).
