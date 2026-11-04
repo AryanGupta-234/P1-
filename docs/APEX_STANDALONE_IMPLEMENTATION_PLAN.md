@@ -280,29 +280,39 @@ Each tool manifest must define:
 - Evidence provenance and verification contract.
 - Rollback/compensation contract when applicable.
 
-### Initial capability groups
+### Phase 1 — Whole-Windows automation coverage
 
-**Read-only first**
-- Host/system overview.
-- Process inventory and process details by PID plus creation time.
-- Service and driver state.
-- Startup and scheduled-task inventory.
-- Network interface/DNS/route diagnostics.
-- Storage and volume status.
-- Windows event evidence.
-- Bounded ETW session status/catalog and approved trace collection.
-- AIE/SENTINEL provider health.
-- APEX runtime manifest and capability status.
-- Profile/memory search with sensitivity filtering.
+Whole-Windows automation is a **Phase 1 deliverable**, not a later add-on. Phase 1 must establish the host, typed capability registry, tool dispatcher, Windows action adapters, policy/approval integration, audit trail, verification and a broad initial capability catalogue together.
 
-**Controlled automation later**
-- Open allowlisted applications and Windows settings pages.
-- Manage explicitly registered user workflows.
-- Restart a narrowly allowlisted noncritical service after approval.
-- Apply reversible configuration actions with a before-state snapshot.
-- Run named, versioned diagnostic scripts through an approved adapter.
+The target is broad coverage of supported Windows workflows through explicit adapters. It does not mean unrestricted shell access, arbitrary administrator rights, or a promise that every third-party application exposes automatable controls. Every capability must be reported as available, unavailable, disabled, approval-gated or unsupported based on a live provider check.
 
-Do not expose an unrestricted `execute_powershell(command)`, arbitrary `cmd.exe`, arbitrary file deletion or generic administrator tool to the model. A generated script is a proposal until a separate validator, policy gate and explicit approval authorize a specific operation.
+**Phase 1 action domains**
+
+- **Applications and windows:** discover installed/running applications; launch registered applications; activate, minimize, maximize and close user-owned windows; manage known app workflows. Any process-ending operation must bind to PID plus process creation time and protect Windows, security, anti-cheat and other protected processes.
+- **Files and folders:** browse and search user-approved roots; inspect metadata; create folders; copy, move and rename; send items to the Recycle Bin. Permanent deletion, bulk cleanup, protected locations and recursive destructive operations remain blocked or require a separately reviewed capability and explicit confirmation.
+- **Windows settings and personalization:** open the relevant Settings page and use typed adapters for supported settings such as volume, brightness, display, power, Wi-Fi, Bluetooth, night light, focus/notification behavior and accessibility. Each setting must have a concrete read/write handler and postcondition check; merely opening a Settings URI is not reported as changing a setting.
+- **Processes and applications:** inspect process identity/resource state; launch registered executables; close an app through its supported application/window path; allow termination only for explicitly supported, non-protected targets with exact target revalidation and approval.
+- **Services, startup and scheduled tasks:** inspect services, startup entries and tasks; enable/disable registered startup items; run or manage named tasks; start/stop only approved noncritical services. Critical Windows, security, networking, storage and anti-cheat services are protected.
+- **Networking:** inspect adapters, DNS, routes, proxy and connectivity; provide typed operations for supported adapter toggles, DNS configuration, DHCP renew/release and bounded repair workflows. Network resets, firewall changes, proxy changes and operations that can disconnect the session require explicit approval and a recovery path.
+- **Devices and peripherals:** inspect PnP/device health and expose only individually validated device actions. Device disable/enable requires elevation where Windows demands it, exact device identity, approval and a recovery path. Driver installation/removal and firmware changes are not general-purpose Phase 1 actions.
+- **Audio, display and power:** provide typed controls for supported audio endpoints/volume, display settings and power plans. Lock/sleep/restart/shutdown/sign-out actions require a direct, immediate user confirmation and must not be initiated by background autonomy.
+- **Windows maintenance and security:** expose status and named, bounded workflows such as Defender scan requests, update checks and selected built-in repair diagnostics. Security-control weakening, silent update installation, broad cleanup and repair commands with uncertain side effects are not autonomous actions.
+- **UI automation:** use Windows UI Automation only as a bounded fallback for explicitly enabled and allowlisted applications. It must not collect passwords, arbitrary control text, browser content or sensitive form values. Prefer native Windows APIs and typed adapters when available.
+- **Multi-step workflows:** compose supported capabilities into plans with preconditions, dependencies, progress, cancellation, per-step policy evaluation, verification and compensating actions. APEX must explain unsupported steps instead of improvising shell commands.
+
+**Execution adapters and hard limits**
+
+- Prefer documented Windows APIs, CIM/WMI, registered application protocols and narrow PowerShell cmdlet adapters with typed parameters.
+- PowerShell may be used behind named, versioned handlers whose command and parameter set are fixed in code/configuration. The model must never submit an arbitrary command string.
+- No unrestricted `execute_powershell(command)`, arbitrary `cmd.exe`, generic administrator terminal, arbitrary file deletion or unbounded script generation.
+- Every mutating capability declares risk, privilege, target identity, approval requirements, timeout, rate limit, preconditions, before-state capture, postcondition verifier and rollback/compensation support.
+- Unknown or unsupported actions fail closed. A model-generated plan is not permission to execute it.
+- Elevated operations use a narrowly scoped broker and normal Windows UAC; the normal APEX host remains unelevated.
+- Every capability has an enable/disable switch and appears in the runtime manifest with actual provider health and permission state.
+
+**Automation coverage acceptance matrix**
+
+Phase 1 is not complete with only chat, Settings-page opening or a toy two-command allowlist. It must include tested, documented operations across the action domains above. For each supported operation, tests must cover valid input, invalid input, unavailable provider, permission denial, protected target, cancellation, timeout, audit record, postcondition verification and rollback/compensation where applicable. Operations not yet implemented must be explicitly marked unavailable rather than implied by a broad category name.
 
 ## 10. Diagnostics and reasoning workflow
 
@@ -402,24 +412,31 @@ Do not create the full directory tree until the corresponding phase is implement
 
 **Exit:** reviewed plan and ADR; no application code or UI changes.
 
-### Phase 1 — Headless APEX host foundation
-- Add APEX package/configuration and versioned identity.
-- Implement lifecycle, settings, structured logging and local session model.
-- Reuse the AIE Ollama adapter/router; connect to installed `APEX` model via loopback API.
-- Implement request-level thinking-off default, cancellation, streaming and inference metrics.
-- Implement `apex_get_runtime_manifest` and truthful capability inventory.
-- Provide a developer test harness, not the final desktop UI.
+### Phase 1 — APEX runtime + whole-Windows automation engine
+This is the first coding milestone. Build the assistant host and the actual Windows automation capability layer together.
 
-**Exit:** APEX answers through its own host without `ollama run`; reports exact model/provider status and never invents tools.
+- Add the APEX package, configuration, versioned identity, lifecycle, structured logging, local sessions and cancellation.
+- Connect to the installed `APEX` Ollama model through the existing AIE adapter/router and loopback API; no visible Ollama CLI is required for normal operation.
+- Implement streaming, thinking-off by default, bounded context/timeouts, inference metrics and a single resource-admitted local inference slot.
+- Implement the live capability registry, `apex_get_runtime_manifest`, typed tool schemas and host-side multi-turn tool dispatcher.
+- Implement the Windows automation domains listed in Section 9: applications/windows, files/folders, settings, process lifecycle, services/startup/tasks, networking, devices/peripherals, audio/display/power, maintenance/security workflows and allowlisted UI Automation.
+- Implement a minimal set of read-before-write state providers needed for each action, target identity checks, preconditions and independent postcondition verification.
+- Reuse AIE policy broker, capability manifests, approval, execution-control, executor and audit ledger. Do not create parallel governance.
+- Add per-action risk tiers, explicit approvals, UAC boundary handling, dry-run/preview, cancellation, rate limits, before-state snapshots, audit and rollback/compensation where feasible.
+- Use fixed typed Windows handlers and reviewed/versioned command recipes. Do not let the model create arbitrary PowerShell/CMD strings or gain a generic administrator terminal.
+- Provide a developer harness and Windows integration tests; the final desktop UI remains deferred.
 
-### Phase 2 — Read-only Windows provider integration
-- Define stable provider contracts and evidence schema.
+**Exit:** APEX can receive natural-language Windows requests, select a registered typed capability, show/obtain the required approval, execute supported operations, independently verify outcomes and report unsupported/unavailable operations honestly. Coverage is demonstrated across the Section 9 action domains—not just chat or opening Settings pages. It runs through its own host without `ollama run`, and SENTINEL UI remains untouched.
+
+### Phase 2 — Expanded real-time Windows perception
+- Define stable provider contracts and normalized evidence envelopes.
 - Connect to AIE observation state/event store.
-- Add SENTINEL provider adapter through a supported API/contract.
-- Add targeted Windows native collectors only for coverage gaps.
-- Implement freshness, permission, provider-health and coverage reporting.
+- Add the SENTINEL read-only provider adapter through a supported API/contract.
+- Expand coverage across hardware, CPU/RAM/GPU, processes, services/drivers, startup/tasks, storage, networking, events and bounded ETW.
+- Add provenance, freshness, permission, provider-health, coverage and event-loss reporting.
+- Add adaptive collection and gaming/resource-aware sampling without LLM polling.
 
-**Exit:** APEX can answer bounded, evidence-backed questions across supported Windows domains while SENTINEL UI remains closed.
+**Exit:** APEX can answer evidence-backed whole-Windows questions using fresh provider data while the SENTINEL UI remains closed; automation handlers can consume the same read-only evidence contracts.
 
 ### Phase 3 — Profile and unified memory
 - Add explicit first-run profile setup and editable salutation/display-name preferences.
@@ -430,7 +447,7 @@ Do not create the full directory tree until the corresponding phase is implement
 
 **Exit:** APEX remembers approved user preferences and relevant validated facts across app restarts, with user controls and no duplicate memory DB.
 
-### Phase 4 — Whole-Windows diagnostic intelligence
+### Phase 4 — Advanced Windows diagnostic intelligence
 - Add request/task classification and bounded specialist profiles.
 - Add deterministic evidence correlation and incident records.
 - Add model-generated hypotheses and next-step suggestions grounded in evidence IDs.
@@ -439,34 +456,26 @@ Do not create the full directory tree until the corresponding phase is implement
 
 **Exit:** repeatable Windows diagnostic tasks show evidence provenance, limitations and measured quality.
 
-### Phase 5 — Capability registry and assisted automation
-- Register read-only tools with typed schemas.
-- Add multi-turn Ollama tool calling and host-side dispatch.
-- Connect policy broker, approval and audit.
-- Add a small allowlist of reversible, low-risk/controlled actions.
-- Implement before/after verification and compensation.
-
-**Exit:** invalid/unknown tools are denied; every state-changing action is policy-approved, auditable and verified.
-
-### Phase 6 — Adaptive autonomy and background operation
+### Phase 5 — Adaptive autonomy and background operation
 - Add goal/task lifecycle and bounded agent loop.
 - Add resource-aware admission, sampling and inference budgets.
 - Add proactive findings only for configured, high-signal conditions.
-- Add pause/stop controls and notification delivery.
+- Add pause/stop controls, per-capability controls and notification delivery.
+- Allow bounded autopilot only for individually enabled, reversible, low-risk capabilities with strong verification.
 - Validate behavior during gaming/foreground workloads.
 
-**Exit:** autonomous behavior remains bounded, explainable, reversible where possible and does not degrade foreground use.
+**Exit:** proactive behavior remains bounded, explainable, reversible where possible and does not degrade foreground use. It extends Phase 1 automation; it does not introduce automation for the first time.
 
-### Phase 7 — Standalone desktop UI and Windows packaging
+### Phase 6 — Standalone desktop UI and Windows packaging
 - Select native UI technology after host/API contracts stabilize.
 - Build an independent APEX window, tray controller and startup integration.
 - Launch/connect to Ollama and APEX host without requiring a command prompt.
-- Provide status, chat, evidence, memory, approvals and settings workspaces.
+- Provide status, chat, evidence, memory, approvals and automation workspaces.
 - Package and test install, update, uninstall and rollback.
 
 **Exit:** user can install, launch, use and remove APEX as an independent Windows app; SENTINEL UI is untouched.
 
-### Phase 8 — Evaluation and optional model adaptation
+### Phase 7 — Evaluation and optional model adaptation
 - Benchmark base Qwen/APEX prompt against any candidate adapter on the same tasks.
 - Build reviewed, licensed and consented data only.
 - Fine-tune only if measurable behavior gaps remain after prompts, tools, retrieval and deterministic logic.
@@ -547,15 +556,17 @@ No implementation phase may silently resolve these choices by introducing a new 
 
 ## 19. First implementation milestone
 
-The first coding milestone after this planning branch should be **Phase 1 — Headless APEX host foundation**.
+The first coding milestone after this planning branch is **Phase 1 — APEX runtime + whole-Windows automation engine**.
 
-It should deliver a small, testable local host with:
-- APEX identity/profile contract.
-- Ollama API connection to the already-installed `APEX` model tag.
-- Thinking disabled by default at request level.
-- Streaming chat/session handling.
-- Runtime self-inspection and truthful capability manifest.
-- Existing AIE model adapter/router reuse.
-- No SENTINEL UI changes, no new desktop UI, no action execution and no parallel memory store.
+It must deliver an end-to-end local host and action layer, not a chat-only skeleton:
+- APEX identity/runtime contract and local background host lifecycle.
+- Ollama API connection to the already-installed `APEX` model tag, with thinking disabled by default and no visible Ollama CLI dependency.
+- Streaming sessions, cancellation, bounded inference and resource metrics.
+- Live runtime/capability manifest and typed multi-turn tool dispatch.
+- A broad, documented Windows automation catalogue covering applications/windows, files/folders, settings, process lifecycle, services/startup/tasks, networking, devices, audio/display/power and selected maintenance/security workflows.
+- Native/typed Windows handlers, bounded UI Automation fallback for explicitly allowlisted apps, and reviewed command recipes with fixed parameters.
+- Existing AIE policy/approval/execution/audit reuse, risk tiers, preconditions, target revalidation, before/after evidence, independent verification and rollback/compensation where feasible.
+- Windows tests for every supported action family, including protected-target denial, permission denial, invalid arguments, timeout, cancellation and provider failure.
+- No arbitrary shell access, no generic Administrator mode, no SENTINEL UI changes, no duplicate model router, policy broker or memory database, and no new desktop UI in this milestone.
 
-Only after Phase 1 passes should Phase 2 connect live Windows observations.
+Phase 2 expands real-time Windows perception and evidence coverage; Phase 1 already provides the actual automation engine.
