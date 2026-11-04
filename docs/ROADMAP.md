@@ -4,7 +4,7 @@ Statuses: DONE / IN_PROGRESS / BLOCKED / PLANNED. Mark DONE only with code, test
 
 Development ownership and branch rules are defined in [Development Streams](DEVELOPMENT_STREAMS.md). M1.5 browser/video work is tracked independently on `browser-video-intelligence`; ecosystem and shared-integration work remains on `dev`. The existing browser/video foundation is present in the integrated baseline, but new browser/video progress must stay isolated until a reviewed milestone is ready.
 
-**Last updated:** 2026-11-02 | **Ecosystem branch:** `dev` | **Browser/video branch:** `browser-video-intelligence` | **Stable release:** `main`
+**Last updated:** 2026-11-05 | **Ecosystem branch:** `dev` | **Browser/video branch:** `browser-video-intelligence` | **APEX planning branch:** `feature/apex-standalone-assistant-plan` | **Stable release:** `main`
 
 | ID | Workstream | Status | Exit criteria |
 |---|---|---|---|
@@ -18,6 +18,7 @@ Development ownership and branch rules are defined in [Development Streams](DEVE
 | M6 | Generalization research | PLANNED | Held-out task transfer, robustness and reproducible benchmarks |
 | M7 | Persistent Sentinel experience | IN_PROGRESS | Per-user worker, multi-workspace Titan boot experience, deep system intelligence, searchable event/audit vault, specialist local AI, advanced collector opt-ins and configurable posture automation |
 | M8 | PRIXON model and assistant | IN_PROGRESS | Immutable Qwen foundation, PRIXON identity, reviewed dataset pipeline, Kaggle QLoRA adapter, regression benchmarks and Windows runtime integration |
+| M9 | APEX standalone Windows assistant | PLANNED | Independent APEX host, profile and memory, self-aware capability registry, whole-Windows providers, policy-controlled automation and a separate desktop application |
 
 ## M0 — Foundation
 - [x] Windows-only architecture and boundaries.
@@ -244,3 +245,26 @@ Still pending:
 
 **Execution boundary:** language understanding is context-aware; consequential OS actions remain governed by AIE's independent capability, approval, audit and rollback controls. No model prompt or adapter may bypass that execution policy.
 
+
+
+## M9 — APEX standalone Windows assistant
+
+**Status:** PLANNED — plan and follow-up backlog authored on `feature/apex-standalone-assistant-plan`. No runtime, UI or SENTINEL dashboard code has been changed.
+
+- [x] Define APEX as a standalone Windows assistant, separate from the SENTINEL dashboard.
+- [x] Map existing AIE, PRIXON and SENTINEL reuse boundaries.
+- [x] Define the model, profile, memory, capability and process boundaries.
+- [x] Document the implementation plan, integration boundaries and acceptance gates.
+- [x] Create the phased follow-up TODO backlog and ADR-0015.
+- [ ] Review architecture and extension points against current `dev` implementation before coding.
+- [ ] Build the headless APEX host, Ollama API integration and truthful runtime/capability manifest.
+- [ ] Connect read-only AIE/SENTINEL Windows providers.
+- [ ] Add explicit user profile and APEX-scoped unified memory using the existing AIE MemoryStore.
+- [ ] Add evidence-grounded diagnostics and specialist context routing.
+- [ ] Add typed tool registry and multi-turn Ollama tool calling.
+- [ ] Reuse AIE policy, approval, execution, audit and verification for controlled automation.
+- [ ] Add adaptive resource-aware autonomy and background lifecycle.
+- [ ] Design and ship a separate APEX desktop application after host contracts stabilize.
+- [ ] Complete Windows-host, privacy, security, performance and model-quality evaluation.
+
+**First coding milestone:** Phase 1 in [APEX standalone implementation plan](APEX_STANDALONE_IMPLEMENTATION_PLAN.md). The [follow-up TODO backlog](APEX_FOLLOW_UP_TODOS.md) is the task-level source of truth. Mark implementation tasks DONE only with code and validation evidence.
