@@ -206,37 +206,66 @@ Every observation must carry source/provider, observed timestamp, host identity,
 
 ## 7. Model runtime and prompt architecture
 
-### Initial model
+### Initial model and Modelfile policy
 
-Use the user's existing local Ollama model tag `APEX`, which is based on Qwen3.5 4B, as the first integration target. Preserve the current Modelfile as the initial user baseline; do not rewrite it as part of host integration.
+Use the user's existing local Ollama model tag `APEX`, based on Qwen3.5 4B, as the first integration target. Preserve the current base model, template and working Modelfile as the initial baseline. Do not replace the foundation model, alter model weights, add an adapter or perform a large prompt rewrite as a prerequisite for building the host.
 
-APEX must call Ollama's local HTTP API, not depend on `ollama run` or a visible terminal session. The CLI remains useful for developer diagnostics only.
+The Modelfile has a deliberately narrow role: static assistant identity, voice and non-negotiable truthfulness/interaction principles. It is not the place for live Windows data, current user identity, application lists, available tool schemas, permissions, memory contents or current provider status.
 
-### Runtime requirements
+After reviewing the exact current Modelfile, make only a targeted `SYSTEM` instruction correction if needed:
+- Identify the assistant as APEX, a user-configured local Windows assistant; explicitly prohibit claiming that Microsoft created or owns APEX.
+- State the known foundation model/host provenance only from configured metadata; otherwise answer unknown.
+- Do not claim Windows, registry, process, file, kernel or network access unless a live host capability/provider is supplied for this request.
+- In bare `ollama run` mode, explain that no APEX Windows host/tools are connected and therefore no live machine inspection/action can be performed.
+- Never claim to be running in a sandbox, on the user's physical PC, or in any other execution environment unless the host runtime manifest explicitly reports it.
+- Use the configured user profile and preferred salutation; default to `sir` only when no different user preference is stored.
+- Speak naturally and conversationally; adapt concise or detailed responses to the task without forced catchphrases.
 
-- Use the existing AIE `ModelProvider` contract and Ollama adapter where compatible.
+Do not attempt to solve tool access by adding tool definitions or executable paths to the Modelfile. The Modelfile's SYSTEM instruction can guide model behavior, but it is not an authorization boundary and cannot grant operating-system access. Keep the original `FROM` and model-specific `TEMPLATE` intact unless a separate compatibility test proves the template itself is malformed. Ollama's documented Modelfile instructions separate `SYSTEM`, `TEMPLATE` and generation `PARAMETER` settings; runtime tool definitions are sent through the chat API, not embedded as executable capabilities in the Modelfile.
+
+### Runtime and model transport requirements
+
+- APEX must call Ollama's local HTTP API, not depend on `ollama run` or a visible terminal session. The CLI remains useful for developer diagnostics only.
+- Use the existing AIE `ModelProvider` contract and Ollama adapter where compatible; extend them rather than creating a second model stack.
 - Discover installed model tags; do not auto-download or silently switch to a remote model.
-- Support streaming conversational responses and structured tool-call turns.
-- Send a request-level thinking setting: thinking off for ordinary conversation; allow a deliberate deep-reasoning mode only when the task warrants it and host resource policy admits it.
+- Extend the model request contract with explicit `think` control, optional typed tool definitions and bounded tool-call settings. Normal conversation sends `think: false` explicitly at request time; deep reasoning is enabled only by the host's task/resource policy.
+- Extend message/response contracts to preserve assistant tool calls and tool results: allow the provider's tool message role and tool name, parse `message.tool_calls`, and retain the assistant tool-call turn followed by corresponding tool-result messages. Current AIE `ChatMessage` permits only system/user/assistant, and current `OllamaClient.chat` sends no `think` or `tools` fields and returns only message content; this is a concrete compatibility gap to close before Phase 1 tool use.
+- Use Ollama `/api/chat` tool schemas for model-requested function calls. A model tool call is only a proposal: the APEX host validates tool name/schema/arguments, checks the live capability manifest and AIE policy, executes through the registered adapter and sends a sanitized result back to the model. The model never executes a tool itself.
+- Support bounded multi-turn tool-call loops, streaming responses, cancellation and structured tool errors. Reject malformed, unknown, repeated or over-budget calls.
 - Use one local inference slot initially to avoid RAM/CPU contention.
 - Keep the model warm only within configured memory budgets; unload or defer optional work under pressure.
 - Apply bounded timeouts, response sizes, context budgets and cancellation.
 - Record prompt tokens, output tokens, time-to-first-token, tokens/second, total duration, model load time and failures.
-- Keep tool selection, action policy and memory retrieval outside the Modelfile.
 
-### Dynamic prompt assembly
+### Runtime identity and context precedence
 
-Build each request from clearly separated, versioned inputs:
+Build each request from versioned and separately labelled sources. The host-supplied runtime context is authoritative for dynamic facts:
+1. Static APEX identity and non-negotiable truthfulness principles.
+2. Build metadata: APEX host/product version, configured creator/operator attribution and foundation-model tag/provider.
+3. Live runtime manifest: current Ollama/provider health, connected providers, registered tools, permission state and capability availability.
+4. Explicit user profile: preferred name/salutation, locale, communication preferences and approved device aliases.
+5. Relevant specialist profile for the current task.
+6. Current user request and bounded conversation history.
+7. Fresh Windows evidence and selected memories with source, timestamp and provenance.
+8. Only the tool schemas relevant to this request.
+9. A concise execution-policy reminder and currently permitted autonomy tier.
 
-1. APEX identity and communication principles.
-2. Relevant specialist profile (Windows, performance, network, security or automation).
-3. Current user request and bounded conversation history.
-4. Relevant user-approved profile preferences.
-5. Fresh evidence and selected memories with source/provenance labels.
-6. Only the tool schemas relevant to the current task.
-7. Execution policy reminder and available action tier.
+If these sources conflict, fresh host metadata/provider evidence wins over model prior knowledge. User profile values are never inferred from Windows folder names. Unknown fields remain explicitly unknown. Provider facts must include freshness/health; a stale cached manifest cannot prove a tool is currently connected.
 
 Do not put the whole Windows inventory, full memory database or every tool schema into every prompt. Retrieved observations, user files and memory are untrusted reference data, not higher-priority instructions.
+
+### Deterministic answers for identity and capability questions
+
+For high-risk factual questions such as "who made you?", "what model are you?", "what are you connected to?", "can you see my processes?" and "what can you do?", the host must supply a structured, read-only self-inspection result. The application may answer stable identity/provider fields deterministically before using the model for natural phrasing. It must never rely on the foundation model's parametric memory to invent current provider connectivity, current Windows visibility or owner identity.
+
+The user-facing assistant must distinguish:
+- APEX assistant/product identity.
+- The person/team who configured the APEX host (from explicit build configuration).
+- The foundation model and its provider metadata.
+- Ollama as the local model-serving runtime.
+- AIE as the host/capability/policy framework.
+- SENTINEL as an independent observation/diagnostics provider, only when actually connected.
+- Every individual registered tool/provider and its live status.
 
 ## 8. Unified profile, memory and canonical data store
 
