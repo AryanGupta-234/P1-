@@ -14,7 +14,7 @@
 
 APEX is the user's primary, conversational Windows assistant: a local-first, Friday/Jarvis-style interface for questions, personal context, whole-PC diagnostics, planning and controlled automation.
 
-SENTINEL is a Windows observation and diagnostics capability that APEX can consult. It is not APEX's user interface and it does not own APEX's identity, conversation, profile or orchestration.
+SENTINEL is a separate product. APEX does not depend on it, embed its UI, import its code or access its private data. Any future connection requires a separately approved, documented provider contract.
 
 The APEX desktop experience will be designed and implemented later. This document defines the runtime, integration boundaries, data contracts, memory, capabilities, policy and delivery sequence first. No UI redesign or SENTINEL dashboard modification is in scope for this planning milestone.
 
@@ -40,32 +40,29 @@ The APEX desktop experience will be designed and implemented later. This documen
 - Keylogging, covert screenshots, microphone recording, credential harvesting, browser-cookie/form capture or arbitrary personal-file indexing.
 - Automatic cloud inference or silent model downloads.
 
-## 2. Repository baseline and reuse strategy
+## 2. Repository baseline and ownership
 
-The implementation branch is based on the APEX planning branch. APEX is an independent product and must not reuse or import AIE/SENTINEL runtime internals. Existing AIE source is not a dependency contract.
+The implementation branch is based on the APEX planning branch. APEX is a separate assistant product with its own runtime and release boundary. Its code may coexist in this Git repository during development, but it must not depend on AIE or SENTINEL internals.
 
-### Independent APEX-owned components
+### APEX-owned implementation
 
-| Existing repository component | APEX use |
-|---|---|
-| `aie/models/base.py`, `aie/models/ollama.py`, `aie/models/router.py` | Model request/response contract, loopback Ollama transport and hardware-aware local routing |
-| `aie/prixon/identity.py` | Reference for separating assistant identity from foundation-model weights; APEX gets its own identity module and must not silently rename PRIXON |
-| `aie/memory/store.py`, `aie/memory/prompt_context.py` | Existing local memory records, provenance, sensitivity and bounded context retrieval |
-| `aie/orchestration/` and `aie/planning/` | Validated plans, task runs, dependencies, lifecycle and recovery |
-| `aie/policy/` | Capability manifests, default-deny policy broker, approval controls, executor and audit ledger |
-| AIE event contracts, observer, SQLite store and Windows providers | Read-only whole-machine observations and normalized evidence |
-| `aie/desktop/tray.py` | Reference for native Windows tray lifecycle controls, not a mandate to reuse its UI |
-| SENTINEL's documented local API, telemetry and diagnostics | Optional provider adapter for SENTINEL-owned observations and domain diagnostics |
+APEX owns and maintains the following components under the `apex/` package:
 
-APEX may independently implement similar capabilities, but it owns its contracts, adapters, state, approval and persistence. Do not import code from `aie/` or `SENTINEL/` as a runtime dependency.
+- Python host lifecycle, configuration, identity, prompt composition and model contracts.
+- Direct loopback Ollama HTTP transport, inference scheduling and structured tool-call handling.
+- Typed capability registry, policy decisions, approval interface, executor and audit records.
+- Windows inventory, desktop interaction, UI Automation, application catalogue, file, audio, network and system adapters.
+- The canonical APEX SQLite store, profile, memories, conversations, application metadata, task context and change journal.
+- Future APEX IPC, desktop UI, installer and lifecycle management.
 
-### Product independence rule
+### Independence requirements
 
-- APEX has its own model transport, data store, policy broker, approval ledger, executor and Windows providers.
-- Do not import AIE observer or SENTINEL private packages; only a later, separately approved and documented provider protocol may connect products.
-- Similarity of capability is not a reason to couple product lifecycles.
-- Do not import SENTINEL's private module globals as an integration contract. Prefer a versioned provider interface or authenticated local API.
-- Do not modify `SENTINEL/ui/`, `SENTINEL/sentinel/server.py` or the SENTINEL dashboard to host APEX.
+- No imports from `aie/` or `SENTINEL/` in the APEX package.
+- No calls to AIE or SENTINEL command-line entry points or private APIs.
+- No reads, writes or migrations of AIE or SENTINEL databases.
+- No dependency on the SENTINEL dashboard or its lifecycle.
+- Tests enforce the import boundary and absence of arbitrary shell/subprocess model execution.
+- Any future cross-product integration must be optional, read-only by default, versioned, explicitly approved and backed by a documented external provider contract. It is not a Phase 1 dependency.
 
 ## 3. Product and process boundaries
 
@@ -115,9 +112,8 @@ If a dependency is unavailable, APEX must show a precise degraded status and pre
 ### Identity separation
 
 - **APEX** is the user-facing assistant and product identity.
-- **SENTINEL** is the observation/diagnostics provider and specialist capability.
+- **SENTINEL** is a separate product and is not an APEX runtime dependency.
 - **Qwen3.5 4B** is the current foundation model used by the user's Ollama tag `APEX`.
-- **PRIXON** remains the separately documented AIE model/adapter research identity until an explicit architecture decision changes that relationship. Do not silently merge identities or replace PRIXON files.
 - The assistant must never invent its creator, model provenance, installed tools or permissions. These facts come from build metadata, model metadata and the operator profile.
 
 ### Profile setup
@@ -159,8 +155,8 @@ Add a read-only self-inspection capability, conceptually `apex_get_runtime_manif
 - Assistant identity and active prompt/profile version.
 - Foundation model tag, model family and quantization metadata when available.
 - Ollama endpoint status and model availability.
-- Current inference mode (fast/deep), thinking setting and resource-admission state.
-- Connected providers: AIE observer, SENTINEL provider, Windows native providers and optional services.
+- Current inference mode (normal), fixed thinking-off state and resource-admission state.
+- Connected providers: APEX-owned Win32, WMI, COM, Core Audio, UI Automation and other registered Windows providers, each with its own health check.
 - Registered tools with identifier, description, schema version, source provider, availability, permission tier and last health check.
 - Capabilities currently enabled, disabled, approval-gated or unavailable.
 - Memory store status, active profile and retention state.
@@ -171,7 +167,7 @@ A tool is considered connected only after a real health check. A registered-but-
 
 ## 6. Whole-Windows perception and telemetry
 
-APEX should consume normalized AIE observations first, then add provider adapters for missing Windows coverage. SENTINEL remains a separate provider, not the APEX UI.
+APEX collects normalized evidence through its own Windows providers. AIE and SENTINEL are not sources or dependencies in this phase.
 
 Initial read-only domains:
 
@@ -222,12 +218,12 @@ Do not attempt to solve tool access by adding tool definitions or executable pat
 ### Runtime and model transport requirements
 
 - APEX must call Ollama's local HTTP API, not depend on `ollama run` or a visible terminal session. The CLI remains useful for developer diagnostics only.
-- Use the APEX-owned model request/response contracts and Ollama HTTP adapter. Do not import or extend the AIE model stack.
+- Use the APEX-owned model request/response contracts and direct Ollama HTTP adapter. Do not import or extend the AIE model stack.
 - Discover installed model tags; do not auto-download or silently switch to a remote model.
-- Extend the model request contract with explicit `think` control, optional typed tool definitions and bounded tool-call settings. Normal conversation sends `think: false` explicitly at request time; deep reasoning is enabled only by the host's task/resource policy.
+- Extend the model request contract with explicit `think` control, optional typed tool definitions and bounded tool-call settings. All Phase 1 inference sends `think: false` from Python in the Ollama HTTP request. No thinking override is exposed in the current runtime.
 - Extend message/response contracts to preserve assistant tool calls and tool results: allow the provider's tool message role and tool name, parse `message.tool_calls`, and retain the assistant tool-call turn followed by corresponding tool-result messages. APEX's own `ChatMessage` and Ollama client must preserve tool-call turns and tool-result messages; normal `/api/chat` calls explicitly include `think: false`.
 - Use Ollama `/api/chat` tool schemas for model-requested function calls. A model tool call is only a proposal: the APEX host validates tool name/schema/arguments, checks the live capability manifest and APEX policy, executes through the registered adapter and sends a sanitized result back to the model. The model never executes a tool itself.
-- Support bounded multi-turn tool-call loops, streaming responses, cancellation and structured tool errors. Reject malformed, unknown, repeated or over-budget calls.
+- Support bounded non-streaming multi-turn tool-call loops and structured tool errors. Reject malformed, unknown, repeated or over-budget calls. The initial runtime sends `stream: false`; streaming and interactive cancellation remain follow-up work.
 - Use one local inference slot initially to avoid RAM/CPU contention.
 - Keep the model warm only within configured memory budgets; unload or defer optional work under pressure.
 - Apply bounded timeouts, response sizes, context budgets and cancellation.
@@ -260,7 +256,7 @@ The user-facing assistant must distinguish APEX product identity, its explicitly
 
 APEX must have one canonical local database file for its durable assistant memory and knowledge, not separate databases for profile, chat history, memory types, application discovery and task context. This is a single physical SQLite database with logically separated, typed tables and repository interfaces.
 
-**Canonical database target:** %LOCALAPPDATA%\\APEX\\apex-unified.sqlite3 (resolved through the existing AIE per-user data-directory helper, not hardcoded in application code). A portable/configurable data-root override may be supported for development and backup/restore.
+**Canonical database target:** %LOCALAPPDATA%\\APEX\\apex-unified.sqlite3 (resolved through APEX-owned `apex_data_dir()`, not an AIE helper). A portable/configurable data-root override may be supported for development and backup/restore.
 
 This is an APEX-owned data store. Do not consolidate, migrate, open or write AIE database files. APEX initializes and migrates only its own versioned schema with integrity checks, transaction journals and backups.
 
@@ -275,7 +271,7 @@ This is an APEX-owned data store. Do not consolidate, migrate, open or write AIE
 - **Task and workflow context:** user-directed task sessions, plans, runs, step state, outcome summaries and references to execution receipts.
 - **Diagnostic knowledge:** reviewed incidents, hypotheses, verified fixes, follow-up notes and linked evidence references. Raw telemetry is not automatically promoted to personal memory.
 
-The policy/security audit ledger and remote-egress audit remain separately protected append-only stores if required by their integrity boundary. They are not alternate memory stores. Secrets, credentials, browser tokens, raw passwords and private keys are never placed in the unified database. Keep the existing execution kill-switch as an independent emergency control that still works if SQLite is unavailable. SENTINEL remains a separate product; any future read-only connection requires a separately approved provider contract and is not a Phase 1 dependency.
+The policy/security audit ledger and remote-egress audit remain separately protected append-only stores if required by their integrity boundary. They are not alternate memory stores. Secrets, credentials, browser tokens, raw passwords and private keys are never placed in the unified database. Implement an APEX-owned independent emergency kill switch that remains effective if SQLite is unavailable; do not reuse AIE control files. SENTINEL remains a separate product; any future read-only connection requires a separately approved provider contract and is not a Phase 1 dependency.
 
 ### Dynamic, adaptable record schema
 
@@ -463,7 +459,7 @@ The agent must not treat a correlation as a proven cause. If telemetry is stale 
 
 ## 11. Controlled autonomy and verification
 
-Reuse AIE's capability manifests, default-deny policy broker, approval, execution-control and audit components. Extend them only through reviewed, backward-compatible contracts.
+Use APEX-owned capability manifests, default-deny policy broker, approval, execution-control and audit components.
 
 Initial autonomy levels:
 
@@ -508,7 +504,7 @@ Voice and wake-word remain later opt-in capabilities. Core desktop interaction�
 
 ## 13. Proposed repository layout
 
-The final layout must be reconciled with existing AIE package conventions before files are added.
+The final layout follows the standalone `apex/` package and must not depend on AIE package conventions.
 
 ```text
 apex/                         # standalone assistant runtime
@@ -517,9 +513,9 @@ apex/                         # standalone assistant runtime
   runtime/                    # host lifecycle, sessions, model requests
   context/                    # bounded context and evidence composition
   registry/                   # capability manifests and tool dispatch
-  providers/                  # AIE, SENTINEL and native Windows adapters
+  providers/                  # APEX-owned native Windows providers and optional external adapters
   profile/                    # user profile and consent
-  memory/                     # adapter to unified AIE MemoryStore
+  memory/                     # APEX-owned repositories over UnifiedDataStore
   diagnostics/                # investigation and evidence correlation
   autonomy/                   # plan, approval bridge, execution, verification
   ipc/                        # local desktop-to-host protocol
@@ -546,8 +542,8 @@ Do not create the full directory tree until the corresponding phase is implement
 This is the first coding milestone. Build the assistant host and the actual Windows automation capability layer together.
 
 - Add the APEX package, configuration, versioned identity, lifecycle, structured logging, local sessions and cancellation.
-- Connect to the installed `APEX` Ollama model through the existing AIE adapter/router and loopback API; no visible Ollama CLI is required for normal operation.
-- Implement streaming, thinking-off by default, bounded context/timeouts, inference metrics and a single resource-admitted local inference slot.
+- Connect to the installed `APEX` Ollama model through APEX's direct Python loopback HTTP client; no Ollama CLI or subprocess is used for inference.
+- Implement bounded non-streaming inference, fixed `think: false` in the Python `/api/chat` request, context/timeouts, inference metrics and a single local inference slot.
 - Implement the live capability registry, `apex_get_runtime_manifest`, typed tool schemas and host-side multi-turn tool dispatcher.
 - Establish the canonical UnifiedDataStore path, schema registry, versioned migrations, shared connection factory, change journal and one-writer/multi-reader access pattern. The app catalogue is stored in this same database.
 - Complete the idempotent, loss-checked migration of existing events.sqlite3, memory.sqlite3, task-runs.sqlite3 and task-sessions.sqlite3 into apex-unified.sqlite3 before APEX begins writing profile, conversation or app-catalogue records. Verify counts/checksums, references and integrity; preserve verified backups and rollback path. Route EventStore, MemoryStore, TaskRunStore and TaskSessionStore through the same physical database path.
@@ -559,7 +555,7 @@ This is the first coding milestone. Build the assistant host and the actual Wind
 - Add confidence-ranked application name/alias resolution, exact-path/AUMID validation, trust classification, ambiguity handling, launch verification and stale-entry refresh.
 - Add self-knowledge and identity regression cases for “what is your name?”, “who made/configured you?”, “what model are you?”, “what tools/providers are connected?”, “can you see my processes?” and Windows settings/CPL lookups. APEX must distinguish its own assistant/host identity, the configured operator/creator attribution, the foundation model and live provider capabilities. If a provenance field is unknown, say unknown; never fabricate Microsoft authorship, kernel access, local visibility or user identity.
 - Add local model-assisted application metadata enrichment for incomplete/ambiguous EXE candidates; model output is schema-validated descriptive metadata only, never path/signature/trust/permission truth.
-- Reuse AIE policy broker, capability manifests, approval, execution-control, executor and audit ledger. Do not create parallel governance.
+- Implement APEX-owned policy broker, capability manifests, approval, execution-control, executor and audit ledger.
 - Implement a desktop-interaction lease and user-interruption detector for input-injection sequences; never fight the user's mouse/keyboard or steal focus repeatedly.
 - Apply per-action risk tiers and approvals, UAC boundary handling, dry-run/preview, cancellation, rate limits, before-state snapshots, audit and rollback/compensation where feasible.
 - Use fixed typed Windows handlers and reviewed/versioned command recipes. Do not let the model create arbitrary PowerShell/CMD strings or gain a generic administrator terminal.
@@ -569,12 +565,12 @@ This is the first coding milestone. Build the assistant host and the actual Wind
 
 ### Phase 2 — Expanded real-time Windows perception
 - Formalize and extend Phase 1 provider contracts and normalized evidence envelopes.
-- Connect deeply to AIE observation state/event store and add the SENTINEL read-only provider adapter through a supported API/contract.
+- Expand APEX-owned Windows observation providers and normalized evidence contracts. Optional external integrations require separate future approval and do not affect baseline operation.
 - Expand beyond the Phase 1 live baseline into richer hardware/sensor coverage (GPU and supported temperature/power sensors), per-process resource deltas, detailed storage/I/O, bounded Windows Event Log metadata and validated ETW event families.
 - Add richer provenance, freshness, permission, provider-health, coverage and event-loss reporting; distinguish unavailable sensors from zero values.
 - Add adaptive/event-driven collection and gaming/resource-aware sampling without LLM polling.
 
-**Exit:** APEX has broad, fresh, provenance-aware Windows telemetry and SENTINEL/AIE context. Phase 2 deepens telemetry fidelity; it does not postpone basic process, service, network, storage and system visibility, which are required in Phase 1.
+**Exit:** APEX has broad, fresh, provenance-aware Windows telemetry from its own providers. Phase 2 deepens telemetry fidelity; it does not postpone basic process, service, network, storage and system visibility, which are required in Phase 1.
 
 ### Phase 3 — Profile and unified memory
 - Add an explicit onboarding interview for display/preferred name, salutation (default `sir`), locale, communication style, device aliases, technical preferences and user-approved goals; never guess a person's name from a Windows folder path.
@@ -628,7 +624,7 @@ This is the first coding milestone. Build the assistant host and the actual Wind
 Target the current 16 GB RAM / Core i5-12500H-class Windows laptop. This is a design constraint, not a performance guarantee.
 
 - Start with the installed Qwen3.5 4B APEX tag.
-- One local inference request at a time initially; serialize requests across APEX and shared AIE model consumers.
+- One local inference request at a time initially; serialize requests within the APEX runtime only.
 - Use request-level thinking disabled for ordinary conversation; deep reasoning is explicit/adaptive and resource-gated.
 - Keep the system prompt and context concise; retrieve only relevant tools and memories.
 - Do not send full inventories or raw event history into the model.
@@ -686,8 +682,7 @@ The following are intentionally deferred to Phase 1 or later design review:
 1. Exact standalone UI technology (WPF/.NET versus Python-native); choose after backend contracts.
 2. Exact local IPC mechanism (Windows named pipes preferred; authenticated loopback HTTP fallback).
 3. APEX profile schema and explicit first-run questions.
-4. Whether APEX is allowed to auto-start the existing AIE/SENTINEL providers or only connect when they are already running.
-5. How SENTINEL exposes its read-only data contract without coupling APEX to its dashboard or private modules.
+4. Whether an optional, read-only external provider protocol should be introduced in a later release (not required for Phase 1).
 6. Exact model tag/prompt version management and whether the current user Modelfile is copied into repository configuration unchanged.
 7. Retention durations and user controls for each memory/event class.
 8. Voice and additional perception opt-ins.
@@ -701,12 +696,12 @@ The first coding milestone after this planning branch is **Phase 1 — APEX runt
 It must deliver an end-to-end local host and action layer, not a chat-only skeleton:
 - APEX identity/runtime contract and local background host lifecycle.
 - Ollama API connection to the already-installed `APEX` model tag, with thinking disabled by default and no visible Ollama CLI dependency.
-- Streaming sessions, cancellation, bounded inference and resource metrics.
+- Bounded Python-owned inference, request lifecycle controls and resource metrics; streaming is a follow-up.
 - Live runtime/capability manifest and typed multi-turn tool dispatch.
 - A broad, documented Windows automation catalogue covering applications/windows, files/folders, settings, process lifecycle, services/startup/tasks, networking, devices, audio/display/power and selected maintenance/security workflows.
 - Native/typed Windows handlers, bounded UI Automation fallback for explicitly allowlisted apps, and reviewed command recipes with fixed parameters.
-- Existing AIE policy/approval/execution/audit reuse, risk tiers, preconditions, target revalidation, before/after evidence, independent verification and rollback/compensation where feasible.
+- APEX-owned policy/approval/execution/audit, risk tiers, preconditions, target revalidation, before/after evidence, independent verification and rollback/compensation where feasible.
 - Windows tests for every supported action family, including protected-target denial, permission denial, invalid arguments, timeout, cancellation and provider failure.
-- No arbitrary shell access, no generic Administrator mode, no SENTINEL UI changes, no duplicate model router, policy broker or memory database, and no new desktop UI in this milestone.
+- No arbitrary shell access, no generic Administrator mode, no AIE/SENTINEL runtime or database dependency, and no new desktop UI in this milestone.
 
 Phase 2 expands real-time Windows perception and evidence coverage; Phase 1 already provides the actual automation engine.
