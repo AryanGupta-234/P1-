@@ -3,9 +3,9 @@ requires = ["setuptools>=83.0.0,<100", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "aie-windows-apex-runtime"
+name = "aie-windows"
 version = "0.1.0"
-description = "Windows-first AIE sources with an independent APEX assistant runtime"
+description = "Windows-first AIE and independent APEX assistant source packages"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = ["pydantic>=2.7,<3", "psutil>=5.9,<8", "typer>=0.12,<1", "rich>=13.7,<15"]
