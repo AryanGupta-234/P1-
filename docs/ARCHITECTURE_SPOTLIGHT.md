@@ -309,3 +309,18 @@ Official implementation references:
 - [Microsoft UI Automation](https://learn.microsoft.com/en-us/windows/desktop/winauto/entry-uiauto-win32)
 - [Windows SendInput](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-sendinput)
 - [Core Audio EndpointVolume API](https://learn.microsoft.com/en-us/windows/win32/coreaudio/endpointvolume-api)
+
+### Model-assisted app metadata enrichment
+
+Windows discovery is deterministic and model enrichment is advisory. Registry, Start Menu, package/AUMID, process and file metadata produce the executable path and package identity. The installed local APEX model may receive minimized extracted metadata to suggest normalized app/product names, aliases, vendor/product family, category and a short description. Strict schema validation, candidate IDs, confidence and provenance are required. The model cannot create or alter executable paths, AUMIDs, publisher/signature evidence, trust state, launch arguments or permission decisions. Batch/deduplicate enrichment at low priority; do not invoke the LLM per executable. Store model tag, prompt/schema version and review state with the app record.
+
+### One canonical APEX Unified Data Store
+
+APEX durable memory and knowledge use one physical SQLite database file, targeted at the existing per-user AIE data directory as apex-unified.sqlite3. It contains logically separated tables for profile, conversation history, all five memory kinds, embeddings/lineage, application discovery and model enrichment, task/session context, normalized observations/state references and diagnostic knowledge. The application catalogue is a separate table domain in this same file; it is not injected into personal-memory retrieval by default.
+
+The current separate AIE events.sqlite3, memory.sqlite3, task-runs.sqlite3 and task-sessions.sqlite3 sources are migrated with an idempotent, loss-checked migration, source backups and post-migration verification. One UnifiedDataStore factory/repository layer owns connections for every domain. Profile, memories, app records and task context are live-readable from the latest committed transaction.
+
+Use stable typed columns plus versioned JSON payloads/extension fields and a schema registry for adaptable fields. Each record has a schema version; migrations are transactional and backward-compatible where possible. SQLite WAL, foreign keys, busy timeout, a serialized/batched writer queue, bounded transactions, optimistic versions and a monotonic change journal support real-time access without allowing the scanner to monopolize writes. Dynamic fields are validated, not arbitrary schema mutation.
+
+Separate append-only policy and remote-egress audit databases remain isolated when their integrity model requires it; the emergency execution kill-switch remains independent of database health. SENTINEL's private database is never merged or written by APEX.
+
