@@ -31,6 +31,10 @@ The repository already has reusable model contracts/adapters/router, memory, pla
 14. Normal desktop input injection respects Windows integrity/UIPI and requires an unlocked interactive desktop; APEX does not bypass UAC secure desktop, sign-in/lock screen or protected application boundaries. User input always takes precedence and aborts conflicting automation.
 15. Desktop UI implementation is intentionally deferred until the headless host and IPC/API contracts are stable.
 
+## Related decision
+
+The canonical data model, migration plan, flexible schema, real-time access contract and model-assisted application metadata enrichment are defined in [ADR-0016](0016-apex-unified-data-store-and-app-metadata-enrichment.md).
+
 ## Architecture
 
 ```text
