@@ -71,6 +71,27 @@ This is the implementation backlog. The current branch is documentation-only: no
 - [ ] Add a versioned OS-aware catalogue for known `ms-settings:` page URIs, Control Panel `.cpl` applets, MMC `.msc` consoles and approved Windows management entry points.
 - [ ] Add validated lookups/openers for common targets such as Device Manager, Power Options, Network Connections, Programs and Features and other documented applets; check target existence and OS availability before dispatch.
 - [ ] Test exact user questions about Settings URIs, CPL/MSC commands and the difference between opening a page and changing a setting.
+
+### Dynamic installed-application catalogue — required Phase 1 coverage
+- [ ] Define a normalized app record: display name, aliases, executable path or AUMID, package family, version, publisher, source provenance, signature/trust state, install root, file identity/timestamps, last-seen time, confidence and launch availability.
+- [ ] Enumerate App Paths registrations under HKCU/HKLM in 32-bit and 64-bit registry views; expand environment variables and validate resolved executable paths.
+- [ ] Enumerate Uninstall registry metadata under HKCU/HKLM and both views; use DisplayName/Publisher/DisplayVersion/InstallLocation/DisplayIcon as hints only, never assume a display icon or install directory is an executable.
+- [ ] Enumerate current-user and all-users Start Menu shortcuts; resolve Shell Link target, working directory, icon and arguments as untrusted metadata.
+- [ ] Enumerate packaged apps from package manifests and AUMIDs; consume Get-StartApps as one source only because it omits apps not represented in Start; do not crawl protected WindowsApps directories.
+- [ ] Correlate live process executable paths with catalogue records but do not automatically trust every running binary for future launch.
+- [ ] Implement full application-discovery scan for accessible fixed local volumes to locate apps installed in custom folders, including per-user application directories; scan only executable/shortcut/package metadata, never document/browser/email contents.
+- [ ] Skip reparse points by default and report inaccessible volumes/paths as coverage gaps; exclude large Windows component/servicing stores, caches, restore points and Recycle Bin internals; use package metadata for WindowsApps.
+- [ ] Keep full-volume scanning cancellable, low priority and resource-aware; throttle/pause during gaming, high foreground load, low battery or memory pressure.
+- [ ] Use existing Windows Search metadata as an optional accelerator only; never silently enable Enhanced indexing or change user indexing/privacy settings.
+- [ ] Add incremental refresh from registry/package change signals, file-system notifications on known roots and scheduled bounded reconciliation; no continuous full-volume scan.
+- [ ] Store the app catalogue as a rebuildable metadata cache, not as unified user memory or a file-content index.
+- [ ] Build alias/name resolution across display name, product/file description, executable basename, shortcut name, package name and user-confirmed aliases.
+- [ ] Rank candidates by source confidence, path existence, package identity, publisher/signature and user trust; a valid signature alone does not prove safety, and unsigned apps may be explicitly approved.
+- [ ] Reject deleted paths, path/reparse escapes and temporary/download/cache candidates under default launch policy; ask the user when multiple stable/beta/portable matches remain.
+- [ ] Launch desktop applications via validated canonical executable paths and packaged apps via validated AUMIDs; do not accept model-generated arbitrary command-line arguments.
+- [ ] Verify launch using fresh process/window/package evidence and distinguish process creation from a ready/usable window.
+- [ ] Mark moved/updated/uninstalled executables stale and re-resolve them; expose source, resolved target, trust and last scan in the app catalogue.
+
 - [ ] **Applications/windows:** enumerate supported app/window metadata; launch registered applications; activate, minimize, maximize and close user-owned windows; test exact-target protection for process/window actions.
 - [ ] **Files/folders:** browse/search user-approved roots; inspect metadata; create folders; copy, move and rename; support Recycle Bin deletion; block permanent deletion, bulk deletion and protected paths by default.
 - [ ] **Settings/personalization:** implement typed read/write handlers for supported volume, brightness, display, power, Wi-Fi, Bluetooth, night-light, focus/notification and accessibility settings. Distinguish opening a Settings page from successfully changing a setting.
@@ -107,6 +128,10 @@ This is the implementation backlog. The current branch is documentation-only: no
 - [ ] Windows integration tests for real state changes and independent postcondition verification on the target Windows 11 machine.
 - [ ] Test permission denial, UAC cancellation, protected targets, PID reuse, stale device IDs, network loss, timeout, cancellation and partial workflow failure.
 - [ ] Test that opening a Settings URI is not reported as a successful setting mutation.
+- [ ] Test that known app names resolve through App Paths/Uninstall/Start Menu/AUMID sources and that non-Start apps remain discoverable through other sources.
+- [ ] Test full-volume executable discovery, cancellation, inaccessible folders, reparse-point protection, exclusion rules, stale records and incremental refresh without reading file contents.
+- [ ] Test ambiguous app names, invalid/moved executable paths, untrusted download/temp binaries, signed/unsigned publisher states and user-approved exceptions.
+- [ ] Test packaged-app activation by AUMID and desktop-app launch by exact canonical executable path; verify the resulting process/window.
 - [ ] Test audit-chain integrity, duplicate-action prevention, approval expiry, kill switch and rollback/compensation.
 - [ ] Verify no arbitrary shell/code execution path is reachable from model output.
 - [ ] Verify APEX never claims a capability absent from the live manifest.
