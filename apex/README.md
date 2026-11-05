@@ -14,7 +14,7 @@ print(reply["response"])
 assistant.stop()
 ```
 
-The `ApexService` is an in-process API for a future independent Windows desktop client. Phase 1 does not ship the desktop UI. The host connects to `http://127.0.0.1:11434` by default, discovers installed models only, and never pulls one automatically. This milestone does not start Ollama or spawn any CLI process: the installed Ollama Windows application/service must already be running and reachable on loopback; otherwise APEX reports the provider as unavailable. The configured model tag defaults to `APEX`.
+The `ApexService` is an in-process API for a future independent Windows desktop client. Phase 1 does not ship the desktop UI. The host connects to `http://127.0.0.1:11434` by default, discovers installed models only, and never pulls one automatically. On Windows, it checks the API first and can launch the installed `ollama app.exe` directly using the Windows shell API if the API is unavailable and auto-start is enabled. It never invokes `ollama run`, CMD, PowerShell or a subprocess for model inference. The configured model tag defaults to `APEX`.
 
 ## Windows dependencies
 
@@ -30,4 +30,4 @@ Read-only operations can run when their provider is available. All mutating acti
 
 ## Scope limitations
 
-The initial implementation includes registered Windows inventory, application discovery/launch, Settings and MMC navigation, process/window inventory, window management, bounded mouse/keyboard input, UIA, audio, approved-root file operations, clipboard, services, DNS, brightness, scheduled tasks and Event Log metadata. It does not include kernel access, unrestricted shell execution, UAC/secure-desktop bypass, broad security-control changes, arbitrary driver installation, passive keylogging, or universal automation of every third-party application. A dispatched input or opened Settings page is not reported as verified application state.
+The initial implementation includes registered Windows inventory, EXE and packaged-app discovery/launch, Settings and MMC navigation, process/window inventory, window management, bounded mouse/keyboard/text/drag input, UIA, audio/media, approved-root file operations, clipboard, DNS, adapter/DHCP controls, allowlisted service controls, brightness, scheduled tasks and Event Log metadata. It does not include kernel access, unrestricted shell execution, UAC/secure-desktop bypass, broad security-control changes, arbitrary driver installation, passive keylogging, or universal automation of every third-party application. A dispatched input or opened Settings page is not reported as verified application state.
