@@ -275,3 +275,21 @@ Phase 2 expands live Windows perception and telemetry coverage. It does not intr
 
 Planning source: [APEX standalone implementation plan](APEX_STANDALONE_IMPLEMENTATION_PLAN.md) and [APEX follow-up TODOs](APEX_FOLLOW_UP_TODOS.md).
 
+### First-class desktop interaction contract
+
+The Phase 1 automation engine must handle both ordinary hands-on desktop actions and larger system workflows:
+
+- Mouse/pointer: move, left/right/middle click, double-click, hover, drag/drop and vertical/horizontal scrolling.
+- Keyboard: shortcuts/hotkeys, navigation keys and targeted text entry into verified non-sensitive controls; no keylogging or passive input capture.
+- Windows desktop: open/launch apps, enumerate and switch windows, focus/restore/minimize/maximize/move/resize/snap/close windows, and operate supported Start/taskbar/notification/virtual-desktop surfaces.
+- UI Automation: inspect allowlisted application controls and use semantic invoke, set-value, select, toggle, expand/collapse, wait-for and scroll patterns before coordinate input.
+- Audio/media: master volume and mute, endpoint selection and supported per-app session/media controls.
+- Clipboard: explicit task-scoped copy/cut/paste and clipboard set/get; no background clipboard harvesting.
+- Files, settings, processes, services, tasks, networking, devices, display, power and bounded maintenance actions remain part of the same typed capability model.
+
+Interaction order: native/app APIs first, UIA semantic patterns second, bounded SendInput fallback third, and opt-in screen-grounded coordinates only when fresh visual evidence is available. Input injection is serialized under a short desktop interaction lease; detected user input or focus changes stop the action. Locked/secure desktops, UAC secure desktop, logon screens and UIPI/elevation boundaries are not bypassed.
+
+Official implementation references:
+- [Microsoft UI Automation](https://learn.microsoft.com/en-us/windows/desktop/winauto/entry-uiauto-win32)
+- [Windows SendInput](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-sendinput)
+- [Core Audio EndpointVolume API](https://learn.microsoft.com/en-us/windows/win32/coreaudio/endpointvolume-api)
