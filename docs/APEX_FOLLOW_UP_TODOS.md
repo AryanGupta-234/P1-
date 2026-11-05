@@ -26,17 +26,30 @@ This is the implementation backlog. The current branch is documentation-only: no
 ### Runtime, identity and model
 - [ ] Inspect current `aie.models.base.ModelRequest/ModelResponse` contracts and tests.
 - [ ] Inspect current Ollama adapter, router, locking and runtime memory-admission behavior.
+- [ ] Capture the currently applied APEX model definition with `ollama show --modelfile APEX`; compare it with the source Modelfile before editing. Keep an immutable baseline copy in the user's local project artifacts (do not commit local absolute paths or private machine data).
+- [ ] Make only a targeted Modelfile `SYSTEM` correction if needed: APEX identity, creator attribution policy, model/host distinction, no false Microsoft claim, no unsupported Windows/kernel-access claims, honest bare-CLI limitations, conversational style and default `sir` salutation.
+- [ ] Preserve the existing `FROM`, model-specific `TEMPLATE`, tokenizer/stop settings and working parameters unless an isolated regression proves a defect; do not fine-tune or replace Qwen for identity issues.
+- [ ] Define a versioned runtime system-prompt composer that appends trusted build metadata, live manifest, current user profile, relevant memory/evidence and only task-relevant tool schemas; never bake live system facts or executable permissions into the Modelfile.
+- [ ] Add host-side deterministic self-description for identity/model/provider/capability questions so the LLM cannot invent current connected tools, owner identity or Windows visibility.
 - [ ] Define the `apex/` package boundary without moving or renaming existing AIE/SENTINEL packages.
 - [ ] Define versioned APEX config, identity, prompt and migration contracts; keep PRIXON identity separate.
 - [ ] Implement the local APEX host lifecycle, structured logging, bounded sessions, streaming and cancellation.
 - [ ] Connect to the loopback Ollama API through the existing AIE adapter; select the installed `APEX` model tag when available.
 - [ ] Never auto-pull a model or silently use cloud inference.
 - [ ] Apply request-level thinking-off for normal conversation; gate deep reasoning behind resource admission.
+- [ ] Extend `ModelRequest` with an explicit `think` field and send `think: false` in ordinary `/api/chat` calls; do not rely on a terminal `--think=false` flag once the APEX host owns inference.
+- [ ] Extend `ChatMessage` with Ollama's `tool` role and validated tool-name metadata; extend `ModelRequest` with typed tool schemas and bounded tool-call policy.
+- [ ] Extend `ModelResponse` and Ollama response parsing to retain `message.tool_calls` rather than dropping them and returning only text content.
+- [ ] Send registered tools in Ollama `/api/chat` requests, execute calls only through APEX's validated host dispatcher/AIE policy broker, append sanitized tool results and continue a bounded multi-turn tool loop.
+- [ ] Add request/response contract tests for no-think propagation, tool-call parsing, tool-role round-trips, multiple calls, malformed arguments, unknown tools, timeout and tool-loop budget exhaustion.
 - [ ] Add bounded timeouts/output/context, a single initial local inference slot and serialization with existing AIE consumers.
 - [ ] Record model/provider health, token counts, load time, time-to-first-token, generation time and failures.
 - [ ] Add `apex_get_runtime_manifest` with actual model, provider, tool, permission and availability state.
 - [ ] Ensure normal runtime does not require a visible CMD/PowerShell window or manual `ollama run`; the host must connect to or start the installed Ollama service through a documented Windows mechanism, while developer mode may use a console.
 - [ ] Add regression tests for the exact transcript failures: no false Microsoft creator claim; distinguish APEX host identity from Qwen foundation-model provenance; answer configured creator/operator attribution from metadata; use the approved profile for the user's name; default to `sir`; never claim live access/kernel access without a healthy provider.
+- [ ] Run the pasted transcript as an identity/conversation regression suite in two modes: bare Ollama CLI (must honestly report no connected Windows host/tools) and APEX host (must answer from live manifest/profile and call real tools when required).
+- [ ] Assert direct CLI mode never says Microsoft created APEX, never claims sandbox/physical-PC/kernel access, and never claims it can see the user's name or processes without host context.
+- [ ] Assert host mode answers `who made you`, `what model are you`, `what tools are connected`, `who is your user`, and `can you see my processes` from build/profile/provider metadata with provenance.
 - [ ] Ensure “Can you see my running processes?” calls a real process-inventory capability and returns a timestamped bounded snapshot, or clearly reports why the provider is unavailable.
 
 ### Intent interpretation and tool orchestration
