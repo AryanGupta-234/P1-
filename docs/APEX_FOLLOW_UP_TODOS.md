@@ -32,7 +32,7 @@
 - [ ] Define a versioned runtime system-prompt composer that appends trusted build metadata, live manifest, current user profile, relevant memory/evidence and only task-relevant tool schemas; never bake live system facts or executable permissions into the Modelfile.
 - [ ] Add host-side deterministic self-description for identity/model/provider/capability questions so the LLM cannot invent current connected tools, owner identity or Windows visibility.
 - [ ] Define the `apex/` package boundary without moving or renaming existing AIE/SENTINEL packages.
-- [ ] Define versioned APEX config, identity, prompt and migration contracts; keep PRIXON identity separate.
+- [ ] Define versioned APEX-owned configuration, identity, prompt and schema-migration contracts; do not couple to other model research identities.
 - [ ] Implement the local APEX host lifecycle, structured logging, bounded sessions and request lifecycle controls; streaming remains a follow-up.
 - [ ] Connect to the loopback Ollama API through APEX's own Python HTTP adapter; select the installed `APEX` model tag when available.
 - [ ] Never auto-pull a model or silently use cloud inference.
@@ -47,7 +47,7 @@
 - [ ] Add `apex_get_runtime_manifest` with actual model, provider, tool, permission and availability state.
 - [ ] Ensure normal runtime does not require a visible CMD/PowerShell window or manual `ollama run`; the host must connect to or start the installed Ollama service through a documented Windows mechanism, while developer mode may use a console.
 - [ ] Add regression tests for the exact transcript failures: no false Microsoft creator claim; distinguish APEX host identity from Qwen foundation-model provenance; answer configured creator/operator attribution from metadata; use the approved profile for the user's name; default to `sir`; never claim live access/kernel access without a healthy provider.
-- [ ] Run the pasted transcript as an identity/conversation regression suite in two modes: bare Ollama CLI (must honestly report no connected Windows host/tools) and APEX host (must answer from live manifest/profile and call real tools when required).
+- [ ] Run the pasted identity/conversation regression suite through the Python APEX host: identity and model provenance come from the runtime manifest; Windows questions invoke registered tools or honestly report unavailable providers. No CLI inference path is used.
 - [ ] Assert direct CLI mode never says Microsoft created APEX, never claims sandbox/physical-PC/kernel access, and never claims it can see the user's name or processes without host context.
 - [ ] Assert host mode answers `who made you`, `what model are you`, `what tools are connected`, `who is your user`, and `can you see my processes` from build/profile/provider metadata with provenance.
 - [ ] Ensure “Can you see my running processes?” calls a real process-inventory capability and returns a timestamped bounded snapshot, or clearly reports why the provider is unavailable.
@@ -179,10 +179,10 @@
 - [ ] Expand beyond Phase 1 baseline into richer GPU/sensor coverage, per-process resource deltas, storage I/O, bounded Windows Event Log metadata and validated ETW event families.
 - [ ] Add deeper source health, timestamp, freshness, coverage, permission and event-loss metadata.
 - [ ] Add adaptive sampling and resource/game-aware load shedding without LLM polling.
-- [ ] Confirm no direct writes to SENTINEL's private SQLite database and no SENTINEL UI dependency.
+- [ ] Confirm APEX code has no direct SENTINEL database, module or UI dependency.
 - [ ] Make automation handlers consume the same read-only provider contracts for preconditions and verification.
 
-**Exit criteria:** APEX can answer whole-Windows questions using fresh evidence while the SENTINEL dashboard remains closed; the same evidence providers support automation preconditions and verification.
+**Exit criteria:** APEX can answer whole-Windows questions using fresh evidence from its own providers; the same evidence providers support automation preconditions and verification.
 
 ## Phase 3 — Unified profile and memory workflows
 - [ ] Extend the already-migrated Phase 1 canonical SQLite database; do not create any additional APEX memory or application-catalogue database.
@@ -198,7 +198,7 @@
 - [ ] Test that two feature modules reading/writing profile, memories, app catalogue and task context share the same physical database file and consistent sequence.
 - [ ] Test profile/memory persistence, corrections, expiry, conflict handling, data export/deletion and backward-compatible schema extension upgrades.
 
-**Exit criteria:** all APEX durable memory/profile/conversation/application knowledge/task context is in one physical database, live-readable through one access layer, extensible through validated versioned fields and migrated without data loss. SENTINEL's private database and separately protected policy/egress audit stores are not merged into this user-memory database.
+**Exit criteria:** all APEX durable memory/profile/conversation/application knowledge/task context is in one physical database, live-readable through one access layer, extensible through validated versioned fields and migrated without data loss. No AIE or SENTINEL data is accessed or merged.
 
 ## Phase 4 — Advanced Windows diagnostic intelligence
 - [ ] Implement specialist profiles and request/task classification for complex diagnostics.
@@ -236,7 +236,7 @@
 - [ ] Add accessible keyboard navigation and reduced-motion handling.
 - [ ] Add installer, updater, uninstaller and rollback.
 - [ ] Verify the background host remains usable when the APEX window is closed, if enabled.
-- [ ] Verify SENTINEL UI and existing AIE desktop surfaces remain unchanged.
+- [ ] Verify the independent APEX product has no UI coupling to AIE or SENTINEL.
 
 **Exit criteria:** APEX installs and runs as an independent Windows app without requiring the user to type Ollama CLI commands.
 
@@ -266,4 +266,4 @@
 
 ## First next action
 
-Start with Phase 1 repository/contract inspection, then implement the headless APEX host. Do not begin the desktop UI, modify the SENTINEL dashboard or add autonomous write actions before the host, identity, model and self-inspection contracts pass their tests.
+Continue the remaining Phase 1 capability work and Windows validation on `feature/apex-phase-1-runtime`. Keep the desktop UI deferred. Do not integrate APEX into AIE or SENTINEL, and do not enable autonomous mutations without a host-owned approval/verification flow.
