@@ -46,6 +46,9 @@ This is the implementation backlog. The current branch is documentation-only: no
 - [ ] Implement the canonical UnifiedDataStore connection factory and one-writer/multi-reader access layer, with WAL, foreign keys, busy timeout, bounded transactions and an append-only change-sequence journal.
 - [ ] Add database schema/field registry, versioned JSON payloads and validated extension fields so optional fields can evolve without ad-hoc SQL schema mutation.
 - [ ] Put application catalogue, discovery sources, aliases, model enrichment, scan state and launch history in dedicated tables inside the same unified database.
+- [ ] Migrate events.sqlite3, memory.sqlite3, task-runs.sqlite3 and task-sessions.sqlite3 into apex-unified.sqlite3 with source backups, idempotent migration journal, record counts/checksums, reference validation and rollback.
+- [ ] Route EventStore, MemoryStore, TaskRunStore and TaskSessionStore to the exact same canonical database path; assert resolved paths are identical in tests.
+- [ ] Do not allow APEX profile, conversation, application-catalogue or memory writes until the canonical DB has completed migration/integrity checks.
 - [ ] Implement multi-step workflow plans with preconditions, dependencies, progress, cancellation and per-step policy checks.
 - [ ] Ask one focused clarification when a target or operation is materially ambiguous; do not guess destructive targets.
 - [ ] Report unsupported, disabled, unavailable and approval-gated capabilities distinctly.
@@ -161,14 +164,11 @@ This is the implementation backlog. The current branch is documentation-only: no
 
 **Exit criteria:** APEX can answer whole-Windows questions using fresh evidence while the SENTINEL dashboard remains closed; the same evidence providers support automation preconditions and verification.
 
-## Phase 3 — Unified profile, memory and database consolidation
-- [ ] Use one canonical local SQLite file for all durable APEX memory/knowledge; no separate profile, conversation, memory-kind, app-catalogue or task-context databases.
-- [ ] Consolidate current AIE sources events.sqlite3, memory.sqlite3, task-runs.sqlite3 and task-sessions.sqlite3 into the canonical apex-unified.sqlite3 file under the existing AIE per-user data directory.
-- [ ] Implement transactional, idempotent migration with source checksums, record counts, collision handling, backup retention and a recovery path; never delete old databases before post-migration verification and retention expiry.
-- [ ] Route EventStore, MemoryStore, TaskRunStore and TaskSessionStore to the same canonical database path while keeping each domain's tables and repository API isolated.
+## Phase 3 — Unified profile and memory workflows
+- [ ] Extend the already-migrated Phase 1 canonical SQLite database; do not create any additional APEX memory or application-catalogue database.
 - [ ] Add profile, conversation/session, application catalogue, enrichment, diagnostic incident and reviewed workflow tables to the same file.
-- [ ] Keep policy and egress audit stores separate only where their tamper-evidence/integrity boundary requires it; do not treat them as alternate memory stores.
-- [ ] Add schema registry, JSON extension fields, per-record schema versions, transactional migrations and deprecation handling.
+- [ ] Verify policy and egress audit stores remain separated only where their tamper-evidence/integrity boundary requires it; do not treat them as alternate memory stores.
+- [ ] Extend the Phase 1 schema registry with profile/memory fields, per-record schema versions and backward-compatible migrations/deprecation handling.
 - [ ] Ensure strict validation of extension values; no arbitrary field names/SQL identifiers or untrusted model-defined schemas.
 - [ ] Implement explicit onboarding for owner/preferred name, salutation, locale, communication style, device aliases and preferences; initialize salutation to `sir`.
 - [ ] Add optional local indexing of explicitly selected user folders/documents with inspectable paths, retention and deletion; exclude credentials, browser secrets, protected/system folders and unselected locations.
