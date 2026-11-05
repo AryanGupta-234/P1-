@@ -275,6 +275,22 @@ Phase 2 expands live Windows perception and telemetry coverage. It does not intr
 
 Planning source: [APEX standalone implementation plan](APEX_STANDALONE_IMPLEMENTATION_PLAN.md) and [APEX follow-up TODOs](APEX_FOLLOW_UP_TODOS.md).
 
+### Dynamic application discovery and launch resolution
+
+APEX Phase 1 includes a dynamic, rebuildable Installed Application Catalogue. It must resolve friendly app names without hardcoded executable paths by merging:
+- HKCU/HKLM App Paths registrations in both registry views.
+- Uninstall registry metadata as discovery hints, not direct executable truth.
+- User/all-users Start Menu Shell Link targets.
+- Packaged app package manifests, AppIDs/AUMIDs and `Get-StartApps`; the latter is not a complete installed-program inventory.
+- Executable paths observed from live process inventory.
+- An explicit full fixed-local-volume scan for `.exe` and supported shortcut metadata to find custom install locations.
+
+The full scan examines application metadata only, not file contents. It skips reparse points and protected OS servicing/cache stores, discovers packaged apps through package metadata, reports ACL/volume gaps, and runs cancellably at low priority. Windows Search is an optional metadata accelerator only; APEX does not turn on Enhanced indexing or index document/email content. Registry/package/root notifications and scheduled reconciliation maintain the cache without continuous full-volume scans.
+
+The resolver ranks candidates using provenance, path existence, publisher/signature and user trust. It rejects temporary/download/cache executables by default, asks when stable/beta/portable copies are ambiguous, launches only validated canonical paths or AUMIDs, and verifies the resulting process/window. The catalogue is a replaceable app-metadata cache, not user memory.
+
+Settings destinations live in versioned OS-aware catalogues: documented `ms-settings:` URIs, validated `.cpl` applets and `.msc` consoles. URI availability can vary by Windows build/SKU, so target support is checked before launch.
+
 ### First-class desktop interaction contract
 
 The Phase 1 automation engine must handle both ordinary hands-on desktop actions and larger system workflows:
