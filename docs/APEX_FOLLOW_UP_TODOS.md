@@ -34,13 +34,13 @@ This is the implementation backlog. The current branch is documentation-only: no
 - [ ] Define the `apex/` package boundary without moving or renaming existing AIE/SENTINEL packages.
 - [ ] Define versioned APEX config, identity, prompt and migration contracts; keep PRIXON identity separate.
 - [ ] Implement the local APEX host lifecycle, structured logging, bounded sessions, streaming and cancellation.
-- [ ] Connect to the loopback Ollama API through the existing AIE adapter; select the installed `APEX` model tag when available.
+- [ ] Connect to the loopback Ollama API through APEX's own Python HTTP adapter; select the installed `APEX` model tag when available.
 - [ ] Never auto-pull a model or silently use cloud inference.
 - [ ] Apply request-level thinking-off for normal conversation; gate deep reasoning behind resource admission.
 - [ ] Extend `ModelRequest` with an explicit `think` field and send `think: false` in ordinary `/api/chat` calls; do not rely on a terminal `--think=false` flag once the APEX host owns inference.
 - [ ] Extend `ChatMessage` with Ollama's `tool` role and validated tool-name metadata; extend `ModelRequest` with typed tool schemas and bounded tool-call policy.
 - [ ] Extend `ModelResponse` and Ollama response parsing to retain `message.tool_calls` rather than dropping them and returning only text content.
-- [ ] Send registered tools in Ollama `/api/chat` requests, execute calls only through APEX's validated host dispatcher/AIE policy broker, append sanitized tool results and continue a bounded multi-turn tool loop.
+- [ ] Send registered tools in Ollama `/api/chat` requests, execute calls only through APEX's validated host dispatcher and APEX-owned policy broker, append sanitized tool results and continue a bounded multi-turn tool loop.
 - [ ] Add request/response contract tests for no-think propagation, tool-call parsing, tool-role round-trips, multiple calls, malformed arguments, unknown tools, timeout and tool-loop budget exhaustion.
 - [ ] Add bounded timeouts/output/context, a single initial local inference slot and serialization with existing AIE consumers.
 - [ ] Record model/provider health, token counts, load time, time-to-first-token, generation time and failures.
@@ -59,8 +59,8 @@ This is the implementation backlog. The current branch is documentation-only: no
 - [ ] Implement the canonical UnifiedDataStore connection factory and one-writer/multi-reader access layer, with WAL, foreign keys, busy timeout, bounded transactions and an append-only change-sequence journal.
 - [ ] Add database schema/field registry, versioned JSON payloads and validated extension fields so optional fields can evolve without ad-hoc SQL schema mutation.
 - [ ] Put application catalogue, discovery sources, aliases, model enrichment, scan state and launch history in dedicated tables inside the same unified database.
-- [ ] Migrate events.sqlite3, memory.sqlite3, task-runs.sqlite3 and task-sessions.sqlite3 into apex-unified.sqlite3 with source backups, idempotent migration journal, record counts/checksums, reference validation and rollback.
-- [ ] Route EventStore, MemoryStore, TaskRunStore and TaskSessionStore to the exact same canonical database path; assert resolved paths are identical in tests.
+- [ ] Initialize and migrate only APEX-owned schema into apex-unified.sqlite3 with backup, migration journal, integrity checks and rollback. Do not read or migrate any AIE databases.
+- [ ] Route every APEX repository (profile, conversation, memory, app catalogue and task context) through the exact APEX canonical database path; assert resolved paths are identical in tests.
 - [ ] Do not allow APEX profile, conversation, application-catalogue or memory writes until the canonical DB has completed migration/integrity checks.
 - [ ] Implement multi-step workflow plans with preconditions, dependencies, progress, cancellation and per-step policy checks.
 - [ ] Ask one focused clarification when a target or operation is materially ambiguous; do not guess destructive targets.
@@ -131,7 +131,7 @@ This is the implementation backlog. The current branch is documentation-only: no
 - [ ] Mark every catalogue entry available only when its concrete handler and health check are implemented; do not claim a whole category is supported because one action exists.
 
 ### Policy, safety, verification and recovery
-- [ ] Reuse AIE policy broker, capability manifests, approval queue, execution-control, registered adapter executor and audit ledger.
+- [ ] Use APEX-owned policy broker, capability manifests, approval queue, execution-control, registered adapter executor and audit ledger.
 - [ ] Apply risk tiers and default-deny to every mutating tool.
 - [ ] Bind approval to exact capability, arguments, target identity, expiry and one execution attempt.
 - [ ] Keep the normal APEX process unelevated; use narrowly scoped Windows UAC/broker operations when needed.
