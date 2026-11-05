@@ -494,6 +494,7 @@ The final layout must be reconciled with existing AIE package conventions before
 
 ```text
 apex/                         # standalone assistant runtime
+  store/                       # one UnifiedDataStore, repositories, migrations and field registry
   identity/                   # APEX identity and prompt versions
   runtime/                    # host lifecycle, sessions, model requests
   context/                    # bounded context and evidence composition
@@ -531,6 +532,7 @@ This is the first coding milestone. Build the assistant host and the actual Wind
 - Implement streaming, thinking-off by default, bounded context/timeouts, inference metrics and a single resource-admitted local inference slot.
 - Implement the live capability registry, `apex_get_runtime_manifest`, typed tool schemas and host-side multi-turn tool dispatcher.
 - Establish the canonical UnifiedDataStore path, schema registry, versioned migrations, shared connection factory, change journal and one-writer/multi-reader access pattern. The app catalogue is stored in this same database.
+- Complete the idempotent, loss-checked migration of existing events.sqlite3, memory.sqlite3, task-runs.sqlite3 and task-sessions.sqlite3 into apex-unified.sqlite3 before APEX begins writing profile, conversation or app-catalogue records. Verify counts/checksums, references and integrity; preserve verified backups and rollback path. Route EventStore, MemoryStore, TaskRunStore and TaskSessionStore through the same physical database path.
 - Implement the complete Phase 1 interaction surface in Section 9: mouse movement/click/double-click/right-click/drag, vertical/horizontal scrolling, keyboard shortcuts and targeted text entry; window focus/restore/minimize/maximize/move/resize/switch; semantic UIA inspect/invoke/set/select/toggle/expand/scroll/wait operations; master/per-session volume, mute, audio endpoint and media controls; explicit clipboard operations; plus files, applications, settings, processes, services, startup/tasks, networking, devices, display/power and maintenance workflows.
 - Implement a live Windows baseline provider set in Phase 1, not just action handlers: OS/build and device summary; current session identity as exposed by documented Windows APIs; process inventory/details; foreground windows and registered application metadata; service/startup/task state; network adapters/DNS/routes; volume/free-space status; CPU/RAM load; and the specific setting values required by supported setting actions. Every response carries source, observed time, freshness, privilege and coverage. This baseline must answer “Can you see my running processes?” with a real bounded snapshot when the provider is healthy.
 - Add versioned Settings URI, CPL/MSC and custom protocol catalogues; resolve known Windows targets with OS-build validation.
@@ -545,7 +547,7 @@ This is the first coding milestone. Build the assistant host and the actual Wind
 - Use fixed typed Windows handlers and reviewed/versioned command recipes. Do not let the model create arbitrary PowerShell/CMD strings or gain a generic administrator terminal.
 - Provide a developer harness and Windows integration tests; the final desktop UI remains deferred.
 
-**Exit:** APEX can receive natural-language requests for both tiny desktop actions and large system workflows, select registered typed capabilities, obtain required approvals, execute and independently verify supported actions, and report unsupported/unavailable operations honestly. Demonstrated Phase 1 coverage must include volume up/down/mute, window switching, app launch, clicking/invoking controls, keyboard shortcuts, text entry into non-sensitive controls, vertical/horizontal scrolling, file operations and system/network settings. It must also prove safe interruption when the user takes control. It runs through its own host without `ollama run`, and SENTINEL UI remains untouched.
+**Exit:** APEX can receive natural-language requests for both tiny desktop actions and large system workflows, select registered typed capabilities, obtain required approvals, execute and independently verify supported actions, and report unsupported/unavailable operations honestly. Demonstrated Phase 1 coverage must include volume up/down/mute, window switching, app launch, clicking/invoking controls, keyboard shortcuts, text entry into non-sensitive controls, vertical/horizontal scrolling, file operations and system/network settings. It must also prove safe interruption when the user takes control. It runs through its own host without `ollama run`, and SENTINEL UI remains untouched. All durable APEX memory, observation/evidence, task-context and app-catalogue data use the same verified canonical SQLite file; no parallel memory database remains.
 
 ### Phase 2 — Expanded real-time Windows perception
 - Formalize and extend Phase 1 provider contracts and normalized evidence envelopes.
@@ -558,9 +560,9 @@ This is the first coding milestone. Build the assistant host and the actual Wind
 
 ### Phase 3 — Profile and unified memory
 - Add an explicit onboarding interview for display/preferred name, salutation (default `sir`), locale, communication style, device aliases, technical preferences and user-approved goals; never guess a person's name from a Windows folder path.
-- Move all durable assistant memory domains into the canonical UnifiedDataStore: profile, conversations, all memory kinds, embeddings, lineage, task/session context, approved workflow knowledge, diagnostic summaries and the application catalogue. Keep a single physical database file and a single access layer.
-- Complete idempotent, loss-checked migration from events.sqlite3, memory.sqlite3, task-runs.sqlite3 and task-sessions.sqlite3 into apex-unified.sqlite3; preserve verified source backups until the user-visible migration retention period expires.
+- Extend the Phase 1 canonical UnifiedDataStore with the full profile, conversation, all memory-kind, embedding, lineage, approved workflow knowledge and diagnostic knowledge workflows. Do not create additional persistent APEX memory databases.
 - Keep policy/egress audit stores segregated where their append-only integrity boundary requires it; keep SENTINEL's private database separate and read-only from APEX.
+- Ensure onboarding and memory APIs read/write the same canonical database as the Phase 1 app catalogue and Windows evidence.
 - Add user-controlled, local-only indexing of explicitly selected folders/documents as an optional knowledge source. Exclude credentials, browser secrets, protected/system locations and unselected folders; make source paths, indexing state, retention and removal inspectable.
 - Implement explicit save/review/correct/export/delete and relevant-memory retrieval.
 - Add memory conflict/staleness handling and user controls for retention, consent and data deletion.
