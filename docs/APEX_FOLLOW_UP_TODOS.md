@@ -43,6 +43,9 @@ This is the implementation backlog. The current branch is documentation-only: no
 - [ ] Classify each request as chat, explain, inspect, diagnose, plan or automate without forcing every message into a tool call.
 - [ ] Implement structured multi-turn tool calling and host-side dispatch; never execute model-supplied code directly.
 - [ ] Build a typed capability registry with schema version, source, health check, risk tier, privilege, approval rule, timeout, rate limit, verifier and compensation metadata.
+- [ ] Implement the canonical UnifiedDataStore connection factory and one-writer/multi-reader access layer, with WAL, foreign keys, busy timeout, bounded transactions and an append-only change-sequence journal.
+- [ ] Add database schema/field registry, versioned JSON payloads and validated extension fields so optional fields can evolve without ad-hoc SQL schema mutation.
+- [ ] Put application catalogue, discovery sources, aliases, model enrichment, scan state and launch history in dedicated tables inside the same unified database.
 - [ ] Implement multi-step workflow plans with preconditions, dependencies, progress, cancellation and per-step policy checks.
 - [ ] Ask one focused clarification when a target or operation is materially ambiguous; do not guess destructive targets.
 - [ ] Report unsupported, disabled, unavailable and approval-gated capabilities distinctly.
@@ -84,13 +87,18 @@ This is the implementation backlog. The current branch is documentation-only: no
 - [ ] Keep full-volume scanning cancellable, low priority and resource-aware; throttle/pause during gaming, high foreground load, low battery or memory pressure.
 - [ ] Use existing Windows Search metadata as an optional accelerator only; never silently enable Enhanced indexing or change user indexing/privacy settings.
 - [ ] Add incremental refresh from registry/package change signals, file-system notifications on known roots and scheduled bounded reconciliation; no continuous full-volume scan.
-- [ ] Store the app catalogue as a rebuildable metadata cache, not as unified user memory or a file-content index.
+- [ ] Store the rebuildable app catalogue in separate tables inside the canonical UnifiedDataStore; do not mix app catalogue records into personal-memory retrieval or index file contents.
 - [ ] Build alias/name resolution across display name, product/file description, executable basename, shortcut name, package name and user-confirmed aliases.
 - [ ] Rank candidates by source confidence, path existence, package identity, publisher/signature and user trust; a valid signature alone does not prove safety, and unsigned apps may be explicitly approved.
 - [ ] Reject deleted paths, path/reparse escapes and temporary/download/cache candidates under default launch policy; ask the user when multiple stable/beta/portable matches remain.
 - [ ] Launch desktop applications via validated canonical executable paths and packaged apps via validated AUMIDs; do not accept model-generated arbitrary command-line arguments.
 - [ ] Verify launch using fresh process/window/package evidence and distinguish process creation from a ready/usable window.
 - [ ] Mark moved/updated/uninstalled executables stale and re-resolve them; expose source, resolved target, trust and last scan in the app catalogue.
+- [ ] Add a local model-enrichment queue for incomplete/ambiguous app metadata; send only minimized extracted metadata, never file contents or binaries.
+- [ ] Request only normalized app/product identity, vendor/product family, alias suggestions, broad category, short purpose and confidence; schema-validate outputs and allow unknown.
+- [ ] Never allow model enrichment to write/alter EXE paths, AUMIDs, package IDs, signature/publisher evidence, trust decisions, permissions or launch arguments.
+- [ ] Store model tag, prompt version, output schema version, candidate/evidence IDs, timestamp, confidence and review state with the suggestion in the unified database.
+- [ ] Batch/deduplicate enrichment by file identity/version, run local-only at low priority and re-enrich only when source metadata changes or the user asks.
 
 - [ ] **Applications/windows:** enumerate supported app/window metadata; launch registered applications; activate, minimize, maximize and close user-owned windows; test exact-target protection for process/window actions.
 - [ ] **Files/folders:** browse/search user-approved roots; inspect metadata; create folders; copy, move and rename; support Recycle Bin deletion; block permanent deletion, bulk deletion and protected paths by default.
@@ -153,19 +161,24 @@ This is the implementation backlog. The current branch is documentation-only: no
 
 **Exit criteria:** APEX can answer whole-Windows questions using fresh evidence while the SENTINEL dashboard remains closed; the same evidence providers support automation preconditions and verification.
 
-## Phase 3 — Profile and unified memory
-- [ ] Reuse AIE MemoryStore; avoid a parallel APEX database.
-- [ ] Add APEX namespace/source tags to memory records.
-- [ ] Separate user profile, conversation history, system observations and memories.
+## Phase 3 — Unified profile, memory and database consolidation
+- [ ] Use one canonical local SQLite file for all durable APEX memory/knowledge; no separate profile, conversation, memory-kind, app-catalogue or task-context databases.
+- [ ] Consolidate current AIE sources events.sqlite3, memory.sqlite3, task-runs.sqlite3 and task-sessions.sqlite3 into the canonical apex-unified.sqlite3 file under the existing AIE per-user data directory.
+- [ ] Implement transactional, idempotent migration with source checksums, record counts, collision handling, backup retention and a recovery path; never delete old databases before post-migration verification and retention expiry.
+- [ ] Route EventStore, MemoryStore, TaskRunStore and TaskSessionStore to the same canonical database path while keeping each domain's tables and repository API isolated.
+- [ ] Add profile, conversation/session, application catalogue, enrichment, diagnostic incident and reviewed workflow tables to the same file.
+- [ ] Keep policy and egress audit stores separate only where their tamper-evidence/integrity boundary requires it; do not treat them as alternate memory stores.
+- [ ] Add schema registry, JSON extension fields, per-record schema versions, transactional migrations and deprecation handling.
+- [ ] Ensure strict validation of extension values; no arbitrary field names/SQL identifiers or untrusted model-defined schemas.
 - [ ] Implement explicit onboarding for owner/preferred name, salutation, locale, communication style, device aliases and preferences; initialize salutation to `sir`.
 - [ ] Add optional local indexing of explicitly selected user folders/documents with inspectable paths, retention and deletion; exclude credentials, browser secrets, protected/system folders and unselected locations.
-- [ ] Implement explicit memory capture, review, correction, export and deletion.
-- [ ] Implement relevant, non-sensitive memory retrieval with bounded prompt budget.
-- [ ] Preserve provenance, confidence, sensitivity, verification and expiry.
-- [ ] Define retention for conversations, profile facts, incidents and telemetry.
-- [ ] Test restart persistence, conflicting facts, stale memory and deletion.
+- [ ] Implement explicit memory capture, review, correction, export, deletion and relevant non-sensitive retrieval.
+- [ ] Preserve provenance, confidence, sensitivity, verification, lineage and expiry across migrations and updates.
+- [ ] Add real-time change journal/subscription, optimistic concurrency, idempotent writes and bounded writer queue so UI/host/providers can read latest committed data safely.
+- [ ] Test that two feature modules reading/writing profile, memories, app catalogue and task context share the same physical database file and consistent sequence.
+- [ ] Test migration rollback, interruption/restart, duplicate import, corrupted source, schema upgrade, unknown extension fields and backup recovery.
 
-**Exit criteria:** user-approved profile and memories persist across restarts; the user can inspect and control stored information without a duplicate memory database.
+**Exit criteria:** all APEX durable memory/profile/conversation/application knowledge/task context is in one physical database, live-readable through one access layer, extensible through validated versioned fields and migrated without data loss. SENTINEL's private database and separately protected policy/egress audit stores are not merged into this user-memory database.
 
 ## Phase 4 — Advanced Windows diagnostic intelligence
 - [ ] Implement specialist profiles and request/task classification for complex diagnostics.
