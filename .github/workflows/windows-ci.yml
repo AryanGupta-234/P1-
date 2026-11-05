@@ -2,7 +2,7 @@ name: Windows CI
 
 on:
   push:
-    branches: [main, dev, browser-video-intelligence, "feat/**", "fix/**", "integrate/**"]
+    branches: [main, dev, browser-video-intelligence, "feat/**", "fix/**", "integrate/**", "feature/**"]
   pull_request:
   workflow_dispatch:
 
@@ -37,6 +37,8 @@ jobs:
         run: dotnet build desktop/P1Dashboard/P1Dashboard.csproj --configuration Release
       - name: Lint
         run: python -m ruff check .
+      - name: Validate independent APEX imports
+        run: python -c "from apex import ApexService; from apex.ollama import OllamaClient; from apex.tools.defaults import build_default_registry"
       - name: Validate Windows-only optional imports
         run: python -c "import pywinauto; import win32evtlog; from aie.providers.process_resources import WindowsProcessResourceProvider; from aie.browser.native_host import event_from_browser_payload; from aie.providers.uia import WindowsUIATreeProvider; from aie.providers.eventlog import WindowsEventLogProvider; from aie.providers.etw_process import WindowsETWProcessProvider"
       - name: Validate PowerShell helper syntax
