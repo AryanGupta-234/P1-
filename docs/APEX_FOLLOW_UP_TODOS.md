@@ -146,6 +146,10 @@ This is the implementation backlog. The current branch is documentation-only: no
 - [ ] Test full-volume executable discovery, cancellation, inaccessible folders, reparse-point protection, exclusion rules, stale records and incremental refresh without reading file contents.
 - [ ] Test ambiguous app names, invalid/moved executable paths, untrusted download/temp binaries, signed/unsigned publisher states and user-approved exceptions.
 - [ ] Test packaged-app activation by AUMID and desktop-app launch by exact canonical executable path; verify the resulting process/window.
+- [ ] Test local model enrichment is skipped when Ollama is unavailable while deterministic executable discovery still completes.
+- [ ] Test enrichment batches are deduplicated by executable identity/version and are not invoked once per scanned file.
+- [ ] Test strict enrichment schema, unknown values, confidence bounds and provenance; reject attempts to alter EXE paths, AUMIDs, publisher/signature evidence, trust, privilege or launch arguments.
+- [ ] Test a new validated extension field can be stored/read without a destructive table rewrite and remains compatible with older record schema versions.
 - [ ] Test audit-chain integrity, duplicate-action prevention, approval expiry, kill switch and rollback/compensation.
 - [ ] Verify no arbitrary shell/code execution path is reachable from model output.
 - [ ] Verify APEX never claims a capability absent from the live manifest.
