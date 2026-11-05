@@ -17,6 +17,7 @@ class AppRecord:
     source: str
     trust_state: str = "unknown"
     available: bool = False
+    aumid: str | None = None
 
 class AppDiscovery:
     EXCLUDED_DIRS = {"$recycle.bin", "system volume information", "winsxs", "windows installer",
@@ -80,7 +81,39 @@ class AppDiscovery:
         for root in self._start_menu_roots():
             records.update({row.executable_path.casefold(): row for row in self._shortcut_records(root)
                             if row.executable_path})
+        for row in self._packaged_app_records():
+            records[f"aumid:{row.aumid.casefold()}"] = row
         return list(records.values())
+
+    @staticmethod
+    def _packaged_app_records() -> list[AppRecord]:
+        """Enumerate Start-menu package identities through the Shell AppsFolder namespace."""
+        if os.name != "nt":
+            return []
+        try:
+            import win32com.client
+            shell = win32com.client.Dispatch("Shell.Application")
+            namespace = shell.NameSpace("shell:AppsFolder")
+            if namespace is None:
+                return []
+            found: list[AppRecord] = []
+            for item in namespace.Items():
+                try:
+                    name = str(item.Name or "").strip()
+                    aumid = str(item.ExtendedProperty("System.AppUserModel.ID") or "").strip()
+                    if not aumid:
+                        item_path = str(item.Path or "")
+                        if "!" in item_path:
+                            aumid = item_path.rsplit("\\", 1)[-1].strip()
+                    if not name or not aumid or "!" not in aumid or len(aumid) > 300:
+                        continue
+                    found.append(AppRecord(name, None, (name,), None, None,
+                                           "shell_apps_folder", "package", True, aumid))
+                except Exception:
+                    continue
+            return found
+        except Exception:
+            return []
 
     @staticmethod
     def _start_menu_roots() -> list[Path]:

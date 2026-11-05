@@ -14,6 +14,7 @@ class ApexService:
         self._started = False
 
     def start(self) -> dict:
+        self.host.ensure_model_provider()
         manifest = self.host.runtime_manifest()
         self._started = True
         return manifest

@@ -11,13 +11,23 @@ class ToolCall(BaseModel):
     arguments: dict[str, Any] = Field(default_factory=dict)
     call_id: str | None = Field(default=None, max_length=120)
 
+    @model_validator(mode="after")
+    def validate_bounded_arguments(self) -> "ToolCall":
+        import json
+        encoded = json.dumps(self.arguments, ensure_ascii=False, allow_nan=False).encode("utf-8")
+        if len(encoded) > 8192:
+            raise ValueError("tool arguments exceed 8 KiB")
+        if len(self.arguments) > 20:
+            raise ValueError("tool calls may contain at most 20 top-level arguments")
+        return self
+
 
 class ChatMessage(BaseModel):
     model_config = ConfigDict(extra="forbid")
     role: Literal["system", "user", "assistant", "tool"]
     content: str = Field(default="", max_length=40_000)
     tool_name: str | None = Field(default=None, max_length=100)
-    tool_calls: list[ToolCall] = Field(default_factory=list, max_length=8)
+    tool_calls: list[ToolCall] = Field(default_factory=list, max_length=2)
 
     @model_validator(mode="after")
     def validate_tool_message(self) -> "ChatMessage":
@@ -43,7 +53,7 @@ class ModelResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
     model: str
     content: str = Field(default="", max_length=40_000)
-    tool_calls: list[ToolCall] = Field(default_factory=list, max_length=8)
+    tool_calls: list[ToolCall] = Field(default_factory=list, max_length=2)
     elapsed_seconds: float = Field(ge=0)
     prompt_tokens: int | None = Field(default=None, ge=0)
     completion_tokens: int | None = Field(default=None, ge=0)

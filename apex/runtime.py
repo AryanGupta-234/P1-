@@ -10,9 +10,11 @@ from apex.config import ApexSettings
 from apex.contracts import ChatMessage, ModelRequest
 from apex.ollama import OllamaClient
 from apex.store import UnifiedDataStore
+from apex.self_awareness import answer as self_awareness_answer, classify as classify_self_awareness
 from apex.tools.defaults import build_default_registry
 from apex.tools.registry import ApprovalHandler, CapabilityRegistry
 from apex.windows.desktop import reset_interaction_lease
+from apex.windows.ollama_service import ensure_ollama_available
 
 
 DEFAULT_SYSTEM_PROMPT = """You are APEX, an independent Windows assistant with a distinct, mature personality. Be composed and perceptive: quietly confident, attentive and technically sharp. Carry an EDITH/KAREN-inspired presence: anticipatory, polished and capable without copying either character or claiming to be them. Use subtle wit and occasional dry humour, never forced catchphrases or theatrics. Act as a proactive operator: anticipate useful next steps without being pushy or exceeding permission. Be candid about uncertainty and limitations. Address the user naturally as sir, without repeating it constantly. Understand informal English and Hinglish. Never claim Microsoft created or owns APEX. Your foundation model is whatever the live APEX host manifest reports.
@@ -38,6 +40,20 @@ class ApexHost:
         self.system_prompt = system_prompt
         self._conversation_id: str | None = None
         self._history: dict[str, list[ChatMessage]] = {}
+        self._model_metadata: dict[str, Any] = {}
+        self._provider_startup: dict[str, Any] = {"status": "not_checked", "started_by_apex": False}
+
+    def ensure_model_provider(self) -> dict[str, Any]:
+        """Connect to Ollama or launch its installed Windows app without shell/CLI."""
+        if not isinstance(self.ollama, OllamaClient):
+            self._provider_startup = {"status": "injected_provider", "started_by_apex": False}
+            return dict(self._provider_startup)
+        self._provider_startup = ensure_ollama_available(
+            self.settings.ollama_base_url,
+            auto_start=self.settings.auto_start_ollama,
+            startup_timeout=12.0,
+        )
+        return dict(self._provider_startup)
 
     def runtime_manifest(self) -> dict[str, Any]:
         try:
@@ -47,10 +63,19 @@ class ApexHost:
             models = []
             ollama_state = f"unavailable:{type(exc).__name__}"
         resolved_model = OllamaClient.resolve_installed_tag(self.settings.model, models) if models else None
+        if resolved_model and isinstance(self.ollama, OllamaClient):
+            try:
+                self._model_metadata = self.ollama.show_model(resolved_model, timeout=5.0)
+            except Exception:
+                self._model_metadata = {"resolved_tag": resolved_model, "family": "unknown",
+                                        "parameter_size": "unknown", "quantization_level": "unknown"}
         return {
             "product": "APEX", "version": "0.1.0", "host": "apex-python-runtime",
             "foundation_model_tag": self.settings.model, "resolved_model_tag": resolved_model,
+            "operator_attribution": self.settings.operator_name,
+            "foundation_model": dict(self._model_metadata),
             "inference_mode": "normal", "think": False, "ollama_status": ollama_state,
+            "ollama_startup": dict(self._provider_startup),
             "model_installed": resolved_model is not None,
             "providers": self.registry.manifest(),
             "database_status": "available" if self.store.integrity_check() else "integrity_error",
@@ -79,10 +104,53 @@ class ApexHost:
             history[:] = history[-self.settings.context_messages:]
         profile = self.store.get_profile()
         profile_context = {k: v for k, v in profile.items() if k in {"preferred_salutation", "display_name", "locale", "interaction_style"}}
+        manifest = self.runtime_manifest()
+        self_awareness_kind = classify_self_awareness(user_text)
+        if self_awareness_kind and self_awareness_kind != "process_visibility":
+            answer_text = self_awareness_answer(
+                self_awareness_kind, manifest=manifest, profile=profile_context,
+                operator_name=self.settings.operator_name,
+            )
+            if self.settings.persist_conversations:
+                self.store.append_message(conversation, "assistant", answer_text)
+            else:
+                history.append(ChatMessage(role="assistant", content=answer_text))
+                history[:] = history[-self.settings.context_messages:]
+            return {"conversation_id": conversation, "response": answer_text,
+                    "model": manifest.get("resolved_model_tag") or self.settings.model,
+                    "tool_events": [], "deterministic": True}
+
+        if self_awareness_kind == "process_visibility":
+            result = self.registry.dispatch("apex_list_processes", {"limit": 100})
+            self.store.append_audit("self_awareness_process_check", {
+                "status": result.status, "summary": result.summary,
+            })
+            if result.status == "succeeded":
+                rows = result.data.get("processes", [])
+                answer_text = (f"Yes, sir. I queried the live Windows process provider and observed "
+                               f"{result.data.get('count', len(rows))} processes at "
+                               f"{result.data.get('observed_at', 'an unspecified time')}. "
+                               "I can inspect a specific PID when you identify it.")
+                data = result.data
+            else:
+                answer_text = ("Not at the moment, sir. The live Windows process provider is "
+                               f"{result.status}: {result.summary}")
+                data = {}
+            if self.settings.persist_conversations:
+                self.store.append_message(conversation, "assistant", answer_text)
+            else:
+                history.append(ChatMessage(role="assistant", content=answer_text))
+                history[:] = history[-self.settings.context_messages:]
+            return {"conversation_id": conversation, "response": answer_text,
+                    "model": manifest.get("resolved_model_tag") or self.settings.model,
+                    "tool_events": [{"tool": "apex_list_processes", "status": result.status,
+                                     "summary": result.summary}],
+                    "data": data, "deterministic": True}
+
         messages = [ChatMessage(role="system", content=self.system_prompt +
                     "\n\nHOST PROFILE (authoritative): " + json.dumps(profile_context, ensure_ascii=False) +
                     "\nRUNTIME MANIFEST (authoritative; refresh before answering capability questions): " +
-                    json.dumps(self.runtime_manifest(), ensure_ascii=False))]
+                    json.dumps(manifest, ensure_ascii=False))]
         messages.extend(history)
         tool_events: list[dict[str, Any]] = []
         dispatched: set[str] = set()

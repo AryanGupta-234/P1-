@@ -1,9 +1,27 @@
-"""Semantic UI Automation via pywinauto; secret fields are never read or populated."""
+"""Semantic UI Automation via pywinauto; sensitive/document content is never read."""
 from __future__ import annotations
+
 import os
+
 
 class UIAutomationUnavailable(RuntimeError):
     pass
+
+
+_SAFE_INSPECTION_TYPES = {
+    "Button", "CheckBox", "RadioButton", "ToggleButton", "ComboBox", "Tab", "TabItem",
+    "Menu", "MenuItem", "Hyperlink", "Tree", "TreeItem", "Slider", "Spinner",
+    "ToolBar", "Window", "Pane", "Group", "ScrollBar",
+}
+_CONTROL_TYPES = {
+    "invoke": {"Button", "MenuItem", "Hyperlink", "TabItem", "TreeItem", "SplitButton"},
+    "set_value": {"Edit", "ComboBox", "Spinner"},
+    "select": {"ComboBox", "TabItem", "TreeItem"},
+    "toggle": {"CheckBox", "RadioButton", "ToggleButton"},
+    "expand_collapse": {"TreeItem", "ComboBox", "Pane", "Group"},
+    "scroll": {"ScrollBar", "List", "ListView", "Pane", "Group"},
+}
+
 
 def _window(hwnd: int):
     if os.name != "nt":
@@ -19,13 +37,20 @@ def _window(hwnd: int):
         raise ValueError("target window does not exist")
     return window
 
-def _resolve(window, *, automation_id: str | None = None, name: str | None = None):
+
+def _resolve(window, *, operation: str, automation_id: str | None = None,
+             name: str | None = None):
     if bool(automation_id) == bool(name):
         raise ValueError("provide exactly one of automation_id or name")
+    allowed = _CONTROL_TYPES[operation]
     matches = []
     for control in window.descendants()[:1000]:
         try:
             info = control.element_info
+            if str(info.control_type or "") not in allowed:
+                continue
+            if bool(getattr(info, "is_password", False)):
+                continue
             if automation_id and info.automation_id == automation_id:
                 matches.append(control)
             elif name and info.name == name:
@@ -33,102 +58,111 @@ def _resolve(window, *, automation_id: str | None = None, name: str | None = Non
         except Exception:
             continue
     if len(matches) != 1:
-        raise ValueError("UIA target was not found uniquely; specify a unique automation_id or exact name")
+        raise ValueError("UIA target was not found uniquely within the allowed control types")
     return matches[0]
+
 
 def inspect_tree(hwnd: int, limit: int = 100) -> dict:
     if isinstance(limit, bool) or not 1 <= limit <= 300:
         raise ValueError("limit must be between 1 and 300")
     window = _window(hwnd)
     rows = []
-    for control in window.descendants()[:limit]:
+    for control in window.descendants()[: min(limit * 3, 900)]:
+        if len(rows) >= limit:
+            break
         try:
             info = control.element_info
             password = bool(getattr(info, "is_password", False))
             control_type = str(info.control_type or "")
-            safe_name = "" if password or control_type in {"Edit", "Document"} else str(info.name or "")[:160]
-            rows.append({"name": safe_name, "automation_id": str(info.automation_id or "")[:120],
+            if password or control_type not in _SAFE_INSPECTION_TYPES:
+                continue
+            rows.append({"name": str(info.name or "")[:120],
+                         "automation_id": str(info.automation_id or "")[:120],
                          "control_type": control_type, "enabled": bool(info.enabled),
-                         "visible": bool(info.visible), "password": password})
+                         "visible": bool(info.visible)})
         except Exception:
             continue
-    return {"hwnd": hwnd, "controls": rows, "count": len(rows), "source": "Windows UI Automation"}
+    return {"hwnd": hwnd, "controls": rows, "count": len(rows),
+            "source": "Windows UI Automation; text/document/list contents excluded"}
+
 
 def invoke(hwnd: int, *, automation_id: str | None = None, name: str | None = None) -> dict:
-    control = _resolve(_window(hwnd), automation_id=automation_id, name=name)
+    control = _resolve(_window(hwnd), operation="invoke", automation_id=automation_id, name=name)
     info = control.element_info
-    if bool(getattr(info, "is_password", False)):
-        raise PermissionError("password controls are never automated")
     control.iface_invoke.Invoke()
-    return {"summary": f"Invoked UIA control '{info.name[:120]}'.", "hwnd": hwnd,
+    return {"summary": f"Invoked UIA control '{str(info.name or '')[:120]}'.", "hwnd": hwnd,
             "automation_id": info.automation_id, "verified": False}
 
-def set_value(hwnd: int, value: str, *, automation_id: str | None = None, name: str | None = None) -> dict:
+
+def set_value(hwnd: int, value: str, *, automation_id: str | None = None,
+              name: str | None = None) -> dict:
     if not isinstance(value, str) or len(value) > 2000:
         raise ValueError("value must be a string of at most 2000 characters")
-    control = _resolve(_window(hwnd), automation_id=automation_id, name=name)
+    control = _resolve(_window(hwnd), operation="set_value", automation_id=automation_id, name=name)
     info = control.element_info
     if bool(getattr(info, "is_password", False)):
         raise PermissionError("password controls are never populated")
     control.iface_value.SetValue(value)
     if control.iface_value.CurrentValue != value:
         raise RuntimeError("UIA value verification did not match the requested text")
-    return {"summary": f"Set value on UIA control '{info.name[:120]}'.", "hwnd": hwnd,
+    return {"summary": f"Set value on UIA control '{str(info.name or '')[:120]}'.", "hwnd": hwnd,
             "automation_id": info.automation_id, "verified": True}
 
+
 def toggle(hwnd: int, *, automation_id: str | None = None, name: str | None = None) -> dict:
-    control = _resolve(_window(hwnd), automation_id=automation_id, name=name)
+    control = _resolve(_window(hwnd), operation="toggle", automation_id=automation_id, name=name)
     info = control.element_info
-    if bool(getattr(info, "is_password", False)):
-        raise PermissionError("password controls are never automated")
     control.iface_toggle.Toggle()
-    return {"summary": f"Toggled UIA control '{info.name[:120]}'.", "hwnd": hwnd,
+    return {"summary": f"Toggled UIA control '{str(info.name or '')[:120]}'.", "hwnd": hwnd,
             "automation_id": info.automation_id, "verified": False}
+
 
 def provider_available() -> bool:
     if os.name != "nt":
         return False
     try:
-        import pywinauto
+        import pywinauto  # noqa: F401
         return True
     except ImportError:
         return False
 
+
 def select(hwnd: int, *, automation_id: str | None = None, name: str | None = None) -> dict:
-    control = _resolve(_window(hwnd), automation_id=automation_id, name=name)
+    control = _resolve(_window(hwnd), operation="select", automation_id=automation_id, name=name)
     info = control.element_info
-    if bool(getattr(info, "is_password", False)):
-        raise PermissionError("password controls are never automated")
     control.iface_selection_item.Select()
-    return {"summary": f"Selected UIA control '{info.name[:120]}'.", "hwnd": hwnd,
+    return {"summary": f"Selected UIA control '{str(info.name or '')[:120]}'.", "hwnd": hwnd,
             "automation_id": info.automation_id, "verified": False}
+
 
 def expand_collapse(hwnd: int, expanded: bool, *, automation_id: str | None = None,
                     name: str | None = None) -> dict:
     if not isinstance(expanded, bool):
         raise ValueError("expanded must be a boolean")
-    control = _resolve(_window(hwnd), automation_id=automation_id, name=name)
+    control = _resolve(_window(hwnd), operation="expand_collapse",
+                       automation_id=automation_id, name=name)
     info = control.element_info
-    if bool(getattr(info, "is_password", False)):
-        raise PermissionError("password controls are never automated")
     pattern = control.iface_expand_collapse
     pattern.Expand() if expanded else pattern.Collapse()
     observed = int(pattern.CurrentExpandCollapseState)
     if observed != (1 if expanded else 0):
         raise RuntimeError("UIA expand/collapse postcondition failed")
-    return {"summary": f"UIA control '{info.name[:120]}' is {'expanded' if expanded else 'collapsed'}.",
+    return {"summary": f"UIA control '{str(info.name or '')[:120]}' is {'expanded' if expanded else 'collapsed'}.",
             "hwnd": hwnd, "automation_id": info.automation_id, "verified": True}
+
 
 def scroll_container(hwnd: int, axis: str, direction: str, *, automation_id: str | None = None,
                      name: str | None = None) -> dict:
     if axis not in {"horizontal", "vertical"} or direction not in {"forward", "backward"}:
         raise ValueError("axis/direction is invalid")
-    control = _resolve(_window(hwnd), automation_id=automation_id, name=name)
+    control = _resolve(_window(hwnd), operation="scroll", automation_id=automation_id, name=name)
     info = control.element_info
-    if bool(getattr(info, "is_password", False)):
-        raise PermissionError("password controls are never automated")
-    increment = 4 if direction == "forward" else 0
-    control.iface_scroll.Scroll(increment if axis == "horizontal" else 2,
-                                increment if axis == "vertical" else 2)
+    pattern = control.iface_scroll
+    no_amount = 2
+    small_increment = 4
+    small_decrement = 1
+    horizontal = (small_increment if direction == "forward" else small_decrement) if axis == "horizontal" else no_amount
+    vertical = (small_increment if direction == "forward" else small_decrement) if axis == "vertical" else no_amount
+    pattern.Scroll(horizontal, vertical)
     return {"summary": f"Scrolled {axis} container {direction}.", "hwnd": hwnd,
             "automation_id": info.automation_id, "verified": False}

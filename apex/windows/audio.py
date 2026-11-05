@@ -99,3 +99,20 @@ def set_application_session_volume(pid: int, process_name: str, volume_percent: 
         raise RuntimeError("per-application volume postcondition failed")
     return {"summary": f"Set {process_name} audio session volume to {observed}%.", "pid": pid,
             "process_created_at": created, "volume_percent": observed, "verified": True}
+
+
+def media_control(action: str) -> dict:
+    """Dispatch a named Windows media key; does not inspect arbitrary app content."""
+    import os
+    if os.name != "nt":
+        raise OSError("Windows media key support requires Windows")
+    keys = {"play_pause": 0xB3, "next": 0xB0, "previous": 0xB1, "stop": 0xB2}
+    if action not in keys:
+        raise ValueError("media action must be play_pause, next, previous or stop")
+    import ctypes
+    user32 = ctypes.WinDLL("user32", use_last_error=True)
+    vk = keys[action]
+    user32.keybd_event(vk, 0, 0, 0)
+    user32.keybd_event(vk, 0, 0x0002, 0)
+    return {"summary": f"Dispatched media action: {action}.", "action": action, "verified": False,
+            "verification": "Media-key dispatch does not prove an application changed playback state."}

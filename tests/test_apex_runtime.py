@@ -40,3 +40,41 @@ def test_conversation_persistence_is_opt_in(tmp_path):
     result = host.chat("hello")
     assert result["response"] == "Probe complete, sir."
     assert store.recent_messages(result["conversation_id"]) == []
+
+
+def test_self_awareness_identity_is_answered_from_host_not_model(tmp_path):
+    fake = FakeOllama()
+    host = ApexHost(settings=ApexSettings(operator_name=None), ollama=fake,
+                    store=UnifiedDataStore(tmp_path / "apex.sqlite3"), registry=CapabilityRegistry())
+    result = host.chat("Who are you?")
+    assert result["deterministic"] is True
+    assert "APEX" in result["response"]
+    assert fake.calls == 0
+
+
+def test_self_awareness_creator_does_not_invent_attribution(tmp_path):
+    fake = FakeOllama()
+    host = ApexHost(settings=ApexSettings(operator_name=None), ollama=fake,
+                    store=UnifiedDataStore(tmp_path / "apex.sqlite3"), registry=CapabilityRegistry())
+    result = host.chat("Who made you?")
+    assert "won't invent one" in result["response"]
+    assert fake.calls == 0
+
+
+def test_process_visibility_question_calls_registered_read_only_provider(tmp_path):
+    fake = FakeOllama()
+    registry = CapabilityRegistry()
+    registry.register(ToolDefinition(
+        "apex_list_processes", "List processes", {"type": "object"}, "read_only",
+        lambda _args: {"summary": "observed process list", "count": 2,
+                       "observed_at": "2026-11-05T10:00:00+05:30",
+                       "processes": [{"pid": 101, "name": "explorer.exe"},
+                                     {"pid": 202, "name": "notepad.exe"}]},
+    ))
+    host = ApexHost(settings=ApexSettings(), ollama=fake,
+                    store=UnifiedDataStore(tmp_path / "apex.sqlite3"), registry=registry)
+    result = host.chat("Can you see my running processes?")
+    assert result["deterministic"] is True
+    assert result["tool_events"][0]["status"] == "succeeded"
+    assert "observed 2 processes" in result["response"]
+    assert fake.calls == 0

@@ -1,16 +1,22 @@
 """Read-only Windows inventory providers with explicit platform checks."""
 from __future__ import annotations
+
+import ctypes
 import os
 import platform
 from datetime import datetime, timezone
+from ctypes import wintypes
 from typing import Any
+
 
 class WindowsUnavailable(RuntimeError):
     pass
 
+
 def _require_windows() -> None:
     if os.name != "nt":
         raise WindowsUnavailable("This provider requires Windows 11.")
+
 
 def system_summary() -> dict[str, Any]:
     _require_windows()
@@ -21,6 +27,7 @@ def system_summary() -> dict[str, Any]:
         "memory_total_bytes": psutil.virtual_memory().total,
         "memory_available_bytes": psutil.virtual_memory().available,
         "observed_at": datetime.now(timezone.utc).isoformat(), "source": "APEX/psutil"}
+
 
 def list_processes(limit: int = 100) -> dict[str, Any]:
     _require_windows()
@@ -42,15 +49,23 @@ def list_processes(limit: int = 100) -> dict[str, Any]:
     return {"processes": rows, "count": len(rows), "limit": limit,
             "observed_at": datetime.now(timezone.utc).isoformat(), "source": "APEX/psutil"}
 
+
 def list_windows(limit: int = 100, *, include_titles: bool = False) -> dict[str, Any]:
     _require_windows()
-    import ctypes
-    from ctypes import wintypes
     if isinstance(limit, bool) or not 1 <= limit <= 500:
         raise ValueError("limit must be between 1 and 500")
     user32 = ctypes.WinDLL("user32", use_last_error=True)
+    user32.IsWindowVisible.argtypes = [wintypes.HWND]
+    user32.IsWindowVisible.restype = wintypes.BOOL
+    user32.GetWindowTextLengthW.argtypes = [wintypes.HWND]
+    user32.GetWindowTextLengthW.restype = ctypes.c_int
+    user32.GetWindowTextW.argtypes = [wintypes.HWND, wintypes.LPWSTR, ctypes.c_int]
+    user32.GetWindowTextW.restype = ctypes.c_int
+    user32.GetWindowThreadProcessId.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.DWORD)]
+    user32.GetWindowThreadProcessId.restype = wintypes.DWORD
     rows: list[dict[str, Any]] = []
     callback_type = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+
     def callback(hwnd, _lparam):
         if len(rows) >= limit:
             return False
@@ -67,6 +82,7 @@ def list_windows(limit: int = 100, *, include_titles: bool = False) -> dict[str,
         user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
         rows.append({"hwnd": int(hwnd), "pid": int(pid.value), "title": title_value})
         return True
+
     user32.EnumWindows.argtypes = [callback_type, wintypes.LPARAM]
     user32.EnumWindows.restype = wintypes.BOOL
     user32.EnumWindows(callback_type(callback), 0)

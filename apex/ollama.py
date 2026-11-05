@@ -77,6 +77,27 @@ class OllamaClient:
             return latest
         return None
 
+    def show_model(self, model: str, *, timeout: float = 5.0) -> dict:
+        """Read local Ollama model metadata; do not expose or persist the full Modelfile."""
+        installed = set(self.list_models(timeout=min(5.0, timeout)))
+        resolved = self.resolve_installed_tag(model, installed)
+        if resolved is None:
+            raise OllamaUnavailable(f"Model '{model}' is not installed.")
+        payload = self._request("/api/show", payload={"model": resolved, "verbose": False},
+                                timeout=min(timeout, self.default_timeout))
+        details = payload.get("details", {})
+        if not isinstance(details, dict):
+            details = {}
+        raw_families = details.get("families", [])
+        return {
+            "resolved_tag": resolved,
+            "family": str(details.get("family") or "unknown")[:100],
+            "families": [str(x)[:100] for x in raw_families[:8]] if isinstance(raw_families, list) else [],
+            "parameter_size": str(details.get("parameter_size") or "unknown")[:60],
+            "quantization_level": str(details.get("quantization_level") or "unknown")[:40],
+            "format": str(details.get("format") or "unknown")[:40],
+        }
+
     def chat(self, request: ModelRequest, *, model: str) -> ModelResponse:
         installed = set(self.list_models(timeout=min(5.0, request.timeout_seconds)))
         resolved_model = self.resolve_installed_tag(model, installed)
@@ -121,7 +142,7 @@ class OllamaClient:
         if not isinstance(content, str):
             raise OllamaUnavailable("Ollama message.content is malformed")
         raw_calls = message.get("tool_calls", [])
-        if not isinstance(raw_calls, list) or len(raw_calls) > 8:
+        if not isinstance(raw_calls, list) or len(raw_calls) > 2:
             raise OllamaUnavailable("Ollama returned an invalid or excessive tool-call list")
         calls: list[ToolCall] = []
         for raw in raw_calls:

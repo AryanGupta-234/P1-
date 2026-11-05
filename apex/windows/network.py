@@ -77,3 +77,60 @@ def provider_available() -> bool:
         return True
     except ImportError:
         return False
+
+
+def set_adapter_enabled(adapter_index: int, enabled: bool) -> dict[str, Any]:
+    """Enable/disable one exact network adapter; this may disconnect the current session."""
+    if isinstance(adapter_index, bool) or not isinstance(adapter_index, int) or adapter_index < 0:
+        raise ValueError("adapter_index must be a non-negative integer")
+    if not isinstance(enabled, bool):
+        raise ValueError("enabled must be a boolean")
+    service = _service()
+    matches = list(service.ExecQuery(
+        f"SELECT Index, Name, NetEnabled FROM Win32_NetworkAdapter WHERE Index={adapter_index}"
+    ))
+    if len(matches) != 1:
+        raise LookupError("network adapter index is missing or ambiguous")
+    adapter = matches[0]
+    previous = bool(adapter.NetEnabled) if adapter.NetEnabled is not None else None
+    method_name = "Enable" if enabled else "Disable"
+    if previous is enabled:
+        return {"summary": f"Network adapter {adapter_index} is already {'enabled' if enabled else 'disabled'}.",
+                "adapter_index": adapter_index, "enabled": enabled, "verified": True}
+    result = adapter.ExecMethod_(method_name)
+    return_code = int(result.ReturnValue)
+    if return_code not in {0, 1}:
+        raise OSError(f"Windows adapter {method_name} returned WMI code {return_code}")
+    refreshed = list(service.ExecQuery(
+        f"SELECT Index, Name, NetEnabled FROM Win32_NetworkAdapter WHERE Index={adapter_index}"
+    ))
+    observed = bool(refreshed[0].NetEnabled) if len(refreshed) == 1 and refreshed[0].NetEnabled is not None else None
+    if observed is not enabled:
+        raise RuntimeError("network adapter state did not reach requested postcondition")
+    return {"summary": f"Network adapter {adapter_index} is now {'enabled' if enabled else 'disabled'}.",
+            "adapter_index": adapter_index, "adapter_name": str(adapter.Name or "")[:240],
+            "previous_enabled": previous, "enabled": observed, "verified": True}
+
+
+def dhcp_lease(adapter_index: int, action: str) -> dict[str, Any]:
+    if isinstance(adapter_index, bool) or not isinstance(adapter_index, int) or adapter_index < 0:
+        raise ValueError("adapter_index must be a non-negative integer")
+    methods = {"renew": "RenewDHCPLease", "release": "ReleaseDHCPLease"}
+    if action not in methods:
+        raise ValueError("action must be renew or release")
+    service = _service()
+    matches = list(service.ExecQuery(
+        f"SELECT Index, DHCPEnabled FROM Win32_NetworkAdapterConfiguration WHERE Index={adapter_index} AND IPEnabled=True"
+    ))
+    if len(matches) != 1:
+        raise LookupError("IP-enabled adapter configuration was not found")
+    adapter = matches[0]
+    if not bool(adapter.DHCPEnabled):
+        raise ValueError("DHCP lease action is unavailable on a statically configured adapter")
+    result = adapter.ExecMethod_(methods[action])
+    code = int(result.ReturnValue)
+    if code not in {0, 1}:
+        raise OSError(f"Windows DHCP {action} returned WMI code {code}")
+    return {"summary": f"Requested DHCP lease {action} for adapter {adapter_index}.",
+            "adapter_index": adapter_index, "return_code": code, "verified": False,
+            "verification": "Re-read adapter IP/gateway/DHCP state after the lease operation completes."}

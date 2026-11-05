@@ -5,8 +5,9 @@ import os
 from typing import Any
 
 from apex.tools.registry import CapabilityRegistry, ToolDefinition
-from apex.windows import (app_catalog, audio, clipboard, desktop, display, files, host_details, inventory,
-                          launch, network, scheduled_tasks, services, settings as settings_provider, uia, window_ops)
+from apex.windows import (app_catalog, audio, clipboard, desktop, desktop_drag, display, files, host_details,
+                          inventory, launch, network, processes, scheduled_tasks, services,
+                          settings as settings_provider, uia, window_ops)
 
 
 def _object(properties: dict[str, Any] | None = None, required: list[str] | None = None) -> dict[str, Any]:
@@ -33,7 +34,7 @@ def build_default_registry(store=None, runtime_settings=None) -> CapabilityRegis
         if store is not None:
             for row in rows:
                 store.upsert_app(display_name=row.display_name, executable_path=row.executable_path,
-                                 aliases=list(row.aliases), metadata={"publisher": row.publisher, "version": row.version},
+                                 aumid=row.aumid, aliases=list(row.aliases), metadata={"publisher": row.publisher, "version": row.version},
                                  trust_state=row.trust_state, source=row.source, available=row.available)
         return rows
     windows = lambda: os.name == "nt"
@@ -45,6 +46,10 @@ def build_default_registry(store=None, runtime_settings=None) -> CapabilityRegis
         name="apex_list_processes", description="List a bounded set of live processes and basic resource metadata.",
         parameters=_object({"limit": {"type": "integer", "minimum": 1, "maximum": 500}}),
         risk="read_only", handler=lambda args: inventory.list_processes(args.get("limit", 100)), available=windows))
+    registry.register(ToolDefinition(
+        name="apex_get_process_details", description="Inspect one exact PID's owner, parent, threads, memory and CPU times.",
+        parameters=_object({"pid": {"type": "integer", "minimum": 1}}, ["pid"]),
+        risk="read_only", handler=lambda args: processes.process_details(args["pid"]), available=windows))
     registry.register(ToolDefinition(
         name="apex_get_network_summary", description="Inspect Windows network adapters, addresses, link state and traffic counters.",
         parameters=_object(), risk="read_only", handler=lambda _args: host_details.network_summary(),
@@ -65,6 +70,19 @@ def build_default_registry(store=None, runtime_settings=None) -> CapabilityRegis
                                             "items": {"type": "string", "maxLength": 64}}},
                            ["adapter_index", "dns_servers"]), risk="controlled",
         handler=lambda args: network.set_dns_servers(args["adapter_index"], args["dns_servers"]),
+        available=network.provider_available))
+    registry.register(ToolDefinition(
+        name="apex_set_network_adapter_enabled", description="Enable or disable one exact Windows network adapter; this can disconnect the current network session.",
+        parameters=_object({"adapter_index": {"type": "integer", "minimum": 0},
+                            "enabled": {"type": "boolean"}}, ["adapter_index", "enabled"]), risk="controlled",
+        handler=lambda args: network.set_adapter_enabled(args["adapter_index"], args["enabled"]),
+        available=network.provider_available))
+    registry.register(ToolDefinition(
+        name="apex_dhcp_lease_action", description="Renew or release DHCP lease for one exact IP-enabled DHCP adapter.",
+        parameters=_object({"adapter_index": {"type": "integer", "minimum": 0},
+                            "action": {"type": "string", "enum": ["renew", "release"]}},
+                           ["adapter_index", "action"]), risk="controlled",
+        handler=lambda args: network.dhcp_lease(args["adapter_index"], args["action"]),
         available=network.provider_available))
     registry.register(ToolDefinition(
         name="apex_get_brightness", description="Read WMI-supported display brightness levels.",
@@ -185,6 +203,13 @@ def build_default_registry(store=None, runtime_settings=None) -> CapabilityRegis
         risk="controlled", handler=lambda args: services.change_service(args["service_name"], args["action"]),
         available=services.provider_available))
     registry.register(ToolDefinition(
+        name="apex_set_service_start_type", description="Set startup type of one exact non-protected Windows service to automatic, manual or disabled.",
+        parameters=_object({"service_name": {"type": "string", "minLength": 1, "maxLength": 256},
+                            "start_type": {"type": "string", "enum": ["automatic", "manual", "disabled"]}},
+                           ["service_name", "start_type"]), risk="controlled",
+        handler=lambda args: services.set_service_start_type(args["service_name"], args["start_type"]),
+        available=services.provider_available))
+    registry.register(ToolDefinition(
         name="apex_discover_applications", description="Read application names and launch candidates from Windows registration metadata.",
         parameters=_object(), risk="read_only", handler=lambda _args: launch.discover_applications(store=store), available=windows))
 
@@ -195,7 +220,7 @@ def build_default_registry(store=None, runtime_settings=None) -> CapabilityRegis
         persist_apps(rows)
         return {"summary": f"Discovered {len(rows)} executable metadata records.", "count": len(rows),
                 "applications": [{"display_name": row.display_name, "executable_path": row.executable_path,
-                                  "source": row.source} for row in rows[:500]], "verified": True}
+                                  "source": row.source, "aumid": row.aumid} for row in rows[:500]], "verified": True}
 
     registry.register(ToolDefinition(
         name="apex_scan_application_volume", description="Cancellably scan one selected fixed local volume for executable metadata only.",
@@ -231,6 +256,11 @@ def build_default_registry(store=None, runtime_settings=None) -> CapabilityRegis
         handler=lambda args: audio.set_application_session_volume(args["pid"], args["process_name"], args["volume_percent"]),
         available=audio.provider_available))
     registry.register(ToolDefinition(
+        name="apex_media_control", description="Dispatch a named system media key: play/pause, next, previous or stop.",
+        parameters=_object({"action": {"type": "string", "enum": ["play_pause", "next", "previous", "stop"]}},
+                           ["action"]), risk="low",
+        handler=lambda args: audio.media_control(args["action"]), available=windows))
+    registry.register(ToolDefinition(
         name="apex_get_clipboard_text", description="Read clipboard text only in response to an explicit user request and host approval.",
         parameters=_object(), risk="controlled", handler=lambda _args: clipboard.get_text(),
         available=clipboard.provider_available))
@@ -238,6 +268,11 @@ def build_default_registry(store=None, runtime_settings=None) -> CapabilityRegis
         name="apex_set_clipboard_text", description="Set clipboard text only in response to an explicit user request and host approval.",
         parameters=_object({"text": {"type": "string", "maxLength": 20000}}, ["text"]), risk="controlled",
         handler=lambda args: clipboard.set_text(args["text"]), available=clipboard.provider_available))
+    registry.register(ToolDefinition(
+        name="apex_type_text", description="Type text into the verified focused, non-password UIA control of the exact foreground window.",
+        parameters=_object({**_window_properties(), "text": {"type": "string", "minLength": 1, "maxLength": 2000}},
+                           ["hwnd", "text"]), risk="controlled",
+        handler=lambda args: desktop.type_text(args["hwnd"], args["text"]), available=uia.provider_available))
     registry.register(ToolDefinition(
         name="apex_mouse_move", description="Move the pointer within a freshly verified foreground window.",
         parameters=_object({**_window_properties(), "x": {"type": "integer", "minimum": -32768, "maximum": 32767},
@@ -261,6 +296,16 @@ def build_default_registry(store=None, runtime_settings=None) -> CapabilityRegis
         risk="controlled", handler=lambda args: desktop.scroll(args["hwnd"], args["amount"], args.get("axis", "vertical"),
                                                                 x=args["x"], y=args["y"]),
         available=windows))
+    registry.register(ToolDefinition(
+        name="apex_drag_drop", description="Perform a bounded drag/drop gesture between two points inside one verified foreground window.",
+        parameters=_object({**_window_properties(),
+                            "start_x": {"type": "integer", "minimum": -32768, "maximum": 32767},
+                            "start_y": {"type": "integer", "minimum": -32768, "maximum": 32767},
+                            "end_x": {"type": "integer", "minimum": -32768, "maximum": 32767},
+                            "end_y": {"type": "integer", "minimum": -32768, "maximum": 32767}},
+                           ["hwnd", "start_x", "start_y", "end_x", "end_y"]), risk="controlled",
+        handler=lambda args: desktop_drag.drag_drop(args["hwnd"], args["start_x"], args["start_y"],
+                                                     args["end_x"], args["end_y"]), available=windows))
     registry.register(ToolDefinition(
         name="apex_press_hotkey", description="Send a bounded named-key combination to the verified foreground window.",
         parameters=_object({**_window_properties(), "keys": {"type": "array", "minItems": 1, "maxItems": 4,
