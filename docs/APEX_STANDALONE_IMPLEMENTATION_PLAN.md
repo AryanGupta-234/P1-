@@ -271,7 +271,7 @@ This is an APEX-owned data store. Do not consolidate, migrate, open or write AIE
 - **Task and workflow context:** user-directed task sessions, plans, runs, step state, outcome summaries and references to execution receipts.
 - **Diagnostic knowledge:** reviewed incidents, hypotheses, verified fixes, follow-up notes and linked evidence references. Raw telemetry is not automatically promoted to personal memory.
 
-The policy/security audit ledger and remote-egress audit remain separately protected append-only stores if required by their integrity boundary. They are not alternate memory stores. Secrets, credentials, browser tokens, raw passwords and private keys are never placed in the unified database. Implement an APEX-owned independent emergency kill switch that remains effective if SQLite is unavailable; do not reuse AIE control files. SENTINEL remains a separate product; any future read-only connection requires a separately approved provider contract and is not a Phase 1 dependency.
+The policy/security audit ledger and remote-egress audit may use separately protected APEX-owned append-only stores if required by their integrity boundary. They are not alternate memory stores. Secrets, credentials, browser tokens, raw passwords and private keys are never placed in the unified database. Implement an APEX-owned independent emergency kill switch that remains effective if SQLite is unavailable; do not reuse AIE control files. SENTINEL remains a separate product; any future read-only connection requires a separately approved provider contract and is not a Phase 1 dependency.
 
 ### Dynamic, adaptable record schema
 
@@ -546,7 +546,7 @@ This is the first coding milestone. Build the assistant host and the actual Wind
 - Implement bounded non-streaming inference, fixed `think: false` in the Python `/api/chat` request, context/timeouts, inference metrics and a single local inference slot.
 - Implement the live capability registry, `apex_get_runtime_manifest`, typed tool schemas and host-side multi-turn tool dispatcher.
 - Establish the canonical UnifiedDataStore path, schema registry, versioned migrations, shared connection factory, change journal and one-writer/multi-reader access pattern. The app catalogue is stored in this same database.
-- Complete the idempotent, loss-checked migration of existing events.sqlite3, memory.sqlite3, task-runs.sqlite3 and task-sessions.sqlite3 into apex-unified.sqlite3 before APEX begins writing profile, conversation or app-catalogue records. Verify counts/checksums, references and integrity; preserve verified backups and rollback path. Route EventStore, MemoryStore, TaskRunStore and TaskSessionStore through the same physical database path.
+- Initialize and migrate only APEX-owned schema versions inside apex-unified.sqlite3 before APEX writes profile, conversation or app-catalogue records. Use transactional, idempotent schema migrations, integrity checks and backups. Do not read, consolidate or migrate events.sqlite3, memory.sqlite3, task-runs.sqlite3 or task-sessions.sqlite3 from AIE.
 - Implement the complete Phase 1 interaction surface in Section 9: mouse movement/click/double-click/right-click/drag, vertical/horizontal scrolling, keyboard shortcuts and targeted text entry; window focus/restore/minimize/maximize/move/resize/switch; semantic UIA inspect/invoke/set/select/toggle/expand/scroll/wait operations; master/per-session volume, mute, audio endpoint and media controls; explicit clipboard operations; plus files, applications, settings, processes, services, startup/tasks, networking, devices, display/power and maintenance workflows.
 - Implement a live Windows baseline provider set in Phase 1, not just action handlers: OS/build and device summary; current session identity as exposed by documented Windows APIs; process inventory/details; foreground windows and registered application metadata; service/startup/task state; network adapters/DNS/routes; volume/free-space status; CPU/RAM load; and the specific setting values required by supported setting actions. Every response carries source, observed time, freshness, privilege and coverage. This baseline must answer “Can you see my running processes?” with a real bounded snapshot when the provider is healthy.
 - Add versioned Settings URI, CPL/MSC and custom protocol catalogues; resolve known Windows targets with OS-build validation.
@@ -653,7 +653,7 @@ Target the current 16 GB RAM / Core i5-12500H-class Windows laptop. This is a de
 Required test groups:
 
 - Identity and prompt composition: salutation, slang, concise chat, truthful creator/model identity, no unsupported capability claims.
-- Model transport: Ollama unavailable, missing model, malformed response, timeout, cancellation, thinking-off behavior, streaming and context limits.
+- Model transport: Ollama unavailable, missing model, malformed response, timeout, fixed thinking-off behavior, non-streaming tool loops and context limits.
 - Runtime introspection: every reported model/provider/tool/permission matches the live manifest.
 - Windows providers: schema validation, freshness, permission denied, missing source, event loss and degraded state.
 - Memory: persistence across restart, provenance, sensitivity exclusion, conflict, expiry, revision, export and deletion.
