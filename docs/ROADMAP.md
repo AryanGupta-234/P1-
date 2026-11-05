@@ -18,7 +18,7 @@ Development ownership and branch rules are defined in [Development Streams](DEVE
 | M6 | Generalization research | PLANNED | Held-out task transfer, robustness and reproducible benchmarks |
 | M7 | Persistent Sentinel experience | IN_PROGRESS | Per-user worker, multi-workspace Titan boot experience, deep system intelligence, searchable event/audit vault, specialist local AI, advanced collector opt-ins and configurable posture automation |
 | M8 | PRIXON model and assistant | IN_PROGRESS | Immutable Qwen foundation, PRIXON identity, reviewed dataset pipeline, Kaggle QLoRA adapter, regression benchmarks and Windows runtime integration |
-| M9 | APEX standalone Windows assistant | PLANNED | Phase 1 delivers the independent APEX host and whole-desktop interaction (mouse, keyboard, clicks, scroll, windows, apps, volume/media, clipboard, UIA) plus typed system automation; later phases deepen perception, memory, diagnostics, bounded autonomy and standalone UI |
+| M9 | APEX standalone Windows assistant | PLANNED | Phase 1 delivers the independent APEX host, whole-desktop interaction and dynamic installed-app discovery (registry, shortcuts, AUMID and metadata-only full-volume scan) plus typed system automation; later phases deepen perception, memory, diagnostics, bounded autonomy and standalone UI |
 
 ## M0 — Foundation
 - [x] Windows-only architecture and boundaries.
