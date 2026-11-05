@@ -1,17 +1,17 @@
 # APEX — Follow-up TODOs
 
-**Owner:** AIE / APEX workstream  
-**Branch:** `feature/apex-standalone-assistant-plan`  
-**Base:** `dev`  
+**Owner:** APEX implementation  
+**Branch:** `feature/apex-phase-1-runtime`  
+**Base:** `feature/apex-standalone-assistant-plan`  
 **Source plan:** [APEX Standalone Implementation Plan](APEX_STANDALONE_IMPLEMENTATION_PLAN.md)  
 **Status convention:** TODO / IN_PROGRESS / BLOCKED / DONE. Mark DONE only with code, tests and validation evidence.
 
-This is the implementation backlog. The current branch is documentation-only: no APEX runtime, UI or SENTINEL dashboard changes have been made.
+**Implementation status:** Initial headless Python runtime, direct local Ollama HTTP client (`think: false`), APEX-owned SQLite store, tool-call dispatcher, typed capability registry and first Windows provider adapters are implemented. The desktop UI is deferred. The remaining Phase 1 checklist is not complete until Windows target-machine integration and all marked follow-ups are validated.
 
 ## Phase 0 — Planning and repository alignment
 
 - [x] APEX standalone product boundary documented.
-- [x] Existing AIE, PRIXON and SENTINEL reuse boundaries documented.
+- [x] APEX independence from AIE and SENTINEL documented.
 - [x] Standalone lifecycle and future UI separation documented.
 - [x] Architecture decision record created.
 - [x] Follow-up backlog created.
@@ -24,7 +24,7 @@ This is the implementation backlog. The current branch is documentation-only: no
 ## Phase 1 — APEX runtime + whole-Windows automation engine (first coding milestone)
 
 ### Runtime, identity and model
-- [ ] Inspect current `aie.models.base.ModelRequest/ModelResponse` contracts and tests.
+- [ ] Inspect APEX's own model request/response contracts and tests.
 - [ ] Inspect current Ollama adapter, router, locking and runtime memory-admission behavior.
 - [ ] Capture the currently applied APEX model definition with `ollama show --modelfile APEX`; compare it with the source Modelfile before editing. Keep an immutable baseline copy in the user's local project artifacts (do not commit local absolute paths or private machine data).
 - [ ] Make only a targeted Modelfile `SYSTEM` correction if needed: APEX identity, creator attribution policy, model/host distinction, no false Microsoft claim, no unsupported Windows/kernel-access claims, honest bare-CLI limitations, conversational style and default `sir` salutation.
@@ -33,16 +33,16 @@ This is the implementation backlog. The current branch is documentation-only: no
 - [ ] Add host-side deterministic self-description for identity/model/provider/capability questions so the LLM cannot invent current connected tools, owner identity or Windows visibility.
 - [ ] Define the `apex/` package boundary without moving or renaming existing AIE/SENTINEL packages.
 - [ ] Define versioned APEX config, identity, prompt and migration contracts; keep PRIXON identity separate.
-- [ ] Implement the local APEX host lifecycle, structured logging, bounded sessions, streaming and cancellation.
+- [ ] Implement the local APEX host lifecycle, structured logging, bounded sessions and request lifecycle controls; streaming remains a follow-up.
 - [ ] Connect to the loopback Ollama API through APEX's own Python HTTP adapter; select the installed `APEX` model tag when available.
 - [ ] Never auto-pull a model or silently use cloud inference.
-- [ ] Apply request-level thinking-off for normal conversation; gate deep reasoning behind resource admission.
+- [ ] Keep thinking disabled for all Phase 1 inference; Python always sends `think: false` and no runtime override is exposed.
 - [ ] Extend `ModelRequest` with an explicit `think` field and send `think: false` in ordinary `/api/chat` calls; do not rely on a terminal `--think=false` flag once the APEX host owns inference.
 - [ ] Extend `ChatMessage` with Ollama's `tool` role and validated tool-name metadata; extend `ModelRequest` with typed tool schemas and bounded tool-call policy.
 - [ ] Extend `ModelResponse` and Ollama response parsing to retain `message.tool_calls` rather than dropping them and returning only text content.
 - [ ] Send registered tools in Ollama `/api/chat` requests, execute calls only through APEX's validated host dispatcher and APEX-owned policy broker, append sanitized tool results and continue a bounded multi-turn tool loop.
 - [ ] Add request/response contract tests for no-think propagation, tool-call parsing, tool-role round-trips, multiple calls, malformed arguments, unknown tools, timeout and tool-loop budget exhaustion.
-- [ ] Add bounded timeouts/output/context, a single initial local inference slot and serialization with existing AIE consumers.
+- [ ] Add bounded timeouts/output/context and one local inference slot within the standalone APEX runtime; do not share AIE model consumers.
 - [ ] Record model/provider health, token counts, load time, time-to-first-token, generation time and failures.
 - [ ] Add `apex_get_runtime_manifest` with actual model, provider, tool, permission and availability state.
 - [ ] Ensure normal runtime does not require a visible CMD/PowerShell window or manual `ollama run`; the host must connect to or start the installed Ollama service through a documented Windows mechanism, while developer mode may use a console.
@@ -174,8 +174,8 @@ This is the implementation backlog. The current branch is documentation-only: no
 
 ## Phase 2 — Expanded real-time Windows perception
 - [ ] Formalize and extend Phase 1 provider contracts and normalized evidence envelopes.
-- [ ] Connect the existing AIE Windows observer/event store.
-- [ ] Build a SENTINEL read-only provider adapter using a documented API/contract.
+- [ ] Implement APEX-owned Windows provider and evidence contracts; do not connect AIE stores.
+- [ ] [OUT OF PHASE 1] Any future SENTINEL connection requires a separately approved read-only protocol and is not an APEX dependency.
 - [ ] Expand beyond Phase 1 baseline into richer GPU/sensor coverage, per-process resource deltas, storage I/O, bounded Windows Event Log metadata and validated ETW event families.
 - [ ] Add deeper source health, timestamp, freshness, coverage, permission and event-loss metadata.
 - [ ] Add adaptive sampling and resource/game-aware load shedding without LLM polling.
@@ -213,14 +213,14 @@ This is the implementation backlog. The current branch is documentation-only: no
 **Exit criteria:** diagnostics are repeatable, evidence-backed and calibrated; correlation is not presented as proof of causation.
 
 ## Phase 5 — Adaptive autonomy and background operation
-- [ ] Reuse AIE planning/task orchestration and durable run lifecycle.
+- [ ] Implement APEX-owned planning/task orchestration and durable run lifecycle.
 - [ ] Add bounded goal loop with max step, time, token and tool budgets.
 - [ ] Add runtime load shedding based on RAM, CPU, foreground activity and game state.
 - [ ] Add anomaly-triggered diagnostic jobs; do not call LLM on every sample.
 - [ ] Add user-configured proactive notification preferences.
 - [ ] Add pause/resume, per-provider disable, per-capability disable and stale-task reconciliation.
 - [ ] Permit bounded autopilot only for individually enabled, reversible, low-risk Phase 1 capabilities with strong verification.
-- [ ] Validate protected-game behavior with existing SENTINEL/AIE guard contracts.
+- [ ] Validate protected-game behavior with APEX-owned anti-cheat and protected-process guards.
 - [ ] Measure idle/background overhead and impact during real gaming sessions.
 
 **Exit criteria:** background automation remains bounded and stops/degrades safely when evidence, permissions or resource headroom are unavailable. This phase extends Phase 1 automation; it does not introduce it.
