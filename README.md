@@ -545,11 +545,12 @@ aie execution-disable
 
 ## APEX standalone Windows assistant (planned)
 
-APEX is planned as a separate Windows desktop assistant for conversation, user profile/memory, whole-PC diagnostics and policy-controlled automation. It is not embedded in the SENTINEL dashboard. The first milestone is a headless host using existing AIE model, memory, planning, Windows-observation and policy components; the standalone UI is deferred until host contracts stabilize.
+APEX is planned as a separate Windows desktop assistant for conversation, user profile/memory, whole-desktop interaction, dynamic installed-app discovery, whole-PC diagnostics and policy-controlled automation. It is not embedded in the SENTINEL dashboard. Phase 1 establishes the host, broad desktop/Windows automation, dynamic EXE/AUMID catalogue, local model-assisted descriptive metadata enrichment and one canonical schema-flexible SQLite database for APEX durable memory and knowledge. The standalone UI is deferred until host contracts stabilize.
 
 - [APEX standalone implementation plan](docs/APEX_STANDALONE_IMPLEMENTATION_PLAN.md)
 - [APEX follow-up TODO backlog](docs/APEX_FOLLOW_UP_TODOS.md)
 - [ADR-0015: standalone APEX boundary](docs/adr/0015-apex-standalone-assistant-boundary.md)
+- [ADR-0016: unified APEX data store and app metadata enrichment](docs/adr/0016-apex-unified-data-store-and-app-metadata-enrichment.md)
 
 ## PRIXON model development
 
