@@ -47,6 +47,24 @@ This is the implementation backlog. The current branch is documentation-only: no
 - [ ] Ask one focused clarification when a target or operation is materially ambiguous; do not guess destructive targets.
 - [ ] Report unsupported, disabled, unavailable and approval-gated capabilities distinctly.
 
+### Desktop interaction and everyday automation — required Phase 1 coverage
+- [ ] Implement a general desktop-interaction tool family with target window/control identity, typed arguments, bounds, timeouts and structured receipts.
+- [ ] Implement pointer actions: move, left/right/middle click, double-click, hover, drag/drop and coordinate targeting only against a freshly resolved target.
+- [ ] Implement vertical and horizontal wheel scrolling; prefer UIA ScrollPattern/semantic container scrolling and use real wheel input only when needed.
+- [ ] Implement keyboard actions: key down/up, shortcuts/hotkeys, safe text entry, navigation keys and app-specific keystrokes; ensure held keys are released after cancellation/error.
+- [ ] Implement window controls: list windows, resolve process/window identity, focus, restore, minimize, maximize, move, resize, snap, close and switch between apps/windows.
+- [ ] Implement common desktop-shell actions: Start menu, taskbar launch/switch, notification/quick-settings surfaces and supported virtual-desktop operations.
+- [ ] Implement UIA tree/control inspection for allowlisted apps: invoke, set value, select, toggle, expand/collapse, select tab, wait-for, scroll, inspect enabled/disabled state and verify postconditions.
+- [ ] Implement a desktop interaction lease: verify foreground target, serialize injected input, detect user mouse/keyboard/focus activity, pause/abort promptly and never fight for control.
+- [ ] Enforce interactive-desktop and integrity boundaries: no input injection on locked/sign-in/UAC secure desktop; respect UIPI and elevation; do not bypass application protection.
+- [ ] Implement master volume read/set/mute and endpoint selection through Windows Core Audio; implement per-app session volume only where the OS exposes a reliable session.
+- [ ] Implement supported media actions (play/pause/next/previous, mute, volume) through session APIs or bounded multimedia-key fallback.
+- [ ] Implement explicit clipboard set/get/copy/cut/paste tools scoped to a user-requested task; never watch or harvest clipboard contents in the background.
+- [ ] Implement non-sensitive text entry into a verified active control; sensitive password/credential/payment fields must be blocked from model-provided text entry.
+- [ ] Add application-specific adapters for selected apps; keep the general UIA path for accessible controls and report unsupported controls honestly.
+- [ ] Keep screenshot/vision-based coordinate interaction opt-in and separate from baseline UIA/input tools; require fresh screen evidence, explicit scope and retention limits before adding it.
+- [ ] Ensure browser/video observation does not imply general browser automation; any tab/navigation/action bridge requires a separate documented browser adapter and user opt-in.
+
 ### Live Windows baseline and built-in command knowledge — required Phase 1 coverage
 - [ ] Implement live OS/build and device summary, current-session facts from documented APIs, process inventory/details, foreground-window/application metadata, service/startup/task state, adapter/DNS/route state, volume/free-space state and CPU/RAM load.
 - [ ] Return source/provider, observed timestamp, freshness, permission level and coverage for every live result; missing/denied/stale values must never be represented as healthy or zero.
@@ -60,9 +78,9 @@ This is the implementation backlog. The current branch is documentation-only: no
 - [ ] **Services/startup/tasks:** inspect services/startup entries/scheduled tasks; enable/disable registered startup items; run/manage named tasks; start/stop only approved noncritical services; protect critical Windows, security, networking, storage and anti-cheat services.
 - [ ] **Networking:** inspect adapters, DNS, routes, proxy and connectivity; implement supported adapter toggles, DNS configuration, DHCP renew/release and bounded repair recipes; require approval and recovery planning for network resets, proxy/firewall changes and disconnecting actions.
 - [ ] **Devices/peripherals:** inspect PnP identity and device problem codes; implement only validated enable/disable operations using exact device instance IDs, elevation boundaries, approval and a recovery path; do not add generic driver/firmware installation.
-- [ ] **Audio/display/power:** implement supported audio endpoint/volume, display and power-plan operations; require direct immediate confirmation for lock, sleep, shutdown, restart and sign-out.
+- [ ] **Audio/display/power:** implement master/per-session volume where supported, mute, endpoint selection, media controls, brightness/display/power-plan operations; require direct immediate confirmation for lock, sleep, shutdown, restart and sign-out.
 - [ ] **Maintenance/security:** expose status and named bounded workflows such as Defender scan requests, update checks and selected built-in repair diagnostics; do not weaken security controls or silently install updates.
-- [ ] **UI Automation:** add an opt-in, process-allowlisted, bounded UIA adapter as a fallback; never extract passwords, arbitrary form values, browser content or sensitive control text.
+- [ ] **UI Automation:** implement a first-class, process-allowlisted and bounded UIA adapter. Prefer semantic patterns over coordinates. Never extract passwords, browser secrets or sensitive form values.
 - [ ] **Named command recipes:** use fixed, versioned PowerShell/CIM handlers with typed parameters; never expose arbitrary `execute_powershell(command)`, arbitrary `cmd.exe`, or a generic elevated terminal.
 - [ ] **Cross-domain workflows:** implement representative end-to-end workflows that combine multiple Windows capabilities, show the plan, enforce per-step permissions, verify each result and stop safely on partial failure.
 - [ ] Mark every catalogue entry available only when its concrete handler and health check are implemented; do not claim a whole category is supported because one action exists.
@@ -81,6 +99,11 @@ This is the implementation backlog. The current branch is documentation-only: no
 ### Phase 1 tests and exit criteria
 - [ ] Unit tests for identity, config, capability manifests, schemas, routing, policy and prompt composition.
 - [ ] Adapter tests for every supported action domain with valid/invalid parameters and unavailable providers.
+- [ ] Interactive desktop integration tests for move/click/double-click/right-click/drag, vertical/horizontal scroll, keyboard shortcuts, targeted text input, focus/window switching, UIA invoke/set/select/toggle/scroll and cancellation.
+- [ ] Audio tests for master volume read/set/mute, endpoint changes and supported per-app media sessions; verify actual post-state rather than trusting dispatch.
+- [ ] Test user interruption: moving the mouse, typing, changing focus or cancelling must stop an injected-input sequence immediately and release held keys/buttons.
+- [ ] Test that input injection fails safely on locked/secure desktop or when blocked by Windows integrity/UIPI; no bypass or elevation escalation.
+- [ ] Test clipboard actions are explicit, scoped and never run as a passive collector; test sensitive text fields are excluded.
 - [ ] Windows integration tests for real state changes and independent postcondition verification on the target Windows 11 machine.
 - [ ] Test permission denial, UAC cancellation, protected targets, PID reuse, stale device IDs, network loss, timeout, cancellation and partial workflow failure.
 - [ ] Test that opening a Settings URI is not reported as a successful setting mutation.
@@ -91,7 +114,7 @@ This is the implementation backlog. The current branch is documentation-only: no
 - [ ] Measure first-token latency, warm/cold response time, host RAM/CPU and action latency on the target device.
 - [ ] Phase 1 review and ADR updates.
 
-**Exit criteria:** APEX can understand a natural-language Windows request, select and execute a registered typed capability under policy, verify the resulting OS state and report the result honestly. Tested operations must span the Section 9 Windows automation domains; chat-only operation or a tiny Settings-URI allowlist is not sufficient.
+**Exit criteria:** APEX can understand a natural-language request for either a tiny interaction or a multi-step Windows workflow, select and execute a registered typed capability under policy, verify the resulting state and report the result honestly. Phase 1 tests must explicitly include opening apps, volume changes/mute, window switching, clicks, keyboard shortcuts, targeted text entry, scrolling and semantic UIA operations as well as system/file/network workflows; chat-only operation or a tiny Settings-URI allowlist is not sufficient.
 
 ## Phase 2 — Expanded real-time Windows perception
 - [ ] Formalize and extend Phase 1 provider contracts and normalized evidence envelopes.
