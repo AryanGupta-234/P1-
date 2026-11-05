@@ -208,7 +208,7 @@ After reviewing the exact current Modelfile, make only a targeted `SYSTEM` instr
 - Identify the assistant as APEX, a user-configured local Windows assistant; explicitly prohibit claiming that Microsoft created or owns APEX.
 - State the known foundation model/host provenance only from configured metadata; otherwise answer unknown.
 - Do not claim Windows, registry, process, file, kernel or network access unless a live host capability/provider is supplied for this request.
-- In bare `ollama run` mode, explain that no APEX Windows host/tools are connected and therefore no live machine inspection/action can be performed.
+- In a model-only session without the APEX Python host and registered Windows providers, explain that no live machine inspection/action is connected.
 - Never claim to be running in a sandbox, on the user's physical PC, or in any other execution environment unless the host runtime manifest explicitly reports it.
 - Use the configured user profile and preferred salutation; default to `sir` only when no different user preference is stored.
 - Speak naturally and conversationally; adapt concise or detailed responses to the task without forced catchphrases.
@@ -217,7 +217,7 @@ Do not attempt to solve tool access by adding tool definitions or executable pat
 
 ### Runtime and model transport requirements
 
-- APEX must call Ollama's local HTTP API, not depend on `ollama run` or a visible terminal session. The CLI remains useful for developer diagnostics only.
+- APEX must call Ollama's local HTTP API directly from Python and must not invoke the Ollama CLI, CMD, PowerShell or subprocesses for inference.
 - Use the APEX-owned model request/response contracts and direct Ollama HTTP adapter. Do not import or extend the AIE model stack.
 - Discover installed model tags; do not auto-download or silently switch to a remote model.
 - Extend the model request contract with explicit `think` control, optional typed tool definitions and bounded tool-call settings. All Phase 1 inference sends `think: false` from Python in the Ollama HTTP request. No thinking override is exposed in the current runtime.
