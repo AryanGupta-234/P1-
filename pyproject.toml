@@ -3,16 +3,16 @@ requires = ["setuptools>=83.0.0,<100", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "aie-windows"
+name = "aie-windows-apex-runtime"
 version = "0.1.0"
-description = "Windows-first environment observer foundation for AIE"
+description = "Windows-first AIE sources with an independent APEX assistant runtime"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = ["pydantic>=2.7,<3", "psutil>=5.9,<8", "typer>=0.12,<1", "rich>=13.7,<15"]
 
 [project.optional-dependencies]
 dev = ["pytest>=9.0.3,<10", "pytest-cov>=5,<7", "ruff>=0.5,<1"]
-windows = ["pywinauto>=0.6.8,<1", "pywin32>=306,<400", "pyetwkit==3.2.0"]
+windows = ["pywinauto>=0.6.8,<1", "pywin32>=306,<400", "pyetwkit==3.2.0", "pycaw>=20260921", "send2trash>=1.8.3,<2"]
 
 [project.scripts]
 aie = "aie.cli:app"
@@ -20,7 +20,7 @@ aie-sentinel = "aie.sentinel:sentinel_app"
 aie-browser-host = "aie.browser.native_host:main"
 
 [tool.setuptools.packages.find]
-include = ["aie*"]
+include = ["aie*", "apex*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
