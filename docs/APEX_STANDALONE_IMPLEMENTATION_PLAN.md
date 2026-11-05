@@ -238,11 +238,50 @@ Build each request from clearly separated, versioned inputs:
 
 Do not put the whole Windows inventory, full memory database or every tool schema into every prompt. Retrieved observations, user files and memory are untrusted reference data, not higher-priority instructions.
 
-## 8. Unified profile and memory
+## 8. Unified profile, memory and canonical data store
 
-Use the existing AIE memory store and data contracts where they meet requirements. APEX must not create a parallel durable memory database or directly write to SENTINEL's internal database.
+APEX must have one canonical local database file for its durable assistant memory and knowledge, not separate databases for profile, chat history, memory types, application discovery and task context. This is a single physical SQLite database with logically separated, typed tables and repository interfaces.
 
-Memory categories:
+**Canonical database target:** %LOCALAPPDATA%\\AIE\\apex-unified.sqlite3 (resolved through the existing AIE per-user data-directory helper, not hardcoded in application code). A portable/configurable data-root override may be supported for development and backup/restore.
+
+The implementation must consolidate the existing AIE assistant data currently separated by database_path(), memory_database_path(), task_run_database_path() and task_session_database_path() into this canonical file. The current source paths are events.sqlite3, memory.sqlite3, task-runs.sqlite3 and task-sessions.sqlite3 under the AIE data directory. Migrate data transactionally with an idempotent migration journal, record counts/checksums, keep verified backups and preserve the old files read-only until post-migration validation and a user-visible retention period have passed. Do not silently discard or overwrite source records.
+
+**The canonical database owns these persistent domains:**
+
+- **User profile:** preferred salutation/name, locale, interaction preferences, device aliases, approved technical preferences and explicit consent settings.
+- **Conversations:** session metadata, messages, summaries, references and user-controlled retention.
+- **All memory kinds:** working, episodic, semantic, procedural and prospective records, including confidence, sensitivity, verification, TTL, corrections, supersession and lineage.
+- **Embeddings and retrieval metadata:** local vectors keyed by record/model/version, lexical search indexes and retrieval evaluation metadata.
+- **Application knowledge:** discovered app records, EXE/AUMID identities, aliases, versions, publisher/signature evidence, source provenance, model enrichment results, user corrections, scan state and launch history.
+- **Windows observations and state references:** normalized event records, inventory snapshots, process-instance state, source IDs, and evidence references needed for memory/diagnostics, subject to explicit retention and sensitivity policy.
+- **Task and workflow context:** user-directed task sessions, plans, runs, step state, outcome summaries and references to execution receipts.
+- **Diagnostic knowledge:** reviewed incidents, hypotheses, verified fixes, follow-up notes and linked evidence references. Raw telemetry is not automatically promoted to personal memory.
+
+The policy/security audit ledger and remote-egress audit remain separately protected append-only stores if required by their integrity boundary. They are not alternate memory stores. Secrets, credentials, browser tokens, raw passwords and private keys are never placed in the unified database. Keep the existing execution kill-switch as an independent emergency control that still works if SQLite is unavailable. SENTINEL's private database remains owned by SENTINEL; APEX consumes its supported read-only provider contract and stores only permitted APEX-side references/summaries in its own database.
+
+### Dynamic, adaptable record schema
+
+Do not alter the SQL schema every time a memory type needs a new optional field. Use a stable typed envelope plus versioned JSON payload/extension fields:
+
+- Stable indexed columns: record_id, namespace, record_type, schema_version, status, sensitivity, created_at, updated_at, expires_at, source/provider, confidence and version.
+- Domain payload: validated JSON for typed content, with an explicit extensions/attributes object for new optional fields.
+- A field/schema registry records each extension's namespace, type, validation rules, sensitivity, index intent, introduction version and deprecation status.
+- Unknown fields are preserved only in the bounded extension object; arbitrary SQL identifiers, unvalidated model keys and schema mutations are prohibited.
+- Frequently queried fields get typed columns or explicit indexes; less common fields remain JSON. New fields require a schema-registry update and tests, not an ad-hoc ALTER TABLE on a live user database.
+- Every record carries a schema version; migrations are transactional, deterministic, idempotent and backward-compatible where possible. Deprecations use a transition window and do not erase old values until migration/backup validation.
+- Use SQLite JSON support and optional FTS5 where available; vector embeddings remain local and model-versioned. Never silently pull an embedding model.
+
+### Real-time access and consistency
+
+- All APEX features use one UnifiedDataStore connection/session factory and repository facade; no feature opens its own memory database path.
+- Enable SQLite WAL, foreign keys, busy timeout and bounded transactions. Use one serialized writer queue with batched writes for observer/scanner traffic; multiple readers may query the latest committed snapshot.
+- Commit a monotonic change sequence to a store_changes journal in the same transaction as each update. Local subscribers/IPC clients can request changes after a sequence and receive invalidation notifications after commit.
+- Use optimistic record versions/compare-and-swap for simultaneous edits, and idempotency keys for repeated discovery/import/enrichment events.
+- Expose live read APIs for profile, memories, application records, scan progress, diagnostic state and recent changes. Responses include updated_at, source and freshness.
+- Bound event ingestion, JSON payload size, query limits, FTS rebuilds, embedding work and maintenance/checkpoint operations. SQLite has a single-writer constraint; the writer queue and batching prevent background telemetry from competing with interactive requests.
+- Provide backup, integrity check, recovery, schema version and size/retention reporting. Database unavailability must degrade clearly; do not invent or silently recreate an empty memory store.
+
+### Memory categories and behavior
 
 - **Profile:** user-approved identity and preferences.
 - **Working:** current conversation/task context with a short TTL.
@@ -251,18 +290,18 @@ Memory categories:
 - **Procedural:** reviewed workflows and reusable task patterns; these are references, not executable privileges.
 - **Prospective:** user-directed goals, reminders and pending task steps.
 
-Each memory item needs provenance, creation/updated time, sensitivity, verification state, confidence where meaningful, expiry/retention and revision history.
+Each record needs provenance, creation/updated time, sensitivity, verification state, confidence where meaningful, expiry/retention, schema version and revision history.
 
 Rules:
 
 - Do not silently save every conversation or raw telemetry stream as personal memory.
 - Save profile facts and long-term memories through explicit onboarding, explicit save actions or narrowly configured consent.
-- Automatically retain operational observations only under the configured telemetry policy and existing retention controls.
+- Automatically retain operational observations only under configured telemetry policy and existing retention controls.
 - Retrieve only relevant, non-sensitive memories by default.
 - Show the source and freshness of retrieved memories.
 - Provide inspect, edit, correct, export and delete workflows.
-- Keep user profile data separate from machine observations.
-- If AIE and SENTINEL currently have separate stores, integrate through adapters and a reviewed migration plan; do not assume their schemas can be merged directly.
+- Keep profile data logically separated from machine observations even though both reside in the same database.
+- Unified storage means one database file, not one unstructured blob: use domain tables, typed models, provenance and access controls.
 
 ## 9. Capability registry and tool execution
 
@@ -327,7 +366,7 @@ APEX must not rely on a hardcoded list of executable paths. It maintains a rebui
 - Keep scanning bounded, cancellable, low-priority and resource-aware. Pause or throttle during gaming, high foreground load, low battery or memory pressure.
 - Prefer an existing Windows Search metadata index as an optional accelerator only when available. Do not enable Enhanced indexing, alter the user's Search privacy settings, or index document/email contents on APEX's behalf. Windows Search's Enhanced mode can index all user folders and files and may use more resources; APEX's application catalogue must remain executable/shortcut metadata-only. See [Windows Search indexing](https://support.microsoft.com/en-us/windows/experience/performance-optimization/search-indexing-in-windows).
 - Maintain the catalogue incrementally using registry/package change signals, file-system change notifications on known roots and bounded scheduled reconciliation scans. A full-volume rescan must not run continuously.
-- Store only app-discovery metadata in a rebuildable application index/cache (name, aliases, path or AUMID, source, version, publisher, signature state, file identity/timestamps, last-seen time and confidence). This is not user memory and must not become a general file-content index.
+- Store app-discovery records in dedicated tables inside the same canonical APEX Unified Data Store used for all persistent APEX memory. The app catalogue remains a logically separate, rebuildable domain (name, aliases, path or AUMID, source, version, publisher, signature state, file identity/timestamps, last-seen time and confidence), not a general file-content index. Rebuilding the catalogue must not delete or rewrite user memories.
 
 **Name resolution, trust and launching**
 
@@ -338,6 +377,23 @@ APEX must not rely on a hardcoded list of executable paths. It maintains a rebui
 - Launch desktop apps by their resolved canonical executable path using a typed launch handler; use packaged-app activation by validated AUMID. Do not accept model-generated arbitrary command-line strings or unvalidated arguments. URI/file opening is a separate typed operation with scheme/extension policy and target validation.
 - Verify launch by observing the expected process/window/package activation after dispatch. Report process creation separately from a usable window being ready.
 - Detect removed/moved/updated executables and mark stale catalogue entries unavailable until re-resolved. Provide a user-inspectable app catalogue with source, resolved path/AUMID, trust status, last scan and launch availability.
+
+
+
+**Model-assisted executable metadata enrichment (local and evidence-bound)**
+
+The model may enrich missing or ambiguous descriptive metadata, but it is not the source of executable facts and must never invent or choose an executable path.
+
+- The deterministic scanner and Windows APIs establish executable path, file identity, package/AUMID, registry/shortcut source, version resources, publisher/signature status and timestamps. These fields are authoritative only with their original OS/file provenance.
+- When descriptive metadata is incomplete or ambiguous, send a bounded, minimized JSON record to the already-installed local APEX Ollama model. Candidate fields include display/product name, file description, original filename, executable basename, package display name, publisher text, version and discovery-source labels. Do not send file contents or binaries.
+- Ask the model only for schema-defined enrichment such as normalized product/app name, likely vendor/product family, aliases, broad app category, concise purpose/description, duplicate-family suggestions and a confidence estimate. The model may return an unknown value; it must not return an executable path, signature verdict, privilege level or permission decision.
+- Treat every model result as an untrusted suggestion. Validate against a strict JSON schema, allowed categories, length limits and candidate IDs. Preserve the deterministic source fields unchanged. Never allow model output to change the path, AUMID, publisher/signature evidence or launch trust state.
+- Persist the enrichment beside the source record in the same Unified Data Store with model tag, provider, prompt version, output-schema version, timestamp, evidence/candidate IDs, confidence and review status. Keep raw prompts/responses only when needed for a bounded audit/debug policy; default to storing normalized output and provenance.
+- Use local inference only. Enrichment is queued, batched and low priority; deduplicate by file identity/version and run only when resource policy permits. Do not call the LLM once per file or during every scanner pass.
+- Deterministic metadata always wins over contradictory model suggestions. Low-confidence aliases, app-family merges or uncertain classifications require user review. A model suggestion never authorizes launch or enables an automation adapter.
+- Cache the result and re-enrich only when the executable identity/version or relevant source metadata changes, or when the user explicitly requests refresh.
+
+This division keeps executable discovery deterministic and lets the model improve the catalogue's human understanding without becoming a fabricated source of truth.
 
 ### Windows Settings, CPL and MMC target catalogue
 
@@ -474,6 +530,7 @@ This is the first coding milestone. Build the assistant host and the actual Wind
 - Connect to the installed `APEX` Ollama model through the existing AIE adapter/router and loopback API; no visible Ollama CLI is required for normal operation.
 - Implement streaming, thinking-off by default, bounded context/timeouts, inference metrics and a single resource-admitted local inference slot.
 - Implement the live capability registry, `apex_get_runtime_manifest`, typed tool schemas and host-side multi-turn tool dispatcher.
+- Establish the canonical UnifiedDataStore path, schema registry, versioned migrations, shared connection factory, change journal and one-writer/multi-reader access pattern. The app catalogue is stored in this same database.
 - Implement the complete Phase 1 interaction surface in Section 9: mouse movement/click/double-click/right-click/drag, vertical/horizontal scrolling, keyboard shortcuts and targeted text entry; window focus/restore/minimize/maximize/move/resize/switch; semantic UIA inspect/invoke/set/select/toggle/expand/scroll/wait operations; master/per-session volume, mute, audio endpoint and media controls; explicit clipboard operations; plus files, applications, settings, processes, services, startup/tasks, networking, devices, display/power and maintenance workflows.
 - Implement a live Windows baseline provider set in Phase 1, not just action handlers: OS/build and device summary; current session identity as exposed by documented Windows APIs; process inventory/details; foreground windows and registered application metadata; service/startup/task state; network adapters/DNS/routes; volume/free-space status; CPU/RAM load; and the specific setting values required by supported setting actions. Every response carries source, observed time, freshness, privilege and coverage. This baseline must answer “Can you see my running processes?” with a real bounded snapshot when the provider is healthy.
 - Add versioned Settings URI, CPL/MSC and custom protocol catalogues; resolve known Windows targets with OS-build validation.
@@ -481,6 +538,7 @@ This is the first coding milestone. Build the assistant host and the actual Wind
 - Add an opt-in/on-demand full fixed-volume scan for executable and shortcut metadata only, plus incremental reconciliation; never index file contents or silently enable Windows Search Enhanced indexing.
 - Add confidence-ranked application name/alias resolution, exact-path/AUMID validation, trust classification, ambiguity handling, launch verification and stale-entry refresh.
 - Add self-knowledge and identity regression cases for “what is your name?”, “who made/configured you?”, “what model are you?”, “what tools/providers are connected?”, “can you see my processes?” and Windows settings/CPL lookups. APEX must distinguish its own assistant/host identity, the configured operator/creator attribution, the foundation model and live provider capabilities. If a provenance field is unknown, say unknown; never fabricate Microsoft authorship, kernel access, local visibility or user identity.
+- Add local model-assisted application metadata enrichment for incomplete/ambiguous EXE candidates; model output is schema-validated descriptive metadata only, never path/signature/trust/permission truth.
 - Reuse AIE policy broker, capability manifests, approval, execution-control, executor and audit ledger. Do not create parallel governance.
 - Implement a desktop-interaction lease and user-interruption detector for input-injection sequences; never fight the user's mouse/keyboard or steal focus repeatedly.
 - Apply per-action risk tiers and approvals, UAC boundary handling, dry-run/preview, cancellation, rate limits, before-state snapshots, audit and rollback/compensation where feasible.
@@ -500,7 +558,9 @@ This is the first coding milestone. Build the assistant host and the actual Wind
 
 ### Phase 3 — Profile and unified memory
 - Add an explicit onboarding interview for display/preferred name, salutation (default `sir`), locale, communication style, device aliases, technical preferences and user-approved goals; never guess a person's name from a Windows folder path.
-- Reuse existing AIE MemoryStore with APEX namespaces and provenance; unify APEX-approved profile facts, conversation summaries, preferences, reviewed incidents and reusable workflows without copying raw telemetry into personal memory.
+- Move all durable assistant memory domains into the canonical UnifiedDataStore: profile, conversations, all memory kinds, embeddings, lineage, task/session context, approved workflow knowledge, diagnostic summaries and the application catalogue. Keep a single physical database file and a single access layer.
+- Complete idempotent, loss-checked migration from events.sqlite3, memory.sqlite3, task-runs.sqlite3 and task-sessions.sqlite3 into apex-unified.sqlite3; preserve verified source backups until the user-visible migration retention period expires.
+- Keep policy/egress audit stores segregated where their append-only integrity boundary requires it; keep SENTINEL's private database separate and read-only from APEX.
 - Add user-controlled, local-only indexing of explicitly selected folders/documents as an optional knowledge source. Exclude credentials, browser secrets, protected/system locations and unselected folders; make source paths, indexing state, retention and removal inspectable.
 - Implement explicit save/review/correct/export/delete and relevant-memory retrieval.
 - Add memory conflict/staleness handling and user controls for retention, consent and data deletion.
