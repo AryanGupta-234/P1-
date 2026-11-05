@@ -6,7 +6,7 @@
 **Source plan:** [APEX Standalone Implementation Plan](APEX_STANDALONE_IMPLEMENTATION_PLAN.md)  
 **Status convention:** TODO / IN_PROGRESS / BLOCKED / DONE. Mark DONE only with code, tests and validation evidence.
 
-**Implementation status:** Initial headless Python runtime, direct local Ollama HTTP client (`think: false`), APEX-owned SQLite store, tool-call dispatcher, typed capability registry and first Windows provider adapters are implemented. The desktop UI is deferred. The remaining Phase 1 checklist is not complete until Windows target-machine integration and all marked follow-ups are validated.
+**Implementation status:** A first standalone Python runtime and Windows adapter set has been authored on this branch. It includes direct loopback Ollama HTTP transport (`think: false`), bounded tool calls, host-owned self-awareness, APEX-only SQLite storage, a typed 57-tool registry and initial Win32/WMI/COM/UIA providers. APEX has a separate `apex/pyproject.toml`; root AIE packaging is preserved. Automated tests are authored, but test execution and Windows 11 target validation are still pending. The desktop UI is deferred. The remaining Phase 1 checklist is not complete.
 
 ## Phase 0 — Planning and repository alignment
 
@@ -34,7 +34,7 @@
 - [ ] Define the `apex/` package boundary without moving or renaming existing AIE/SENTINEL packages.
 - [ ] Define versioned APEX-owned configuration, identity, prompt and schema-migration contracts; do not couple to other model research identities.
 - [ ] Implement the local APEX host lifecycle, structured logging, bounded sessions and request lifecycle controls; streaming remains a follow-up.
-- [ ] Connect to the loopback Ollama API through APEX's own Python HTTP adapter; select the installed `APEX` model tag when available.
+- [ ] Connect to the loopback Ollama API through APEX's own Python HTTP adapter; select the installed `APEX` model tag when available. Optionally launch the installed Windows `ollama app.exe` directly at host startup when the API is not responding.
 - [ ] Never auto-pull a model or silently use cloud inference.
 - [ ] Keep thinking disabled for all Phase 1 inference; Python always sends `think: false` and no runtime override is exposed.
 - [ ] Extend `ModelRequest` with an explicit `think` field and send `think: false` in ordinary `/api/chat` calls; do not rely on a terminal `--think=false` flag once the APEX host owns inference.
@@ -47,7 +47,7 @@
 - [ ] Add `apex_get_runtime_manifest` with actual model, provider, tool, permission and availability state.
 - [ ] Ensure normal runtime does not require a visible CMD/PowerShell window or manual `ollama run`; the host must connect to or start the installed Ollama service through a documented Windows mechanism, while developer mode may use a console.
 - [ ] Add regression tests for the exact transcript failures: no false Microsoft creator claim; distinguish APEX host identity from Qwen foundation-model provenance; answer configured creator/operator attribution from metadata; use the approved profile for the user's name; default to `sir`; never claim live access/kernel access without a healthy provider.
-- [ ] Run the pasted identity/conversation regression suite through the Python APEX host: identity and model provenance come from the runtime manifest; Windows questions invoke registered tools or honestly report unavailable providers. No CLI inference path is used.
+- [ ] Run the pasted identity/conversation regression suite through the Python APEX host: identity, operator attribution and model provenance come from the runtime manifest; process questions invoke the actual process provider; other Windows questions invoke registered tools or honestly report unavailable providers. No CLI inference path is used.
 - [ ] Assert direct CLI mode never says Microsoft created APEX, never claims sandbox/physical-PC/kernel access, and never claims it can see the user's name or processes without host context.
 - [ ] Assert host mode answers `who made you`, `what model are you`, `what tools are connected`, `who is your user`, and `can you see my processes` from build/profile/provider metadata with provenance.
 - [ ] Ensure “Can you see my running processes?” calls a real process-inventory capability and returns a timestamped bounded snapshot, or clearly reports why the provider is unavailable.
