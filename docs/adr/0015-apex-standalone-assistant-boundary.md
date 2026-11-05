@@ -24,9 +24,10 @@ The repository already has reusable model contracts/adapters/router, memory, pla
 7. The user's installed Ollama model tag `APEX` is the initial local inference target. The application uses Ollama's loopback API and request-level thinking controls; normal conversation defaults to thinking off. The app does not require `ollama run` in a terminal.
 8. Unified memory reuses AIE's existing memory store and provenance/sensitivity contracts. No parallel durable APEX memory database is created. SENTINEL data is consumed through a provider adapter; direct writes to SENTINEL's private database are prohibited.
 9. APEX Phase 1 includes broad Windows desktop interaction—not just file/system administration—including app launch, window management, mouse/keyboard input, click/drag/scroll, UI Automation, master/per-session audio controls, media actions, explicit clipboard workflows and multi-step app tasks. These capabilities use typed adapters and a user-interruptible desktop interaction lease; screen/vision features remain opt-in.
-10. All OS and desktop mutations remain behind the existing AIE capability policy, risk/approval, executor, audit and verification path. The model cannot grant itself permissions or call unrestricted PowerShell.
-11. Normal desktop input injection respects Windows integrity/UIPI and requires an unlocked interactive desktop; APEX does not bypass UAC secure desktop, sign-in/lock screen or protected application boundaries. User input always takes precedence and aborts conflicting automation.
-12. Desktop UI implementation is intentionally deferred until the headless host and IPC/API contracts are stable.
+10. APEX Phase 1 maintains a dynamic Installed Application Catalogue from App Paths, Uninstall registry metadata, Start Menu shortcuts, packaged-app AUMIDs, live process observations and an explicit metadata-only full fixed-volume application scan. It resolves friendly names to validated executable paths or package identities; it must not depend on hardcoded executable locations or blindly launch discovered binaries.
+11. All OS and desktop mutations remain behind the existing AIE capability policy, risk/approval, executor, audit and verification path. The model cannot grant itself permissions or call unrestricted PowerShell.
+12. Normal desktop input injection respects Windows integrity/UIPI and requires an unlocked interactive desktop; APEX does not bypass UAC secure desktop, sign-in/lock screen or protected application boundaries. User input always takes precedence and aborts conflicting automation.
+13. Desktop UI implementation is intentionally deferred until the headless host and IPC/API contracts are stable.
 
 ## Architecture
 
