@@ -137,6 +137,9 @@ This is the implementation backlog. The current branch is documentation-only: no
 - [ ] Test that input injection fails safely on locked/secure desktop or when blocked by Windows integrity/UIPI; no bypass or elevation escalation.
 - [ ] Test clipboard actions are explicit, scoped and never run as a passive collector; test sensitive text fields are excluded.
 - [ ] Windows integration tests for real state changes and independent postcondition verification on the target Windows 11 machine.
+- [ ] Test migration of events.sqlite3, memory.sqlite3, task-runs.sqlite3 and task-sessions.sqlite3: source/target row counts, stable IDs, lineage/references, checksums, duplicate handling and post-migration integrity.
+- [ ] Test migration interruption and restart, migration journal idempotency, backup restoration and rollback without deleting original source files.
+- [ ] Assert EventStore, MemoryStore, TaskRunStore and TaskSessionStore all resolve to the same canonical apex-unified.sqlite3 file after migration.
 - [ ] Test permission denial, UAC cancellation, protected targets, PID reuse, stale device IDs, network loss, timeout, cancellation and partial workflow failure.
 - [ ] Test that opening a Settings URI is not reported as a successful setting mutation.
 - [ ] Test that known app names resolve through App Paths/Uninstall/Start Menu/AUMID sources and that non-Start apps remain discoverable through other sources.
@@ -166,17 +169,17 @@ This is the implementation backlog. The current branch is documentation-only: no
 
 ## Phase 3 — Unified profile and memory workflows
 - [ ] Extend the already-migrated Phase 1 canonical SQLite database; do not create any additional APEX memory or application-catalogue database.
-- [ ] Add profile, conversation/session, application catalogue, enrichment, diagnostic incident and reviewed workflow tables to the same file.
+- [ ] Add profile, conversation/session, diagnostic incident and reviewed workflow tables to the same file; application catalogue/enrichment tables are already established in Phase 1.
 - [ ] Verify policy and egress audit stores remain separated only where their tamper-evidence/integrity boundary requires it; do not treat them as alternate memory stores.
 - [ ] Extend the Phase 1 schema registry with profile/memory fields, per-record schema versions and backward-compatible migrations/deprecation handling.
 - [ ] Ensure strict validation of extension values; no arbitrary field names/SQL identifiers or untrusted model-defined schemas.
 - [ ] Implement explicit onboarding for owner/preferred name, salutation, locale, communication style, device aliases and preferences; initialize salutation to `sir`.
 - [ ] Add optional local indexing of explicitly selected user folders/documents with inspectable paths, retention and deletion; exclude credentials, browser secrets, protected/system folders and unselected locations.
 - [ ] Implement explicit memory capture, review, correction, export, deletion and relevant non-sensitive retrieval.
-- [ ] Preserve provenance, confidence, sensitivity, verification, lineage and expiry across migrations and updates.
-- [ ] Add real-time change journal/subscription, optimistic concurrency, idempotent writes and bounded writer queue so UI/host/providers can read latest committed data safely.
+- [ ] Preserve provenance, confidence, sensitivity, verification, lineage and expiry across profile/memory updates and corrections.
+- [ ] Extend the Phase 1 real-time change journal/subscription and optimistic-concurrency contracts to profile and memory updates; keep all reads/writes on the shared repository layer.
 - [ ] Test that two feature modules reading/writing profile, memories, app catalogue and task context share the same physical database file and consistent sequence.
-- [ ] Test migration rollback, interruption/restart, duplicate import, corrupted source, schema upgrade, unknown extension fields and backup recovery.
+- [ ] Test profile/memory persistence, corrections, expiry, conflict handling, data export/deletion and backward-compatible schema extension upgrades.
 
 **Exit criteria:** all APEX durable memory/profile/conversation/application knowledge/task context is in one physical database, live-readable through one access layer, extensible through validated versioned fields and migrated without data loss. SENTINEL's private database and separately protected policy/egress audit stores are not merged into this user-memory database.
 
