@@ -43,8 +43,8 @@ def set_text(value: str) -> dict:
 def provider_available() -> bool:
     if os.name != "nt":
         return False
+    from importlib.util import find_spec
     try:
-        import win32clipboard
-        return True
-    except ImportError:
+        return find_spec("win32clipboard") is not None
+    except (ImportError, ModuleNotFoundError, ValueError):
         return False
