@@ -38,7 +38,7 @@ jobs:
       - name: Build Windows desktop dashboard
         run: dotnet build desktop/P1Dashboard/P1Dashboard.csproj --configuration Release
       - name: Lint
-        run: python -m ruff check .
+        run: python -m ruff check . --config pyproject.toml
       - name: Validate independent APEX imports
         run: python -c "from apex import ApexService; from apex.ollama import OllamaClient; from apex.tools.defaults import build_default_registry"
       - name: Validate Windows-only optional imports
