@@ -1,13 +1,12 @@
 """Typed capability registry. Model tool calls are proposals, never executable code."""
 from __future__ import annotations
 
-import json
 import time
 from collections import deque
 from dataclasses import dataclass
 from typing import Any, Callable, Literal
 
-from pydantic import BaseModel, ConfigDict, ValidationError
+from pydantic import ValidationError
 
 from apex.contracts import ToolResult
 
