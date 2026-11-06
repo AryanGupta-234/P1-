@@ -40,10 +40,10 @@ def set_master_mute(muted: bool) -> dict:
 def provider_available() -> bool:
     if os.name != "nt":
         return False
+    from importlib.util import find_spec
     try:
-        import pycaw.pycaw
-        return True
-    except ImportError:
+        return find_spec("pycaw.pycaw") is not None
+    except (ImportError, ModuleNotFoundError, ValueError):
         return False
 
 def list_application_sessions() -> dict:
@@ -103,7 +103,6 @@ def set_application_session_volume(pid: int, process_name: str, volume_percent: 
 
 def media_control(action: str) -> dict:
     """Dispatch a named Windows media key; does not inspect arbitrary app content."""
-    import os
     if os.name != "nt":
         raise OSError("Windows media key support requires Windows")
     keys = {"play_pause": 0xB3, "next": 0xB0, "previous": 0xB1, "stop": 0xB2}
