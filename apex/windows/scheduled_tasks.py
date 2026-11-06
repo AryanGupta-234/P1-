@@ -72,8 +72,8 @@ def set_task_enabled(path: str, enabled: bool) -> dict:
 def provider_available() -> bool:
     if os.name != "nt":
         return False
+    from importlib.util import find_spec
     try:
-        import win32com.client
-        return True
-    except ImportError:
+        return find_spec("win32com.client") is not None
+    except (ImportError, ModuleNotFoundError, ValueError):
         return False
