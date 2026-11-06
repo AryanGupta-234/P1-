@@ -72,10 +72,10 @@ def set_dns_servers(adapter_index: int, dns_servers: list[str]) -> dict[str, Any
 def provider_available() -> bool:
     if os.name != "nt":
         return False
+    from importlib.util import find_spec
     try:
-        import win32com.client
-        return True
-    except ImportError:
+        return find_spec("win32com.client") is not None
+    except (ImportError, ModuleNotFoundError, ValueError):
         return False
 
 
