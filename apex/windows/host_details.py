@@ -122,8 +122,5 @@ def recent_events(log_name: str = "System", limit: int = 50) -> dict:
 def provider_available() -> bool:
     if os.name != "nt":
         return False
-    try:
-        import psutil
-        return True
-    except ImportError:
-        return False
+    from importlib.util import find_spec
+    return find_spec("psutil") is not None
