@@ -69,11 +69,8 @@ def change_service(name: str, action: str) -> dict:
 def provider_available() -> bool:
     if os.name != "nt":
         return False
-    try:
-        import win32service
-        return True
-    except ImportError:
-        return False
+    from importlib.util import find_spec
+    return find_spec("win32service") is not None
 
 
 def set_service_start_type(name: str, start_type: str) -> dict:
