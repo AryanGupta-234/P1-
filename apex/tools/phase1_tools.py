@@ -23,7 +23,7 @@ def _forget_memory(store, memory_id: str) -> dict[str, Any]:
     return {
         "summary": "Memory deleted." if deleted else "No memory matched that identifier.",
         "deleted": deleted,
-        "verified": True,
+        "verified": deleted,
     }
 
 
