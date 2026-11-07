@@ -146,6 +146,27 @@ class ApexHost:
         profile_context = {k: v for k, v in profile.items()
                            if k in {"preferred_salutation", "display_name", "locale", "interaction_style"}}
         manifest = self.runtime_manifest()
+        provider_rows = manifest.get("providers", [])
+        prompt_manifest = {
+            "product": manifest.get("product"),
+            "version": manifest.get("version"),
+            "foundation_model_tag": manifest.get("foundation_model_tag"),
+            "resolved_model_tag": manifest.get("resolved_model_tag"),
+            "foundation_model": manifest.get("foundation_model"),
+            "operator_attribution": manifest.get("operator_attribution"),
+            "ollama_status": manifest.get("ollama_status"),
+            "model_installed": manifest.get("model_installed"),
+            "inference_mode": manifest.get("inference_mode"),
+            "think": False,
+            "policy": manifest.get("policy"),
+            "database_status": manifest.get("database_status"),
+            "capabilities": {
+                "registered": len(provider_rows),
+                "available": sum(1 for item in provider_rows if item.get("available")),
+                "unavailable": sum(1 for item in provider_rows if not item.get("available")),
+                "routing": "only task-relevant schemas are supplied for this request",
+            },
+        }
         self_awareness_kind = classify_self_awareness(user_text)
         if self_awareness_kind and self_awareness_kind != "process_visibility":
             answer_text = self_awareness_answer(
@@ -191,7 +212,7 @@ class ApexHost:
         messages = [ChatMessage(role="system", content=self.system_prompt +
                     "\n\nHOST PROFILE (authoritative): " + json.dumps(profile_context, ensure_ascii=False) +
                     "\nRUNTIME MANIFEST (authoritative; refresh before answering capability questions): " +
-                    json.dumps(manifest, ensure_ascii=False))]
+                    json.dumps(prompt_manifest, ensure_ascii=False))]
         messages.extend(history)
         tool_events: list[dict[str, Any]] = []
         dispatched: set[str] = set()
