@@ -64,12 +64,12 @@ def test_router_maps_common_pc_spec_language_to_system_summary():
 
 
 
-def test_router_maps_remember_and_notes_language_to_memory_tools():
+def test_router_maps_remember_and_notes_language_to_memory_tools(tmp_path):
     from apex.tools.phase1_tools import register_phase1_tools
     from apex.store import UnifiedDataStore
 
     registry = build_default_registry()
-    register_phase1_tools(registry, UnifiedDataStore(":memory:"))
+    register_phase1_tools(registry, UnifiedDataStore(tmp_path / "apex.sqlite3"))
     schemas = registry.definitions(available_only=False)
 
     save_names = {item["function"]["name"] for item in select_tool_schemas(
