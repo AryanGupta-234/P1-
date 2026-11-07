@@ -24,5 +24,9 @@ class ApexService:
             self.start()
         return self.host.chat(message, conversation_id=conversation_id)
 
+    def set_emergency_stop(self, enabled: bool, *, reason: str = "host_operator") -> dict:
+        """Expose the host-owned emergency stop to an embedding UI or service."""
+        return self.host.set_emergency_stop(enabled, reason=reason)
+
     def stop(self) -> None:
         self._started = False
