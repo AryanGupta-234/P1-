@@ -93,3 +93,11 @@ A green APEX-focused test run and a complete green repository suite are still re
 - Successful receipts include the previous state as compensation information.
 - The provider is optional in the Windows extra and uses the PyWinRT `winrt-Windows.Devices.Radios` package. It is unavailable when that package or a usable Bluetooth radio is absent.
 - Actual permission prompts, OEM radio policy and hardware state must be validated on the target Windows 11 device.
+
+
+## Windows 11 shell shortcuts
+
+- Add typed, allowlisted actions for Start, Quick Settings, notification center, Task View, taskbar cycling, Alt+Tab window switching, and virtual-desktop navigation/create/close.
+- Each action first validates the exact target window/process against protected-window policy, then uses the existing foreground-window and interaction lease to dispatch a fixed shortcut.
+- There is no arbitrary key-sequence input through this shell tool. Shortcut dispatch is reported as unverified because it does not independently prove the shell surface changed.
+- Create/close virtual desktop actions remain approval-gated and are not represented as automatically reversible.
