@@ -29,3 +29,36 @@ def test_tool_rate_limit_is_enforced():
                                      lambda _args: {"summary": "ok"}, max_per_minute=1))
     assert registry.dispatch("apex_probe", {}).status == "succeeded"
     assert registry.dispatch("apex_probe", {}).status == "denied"
+
+
+
+def test_registry_manifest_exposes_schema_and_policy_metadata():
+    registry = CapabilityRegistry()
+    registry.register(ToolDefinition(
+        "apex_read", "read", {"type": "object", "properties": {}}, "read_only",
+        lambda _args: {"summary": "ok"}, max_per_minute=4,
+    ))
+    registry.register(ToolDefinition(
+        "apex_change", "change", {"type": "object", "properties": {}}, "controlled",
+        lambda _args: {"summary": "changed"},
+    ))
+
+    rows = {item["name"]: item for item in registry.manifest()}
+    assert rows["apex_read"]["schema_version"] == 1
+    assert rows["apex_read"]["execution_context"] == "current_user"
+    assert rows["apex_read"]["approval_required"] is False
+    assert rows["apex_read"]["rate_limit_per_minute"] == 4
+    assert rows["apex_change"]["approval_required"] is True
+    assert rows["apex_change"]["mutations_enabled"] is True
+
+
+def test_tool_definition_rejects_unsupported_execution_context():
+    try:
+        ToolDefinition(
+            "apex_bad", "bad", {"type": "object"}, "controlled",
+            lambda _args: {"summary": "bad"}, execution_context="administrator",
+        )
+    except ValueError as exc:
+        assert "current user context" in str(exc)
+    else:
+        raise AssertionError("unsupported execution context was accepted")
