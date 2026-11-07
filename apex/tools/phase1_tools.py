@@ -4,7 +4,7 @@ from __future__ import annotations
 from typing import Any
 
 from apex.tools.registry import CapabilityRegistry, ToolDefinition
-from apex.windows import power, security, updates
+from apex.windows import power, security, updates, uia
 
 
 def _object(properties: dict[str, Any] | None = None, required: list[str] | None = None) -> dict[str, Any]:
@@ -108,4 +108,22 @@ def register_phase1_tools(registry: CapabilityRegistry, store) -> None:
         risk="controlled",
         handler=lambda args: _forget_memory(store, args["memory_id"]),
         available=lambda: store.integrity_check(),
+    ))
+
+
+    registry.register(ToolDefinition(
+        name="apex_uia_wait_for",
+        description="Wait up to ten seconds for one uniquely identified, visible and enabled UI Automation control without reading its value.",
+        parameters=_object({
+            "hwnd": {"type": "integer", "minimum": 1},
+            "automation_id": {"type": "string", "maxLength": 120},
+            "name": {"type": "string", "maxLength": 160},
+            "timeout_seconds": {"type": "number", "minimum": 0.1, "maximum": 10.0},
+        }, ["hwnd"]),
+        risk="read_only",
+        handler=lambda args: uia.wait_for_control(
+            args["hwnd"], args.get("timeout_seconds", 5.0),
+            automation_id=args.get("automation_id"), name=args.get("name"),
+        ),
+        available=uia.provider_available,
     ))
