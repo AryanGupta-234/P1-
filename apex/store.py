@@ -23,7 +23,7 @@ def utc_now() -> str:
 class UnifiedDataStore:
     """One canonical SQLite file; all feature modules use this repository facade."""
 
-    SCHEMA_VERSION = 1
+    SCHEMA_VERSION = 2
     _SENSITIVE_KEYS = ("password", "passwd", "token", "secret", "credential", "cookie", "private_key")
 
     def __init__(self, path: str | Path | None = None):
