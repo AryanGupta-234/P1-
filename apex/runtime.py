@@ -44,15 +44,16 @@ class ApexHost:
             self.registry = registry
         self._emergency_stop = bool(self.store.get_runtime_flag("emergency_stop", False))
         self.registry.set_mutations_enabled(not self._emergency_stop)
-        self.registry.register(ToolDefinition(
-            name="apex_get_runtime_manifest",
-            description="Read the current APEX model, provider, tool-availability and policy manifest from the trusted Python host.",
-            parameters={"type": "object", "properties": {}, "additionalProperties": False},
-            risk="read_only",
-            handler=lambda _args: {"summary": "Returned the current trusted APEX runtime manifest.",
-                                   "manifest": self.capability_snapshot(), "verified": True},
-            available=lambda: True,
-        ))
+        if not self.registry.contains("apex_get_runtime_manifest"):
+            self.registry.register(ToolDefinition(
+                name="apex_get_runtime_manifest",
+                description="Read the current APEX model, provider, tool-availability and policy manifest from the trusted Python host.",
+                parameters={"type": "object", "properties": {}, "additionalProperties": False},
+                risk="read_only",
+                handler=lambda _args: {"summary": "Returned the current trusted APEX runtime manifest.",
+                                       "manifest": self.capability_snapshot(), "verified": True},
+                available=lambda: True,
+            ))
         self.approval_handler = approval_handler
         self.system_prompt = system_prompt
         self._conversation_id: str | None = None
