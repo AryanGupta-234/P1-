@@ -82,6 +82,8 @@ jobs:
           path: |
             dist/*.whl
             dist/*.tar.gz
+            dist/apex/*.whl
+            dist/apex/*.tar.gz
           if-no-files-found: error
           retention-days: 7
       - name: Run full repository tests
