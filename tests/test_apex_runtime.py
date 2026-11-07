@@ -5,10 +5,13 @@ from apex.store import UnifiedDataStore
 from apex.tools.registry import CapabilityRegistry, ToolDefinition
 
 class FakeOllama:
-    def __init__(self): self.calls = 0
+    def __init__(self):
+        self.calls = 0
+        self.requests = []
     def list_models(self, timeout=3.0): return ["APEX"]
     def chat(self, request, *, model):
         self.calls += 1
+        self.requests.append(request)
         if self.calls == 1:
             return ModelResponse(model=model, content="", elapsed_seconds=0.01,
                                  tool_calls=[ToolCall(name="apex_read_probe", arguments={})])
@@ -78,3 +81,53 @@ def test_process_visibility_question_calls_registered_read_only_provider(tmp_pat
     assert result["tool_events"][0]["status"] == "succeeded"
     assert "observed 2 processes" in result["response"]
     assert fake.calls == 0
+
+
+
+def test_relevant_normal_memory_is_injected_as_untrusted_reference_data(tmp_path):
+    fake = FakeOllama()
+    store = UnifiedDataStore(tmp_path / "apex.sqlite3")
+    store.add_memory(
+        namespace="technical",
+        memory_type="project_context",
+        payload={"note": "quasar stack uses the bounded local memory retriever"},
+        source="explicit_user_request",
+    )
+    store.add_memory(
+        namespace="technical",
+        memory_type="fact",
+        payload={"note": "quasar stack private memory must stay hidden"},
+        source="explicit_user_request",
+        sensitivity="sensitive",
+    )
+    host = ApexHost(
+        settings=ApexSettings(),
+        ollama=fake,
+        store=store,
+        registry=CapabilityRegistry(),
+    )
+
+    host.chat("Remind me about the quasar stack details")
+
+    system_content = fake.requests[0].messages[0].content
+    assert "bounded local memory retriever" in system_content
+    assert "quasar stack private memory" not in system_content
+    assert "untrusted reference data" in system_content
+
+
+def test_memory_context_is_not_added_for_unrelated_chat(tmp_path):
+    fake = FakeOllama()
+    store = UnifiedDataStore(tmp_path / "apex.sqlite3")
+    store.add_memory(
+        namespace="technical",
+        memory_type="fact",
+        payload={"note": "quasar stack details"},
+        source="explicit_user_request",
+    )
+    host = ApexHost(settings=ApexSettings(), ollama=fake,
+                    store=store, registry=CapabilityRegistry())
+
+    host.chat("Tell me a joke about penguins")
+
+    system_content = fake.requests[0].messages[0].content
+    assert "RELEVANT APEX MEMORY" not in system_content
