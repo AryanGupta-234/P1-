@@ -4,7 +4,7 @@ from __future__ import annotations
 from typing import Any
 
 from apex.tools.registry import CapabilityRegistry, ToolDefinition
-from apex.windows import power, security, updates, uia, wireless, bluetooth
+from apex.windows import power, security, updates, uia, wireless, bluetooth, shell
 
 
 def _object(properties: dict[str, Any] | None = None, required: list[str] | None = None) -> dict[str, Any]:
@@ -172,4 +172,18 @@ def register_phase1_tools(registry: CapabilityRegistry, store) -> None:
         handler=lambda args: bluetooth.set_bluetooth_radio(args["radio_name"], args["enabled"]),
         available=bluetooth.provider_available,
         compensation="successful execution receipt includes the previous Bluetooth radio state",
+    ))
+
+
+    registry.register(ToolDefinition(
+        name="apex_windows_shell_action",
+        description="Open the Start menu, Windows 11 Quick Settings, notification center, Task View, taskbar app cycling, switch windows, or navigate/create/close virtual desktops with fixed allowlisted Windows shortcuts.",
+        parameters=_object({
+            "hwnd": {"type": "integer", "minimum": 1},
+            "action": {"type": "string", "enum": sorted(shell._ACTIONS)},
+        }, ["hwnd", "action"]),
+        risk="controlled",
+        handler=lambda args: shell.shell_action(args["hwnd"], args["action"]),
+        available=shell.provider_available,
+        compensation="Window/shell shortcuts are not guaranteed to be reversible; virtual-desktop creation/closure is intentionally approval-gated.",
     ))
