@@ -61,3 +61,23 @@ def test_router_maps_common_pc_spec_language_to_system_summary():
 
     names = {item["function"]["name"] for item in selected}
     assert "apex_get_system_summary" in names
+
+
+
+def test_router_maps_remember_and_notes_language_to_memory_tools():
+    from apex.tools.phase1_tools import register_phase1_tools
+    from apex.store import UnifiedDataStore
+
+    registry = build_default_registry()
+    register_phase1_tools(registry, UnifiedDataStore(":memory:"))
+    schemas = registry.definitions(available_only=False)
+
+    save_names = {item["function"]["name"] for item in select_tool_schemas(
+        "Please remember my preference for concise answers", schemas
+    )}
+    search_names = {item["function"]["name"] for item in select_tool_schemas(
+        "Search my saved notes about APEX", schemas
+    )}
+
+    assert "apex_save_memory" in save_names
+    assert "apex_search_memory" in search_names
