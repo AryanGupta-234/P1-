@@ -165,6 +165,33 @@ class UnifiedDataStore:
             row = db.execute("SELECT profile_json FROM assistant_profile WHERE profile_id='primary'").fetchone()
         return json.loads(row[0]) if row else {"preferred_salutation": "sir"}
 
+    def update_user_profile(self, fields: dict[str, Any]) -> dict[str, Any]:
+        """Merge only explicit, user-provided profile fields from a small allowlist."""
+        field_limits = {
+            "display_name": 80,
+            "preferred_salutation": 40,
+            "locale": 40,
+            "interaction_style": 120,
+        }
+        if not isinstance(fields, dict) or not fields or len(fields) > len(field_limits):
+            raise ValueError("profile update must contain one to four allowed fields")
+        unknown = set(fields) - set(field_limits)
+        if unknown:
+            raise ValueError(f"unsupported profile fields: {', '.join(sorted(unknown))}")
+        normalized: dict[str, str] = {}
+        for key, value in fields.items():
+            if not isinstance(value, str):
+                raise ValueError(f"profile field '{key}' must be a string")
+            value = value.strip()
+            if not value or len(value) > field_limits[key]:
+                raise ValueError(f"profile field '{key}' must contain 1 to {field_limits[key]} characters")
+            normalized[key] = value
+        profile = self.get_profile()
+        profile.update(normalized)
+        # The update operation uses the same canonical profile row and journal.
+        self.save_profile(profile)
+        return self.get_profile()
+
     def ensure_conversation(self, conversation_id: str | None = None) -> str:
         identifier = conversation_id or str(uuid4())
         now = utc_now()
