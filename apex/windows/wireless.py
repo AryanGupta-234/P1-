@@ -183,21 +183,7 @@ class _WlanSession:
             if count > _MAX_PHYS or required > expected_size or required > data_size.value:
                 raise RuntimeError("WLAN radio-state response failed bounds validation")
             raw = ctypes.string_at(data, expected_size)
-            state = _WLAN_RADIO_STATE.from_buffer_copy(raw)
-            return [
-                {
-                    "phy_index": int(item.dwPhyIndex),
-                    "software_radio": int(item.dot11SoftwareRadioState),
-                    "software_radio_name": _radio_name(int(item.dot11SoftwareRadioState)),
-                    "hardware_radio": int(item.dot11HardwareRadioState),
-                    "hardware_radio_name": _radio_name(int(item.dot11HardwareRadioState)),
-                    "effective_radio_on": (
-                        item.dot11SoftwareRadioState == _DOT11_RADIO_ON
-                        and item.dot11HardwareRadioState == _DOT11_RADIO_ON
-                    ),
-                }
-                for item in state.PhyRadioState[:count]
-            ]
+            return _parse_radio_state_buffer(raw)
         finally:
             if data:
                 self.api.WlanFreeMemory(data)
