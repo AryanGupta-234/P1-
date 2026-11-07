@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import time
 from typing import Any
 from uuid import uuid4
 
@@ -60,6 +61,8 @@ class ApexHost:
         self._history: dict[str, list[ChatMessage]] = {}
         self._model_metadata: dict[str, Any] = {}
         self._provider_startup: dict[str, Any] = {"status": "not_checked", "started_by_apex": False}
+        self._manifest_cache: dict[str, Any] | None = None
+        self._manifest_cached_at = 0.0
 
     def set_emergency_stop(self, enabled: bool, *, reason: str = "host_operator") -> dict[str, Any]:
         """Persist the emergency stop and immediately gate every mutating capability."""
@@ -70,6 +73,7 @@ class ApexHost:
         self.store.set_runtime_flag("emergency_stop", enabled)
         self._emergency_stop = enabled
         self.registry.set_mutations_enabled(not enabled)
+        self._manifest_cache = None
         self.store.append_audit("emergency_stop_changed", {
             "enabled": enabled, "reason": reason.strip()[:160],
         })
@@ -119,7 +123,12 @@ class ApexHost:
             ],
         }
 
-    def runtime_manifest(self) -> dict[str, Any]:
+    def runtime_manifest(self, *, force_refresh: bool = False) -> dict[str, Any]:
+        """Return a five-second cached manifest; policy changes invalidate it immediately."""
+        now = time.monotonic()
+        if (not force_refresh and self._manifest_cache is not None
+                and now - self._manifest_cached_at < 5.0):
+            return json.loads(json.dumps(self._manifest_cache, ensure_ascii=False))
         try:
             models = self.ollama.list_models(timeout=3.0)
             ollama_state = "connected"
@@ -133,7 +142,7 @@ class ApexHost:
             except Exception:
                 self._model_metadata = {"resolved_tag": resolved_model, "family": "unknown",
                                         "parameter_size": "unknown", "quantization_level": "unknown"}
-        return {
+        manifest = {
             "product": "APEX", "version": "0.1.0", "host": "apex-python-runtime",
             "foundation_model_tag": self.settings.model, "resolved_model_tag": resolved_model,
             "operator_attribution": self.settings.operator_name,
@@ -149,6 +158,9 @@ class ApexHost:
             "providers": self.registry.manifest(),
             "database_status": "available" if self.store.integrity_check() else "integrity_error",
         }
+        self._manifest_cache = manifest
+        self._manifest_cached_at = time.monotonic()
+        return json.loads(json.dumps(manifest, ensure_ascii=False))
 
     def new_conversation(self) -> str:
         self._conversation_id = (self.store.ensure_conversation() if self.settings.persist_conversations
