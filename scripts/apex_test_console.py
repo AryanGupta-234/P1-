@@ -6,8 +6,9 @@ Ollama HTTP; this console exists only to exercise the Phase 1 host and approval 
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 
-from apex import ApexService
+from apex import ApexHost, ApexService, ApexSettings
 
 
 def _confirm_action(tool_name: str, arguments: dict, risk: str) -> bool:
@@ -20,16 +21,38 @@ def _confirm_action(tool_name: str, arguments: dict, risk: str) -> bool:
     return answer in {"y", "yes"}
 
 
+def _start_service(settings: ApexSettings) -> tuple[ApexService, dict]:
+    host = ApexHost(settings=settings, approval_handler=_confirm_action)
+    service = ApexService(host=host)
+    return service, service.start()
+
+
 def main() -> int:
-    service = ApexService(approval_handler=_confirm_action)
+    settings = ApexSettings.from_env()
+    service, manifest = _start_service(settings)
     try:
-        manifest = service.start()
+        installed_models = manifest.get("installed_local_models", [])
+        if not manifest.get("model_installed") and installed_models:
+            print(f"Configured model tag '{settings.model}' is not installed.")
+            for index, tag in enumerate(installed_models, start=1):
+                print(f"  {index}. {tag}")
+            selection = input("Select an exact installed local model number (or press Enter to exit): ").strip()
+            if not selection:
+                return 2
+            if not selection.isdecimal() or not 1 <= int(selection) <= len(installed_models):
+                print("Invalid model selection; no model was changed or downloaded.")
+                return 2
+            service.stop()
+            settings = replace(settings, model=installed_models[int(selection) - 1])
+            service, manifest = _start_service(settings)
+
         print("APEX Phase 1 test console")
         print(f"Model: {manifest.get('resolved_model_tag') or manifest.get('foundation_model_tag')}")
         installed_models = manifest.get("installed_local_models", [])
         print("Installed local models: " + (", ".join(installed_models) if installed_models else "(none detected)"))
         if not manifest.get("model_installed"):
-            print("The configured APEX model tag is not installed. Set APEX_MODEL to one exact installed tag before chatting.")
+            print("The configured APEX model tag is not installed. No inference request will be sent.")
+            return 2
         print(f"Ollama: {manifest.get('ollama_status')}")
         print(f"Database: {manifest.get('database_status')}")
         print("Mutations: approval-gated; emergency stop initially "
