@@ -40,6 +40,12 @@ _SYNONYMS = {
     "scheduler": {"scheduled", "task"},
     "service": {"services"},
     "update": {"updates", "hotfix", "windows"},
+    "pc": {"system", "hardware", "computer"},
+    "computer": {"system", "hardware", "pc"},
+    "laptop": {"system", "hardware", "device"},
+    "machine": {"system", "hardware", "device"},
+    "spec": {"specs", "hardware", "system"},
+    "specs": {"spec", "hardware", "system"},
 }
 
 
