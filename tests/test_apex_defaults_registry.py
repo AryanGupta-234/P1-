@@ -14,13 +14,15 @@ def test_phase_one_everyday_windows_capabilities_are_registered():
     names = {item["name"] for item in registry.manifest()}
     assert {
         "apex_get_process_details",
-        "apex_terminate_process",
         "apex_set_network_adapter_enabled",
         "apex_dhcp_lease_action",
         "apex_set_service_start_type",
         "apex_media_control",
         "apex_drag_drop",
     }.issubset(names)
+    # Process termination remains deliberately unregistered until an independently reviewed,
+    # reversible process-control policy and dedicated approval surface exist.
+    assert "apex_terminate_process" not in names
 
 
 def test_phase_one_extended_windows_capabilities_are_registered():
