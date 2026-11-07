@@ -16,7 +16,8 @@ windows = [
   "pywinauto>=0.6.9,<1",
   "pywin32>=306,<400",
   "pycaw>=20260927",
-  "send2trash>=2.1.0,<3"
+  "send2trash>=2.1.0,<3",
+  "winrt-Windows.Devices.Radios>=3.2.1,<5"
 ]
 
 [tool.setuptools]
