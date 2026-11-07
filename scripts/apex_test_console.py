@@ -26,6 +26,10 @@ def main() -> int:
         manifest = service.start()
         print("APEX Phase 1 test console")
         print(f"Model: {manifest.get('resolved_model_tag') or manifest.get('foundation_model_tag')}")
+        installed_models = manifest.get("installed_local_models", [])
+        print("Installed local models: " + (", ".join(installed_models) if installed_models else "(none detected)"))
+        if not manifest.get("model_installed"):
+            print("The configured APEX model tag is not installed. Set APEX_MODEL to one exact installed tag before chatting.")
         print(f"Ollama: {manifest.get('ollama_status')}")
         print(f"Database: {manifest.get('database_status')}")
         print("Mutations: approval-gated; emergency stop initially "
