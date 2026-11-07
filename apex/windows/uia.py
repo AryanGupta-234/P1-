@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import time
 
 
 class UIAutomationUnavailable(RuntimeError):
@@ -20,6 +21,7 @@ _CONTROL_TYPES = {
     "toggle": {"CheckBox", "RadioButton", "ToggleButton"},
     "expand_collapse": {"TreeItem", "ComboBox", "Pane", "Group"},
     "scroll": {"ScrollBar", "List", "ListView", "Pane", "Group"},
+    "wait": _SAFE_INSPECTION_TYPES | {"Edit"},
 }
 
 
@@ -166,3 +168,55 @@ def scroll_container(hwnd: int, axis: str, direction: str, *, automation_id: str
     pattern.Scroll(horizontal, vertical)
     return {"summary": f"Scrolled {axis} container {direction}.", "hwnd": hwnd,
             "automation_id": info.automation_id, "verified": False}
+
+
+
+def wait_for_control(hwnd: int, timeout_seconds: float = 5.0, *,
+                     automation_id: str | None = None, name: str | None = None) -> dict:
+    """Wait a bounded time for a unique, visible, enabled semantic control.
+
+    Control values and document/list contents are never read by this operation.
+    """
+    if isinstance(timeout_seconds, bool) or not isinstance(timeout_seconds, (int, float)):
+        raise ValueError("timeout_seconds must be a number")
+    if not 0.1 <= timeout_seconds <= 10.0:
+        raise ValueError("timeout_seconds must be between 0.1 and 10 seconds")
+    if bool(automation_id) == bool(name):
+        raise ValueError("provide exactly one of automation_id or name")
+
+    window = _window(hwnd)
+    deadline = time.monotonic() + float(timeout_seconds)
+    while True:
+        matches = []
+        for control in window.descendants()[:1000]:
+            try:
+                info = control.element_info
+                if str(info.control_type or "") not in _CONTROL_TYPES["wait"]:
+                    continue
+                if bool(getattr(info, "is_password", False)):
+                    continue
+                if automation_id and info.automation_id == automation_id:
+                    matches.append(control)
+                elif name and info.name == name:
+                    matches.append(control)
+            except Exception:
+                continue
+
+        if len(matches) > 1:
+            raise ValueError("UIA wait target matched more than one allowed control")
+        if matches:
+            info = matches[0].element_info
+            if bool(info.visible) and bool(info.enabled):
+                return {
+                    "summary": f"UIA control '{str(info.name or '')[:120]}' is visible and enabled.",
+                    "hwnd": hwnd,
+                    "name": str(info.name or "")[:120],
+                    "automation_id": str(info.automation_id or "")[:120],
+                    "control_type": str(info.control_type or ""),
+                    "verified": True,
+                }
+
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise TimeoutError("UIA control did not become visible and enabled before the timeout")
+        time.sleep(min(0.1, remaining))
