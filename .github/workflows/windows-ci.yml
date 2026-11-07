@@ -46,7 +46,7 @@ jobs:
       - name: Validate independent APEX imports
         run: python -c "from apex import ApexService; from apex.ollama import OllamaClient; from apex.tools.defaults import build_default_registry"
       - name: Validate Windows-only optional imports
-        run: python -c "import pywinauto; import win32evtlog; from aie.providers.process_resources import WindowsProcessResourceProvider; from aie.browser.native_host import event_from_browser_payload; from aie.providers.uia import WindowsUIATreeProvider; from aie.providers.eventlog import WindowsEventLogProvider; from aie.providers.etw_process import WindowsETWProcessProvider"
+        run: python -c "import pywinauto; from winrt.windows.devices.radios import Radio, RadioKind, RadioState; import win32evtlog; from aie.providers.process_resources import WindowsProcessResourceProvider; from aie.browser.native_host import event_from_browser_payload; from aie.providers.uia import WindowsUIATreeProvider; from aie.providers.eventlog import WindowsEventLogProvider; from aie.providers.etw_process import WindowsETWProcessProvider"
       - name: Validate PowerShell helper syntax
         shell: pwsh
         run: |
