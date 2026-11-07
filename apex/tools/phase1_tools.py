@@ -180,6 +180,42 @@ def register_phase1_tools(registry: CapabilityRegistry, store) -> None:
     ))
 
     registry.register(ToolDefinition(
+        name="apex_get_user_profile",
+        description="Read the explicitly user-provided APEX profile fields: display name, preferred salutation, locale and interaction style.",
+        parameters=_object(),
+        risk="read_only",
+        handler=lambda _args: {
+            "summary": "Returned the user-approved APEX profile.",
+            "profile": store.get_profile(),
+            "verified": True,
+        },
+        available=lambda: store.integrity_check(),
+    ))
+    registry.register(ToolDefinition(
+        name="apex_update_user_profile",
+        description="Update one or more explicitly provided APEX profile fields. Never infer a display name or other identity from machine metadata.",
+        parameters=_object({
+            "fields": {
+                "type": "object",
+                "properties": {
+                    "display_name": {"type": "string", "minLength": 1, "maxLength": 80},
+                    "preferred_salutation": {"type": "string", "minLength": 1, "maxLength": 40},
+                    "locale": {"type": "string", "minLength": 1, "maxLength": 40},
+                    "interaction_style": {"type": "string", "minLength": 1, "maxLength": 120},
+                },
+                "additionalProperties": False,
+            },
+        }, ["fields"]),
+        risk="controlled",
+        handler=lambda args: {
+            "summary": "Updated the explicitly user-provided APEX profile.",
+            "profile": store.update_user_profile(args["fields"]),
+            "verified": True,
+        },
+        available=lambda: store.integrity_check(),
+        compensation="The previous values are available from the profile read receipt and can be restored with a later approved update.",
+    ))
+    registry.register(ToolDefinition(
         name="apex_windows_shell_action",
         description="Open the Start menu, Windows 11 Quick Settings, notification center, Task View, taskbar app cycling, switch windows, or navigate/create/close virtual desktops with fixed allowlisted Windows shortcuts.",
         parameters=_object({
