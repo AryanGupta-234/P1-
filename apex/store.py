@@ -1,12 +1,13 @@
 """Single-file APEX data store for profile, conversations, memory, apps and tasks."""
 from __future__ import annotations
 
-import json
 import hashlib
+import json
+import re
 import sqlite3
 import threading
-from contextlib import contextmanager
 from collections.abc import Iterator
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -23,6 +24,7 @@ class UnifiedDataStore:
     """One canonical SQLite file; all feature modules use this repository facade."""
 
     SCHEMA_VERSION = 1
+    _SENSITIVE_KEYS = ("password", "passwd", "token", "secret", "credential", "cookie", "private_key")
 
     def __init__(self, path: str | Path | None = None):
         self.path = Path(path) if path else apex_data_dir() / "apex-unified.sqlite3"
@@ -95,6 +97,9 @@ class UnifiedDataStore:
             sequence INTEGER PRIMARY KEY AUTOINCREMENT, domain TEXT NOT NULL,
             record_id TEXT NOT NULL, operation TEXT NOT NULL, changed_at TEXT NOT NULL
         );
+        CREATE TABLE IF NOT EXISTS runtime_flags (
+            flag_key TEXT PRIMARY KEY, value_json TEXT NOT NULL, updated_at TEXT NOT NULL
+        );
         """
         with self._lock, self.connect() as db:
             db.execute("PRAGMA journal_mode=WAL")
@@ -110,11 +115,37 @@ class UnifiedDataStore:
             (domain, record_id, operation, utc_now()),
         )
 
+    @classmethod
+    def _validate_memory_payload(cls, payload: dict[str, Any]) -> str:
+        if not isinstance(payload, dict) or not payload or len(payload) > 20:
+            raise ValueError("memory payload must be a non-empty object with at most 20 fields")
+
+        def inspect(value: Any) -> None:
+            if isinstance(value, dict):
+                for key, child in value.items():
+                    if any(token in str(key).casefold() for token in cls._SENSITIVE_KEYS):
+                        raise ValueError("credential-like memory fields are not permitted")
+                    inspect(child)
+            elif isinstance(value, list):
+                if len(value) > 50:
+                    raise ValueError("memory lists may contain at most 50 values")
+                for child in value:
+                    inspect(child)
+            elif isinstance(value, str) and len(value) > 2000:
+                raise ValueError("individual memory strings may not exceed 2000 characters")
+            elif value is not None and not isinstance(value, (str, int, float, bool)):
+                raise ValueError("memory values must be JSON-compatible primitives, objects or lists")
+
+        inspect(payload)
+        encoded = json.dumps(payload, ensure_ascii=False, allow_nan=False)
+        if len(encoded.encode("utf-8")) > 8_192:
+            raise ValueError("memory payload exceeds 8 KiB")
+        return encoded
+
     def save_profile(self, profile: dict[str, Any]) -> None:
         if not isinstance(profile, dict) or len(profile) > 40:
             raise ValueError("profile must be an object with at most 40 fields")
-        forbidden = ("password", "passwd", "token", "secret", "credential", "cookie", "private_key")
-        if any(any(part in str(key).casefold() for part in forbidden) for key in profile):
+        if any(any(part in str(key).casefold() for part in self._SENSITIVE_KEYS) for key in profile):
             raise ValueError("credential-like profile fields are not permitted")
         payload = json.dumps(profile, ensure_ascii=False, allow_nan=False)
         if len(payload.encode("utf-8")) > 32_000:
@@ -169,17 +200,105 @@ class UnifiedDataStore:
     def add_memory(self, *, namespace: str, memory_type: str, payload: dict, source: str,
                    sensitivity: str = "normal", confidence: float | None = None,
                    expires_at: str | None = None) -> str:
+        for label, value in (("namespace", namespace), ("memory_type", memory_type), ("source", source)):
+            if not isinstance(value, str) or not 1 <= len(value.strip()) <= 80:
+                raise ValueError(f"{label} must contain 1 to 80 characters")
+        if sensitivity not in {"normal", "sensitive"}:
+            raise ValueError("sensitivity must be normal or sensitive")
+        if confidence is not None and (isinstance(confidence, bool) or not 0.0 <= confidence <= 1.0):
+            raise ValueError("confidence must be between 0 and 1")
+        if expires_at is not None:
+            try:
+                parsed_expiry = datetime.fromisoformat(expires_at)
+            except (TypeError, ValueError) as exc:
+                raise ValueError("expires_at must be an ISO-8601 timestamp") from exc
+            if parsed_expiry.tzinfo is None:
+                raise ValueError("expires_at must include a timezone")
+        payload_json = self._validate_memory_payload(payload)
         memory_id = str(uuid4())
         now = utc_now()
         with self._lock, self.connect() as db:
             db.execute(
                 "INSERT INTO memories(memory_id, namespace, memory_type, payload_json, source, sensitivity, "
                 "confidence, expires_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                (memory_id, namespace, memory_type, json.dumps(payload, ensure_ascii=False, allow_nan=False),
-                 source, sensitivity, confidence, expires_at, now, now),
+                (memory_id, namespace.strip(), memory_type.strip(), payload_json,
+                 source.strip(), sensitivity, confidence, expires_at, now, now),
             )
             self._change(db, "memory", memory_id, "insert")
         return memory_id
+
+    def search_memories(self, query: str = "", *, namespace: str = "personal",
+                        limit: int = 20, include_sensitive: bool = False) -> list[dict[str, Any]]:
+        if not isinstance(query, str) or len(query) > 500:
+            raise ValueError("memory query must be a string of at most 500 characters")
+        if not isinstance(namespace, str) or not 1 <= len(namespace) <= 80:
+            raise ValueError("memory namespace is invalid")
+        if isinstance(limit, bool) or not 1 <= limit <= 50:
+            raise ValueError("memory limit must be between 1 and 50")
+        terms = list(dict.fromkeys(re.findall(r"[\w-]{3,}", query.casefold())))[:8]
+        clauses = []
+        params: list[Any] = [namespace, utc_now()]
+        if terms:
+            clauses.append("(" + " OR ".join("lower(payload_json) LIKE ?" for _ in terms) + ")")
+            params.extend(f"%{term}%" for term in terms)
+        if not include_sensitive:
+            clauses.append("sensitivity='normal'")
+        where = " AND ".join(clauses) if clauses else "1=1"
+        params.append(limit)
+        with self.connect() as db:
+            rows = db.execute(
+                "SELECT memory_id, namespace, memory_type, payload_json, source, sensitivity, "
+                "confidence, expires_at, created_at, updated_at FROM memories "
+                "WHERE namespace=? AND (expires_at IS NULL OR expires_at>?) AND " + where +
+                " ORDER BY updated_at DESC LIMIT ?", params,
+            ).fetchall()
+        return [
+            {**dict(row), "payload": json.loads(row["payload_json"])}
+            for row in rows
+        ]
+
+    def forget_memory(self, memory_id: str) -> bool:
+        if not isinstance(memory_id, str) or not 1 <= len(memory_id) <= 64:
+            raise ValueError("memory_id is invalid")
+        with self._lock, self.connect() as db:
+            row = db.execute("SELECT memory_id FROM memories WHERE memory_id=?", (memory_id,)).fetchone()
+            if row is None:
+                return False
+            db.execute("DELETE FROM memories WHERE memory_id=?", (memory_id,))
+            self._change(db, "memory", memory_id, "delete")
+        return True
+
+    def prune_expired_memories(self) -> int:
+        now = utc_now()
+        with self._lock, self.connect() as db:
+            rows = db.execute(
+                "SELECT memory_id FROM memories WHERE expires_at IS NOT NULL AND expires_at<=?", (now,)
+            ).fetchall()
+            if not rows:
+                return 0
+            db.execute("DELETE FROM memories WHERE expires_at IS NOT NULL AND expires_at<=?", (now,))
+            for row in rows:
+                self._change(db, "memory", row["memory_id"], "expire")
+        return len(rows)
+
+    def set_runtime_flag(self, key: str, value: Any) -> None:
+        if not isinstance(key, str) or not 1 <= len(key) <= 80:
+            raise ValueError("runtime flag key is invalid")
+        payload = json.dumps(value, ensure_ascii=False, allow_nan=False)
+        if len(payload.encode("utf-8")) > 2_048:
+            raise ValueError("runtime flag value exceeds 2 KiB")
+        with self._lock, self.connect() as db:
+            db.execute(
+                "INSERT INTO runtime_flags(flag_key, value_json, updated_at) VALUES (?, ?, ?) "
+                "ON CONFLICT(flag_key) DO UPDATE SET value_json=excluded.value_json, updated_at=excluded.updated_at",
+                (key, payload, utc_now()),
+            )
+            self._change(db, "runtime_flag", key, "upsert")
+
+    def get_runtime_flag(self, key: str, default: Any = None) -> Any:
+        with self.connect() as db:
+            row = db.execute("SELECT value_json FROM runtime_flags WHERE flag_key=?", (key,)).fetchone()
+        return json.loads(row["value_json"]) if row else default
 
     def upsert_app(self, *, display_name: str, executable_path: str | None, aumid: str | None = None,
                    aliases: list[str] | None = None, metadata: dict[str, Any] | None = None,
