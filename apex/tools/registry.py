@@ -69,6 +69,10 @@ class CapabilityRegistry:
     def mutations_enabled(self) -> bool:
         return self._mutations_enabled
 
+    def contains(self, name: str) -> bool:
+        """Check whether a trusted host already registered a capability identifier."""
+        return name in self._tools
+
     def set_mutations_enabled(self, enabled: bool) -> None:
         """Fail closed unless the trusted host explicitly re-enables mutations."""
         if not isinstance(enabled, bool):
