@@ -46,6 +46,14 @@ _SYNONYMS = {
     "machine": {"system", "hardware", "device"},
     "spec": {"specs", "hardware", "system"},
     "specs": {"spec", "hardware", "system"},
+    "remember": {"memory", "save", "note"},
+    "forget": {"memory", "delete"},
+    "save": {"memory", "store"},
+    "note": {"memory", "save"},
+    "notes": {"memory", "search"},
+    "preference": {"preferences", "profile", "memory"},
+    "preferences": {"preference", "profile", "memory"},
+    "profile": {"preferences", "memory"},
 }
 
 
