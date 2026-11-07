@@ -101,3 +101,11 @@ A green APEX-focused test run and a complete green repository suite are still re
 - Each action first validates the exact target window/process against protected-window policy, then uses the existing foreground-window and interaction lease to dispatch a fixed shortcut.
 - There is no arbitrary key-sequence input through this shell tool. Shortcut dispatch is reported as unverified because it does not independently prove the shell surface changed.
 - Create/close virtual desktop actions remain approval-gated and are not represented as automatically reversible.
+
+
+## User-approved profile operations
+
+- APEX exposes a read-only profile lookup and an approval-gated profile update.
+- The schema accepts only four user-supplied fields: display name, preferred salutation, locale and interaction style, each with strict length bounds.
+- No username or display name is derived from a Windows account folder, machine metadata or inferred identity. The default salutation remains `sir`.
+- The update modifies the existing APEX-owned profile row in the unified store; it does not create another profile database.
