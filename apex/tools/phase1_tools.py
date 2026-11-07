@@ -4,7 +4,7 @@ from __future__ import annotations
 from typing import Any
 
 from apex.tools.registry import CapabilityRegistry, ToolDefinition
-from apex.windows import power, security, updates, uia, wireless
+from apex.windows import power, security, updates, uia, wireless, bluetooth
 
 
 def _object(properties: dict[str, Any] | None = None, required: list[str] | None = None) -> dict[str, Any]:
@@ -150,4 +150,26 @@ def register_phase1_tools(registry: CapabilityRegistry, store) -> None:
         ),
         available=wireless.provider_available,
         compensation="previous_radios in the execution receipt contain the prior software radio states",
+    ))
+
+
+    registry.register(ToolDefinition(
+        name="apex_list_bluetooth_radios",
+        description="Inspect available Windows Bluetooth radio names and their effective states.",
+        parameters=_object(),
+        risk="read_only",
+        handler=lambda _args: bluetooth.list_bluetooth_radios(),
+        available=bluetooth.provider_available,
+    ))
+    registry.register(ToolDefinition(
+        name="apex_set_bluetooth_radio",
+        description="Enable or disable one uniquely named Windows Bluetooth radio through the WinRT radio API. Windows permission and hardware policy are respected; host approval is required.",
+        parameters=_object({
+            "radio_name": {"type": "string", "minLength": 1, "maxLength": 160},
+            "enabled": {"type": "boolean"},
+        }, ["radio_name", "enabled"]),
+        risk="controlled",
+        handler=lambda args: bluetooth.set_bluetooth_radio(args["radio_name"], args["enabled"]),
+        available=bluetooth.provider_available,
+        compensation="successful execution receipt includes the previous Bluetooth radio state",
     ))
