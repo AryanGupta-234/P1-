@@ -13,6 +13,7 @@ from apex.self_awareness import answer as self_awareness_answer, classify as cla
 from apex.store import UnifiedDataStore
 from apex.tools.defaults import build_default_registry
 from apex.tools.phase1_tools import register_phase1_tools
+from apex.tools.router import select_tool_schemas
 from apex.tools.registry import ApprovalHandler, CapabilityRegistry, ToolDefinition
 from apex.windows.desktop import reset_interaction_lease
 from apex.windows.ollama_service import ensure_ollama_available
@@ -194,7 +195,8 @@ class ApexHost:
         messages.extend(history)
         tool_events: list[dict[str, Any]] = []
         dispatched: set[str] = set()
-        tools = self.registry.definitions(available_only=True)
+        available_tools = self.registry.definitions(available_only=True)
+        tools = select_tool_schemas(user_text, available_tools, limit=18)
         for round_index in range(self.settings.max_tool_rounds):
             request = ModelRequest(messages=messages, tools=tools,
                                    timeout_seconds=self.settings.request_timeout_seconds,
