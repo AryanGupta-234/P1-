@@ -1,17 +1,18 @@
 """Independent APEX assistant host and bounded Ollama tool loop."""
 from __future__ import annotations
 
-import json
 import hashlib
-from uuid import uuid4
+import json
 from typing import Any
+from uuid import uuid4
 
 from apex.config import ApexSettings
 from apex.contracts import ChatMessage, ModelRequest
 from apex.ollama import OllamaClient
-from apex.store import UnifiedDataStore
 from apex.self_awareness import answer as self_awareness_answer, classify as classify_self_awareness
+from apex.store import UnifiedDataStore
 from apex.tools.defaults import build_default_registry
+from apex.tools.phase1_tools import register_phase1_tools
 from apex.tools.registry import ApprovalHandler, CapabilityRegistry
 from apex.windows.desktop import reset_interaction_lease
 from apex.windows.ollama_service import ensure_ollama_available
@@ -35,13 +36,37 @@ class ApexHost:
         self.ollama = ollama or OllamaClient(self.settings.ollama_base_url,
                                              default_timeout=self.settings.request_timeout_seconds)
         self.store = store or UnifiedDataStore()
-        self.registry = registry or build_default_registry(self.store, self.settings)
+        if registry is None:
+            self.registry = build_default_registry(self.store, self.settings)
+            register_phase1_tools(self.registry, self.store)
+        else:
+            self.registry = registry
+        self._emergency_stop = bool(self.store.get_runtime_flag("emergency_stop", False))
+        self.registry.set_mutations_enabled(not self._emergency_stop)
         self.approval_handler = approval_handler
         self.system_prompt = system_prompt
         self._conversation_id: str | None = None
         self._history: dict[str, list[ChatMessage]] = {}
         self._model_metadata: dict[str, Any] = {}
         self._provider_startup: dict[str, Any] = {"status": "not_checked", "started_by_apex": False}
+
+    def set_emergency_stop(self, enabled: bool, *, reason: str = "host_operator") -> dict[str, Any]:
+        """Persist the emergency stop and immediately gate every mutating capability."""
+        if not isinstance(enabled, bool):
+            raise ValueError("enabled must be a boolean")
+        if not isinstance(reason, str) or not 1 <= len(reason.strip()) <= 160:
+            raise ValueError("reason must contain 1 to 160 characters")
+        self.store.set_runtime_flag("emergency_stop", enabled)
+        self._emergency_stop = enabled
+        self.registry.set_mutations_enabled(not enabled)
+        self.store.append_audit("emergency_stop_changed", {
+            "enabled": enabled, "reason": reason.strip()[:160],
+        })
+        return {
+            "emergency_stop": self._emergency_stop,
+            "mutations_enabled": self.registry.mutations_enabled,
+            "persisted": True,
+        }
 
     def ensure_model_provider(self) -> dict[str, Any]:
         """Connect to Ollama or launch its installed Windows app without shell/CLI."""
@@ -77,6 +102,11 @@ class ApexHost:
             "inference_mode": "normal", "think": False, "ollama_status": ollama_state,
             "ollama_startup": dict(self._provider_startup),
             "model_installed": resolved_model is not None,
+            "policy": {
+                "emergency_stop": self._emergency_stop,
+                "mutations_enabled": self.registry.mutations_enabled,
+                "mutations_require_host_approval": True,
+            },
             "providers": self.registry.manifest(),
             "database_status": "available" if self.store.integrity_check() else "integrity_error",
         }
@@ -103,7 +133,8 @@ class ApexHost:
             history.append(ChatMessage(role="user", content=user_text))
             history[:] = history[-self.settings.context_messages:]
         profile = self.store.get_profile()
-        profile_context = {k: v for k, v in profile.items() if k in {"preferred_salutation", "display_name", "locale", "interaction_style"}}
+        profile_context = {k: v for k, v in profile.items()
+                           if k in {"preferred_salutation", "display_name", "locale", "interaction_style"}}
         manifest = self.runtime_manifest()
         self_awareness_kind = classify_self_awareness(user_text)
         if self_awareness_kind and self_awareness_kind != "process_visibility":
