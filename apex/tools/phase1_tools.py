@@ -4,7 +4,15 @@ from __future__ import annotations
 from typing import Any
 
 from apex.tools.registry import CapabilityRegistry, ToolDefinition
-from apex.windows import power, security, updates, uia, wireless, bluetooth, shell
+from apex.windows import (
+    bluetooth,
+    power,
+    security,
+    shell,
+    updates,
+    uia,
+    wireless,
+)
 
 
 def _object(properties: dict[str, Any] | None = None, required: list[str] | None = None) -> dict[str, Any]:
@@ -110,7 +118,6 @@ def register_phase1_tools(registry: CapabilityRegistry, store) -> None:
         available=lambda: store.integrity_check(),
     ))
 
-
     registry.register(ToolDefinition(
         name="apex_uia_wait_for",
         description="Wait up to ten seconds for one uniquely identified, visible and enabled UI Automation control without reading its value.",
@@ -127,7 +134,6 @@ def register_phase1_tools(registry: CapabilityRegistry, store) -> None:
         ),
         available=uia.provider_available,
     ))
-
 
     registry.register(ToolDefinition(
         name="apex_list_wireless_radios",
@@ -152,7 +158,6 @@ def register_phase1_tools(registry: CapabilityRegistry, store) -> None:
         compensation="previous_radios in the execution receipt contain the prior software radio states",
     ))
 
-
     registry.register(ToolDefinition(
         name="apex_list_bluetooth_radios",
         description="Inspect available Windows Bluetooth radio names and their effective states.",
@@ -173,7 +178,6 @@ def register_phase1_tools(registry: CapabilityRegistry, store) -> None:
         available=bluetooth.provider_available,
         compensation="successful execution receipt includes the previous Bluetooth radio state",
     ))
-
 
     registry.register(ToolDefinition(
         name="apex_windows_shell_action",
