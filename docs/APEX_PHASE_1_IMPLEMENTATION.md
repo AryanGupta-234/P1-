@@ -74,3 +74,12 @@ This is an initial Phase 1 runtime and adapter set, not completion of every Phas
 The Windows CI workflow has verified package installation and the WPF dashboard build. The most recent completed full test run reached the suite after lint and reported an APEX test expectation that still listed process termination, plus two PRIXON identity-test mismatches. Process termination remains deliberately unregistered; the APEX test is being aligned to that safety boundary. The PRIXON subsystem is outside APEX's product boundary and has not been modified.
 
 A green APEX-focused test run and a complete green repository suite are still required. Power APIs, WMI providers, UI Automation, Core Audio, adapter/service/task operations, interaction lease, filesystem scoping, and the actual local Ollama model must also be exercised on the target Windows 11 device before claiming end-to-end validation.
+
+
+## Native Wi-Fi radio controls
+
+- Inspect WLAN interface GUIDs, interface state and per-PHY software/hardware radio state with the Windows Native WLAN API (`WlanEnumInterfaces`, `WlanQueryInterface`).
+- Enable/disable the software radio on one exact interface GUID using `WlanSetInterface`; mutation is host-approval-gated and the before-state is returned in the receipt.
+- Hardware radio is read-only. APEX refuses to enable software radio when the hardware switch is reported off, and does not claim a hardware switch can be overridden.
+- Each change is re-queried. When the postcondition fails, APEX attempts to restore every PHY changed by that invocation.
+- This is not a Bluetooth radio provider; Bluetooth radio control remains outstanding. Interface enumeration and driver support must be validated on the target Windows 11 device.
