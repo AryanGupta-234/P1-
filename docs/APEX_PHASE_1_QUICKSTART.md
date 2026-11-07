@@ -5,7 +5,7 @@ This is a temporary test adapter for the independent APEX Python host. It is **n
 ## Requirements
 
 - Windows 11, Python 3.11 or newer.
-- The locally installed Ollama Windows application and the configured APEX model tag.
+- The locally installed Ollama Windows application and the configured APEX model tag.\n- Windows optional dependencies include PyWinRT radio projection for Bluetooth support.
 - The Ollama loopback API at `http://127.0.0.1:11434` (the normal local default).
 - No cloud provider, model auto-download or Linux/WSL/Docker dependency is used.
 
@@ -52,7 +52,7 @@ Try conversational identity first, then read-only requests such as:
 - “What model and providers are connected?”
 - “List my running processes.”
 - “Show my network adapter and DNS configuration.”
-- “Show installed power plans.”
+- “Show installed power plans.”\n- “List Wi-Fi radio state.”\n- “Check Bluetooth radio state.”
 - “Check Windows Defender status.”
 - “Check Windows Update service and reboot status.”
 - “Find the APEX project notes I asked you to remember.”
