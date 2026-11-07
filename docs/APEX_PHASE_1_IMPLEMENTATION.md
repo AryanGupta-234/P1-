@@ -30,7 +30,20 @@
 
 ## Not yet complete / needs device validation
 
-This is an initial Phase 1 implementation, not universal control of all Windows surfaces. Power-plan configuration, dedicated Wi-Fi/Bluetooth toggles, PnP enable/disable with scoped elevation, Defender/update action recipes, full Shell/taskbar/virtual-desktop control, full AppX/MSIX manifest enrichment and signature verification, robust post-launch window verification, native named-pipe IPC, interactive approval UI and full rollback coverage remain follow-up work. ETW, kernel-level telemetry, advanced diagnostics and desktop UI are later phases. Packaged-app discovery currently uses the Shell AppsFolder namespace and is best-effort.
+This is an expanded Phase 1 runtime and automation foundation, not universal control of every Windows surface. The following remain incomplete or intentionally excluded:
+
+- PnP device enable/disable through a scoped, least-privilege elevation broker. APEX currently inspects PnP state but does not change device-node state or self-elevate.
+- Named, bounded Defender scan/update-check/repair recipes. Current Defender and Windows Update tools are read-only posture snapshots; they do not change protection settings or install updates.
+- Full app metadata enrichment, AppX/MSIX manifest harvesting, complete publisher/signature validation, and robust post-launch process/window readiness verification. Packaged-app discovery remains best-effort through the Shell AppsFolder namespace.
+- Native authenticated named-pipe IPC, a background Windows service/host lifecycle, and the polished standalone desktop client. The included text console is only a temporary Phase 1 smoke-test adapter; the desktop UI remains deferred to Phase 6.
+- A desktop approval queue/consent surface and scoped UAC broker. Mutations are executable only in a host that supplies an explicit approval callback; the temporary console supplies a text confirmation prompt.
+- Complete rollback/compensation for every mutation. Some operations verify postconditions and return prior state or attempt rollback (DNS, power plan, Wi-Fi PHY state, selected Bluetooth state); other dispatch-style actions cannot guarantee reversal. Receipts must not imply universal reversibility.
+- Native control of every Start/taskbar/Quick Settings surface. Current shell support is a fixed shortcut allowlist and reports dispatch rather than independently verified shell-state changes.
+- Full memory-management UX, semantic/embedding retrieval, review/correction/export workflows, encrypted sensitive-memory storage and automatic profile onboarding. Current memory is bounded lexical retrieval of normal-sensitivity user-approved records plus explicit save/search/forget and profile read/update.
+- Dedicated process termination remains deliberately unregistered. APEX can inspect processes and close supported user windows gracefully, but it does not offer a generic kill-process tool.
+- Target-device testing for Windows WLAN/WinRT radio permissions, WMI, PowrProf, UIA, Core Audio, filesystem boundaries, shell shortcuts, service/task changes and the configured local Ollama model.
+
+ETW/kernel-level telemetry, advanced evidence correlation, adaptive background autonomy and the polished desktop UI are later phases. APEX does not bypass UAC, override hardware radio switches, or interfere with anti-cheat/security software.
 
 ## Python integration
 
@@ -49,15 +62,16 @@ A future desktop application should embed or host this API without changing the 
 
 ## Validation snapshot
 
-- Contract, import-boundary, shell-boundary, tool-schema, self-awareness and Ollama request tests have been added to the branch.
-- Automated test execution is pending; no passing local/CI test result is claimed in this document.
-- Import-boundary regression tests are included to reject any AIE imports in the APEX package.
-- Shell-boundary regression tests are included to reject subprocess, CMD or arbitrary-shell model execution paths.
-- Ollama contract tests cover `think: false` in the Python `/api/chat` JSON body and exact configured-tag/implicit-`:latest` resolution.
-- Windows integration validation remains **pending on the target Windows 11 machine**. COM, Core Audio, UI Automation, file-system and desktop input adapters have not been exercised on the user's PC.
+- The Windows CI matrix installs the root AIE package and independent APEX package, checks optional Windows imports (including PyWinRT radio APIs), builds the existing WPF dashboard, runs Ruff, executes APEX-focused tests, builds both Python distributions and then runs the full repository suite.
+- The latest commit adds focused tests for automatic memory retrieval/sensitivity filtering and the fixed native WLAN structure layout. CI for the current branch head is in progress; cancelled/superseded workflow runs are not a successful gate.
+- An earlier full repository run exposed two unrelated PRIXON identity-test failures (newline preservation and expected wording). PRIXON is outside APEX's product boundary and has not been modified. Process termination is deliberately unregistered and its APEX registry test reflects that safety boundary.
+- No CI result substitutes for target Windows 11 testing. Native WLAN/WinRT radio permissions, WMI, PowrProf, UIA, Core Audio, filesystem boundaries, shell shortcuts, service/task changes and the actual local Ollama model still require device validation.
 
-This is an initial Phase 1 runtime and adapter set, not completion of every Phase 1 requirement. Mutating tools return `approval_required` unless the host supplies an explicit approval callback; no GUI approval surface is included in this milestone. Service mutations additionally require an exact name in `APEX_ALLOWED_SERVICES`, which defaults to an empty allowlist. See the follow-up checklist for remaining Phase 1 coverage.
+**Release gate:** require a completed green APEX-focused test matrix on Python 3.11 and 3.12, successful independent APEX distribution validation, and an explicit target-device smoke test before declaring Phase 1 release-ready. Full repository test status is tracked separately because PRIXON identity tests are outside this milestone.
 
+## Automatic memory context
+
+Before each model request, the host performs a bounded lexical search across APEX's `preferences`, `personal`, `project` and `technical` namespaces. It selects at most six normal-sensitivity records within a 4,000-character budget. Sensitive memories are excluded by the store query and checked again at the host boundary. Retrieved content is labeled as untrusted reference data and cannot modify system policy. This is lexical matching, not embedding-based semantic retrieval.
 
 ## Phase 1 extensions added on 2026-11-07
 
