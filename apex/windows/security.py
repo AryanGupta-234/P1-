@@ -42,7 +42,7 @@ def defender_status() -> dict[str, Any]:
     status = {}
     for output_name, property_name in _FIELDS.items():
         value = getattr(item, property_name, None)
-        if property_name.endswith("_EndTime") or property_name.endswith("_Updated"):
+        if property_name in {"QuickScanEndTime", "FullScanEndTime", "AntivirusSignatureLastUpdated"}:
             status[output_name] = str(value)[:80] if value else None
         else:
             status[output_name] = bool(value) if value is not None else None
