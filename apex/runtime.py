@@ -13,7 +13,7 @@ from apex.self_awareness import answer as self_awareness_answer, classify as cla
 from apex.store import UnifiedDataStore
 from apex.tools.defaults import build_default_registry
 from apex.tools.phase1_tools import register_phase1_tools
-from apex.tools.registry import ApprovalHandler, CapabilityRegistry
+from apex.tools.registry import ApprovalHandler, CapabilityRegistry, ToolDefinition
 from apex.windows.desktop import reset_interaction_lease
 from apex.windows.ollama_service import ensure_ollama_available
 
@@ -43,6 +43,15 @@ class ApexHost:
             self.registry = registry
         self._emergency_stop = bool(self.store.get_runtime_flag("emergency_stop", False))
         self.registry.set_mutations_enabled(not self._emergency_stop)
+        self.registry.register(ToolDefinition(
+            name="apex_get_runtime_manifest",
+            description="Read the current APEX model, provider, tool-availability and policy manifest from the trusted Python host.",
+            parameters={"type": "object", "properties": {}, "additionalProperties": False},
+            risk="read_only",
+            handler=lambda _args: {"summary": "Returned the current trusted APEX runtime manifest.",
+                                   "manifest": self.runtime_manifest(), "verified": True},
+            available=lambda: True,
+        ))
         self.approval_handler = approval_handler
         self.system_prompt = system_prompt
         self._conversation_id: str | None = None
