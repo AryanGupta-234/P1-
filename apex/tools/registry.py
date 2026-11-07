@@ -23,6 +23,26 @@ class ToolDefinition:
     handler: Callable[[dict[str, Any]], dict[str, Any]]
     available: Callable[[], bool] = lambda: True
     max_per_minute: int = 10
+    schema_version: int = 1
+    source: str = "apex_provider"
+    execution_context: Literal["current_user"] = "current_user"
+    compensation: str | None = None
+
+    def __post_init__(self) -> None:
+        if not self.name.startswith("apex_"):
+            raise ValueError("APEX tool names must use the apex_ prefix")
+        if isinstance(self.max_per_minute, bool) or self.max_per_minute < 1:
+            raise ValueError("max_per_minute must be a positive integer")
+        if isinstance(self.schema_version, bool) or self.schema_version < 1:
+            raise ValueError("schema_version must be a positive integer")
+        if not isinstance(self.source, str) or not 1 <= len(self.source) <= 80:
+            raise ValueError("tool source must contain 1 to 80 characters")
+        if self.compensation is not None and len(self.compensation) > 160:
+            raise ValueError("compensation metadata must not exceed 160 characters")
+
+    @property
+    def approval_required(self) -> bool:
+        return self.risk != "read_only"
 
     def ollama_schema(self) -> dict[str, Any]:
         return {"type": "function", "function": {
@@ -72,9 +92,19 @@ class CapabilityRegistry:
                 healthy = bool(tool.available())
             except Exception:
                 healthy = False
-            rows.append({"name": tool.name, "description": tool.description,
-                         "risk": tool.risk, "available": healthy,
-                         "mutations_enabled": self._mutations_enabled or tool.risk == "read_only"})
+            rows.append({
+                "name": tool.name,
+                "description": tool.description,
+                "risk": tool.risk,
+                "schema_version": tool.schema_version,
+                "source": tool.source,
+                "execution_context": tool.execution_context,
+                "approval_required": tool.approval_required,
+                "rate_limit_per_minute": tool.max_per_minute,
+                "compensation": tool.compensation,
+                "available": healthy,
+                "mutations_enabled": self._mutations_enabled or tool.risk == "read_only",
+            })
         return rows
 
     @staticmethod
