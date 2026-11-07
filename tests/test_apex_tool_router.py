@@ -50,3 +50,14 @@ def test_router_is_bounded_and_validates_inputs():
         pass
     else:
         raise AssertionError("oversized route query was accepted")
+
+
+
+def test_router_maps_common_pc_spec_language_to_system_summary():
+    registry = build_default_registry()
+    schemas = registry.definitions(available_only=False)
+
+    selected = select_tool_schemas("What specs does my PC have?", schemas)
+
+    names = {item["function"]["name"] for item in selected}
+    assert "apex_get_system_summary" in names
