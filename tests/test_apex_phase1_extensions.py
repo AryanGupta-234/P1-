@@ -17,6 +17,7 @@ def test_host_registers_phase1_tools_and_persists_emergency_stop(tmp_path):
         "apex_search_memory",
         "apex_save_memory",
         "apex_forget_memory",
+        "apex_uia_wait_for",
     }.issubset(tool_names)
 
     result = host.set_emergency_stop(True, reason="test")
