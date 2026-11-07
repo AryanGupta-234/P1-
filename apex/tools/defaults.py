@@ -37,7 +37,9 @@ def build_default_registry(store=None, runtime_settings=None) -> CapabilityRegis
                                  aumid=row.aumid, aliases=list(row.aliases), metadata={"publisher": row.publisher, "version": row.version},
                                  trust_state=row.trust_state, source=row.source, available=row.available)
         return rows
-    windows = lambda: os.name == "nt"
+
+    def windows() -> bool:
+        return os.name == "nt"
 
     registry.register(ToolDefinition(
         name="apex_get_system_summary", description="Read a basic Windows and hardware summary.",
