@@ -35,6 +35,17 @@ class CapabilityRegistry:
     def __init__(self) -> None:
         self._tools: dict[str, ToolDefinition] = {}
         self._calls: dict[str, deque[float]] = {}
+        self._mutations_enabled = True
+
+    @property
+    def mutations_enabled(self) -> bool:
+        return self._mutations_enabled
+
+    def set_mutations_enabled(self, enabled: bool) -> None:
+        """Fail closed unless the trusted host explicitly re-enables mutations."""
+        if not isinstance(enabled, bool):
+            raise ValueError("mutations_enabled must be a boolean")
+        self._mutations_enabled = enabled
 
     def register(self, tool: ToolDefinition) -> None:
         if tool.name in self._tools:
@@ -62,7 +73,8 @@ class CapabilityRegistry:
             except Exception:
                 healthy = False
             rows.append({"name": tool.name, "description": tool.description,
-                         "risk": tool.risk, "available": healthy})
+                         "risk": tool.risk, "available": healthy,
+                         "mutations_enabled": self._mutations_enabled or tool.risk == "read_only"})
         return rows
 
     @staticmethod
@@ -128,8 +140,11 @@ class CapabilityRegistry:
             calls.popleft()
         if len(calls) >= tool.max_per_minute:
             return ToolResult(tool_name=name, status="denied", summary="Capability rate limit reached; retry later.")
-        # All changes to the desktop/system require a host approval callback.
+        # The emergency stop is host-owned and blocks every state-changing action.
         if tool.risk != "read_only":
+            if not self._mutations_enabled:
+                return ToolResult(tool_name=name, status="denied",
+                                  summary="APEX emergency stop is active; state-changing capabilities are disabled.")
             if approval is None:
                 return ToolResult(tool_name=name, status="approval_required", summary="This action requires approval from the APEX host.")
             try:
@@ -143,8 +158,10 @@ class CapabilityRegistry:
             calls.append(now)
             if not isinstance(result, dict):
                 raise TypeError("tool handler did not return an object")
-            return ToolResult(tool_name=name, status="succeeded", summary=str(result.pop("summary", "Completed."))[:500],
-                              data=result, verified=bool(result.pop("verified", False)))
+            summary = str(result.pop("summary", "Completed."))[:500]
+            verified = bool(result.pop("verified", False))
+            return ToolResult(tool_name=name, status="succeeded", summary=summary,
+                              data=result, verified=verified)
         except (ValueError, ValidationError) as exc:
             return ToolResult(tool_name=name, status="denied", summary=f"Invalid arguments: {str(exc)[:300]}")
         except Exception as exc:  # noqa: BLE001 - tool error is returned as bounded data, not executed again.
