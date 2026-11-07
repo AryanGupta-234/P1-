@@ -63,7 +63,9 @@ jobs:
           node --check browser_extension/content.js
           node --check browser_extension/service_worker.js
           node --check browser_extension/popup.js
-      - name: Run tests
+      - name: Run APEX-focused tests
+        run: python -m pytest tests -k apex
+      - name: Run full repository tests
         run: python -m pytest
       - name: Build and validate independent Python distributions
         run: |
