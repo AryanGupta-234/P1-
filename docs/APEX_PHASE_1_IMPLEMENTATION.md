@@ -83,3 +83,13 @@ A green APEX-focused test run and a complete green repository suite are still re
 - Hardware radio is read-only. APEX refuses to enable software radio when the hardware switch is reported off, and does not claim a hardware switch can be overridden.
 - Each change is re-queried. When the postcondition fails, APEX attempts to restore every PHY changed by that invocation.
 - This is not a Bluetooth radio provider; Bluetooth radio control remains outstanding. Interface enumeration and driver support must be validated on the target Windows 11 device.
+
+
+## Bluetooth radio controls
+
+- Enumerate Bluetooth radio devices and effective radio state with the Windows.Devices.Radios WinRT API.
+- Request Windows radio-control access only when the user-approved mutation is invoked; then set one uniquely named Bluetooth radio to On or Off.
+- Re-enumerate and verify the effective radio state. Hardware/policy-disabled states and denied access are reported as failures rather than bypassed.
+- Successful receipts include the previous state as compensation information.
+- The provider is optional in the Windows extra and uses the PyWinRT `winrt-Windows.Devices.Radios` package. It is unavailable when that package or a usable Bluetooth radio is absent.
+- Actual permission prompts, OEM radio policy and hardware state must be validated on the target Windows 11 device.
