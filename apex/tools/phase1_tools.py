@@ -18,6 +18,15 @@ def _object(properties: dict[str, Any] | None = None, required: list[str] | None
     return schema
 
 
+def _forget_memory(store, memory_id: str) -> dict[str, Any]:
+    deleted = store.forget_memory(memory_id)
+    return {
+        "summary": "Memory deleted." if deleted else "No memory matched that identifier.",
+        "deleted": deleted,
+        "verified": True,
+    }
+
+
 def register_phase1_tools(registry: CapabilityRegistry, store) -> None:
     """Register native diagnostics, power control and explicit user-directed memory tools."""
     registry.register(ToolDefinition(
@@ -97,10 +106,6 @@ def register_phase1_tools(registry: CapabilityRegistry, store) -> None:
         description="Delete one exact APEX memory identifier after host approval.",
         parameters=_object({"memory_id": {"type": "string", "minLength": 1, "maxLength": 64}}, ["memory_id"]),
         risk="controlled",
-        handler=lambda args: {
-            "summary": "Memory deleted." if store.forget_memory(args["memory_id"]) else "No memory matched that identifier.",
-            "deleted": True,
-            "verified": True,
-        },
+        handler=lambda args: _forget_memory(store, args["memory_id"]),
         available=lambda: store.integrity_check(),
     ))
