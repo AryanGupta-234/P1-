@@ -19,6 +19,8 @@ def test_host_registers_phase1_tools_and_persists_emergency_stop(tmp_path):
         "apex_forget_memory",
         "apex_uia_wait_for",
         "apex_get_runtime_manifest",
+        "apex_list_wireless_radios",
+        "apex_set_wifi_radio",
     }.issubset(tool_names)
 
     result = host.set_emergency_stop(True, reason="test")
