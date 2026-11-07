@@ -52,7 +52,7 @@ Try conversational identity first, then read-only requests such as:
 - “What model and providers are connected?”
 - “List my running processes.”
 - “Show my network adapter and DNS configuration.”
-- “Show installed power plans.”\n- “List Wi-Fi radio state.”\n- “Check Bluetooth radio state.”
+- “Show installed power plans.”\n- “List Wi-Fi radio state.”\n- “Check Bluetooth radio state.”\n- “Open Quick Settings.”\n- “Open the Start menu.”\n- “Switch to the next virtual desktop.”
 - “Check Windows Defender status.”
 - “Check Windows Update service and reboot status.”
 - “Find the APEX project notes I asked you to remember.”
