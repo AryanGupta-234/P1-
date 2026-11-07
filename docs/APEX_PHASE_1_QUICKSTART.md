@@ -32,7 +32,7 @@ If PowerShell blocks activation, do not weaken machine-wide policy. Run the virt
 .\.venv\Scripts\python.exe .\scripts\apex_test_console.py
 ```
 
-This starts the APEX Python host. The host communicates with Ollama through Python's direct HTTP client. It does not invoke `ollama run`, `ollama create`, CMD, PowerShell or subprocess for model inference. The script itself is only a temporary text-based test surface.
+This starts the APEX Python host. The host communicates with Ollama through Python's direct HTTP client. It does not invoke `ollama run`, `ollama create`, CMD, PowerShell or subprocess for model inference. The script itself is only a temporary text-based test surface.\n\nIf the default `APEX` tag is not installed, the console displays the locally installed tags and asks you to choose one exact tag. It does not download, pull or silently substitute a model. The APEX personality and host identity remain in the Python runtime prompt; the selected tag identifies only the foundation model.
 
 The console displays the resolved model tag, provider status and database status. If the configured model tag is not installed, APEX reports it and does not download or silently substitute another model.
 
