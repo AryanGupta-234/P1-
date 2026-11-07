@@ -31,10 +31,18 @@ class ToolDefinition:
     def __post_init__(self) -> None:
         if not self.name.startswith("apex_"):
             raise ValueError("APEX tool names must use the apex_ prefix")
-        if isinstance(self.max_per_minute, bool) or self.max_per_minute < 1:
+        if self.risk not in {"read_only", "low", "controlled", "high"}:
+            raise ValueError("unsupported APEX capability risk tier")
+        if not isinstance(self.parameters, dict) or self.parameters.get("type") != "object":
+            raise ValueError("APEX capability parameters must use an object schema")
+        if not callable(self.handler) or not callable(self.available):
+            raise ValueError("APEX capability handler and availability check must be callable")
+        if isinstance(self.max_per_minute, bool) or not isinstance(self.max_per_minute, int) or self.max_per_minute < 1:
             raise ValueError("max_per_minute must be a positive integer")
-        if isinstance(self.schema_version, bool) or self.schema_version < 1:
+        if isinstance(self.schema_version, bool) or not isinstance(self.schema_version, int) or self.schema_version < 1:
             raise ValueError("schema_version must be a positive integer")
+        if self.execution_context != "current_user":
+            raise ValueError("APEX capabilities may only execute in the current user context")
         if not isinstance(self.source, str) or not 1 <= len(self.source) <= 80:
             raise ValueError("tool source must contain 1 to 80 characters")
         if self.compensation is not None and len(self.compensation) > 160:
