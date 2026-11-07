@@ -50,7 +50,7 @@ class ApexHost:
             parameters={"type": "object", "properties": {}, "additionalProperties": False},
             risk="read_only",
             handler=lambda _args: {"summary": "Returned the current trusted APEX runtime manifest.",
-                                   "manifest": self.runtime_manifest(), "verified": True},
+                                   "manifest": self.capability_snapshot(), "verified": True},
             available=lambda: True,
         ))
         self.approval_handler = approval_handler
@@ -89,6 +89,34 @@ class ApexHost:
             startup_timeout=12.0,
         )
         return dict(self._provider_startup)
+
+    def capability_snapshot(self) -> dict[str, Any]:
+        """Return a compact introspection payload suitable for bounded model/tool context."""
+        manifest = self.runtime_manifest()
+        providers = manifest.get("providers", [])
+        return {
+            "product": manifest.get("product"),
+            "version": manifest.get("version"),
+            "foundation_model_tag": manifest.get("foundation_model_tag"),
+            "resolved_model_tag": manifest.get("resolved_model_tag"),
+            "foundation_model": manifest.get("foundation_model"),
+            "operator_attribution": manifest.get("operator_attribution"),
+            "ollama_status": manifest.get("ollama_status"),
+            "model_installed": manifest.get("model_installed"),
+            "inference_mode": manifest.get("inference_mode"),
+            "think": False,
+            "policy": manifest.get("policy"),
+            "database_status": manifest.get("database_status"),
+            "capabilities": [
+                {
+                    "name": item.get("name"),
+                    "risk": item.get("risk"),
+                    "available": item.get("available"),
+                    "mutations_enabled": item.get("mutations_enabled"),
+                }
+                for item in providers
+            ],
+        }
 
     def runtime_manifest(self) -> dict[str, Any]:
         try:
