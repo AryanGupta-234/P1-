@@ -65,8 +65,6 @@ jobs:
           node --check browser_extension/popup.js
       - name: Run APEX-focused tests
         run: python -m pytest tests -k apex
-      - name: Run full repository tests
-        run: python -m pytest
       - name: Build and validate independent Python distributions
         run: |
           python -m pip install --disable-pip-version-check build twine
@@ -82,3 +80,5 @@ jobs:
             dist/*.tar.gz
           if-no-files-found: error
           retention-days: 7
+      - name: Run full repository tests
+        run: python -m pytest
