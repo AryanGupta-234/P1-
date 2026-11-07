@@ -175,13 +175,14 @@ class _WlanSession:
         )
         self._check(code, "WlanQueryInterface(radio_state)")
         try:
-            if data_size.value < ctypes.sizeof(ctypes.c_uint32):
-                raise RuntimeError("WLAN radio-state response is too small")
+            expected_size = ctypes.sizeof(_WLAN_RADIO_STATE)
+            if not data or data_size.value < expected_size:
+                raise RuntimeError("WLAN radio-state response is smaller than WLAN_RADIO_STATE")
             count = ctypes.cast(data, ctypes.POINTER(ctypes.c_uint32)).contents.value
             required = ctypes.sizeof(ctypes.c_uint32) + count * ctypes.sizeof(_WLAN_PHY_RADIO_STATE)
-            if count > _MAX_PHYS or data_size.value < required:
+            if count > _MAX_PHYS or required > expected_size or required > data_size.value:
                 raise RuntimeError("WLAN radio-state response failed bounds validation")
-            raw = ctypes.string_at(data, required)
+            raw = ctypes.string_at(data, expected_size)
             state = _WLAN_RADIO_STATE.from_buffer_copy(raw)
             return [
                 {
@@ -214,6 +215,31 @@ class _WlanSession:
             ),
             "WlanSetInterface(radio_state)",
         )
+
+
+def _parse_radio_state_buffer(raw: bytes) -> list[dict[str, Any]]:
+    """Parse the fixed WLAN_RADIO_STATE structure, using only valid PHY entries."""
+    expected_size = ctypes.sizeof(_WLAN_RADIO_STATE)
+    if not isinstance(raw, bytes) or len(raw) < expected_size:
+        raise ValueError("radio-state buffer is smaller than the native WLAN_RADIO_STATE structure")
+    state = _WLAN_RADIO_STATE.from_buffer_copy(raw[:expected_size])
+    count = int(state.dwNumberOfPhys)
+    if count > _MAX_PHYS:
+        raise ValueError("radio-state PHY count exceeds WLAN_MAX_PHY_INDEX")
+    return [
+        {
+            "phy_index": int(item.dwPhyIndex),
+            "software_radio": int(item.dot11SoftwareRadioState),
+            "software_radio_name": _radio_name(int(item.dot11SoftwareRadioState)),
+            "hardware_radio": int(item.dot11HardwareRadioState),
+            "hardware_radio_name": _radio_name(int(item.dot11HardwareRadioState)),
+            "effective_radio_on": (
+                item.dot11SoftwareRadioState == _DOT11_RADIO_ON
+                and item.dot11HardwareRadioState == _DOT11_RADIO_ON
+            ),
+        }
+        for item in state.PhyRadioState[:count]
+    ]
 
 
 def _radio_name(value: int) -> str:
