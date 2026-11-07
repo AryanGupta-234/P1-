@@ -104,6 +104,7 @@ class ApexHost:
             "version": manifest.get("version"),
             "foundation_model_tag": manifest.get("foundation_model_tag"),
             "resolved_model_tag": manifest.get("resolved_model_tag"),
+            "installed_local_models": manifest.get("installed_local_models", []),
             "foundation_model": manifest.get("foundation_model"),
             "operator_attribution": manifest.get("operator_attribution"),
             "ollama_status": manifest.get("ollama_status"),
@@ -145,6 +146,7 @@ class ApexHost:
         manifest = {
             "product": "APEX", "version": "0.1.0", "host": "apex-python-runtime",
             "foundation_model_tag": self.settings.model, "resolved_model_tag": resolved_model,
+            "installed_local_models": models[:100],
             "operator_attribution": self.settings.operator_name,
             "foundation_model": dict(self._model_metadata),
             "inference_mode": "normal", "think": False, "ollama_status": ollama_state,
