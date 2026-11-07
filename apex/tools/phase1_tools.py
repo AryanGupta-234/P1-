@@ -4,7 +4,7 @@ from __future__ import annotations
 from typing import Any
 
 from apex.tools.registry import CapabilityRegistry, ToolDefinition
-from apex.windows import power, security, updates, uia
+from apex.windows import power, security, updates, uia, wireless
 
 
 def _object(properties: dict[str, Any] | None = None, required: list[str] | None = None) -> dict[str, Any]:
@@ -126,4 +126,28 @@ def register_phase1_tools(registry: CapabilityRegistry, store) -> None:
             automation_id=args.get("automation_id"), name=args.get("name"),
         ),
         available=uia.provider_available,
+    ))
+
+
+    registry.register(ToolDefinition(
+        name="apex_list_wireless_radios",
+        description="Inspect the software and hardware radio state for each Windows WLAN interface. Hardware state is read-only.",
+        parameters=_object(),
+        risk="read_only",
+        handler=lambda _args: wireless.list_wireless_radios(),
+        available=wireless.provider_available,
+    ))
+    registry.register(ToolDefinition(
+        name="apex_set_wifi_radio",
+        description="Enable or disable the software Wi-Fi radio for one exact interface GUID. This may disconnect Wi-Fi. Hardware switches cannot be overridden; host approval is required.",
+        parameters=_object({
+            "interface_guid": {"type": "string", "minLength": 36, "maxLength": 36},
+            "enabled": {"type": "boolean"},
+        }, ["interface_guid", "enabled"]),
+        risk="controlled",
+        handler=lambda args: wireless.set_wireless_software_radio(
+            args["interface_guid"], args["enabled"],
+        ),
+        available=wireless.provider_available,
+        compensation="previous_radios in the execution receipt contain the prior software radio states",
     ))
