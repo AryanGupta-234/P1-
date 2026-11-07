@@ -51,6 +51,7 @@ def test_runtime_manifest_tool_returns_compact_host_authoritative_inventory(tmp_
 
     assert result.status == "succeeded"
     assert result.data["manifest"]["think"] is False
+    assert "installed_local_models" in result.data["manifest"]
     capabilities = result.data["manifest"]["capabilities"]
     assert any(item["name"] == "apex_get_process_details" for item in capabilities)
     assert all("description" not in item for item in capabilities)
