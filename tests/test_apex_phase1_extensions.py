@@ -35,3 +35,20 @@ def test_host_registers_phase1_tools_and_persists_emergency_stop(tmp_path):
     )
     assert restarted.registry.mutations_enabled is False
     assert restarted.runtime_manifest()["policy"]["emergency_stop"] is True
+
+
+
+def test_runtime_manifest_tool_returns_compact_host_authoritative_inventory(tmp_path):
+    host = ApexHost(
+        settings=ApexSettings(auto_start_ollama=False),
+        ollama=object(),
+        store=UnifiedDataStore(tmp_path / "manifest.sqlite3"),
+    )
+
+    result = host.registry.dispatch("apex_get_runtime_manifest", {})
+
+    assert result.status == "succeeded"
+    assert result.data["manifest"]["think"] is False
+    capabilities = result.data["manifest"]["capabilities"]
+    assert any(item["name"] == "apex_get_process_details" for item in capabilities)
+    assert all("description" not in item for item in capabilities)
