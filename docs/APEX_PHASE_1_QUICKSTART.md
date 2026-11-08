@@ -5,7 +5,8 @@ This is a temporary test adapter for the independent APEX Python host. It is **n
 ## Requirements
 
 - Windows 11, Python 3.11 or newer.
-- The locally installed Ollama Windows application and the configured APEX model tag.\n- Windows optional dependencies include PyWinRT radio projection for Bluetooth support.
+- The locally installed Ollama Windows application and the configured APEX model tag.
+- Windows optional dependencies include PyWinRT radio projection for Bluetooth support.
 - The Ollama loopback API at `http://127.0.0.1:11434` (the normal local default).
 - No cloud provider, model auto-download or Linux/WSL/Docker dependency is used.
 
@@ -32,7 +33,9 @@ If PowerShell blocks activation, do not weaken machine-wide policy. Run the virt
 .\.venv\Scripts\python.exe .\scripts\apex_test_console.py
 ```
 
-This starts the APEX Python host. The host communicates with Ollama through Python's direct HTTP client. It does not invoke `ollama run`, `ollama create`, CMD, PowerShell or subprocess for model inference. The script itself is only a temporary text-based test surface.\n\nIf the default `APEX` tag is not installed, the console displays the locally installed tags and asks you to choose one exact tag. It does not download, pull or silently substitute a model. The APEX personality and host identity remain in the Python runtime prompt; the selected tag identifies only the foundation model.
+This starts the APEX Python host. The host communicates with Ollama through Python's direct HTTP client. It does not invoke `ollama run`, `ollama create`, CMD, PowerShell or subprocess for model inference. The script itself is only a temporary text-based test surface.
+
+If the default `APEX` tag is not installed, the console displays the locally installed tags and asks you to choose one exact tag. It does not download, pull or silently substitute a model. The APEX personality and host identity remain in the Python runtime prompt; the selected tag identifies only the foundation model.
 
 The console displays the resolved model tag, provider status and database status. If the configured model tag is not installed, APEX reports it and does not download or silently substitute another model.
 
@@ -52,10 +55,22 @@ Try conversational identity first, then read-only requests such as:
 - “What model and providers are connected?”
 - “List my running processes.”
 - “Show my network adapter and DNS configuration.”
-- “Show installed power plans.”\n- “Open Bluetooth settings.”\n- “Open Wi-Fi settings.”\n- “Find the Windows Update advanced options page.”\n- “List all Settings URLs by category.”\n- “Open the legacy Network and Sharing Center.”\n- “List Wi-Fi radio state.”\n- “Check Bluetooth radio state.”\n- “Open Quick Settings.”\n- “Open the Start menu.”\n- “Switch to the next virtual desktop.”
+- “Show installed power plans.”
+- “Open Bluetooth settings.”
+- “Open Wi-Fi settings.”
+- “Find the Windows Update advanced options page.”
+- “List all Settings URLs by category.”
+- “Open the legacy Network and Sharing Center.”
+- “List Wi-Fi radio state.”
+- “Check Bluetooth radio state.”
+- “Open Quick Settings.”
+- “Open the Start menu.”
+- “Switch to the next virtual desktop.”
 - “Check Windows Defender status.”
 - “Check Windows Update service and reboot status.”
-- “Find the APEX project notes I asked you to remember.”\n- “Show my APEX profile.”\n- “Set my preferred salutation to sir.”
+- “Find the APEX project notes I asked you to remember.”
+- “Show my APEX profile.”
+- “Set my preferred salutation to sir.”
 
 Only test system changes with a non-critical target and review the exact approval details. Do not test network adapter disabling over your only active connection.
 
