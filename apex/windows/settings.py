@@ -69,7 +69,6 @@ CONSOLE_TARGETS = {
     "power_options": "powercfg.cpl",
     "sound_control_panel": "mmsys.cpl",
     "mouse_properties": "main.cpl",
-    "keyboard_properties": "control keyboard",
     "internet_options": "inetcpl.cpl",
     "system_properties": "sysdm.cpl",
     "date_time": "timedate.cpl",
