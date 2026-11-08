@@ -53,6 +53,15 @@ _SYNONYMS = {
     "notes": {"memory", "search"},
     "preference": {"preferences", "profile", "memory"},
     "preferences": {"preference", "profile", "memory"},
+    "url": {"uri", "uris", "settings", "page"},
+    "urls": {"url", "uri", "settings", "page"},
+    "uri": {"url", "urls", "settings", "page"},
+    "uris": {"url", "urls", "settings", "page"},
+    "catalogue": {"catalog", "list", "settings", "pages"},
+    "catalog": {"catalogue", "list", "settings", "pages"},
+    "all": {"list", "catalogue", "catalog", "pages"},
+    "control": {"panel", "applet", "management"},
+    "applet": {"control", "panel", "legacy"},
     "profile": {"preferences", "memory"},
 }
 
