@@ -7,7 +7,6 @@ undocumented URI forms are intentionally not accepted as arbitrary input.
 from __future__ import annotations
 
 import re
-from collections.abc import Iterable
 from typing import Any
 
 MICROSOFT_SOURCE = (
