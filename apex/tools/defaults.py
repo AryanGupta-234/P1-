@@ -159,9 +159,59 @@ def build_default_registry(store=None, runtime_settings=None) -> CapabilityRegis
         parameters=_object(_window_properties(), ["hwnd"]), risk="controlled",
         handler=lambda args: window_ops.close(args["hwnd"]), available=window_ops.provider_available))
     registry.register(ToolDefinition(
-        name="apex_open_settings", description="Open one allowlisted Windows Settings page by key.",
-        parameters=_object({"target": {"type": "string", "enum": sorted(settings_provider.SETTINGS_URIS)}}, ["target"]),
-        risk="low", handler=lambda args: settings_provider.open_settings(args["target"]), available=windows))
+        name="apex_open_settings",
+        description="Open one documented Windows Settings page by exact catalogue ID, page name or alias. Search the Settings catalogue first if the requested page is not obvious. Only Microsoft-documented allowlisted ms-settings URIs are launched; arbitrary URI strings and query parameters are rejected.",
+        parameters=_object({"target": {"type": "string", "minLength": 1, "maxLength": 160}}, ["target"]),
+        risk="low",
+        handler=lambda args: settings_provider.open_settings(args["target"]),
+        available=settings_provider.provider_available,
+    ))
+    registry.register(ToolDefinition(
+        name="apex_search_settings_pages",
+        description="Search the complete APEX catalogue of documented Windows ms-settings pages by natural-language query, URI keyword or category. Returns page IDs, labels, canonical URIs, lifecycle and hardware/version caveats.",
+        parameters=_object({
+            "query": {"type": "string", "maxLength": 160},
+            "category": {"type": "string", "enum": [
+                "Accounts", "Apps", "Control Center", "Devices", "Accessibility",
+                "Extras", "Family", "Gaming", "Network and internet", "Personalization",
+                "Phone", "Privacy", "Search", "Sound", "System", "Time and language",
+                "Update and security",
+            ]},
+            "include_deprecated": {"type": "boolean"},
+            "limit": {"type": "integer", "minimum": 1, "maximum": 30},
+        }),
+        risk="read_only",
+        handler=lambda args: settings_provider.search_settings_pages(
+            args.get("query", ""),
+            category=args.get("category"),
+            include_deprecated=args.get("include_deprecated", False),
+            limit=args.get("limit", 15),
+        ),
+        available=settings_provider.provider_available,
+    ))
+    registry.register(ToolDefinition(
+        name="apex_list_settings_pages",
+        description="List documented Windows Settings pages by category with offset pagination. Includes conditional, deprecated and removed entries when requested, along with lifecycle and compatibility caveats.",
+        parameters=_object({
+            "category": {"type": "string", "enum": [
+                "Accounts", "Apps", "Control Center", "Devices", "Accessibility",
+                "Extras", "Family", "Gaming", "Network and internet", "Personalization",
+                "Phone", "Privacy", "Search", "Sound", "System", "Time and language",
+                "Update and security",
+            ]},
+            "include_deprecated": {"type": "boolean"},
+            "limit": {"type": "integer", "minimum": 1, "maximum": 50},
+            "offset": {"type": "integer", "minimum": 0, "maximum": 500},
+        }),
+        risk="read_only",
+        handler=lambda args: settings_provider.list_settings_pages(
+            category=args.get("category"),
+            include_deprecated=args.get("include_deprecated", True),
+            limit=args.get("limit", 40),
+            offset=args.get("offset", 0),
+        ),
+        available=settings_provider.provider_available,
+    ))
     registry.register(ToolDefinition(
         name="apex_open_management_console", description="Open one allowlisted Windows MMC console.",
         parameters=_object({"target": {"type": "string", "enum": sorted(settings_provider.CONSOLE_TARGETS)}}, ["target"]),
