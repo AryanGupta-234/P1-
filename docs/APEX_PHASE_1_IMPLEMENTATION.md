@@ -123,3 +123,15 @@ A green APEX-focused test run and a complete green repository suite are still re
 - The schema accepts only four user-supplied fields: display name, preferred salutation, locale and interaction style, each with strict length bounds.
 - No username or display name is derived from a Windows account folder, machine metadata or inferred identity. The default salutation remains `sir`.
 - The update modifies the existing APEX-owned profile row in the unified store; it does not create another profile database.
+
+
+## Windows Settings and Control Panel catalogue
+
+- APEX maintains a curated catalogue of the documented Microsoft `ms-settings:` URI reference. Each entry has a stable ID, category, display name, canonical URI, aliases, lifecycle status, availability caveat and minimum Windows build where Microsoft specifies one.
+- Catalogue categories cover Accounts, Apps, Control Center, Devices, Accessibility, Extras, Family, Gaming/Mixed Reality, Network and internet, Personalization, Phone, Privacy, Search, Sound, System, Time and language, and Update and security.
+- Read-only tools search pages by natural-language query and enumerate the catalogue by category with offset pagination. This allows APEX to discover a page before opening it without sending the full URI catalogue in every model prompt.
+- The open-page tool resolves only catalogue IDs, documented page names, aliases or an exact URI already in the catalogue. It does not accept arbitrary URI strings or model-generated query parameters.
+- Removed pages are listed for reference but cannot be launched. Deprecated pages are marked. Conditional pages carry notes about build, SKU, account, hardware, enrollment or feature requirements. Launch dispatch is reported as unverified until Settings UI readiness can be independently observed.
+- Parameterized deep links (for example app-specific Default Apps/Installed Apps pages, camera IDs and specific audio endpoint IDs) are documented with caveats; APEX does not accept arbitrary parameter strings. Device-specific deep-link construction needs a separate validated provider.
+- A second fixed allowlist covers legacy Control Panel applets via fixed `control.exe` arguments. MMC/CPL/EXE entry points remain a separate reviewed allowlist; neither path exposes arbitrary shell/command input.
+- Source reference: [Microsoft Learn — Launch Windows Settings](https://learn.microsoft.com/en-us/windows/apps/develop/launch/launch-settings). The catalogue is a documented reference inventory, not a guarantee that every URI is implemented on every Windows 11 SKU or device.
