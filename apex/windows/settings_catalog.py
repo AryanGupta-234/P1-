@@ -331,7 +331,7 @@ def search_settings_pages(query: str = "", *, category: str | None = None,
         raise ValueError("query must contain at most 160 characters")
     if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 50:
         raise ValueError("limit must be between 1 and 50")
-    stop_words = {"settings", "setting", "page", "pages", "windows", "open", "show", "go", "to", "the", "my"}
+    stop_words = {"settings", "setting", "page", "pages", "windows", "open", "show", "go", "to", "the", "my", "all", "url", "urls", "uri", "uris", "catalog", "catalogue", "list", "get", "give", "every", "total"}
     terms = set(_normalize(query).split()) - stop_words
     category_key = _normalize(category) if category else None
     ranked: list[tuple[int, str, dict[str, Any]]] = []
