@@ -37,7 +37,8 @@ _ROWS = [
     ("your_info", "Accounts", "Your info", "yourinfo", "supported", ("profile information", "account info"), "", 0),
 
     # Apps
-    ("apps_features", "Apps", "Installed apps", "appsfeatures", "supported", ("apps", "installed applications", "programs", "apps and features"), "", 0),
+    ("apps_features", "Apps", "Installed apps", "appsfeatures", "supported", ("apps", "installed applications", "programs", "apps and features", "apps features"), "", 0),
+    ("app_features_detail", "Apps", "Per-app features and options", "appsfeatures-app", "conditional", ("app advanced options", "app features", "manage app permissions", "reset app"), "Microsoft documents an optional package-family-name parameter to target a specific app; APEX only opens the base page and does not accept arbitrary URI parameters.", 0),
     ("apps_for_websites", "Apps", "Apps for websites", "appsforwebsites", "supported", ("website apps",), "", 0),
     ("default_apps", "Apps", "Default apps", "defaultapps", "conditional", ("default application", "file associations", "default browser"), "Per-application deep link parameters are supported only on qualifying Windows 11 builds; APEX does not accept arbitrary query strings.", 22000),
     ("default_browser_settings", "Apps", "Default browser settings (legacy)", "defaultbrowsersettings", "deprecated", ("browser defaults legacy",), "Deprecated in Windows 11; use Default apps.", 0),
@@ -291,7 +292,8 @@ SETTINGS_BY_ID = {item["id"]: item for item in SETTINGS_CATALOG}
 
 
 def _normalize(value: str) -> str:
-    return re.sub(r"[^a-z0-9]+", " ", value.casefold()).strip()
+    normalized = value.casefold().replace("wi-fi", "wifi").replace("wi fi", "wifi")
+    return re.sub(r"[^a-z0-9]+", " ", normalized).strip()
 
 
 def list_settings_pages(*, category: str | None = None, include_deprecated: bool = True,
