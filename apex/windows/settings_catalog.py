@@ -295,9 +295,11 @@ def _normalize(value: str) -> str:
 
 
 def list_settings_pages(*, category: str | None = None, include_deprecated: bool = True,
-                        limit: int = 100) -> dict[str, Any]:
-    if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 200:
-        raise ValueError("limit must be between 1 and 200")
+                        limit: int = 40, offset: int = 0) -> dict[str, Any]:
+    if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 50:
+        raise ValueError("limit must be between 1 and 50")
+    if isinstance(offset, bool) or not isinstance(offset, int) or offset < 0:
+        raise ValueError("offset must be a non-negative integer")
     category_key = _normalize(category) if category else None
     records = [
         item for item in SETTINGS_CATALOG
@@ -305,9 +307,11 @@ def list_settings_pages(*, category: str | None = None, include_deprecated: bool
         and (include_deprecated or item["lifecycle"] not in {"deprecated", "removed"})
     ]
     return {
-        "pages": [dict(item) for item in records[:limit]],
-        "count": len(records[:limit]),
+        "pages": [dict(item) for item in records[offset:offset + limit]],
+        "count": len(records[offset:offset + limit]),
         "total_matching": len(records),
+        "offset": offset,
+        "next_offset": offset + limit if offset + limit < len(records) else None,
         "categories": sorted({item["category"] for item in SETTINGS_CATALOG}),
         "catalogue_version": CATALOGUE_VERSION,
         "source": MICROSOFT_SOURCE,
@@ -325,7 +329,8 @@ def search_settings_pages(query: str = "", *, category: str | None = None,
         raise ValueError("query must contain at most 160 characters")
     if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 50:
         raise ValueError("limit must be between 1 and 50")
-    terms = set(_normalize(query).split())
+    stop_words = {"settings", "setting", "page", "pages", "windows", "open", "show", "go", "to", "the", "my"}
+    terms = set(_normalize(query).split()) - stop_words
     category_key = _normalize(category) if category else None
     ranked: list[tuple[int, str, dict[str, Any]]] = []
     for item in SETTINGS_CATALOG:
@@ -338,9 +343,11 @@ def search_settings_pages(query: str = "", *, category: str | None = None,
         ]))
         words = set(haystack.split())
         score = 0
-        if query and not terms.issubset(words) and not all(any(term in word for word in words) for term in terms):
+        if terms and not terms.issubset(words) and not all(
+            any(term in word for word in words) for term in terms
+        ):
             continue
-        if query:
+        if terms:
             score += 8 * len(terms & words)
             if _normalize(item["label"]) == _normalize(query):
                 score += 20
