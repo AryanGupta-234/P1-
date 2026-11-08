@@ -28,6 +28,23 @@ SETTINGS_URIS.update({
     "night_light": "ms-settings:nightlight",
 })
 
+CONTROL_PANEL_TARGETS = {
+    "network_sharing_center": "/name Microsoft.NetworkAndSharingCenter",
+    "devices_and_printers": "/name Microsoft.DevicesAndPrinters",
+    "credential_manager": "/name Microsoft.CredentialManager",
+    "administrative_tools": "/name Microsoft.AdministrativeTools",
+    "user_accounts": "/name Microsoft.UserAccounts",
+    "windows_firewall": "/name Microsoft.WindowsFirewall",
+    "power_options": "/name Microsoft.PowerOptions",
+    "programs_and_features": "/name Microsoft.ProgramsAndFeatures",
+    "mouse_properties": "/name Microsoft.Mouse",
+    "keyboard_properties": "/name Microsoft.Keyboard",
+    "system_properties": "/name Microsoft.System",
+    "fonts": "/name Microsoft.Fonts",
+    "region": "/name Microsoft.RegionAndLanguage",
+    "date_and_time": "/name Microsoft.DateAndTime",
+}
+
 CONSOLE_TARGETS = {
     "device_manager": "devmgmt.msc",
     "services": "services.msc",
@@ -59,7 +76,6 @@ CONSOLE_TARGETS = {
     "region": "intl.cpl",
     "user_accounts": "netplwiz.exe",
     "fonts": "shell:fonts",
-    "network_sharing": "control.exe /name Microsoft.NetworkAndSharingCenter",
 }
 
 
@@ -120,6 +136,26 @@ def open_settings(target: str) -> dict[str, Any]:
         "source": MICROSOFT_SOURCE,
         "verified": False,
         "verification": "The URI launch was dispatched; Settings page readiness and interactive availability are not independently verified.",
+    }
+
+
+def open_control_panel(target: str) -> dict[str, Any]:
+    """Open one fixed Control Panel applet via a reviewed control.exe argument."""
+    if os.name != "nt":
+        raise OSError("Windows Control Panel launcher is available only on Windows")
+    if not isinstance(target, str):
+        raise ValueError("target must be a string key")
+    key = target.strip().lower()
+    arguments = CONTROL_PANEL_TARGETS.get(key)
+    if arguments is None:
+        raise ValueError("Control Panel target is not in the APEX allowlist")
+    os.startfile("control.exe", arguments=arguments)
+    return {
+        "summary": f"Dispatched Control Panel applet: {key}.",
+        "target": key,
+        "arguments": arguments,
+        "verified": False,
+        "verification": "The Control Panel applet launch was dispatched; UI readiness is not independently verified.",
     }
 
 
