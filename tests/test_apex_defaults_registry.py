@@ -43,3 +43,24 @@ def test_registry_tool_ids_are_unique():
     registry = build_default_registry(runtime_settings=ApexSettings())
     ids = [item["name"] for item in registry.manifest()]
     assert len(ids) == len(set(ids))
+
+
+
+def test_settings_catalogue_tools_are_registered_without_a_huge_uri_enum():
+    registry = build_default_registry(runtime_settings=ApexSettings())
+    rows = {item["name"]: item for item in registry.manifest()}
+
+    assert {
+        "apex_open_settings",
+        "apex_search_settings_pages",
+        "apex_list_settings_pages",
+        "apex_open_control_panel",
+    }.issubset(rows)
+
+    open_schema = next(
+        item for item in registry.definitions(available_only=False)
+        if item["function"]["name"] == "apex_open_settings"
+    )
+    target_schema = open_schema["function"]["parameters"]["properties"]["target"]
+    assert target_schema["type"] == "string"
+    assert "enum" not in target_schema
