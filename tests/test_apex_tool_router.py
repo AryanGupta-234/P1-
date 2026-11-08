@@ -81,3 +81,26 @@ def test_router_maps_remember_and_notes_language_to_memory_tools(tmp_path):
 
     assert "apex_save_memory" in save_names
     assert "apex_search_memory" in search_names
+
+
+
+def test_router_selects_settings_catalogue_tools_for_all_settings_uri_request():
+    registry = build_default_registry()
+    schemas = registry.definitions(available_only=False)
+
+    selected = select_tool_schemas("Give me all Windows Settings URLs", schemas, limit=30)
+
+    names = {item["function"]["name"] for item in selected}
+    assert "apex_list_settings_pages" in names
+    assert "apex_search_settings_pages" in names
+    assert "apex_open_settings" in names
+
+
+def test_router_selects_control_panel_launcher_for_legacy_applet_request():
+    registry = build_default_registry()
+    schemas = registry.definitions(available_only=False)
+
+    selected = select_tool_schemas("Open the old Control Panel Network and Sharing Center", schemas)
+
+    names = {item["function"]["name"] for item in selected}
+    assert "apex_open_control_panel" in names
