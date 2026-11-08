@@ -213,9 +213,17 @@ def build_default_registry(store=None, runtime_settings=None) -> CapabilityRegis
         available=settings_provider.provider_available,
     ))
     registry.register(ToolDefinition(
-        name="apex_open_management_console", description="Open one allowlisted Windows MMC console.",
+        name="apex_open_management_console", description="Open one reviewed Windows management entry point such as an MMC console, Control Panel applet or built-in management utility.",
         parameters=_object({"target": {"type": "string", "enum": sorted(settings_provider.CONSOLE_TARGETS)}}, ["target"]),
         risk="low", handler=lambda args: settings_provider.open_console(args["target"]), available=windows))
+    registry.register(ToolDefinition(
+        name="apex_open_control_panel",
+        description="Open one fixed allowlisted legacy Control Panel applet such as Network and Sharing Center, Devices and Printers, Credential Manager, Power Options, Programs and Features, Mouse, Keyboard or System properties. No arbitrary control.exe arguments are accepted.",
+        parameters=_object({"target": {"type": "string", "enum": sorted(settings_provider.CONTROL_PANEL_TARGETS)}}, ["target"]),
+        risk="low",
+        handler=lambda args: settings_provider.open_control_panel(args["target"]),
+        available=settings_provider.provider_available,
+    ))
     registry.register(ToolDefinition(
         name="apex_list_directory", description="List direct metadata for a directory inside an approved user file root.",
         parameters=_object({"path": {"type": "string", "minLength": 3, "maxLength": 500},
