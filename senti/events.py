@@ -15,6 +15,19 @@ Event types
 ``memory``     ``{"action": "recalled"|"learned"|"forgotten", "count": int, "summary": str}``.
 ``reply``      ``{"text": str, "model": str, "usage": dict}`` - the final answer.
 ``error``      ``{"message": str}``.
+``delta``      ``{"text": str}`` - streamed fragment of the reply being generated.
+``insight``    ``{"insight_id": str, "severity": "info"|"warning"|"critical", "title": str,
+                 "detail": str, "source": str, "suggestion": {"tool": str, "arguments": dict} | None,
+                 "status": "open"|"dismissed"|"resolved"}`` - proactive observation from the
+                 environment monitor or a due reminder. Suggestions are never executed automatically.
+``task``       ``{"task_id": str, "title": str, "status": "open"|"in_progress"|"done"|"blocked",
+                 "action": "created"|"updated"}`` - tracked objective changed.
+
+Extension tool packs
+--------------------
+A tool pack is a module exposing ``register_<name>_tools(registry, store, settings=None)``.
+Packs that need tables create them themselves with ``CREATE TABLE IF NOT EXISTS`` through
+``store.connect()``; they never edit the shared schema in ``senti/store.py``.
 """
 from __future__ import annotations
 
