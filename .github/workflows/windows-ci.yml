@@ -36,7 +36,7 @@ jobs:
           python -m pip install --disable-pip-version-check pip-audit
           python -m pip_audit --local
       - name: Set up .NET SDK for WPF dashboard
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v6
         with:
           dotnet-version: "8.0.x"
       - name: Build Windows desktop dashboard
