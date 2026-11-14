@@ -267,4 +267,4 @@ Still pending:
 - [ ] Design and ship a separate SENTI desktop application after host contracts stabilize.
 - [ ] Complete Windows-host, privacy, security, performance and model-quality evaluation.
 
-**First coding milestone:** Phase 1 in [SENTI standalone implementation plan](SENTI_STANDALONE_IMPLEMENTATION_PLAN.md). The [follow-up TODO backlog](SENTI_FOLLOW_UP_TODOS.md) is the task-level source of truth. Mark implementation tasks DONE only with code and validation evidence.
+**First coding milestone:** Phase 1 in [SENTI standalone implementation plan](SENTI_ARCHITECTURE.md). The [follow-up TODO backlog](SENTI_ARCHITECTURE.md) is the task-level source of truth. Mark implementation tasks DONE only with code and validation evidence.

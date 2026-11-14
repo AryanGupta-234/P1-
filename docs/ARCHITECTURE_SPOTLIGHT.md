@@ -250,8 +250,8 @@ SENTI is planned as a separate Windows desktop assistant with its own host lifec
 SENTI will reuse existing AIE model contracts/router, memory, planning/orchestration, policy and audit foundations wherever compatible. AIE Windows observation and SENTINEL diagnostics will be consumed through provider contracts; SENTI must not duplicate collectors or write directly into SENTINEL's private database. The current Ollama model tag `SENTI` is the initial local model target, not the entire assistant runtime.
 
 Planning documents:
-- [SENTI standalone implementation plan](SENTI_STANDALONE_IMPLEMENTATION_PLAN.md)
-- [SENTI follow-up TODO backlog](SENTI_FOLLOW_UP_TODOS.md)
+- [SENTI standalone implementation plan](SENTI_ARCHITECTURE.md)
+- [SENTI follow-up TODO backlog](SENTI_ARCHITECTURE.md)
 - [ADR-0015: standalone SENTI boundary](adr/0015-senti-standalone-assistant-boundary.md)
 
 The first coding milestone is a headless SENTI host and runtime manifest. Desktop UI work is deliberately deferred until the host contracts stabilize. No SENTI implementation code or SENTINEL UI changes are included in this planning milestone.
@@ -273,7 +273,7 @@ Phase 1 includes:
 
 Phase 2 expands live Windows perception and telemetry coverage. It does not introduce the automation engine: Phase 1 already establishes that engine and its initial action coverage. Later phases add memory, advanced diagnostics, bounded background autonomy and the independent SENTI desktop UI.
 
-Planning source: [SENTI standalone implementation plan](SENTI_STANDALONE_IMPLEMENTATION_PLAN.md) and [SENTI follow-up TODOs](SENTI_FOLLOW_UP_TODOS.md).
+Planning source: [SENTI standalone implementation plan](SENTI_ARCHITECTURE.md) and [SENTI follow-up TODOs](SENTI_ARCHITECTURE.md).
 
 ### Dynamic application discovery and launch resolution
 
