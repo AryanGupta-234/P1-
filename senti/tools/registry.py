@@ -1,6 +1,7 @@
 """Typed capability registry. Model tool calls are proposals, never executable code."""
 from __future__ import annotations
 
+import inspect
 import time
 from collections import deque
 from dataclasses import dataclass
@@ -11,7 +12,13 @@ from pydantic import ValidationError
 from senti.contracts import ToolResult
 
 Risk = Literal["read_only", "low", "controlled", "high"]
-ApprovalHandler = Callable[[str, dict[str, Any], Risk], bool]
+ApprovalHandler = Callable[..., bool]
+"""Approval callback: ``(tool_name, arguments, risk)`` or ``(tool_name, arguments, risk, preview)``.
+
+``preview`` is the dry-run simulation computed by the host before asking, so the approver
+sees what will change (current state, intended state, recovery) rather than raw arguments.
+"""
+SimulateHandler = Callable[[dict[str, Any]], dict[str, Any]]
 
 
 @dataclass(frozen=True, slots=True)
@@ -27,6 +34,7 @@ class ToolDefinition:
     source: str = "senti_provider"
     execution_context: Literal["current_user"] = "current_user"
     compensation: str | None = None
+    simulate: SimulateHandler | None = None
 
     def __post_init__(self) -> None:
         if not self.name.startswith("senti_"):
@@ -45,6 +53,8 @@ class ToolDefinition:
             raise ValueError("SENTI capabilities may only execute in the current user context")
         if not isinstance(self.source, str) or not 1 <= len(self.source) <= 80:
             raise ValueError("tool source must contain 1 to 80 characters")
+        if self.simulate is not None and not callable(self.simulate):
+            raise ValueError("SENTI capability simulate handler must be callable")
         if self.compensation is not None and len(self.compensation) > 160:
             raise ValueError("compensation metadata must not exceed 160 characters")
 
@@ -114,6 +124,7 @@ class CapabilityRegistry:
                 "approval_required": tool.approval_required,
                 "rate_limit_per_minute": tool.max_per_minute,
                 "compensation": tool.compensation,
+                "simulation": "provider" if tool.simulate else "generic",
                 "available": healthy,
                 "mutations_enabled": self._mutations_enabled or tool.risk == "read_only",
             })
@@ -161,6 +172,64 @@ class CapabilityRegistry:
                 if key in properties:
                     CapabilityRegistry._validate_value(item, properties[key], f"{path}.{key}")
 
+    def tool(self, name: str) -> ToolDefinition | None:
+        return self._tools.get(name)
+
+    def simulate(self, name: str, arguments: dict[str, Any]) -> dict[str, Any]:
+        """Dry-run a capability: validate it and describe its effect without changing anything.
+
+        Providers may supply a ``simulate`` handler that reads the current state and reports
+        the intended change. Without one, a generic preview built from the schema is returned.
+        Simulation never calls the real handler.
+        """
+        tool = self._tools.get(name)
+        if tool is None:
+            return {"tool": name[:100], "valid": False, "problem": "Tool is not registered."}
+        if not isinstance(arguments, dict):
+            return {"tool": name, "valid": False, "problem": "Tool arguments must be a JSON object."}
+        try:
+            self._validate_value(arguments, tool.parameters)
+        except ValueError as exc:
+            return {"tool": name, "valid": False, "problem": f"Invalid arguments: {str(exc)[:300]}"}
+        preview: dict[str, Any] = {
+            "tool": name, "valid": True, "risk": tool.risk,
+            "changes_state": tool.risk != "read_only",
+            "approval_required": tool.approval_required,
+            "description": tool.description,
+            "arguments": arguments,
+            "recovery": tool.compensation or ("not needed" if tool.risk == "read_only"
+                                              else "no automatic recovery is registered"),
+            "simulation": "generic",
+        }
+        try:
+            preview["available"] = bool(tool.available())
+        except Exception:
+            preview["available"] = False
+        if tool.simulate is not None and preview["available"]:
+            try:
+                detail = tool.simulate(arguments)
+                if isinstance(detail, dict):
+                    preview.update({k: v for k, v in detail.items() if k not in {"tool", "risk", "valid"}})
+                    preview["simulation"] = "provider"
+            except (ValueError, ValidationError) as exc:
+                preview.update({"valid": False, "problem": str(exc)[:300]})
+            except Exception as exc:  # noqa: BLE001 - a failed preview is reported, never retried.
+                preview["simulation_error"] = type(exc).__name__
+        return preview
+
+    @staticmethod
+    def _ask_approval(approval: ApprovalHandler, name: str, arguments: dict[str, Any],
+                      risk: Risk, preview: dict[str, Any]) -> bool:
+        try:
+            params = inspect.signature(approval).parameters.values()
+            positional = [p for p in params if p.kind in (p.POSITIONAL_ONLY, p.POSITIONAL_OR_KEYWORD)]
+            accepts_preview = len(positional) >= 4 or any(p.kind == p.VAR_POSITIONAL for p in params)
+        except (TypeError, ValueError):
+            accepts_preview = False
+        if accepts_preview:
+            return bool(approval(name, arguments, risk, preview))
+        return bool(approval(name, arguments, risk))
+
     def dispatch(self, name: str, arguments: dict[str, Any], *, approval: ApprovalHandler | None = None) -> ToolResult:
         tool = self._tools.get(name)
         if tool is None:
@@ -189,8 +258,12 @@ class CapabilityRegistry:
                                   summary="SENTI emergency stop is active; state-changing capabilities are disabled.")
             if approval is None:
                 return ToolResult(tool_name=name, status="approval_required", summary="This action requires approval from the SENTI host.")
+            preview = self.simulate(name, arguments)
+            if not preview.get("valid", False):
+                return ToolResult(tool_name=name, status="denied",
+                                  summary=f"Simulation rejected this action: {str(preview.get('problem'))[:300]}")
             try:
-                approved = approval(name, arguments, tool.risk)
+                approved = self._ask_approval(approval, name, arguments, tool.risk, preview)
             except Exception:
                 approved = False
             if not approved:
