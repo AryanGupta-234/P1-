@@ -19,6 +19,9 @@ class SentiService:
         self.host.ensure_model_provider()
         manifest = self.host.runtime_manifest()
         self._started = True
+        start_monitor = getattr(self.host, "start_environment_monitor", None)
+        if callable(start_monitor):
+            start_monitor()
         if warm_up and manifest.get("model_installed"):
             import threading
             threading.Thread(target=self.host.warm_up, name="senti-warmup", daemon=True).start()
@@ -35,3 +38,6 @@ class SentiService:
 
     def stop(self) -> None:
         self._started = False
+        environment = getattr(self.host, "environment", None)
+        if environment is not None:
+            environment.stop()

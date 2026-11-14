@@ -53,6 +53,14 @@
         <button type="button" id="refresh-manifest" class="ghost-btn small">Refresh</button>
       </section>
 
+      <section class="panel glass" aria-labelledby="tasks-title">
+        <div class="panel-head">
+          <h2 id="tasks-title" class="panel-title">Tasks</h2>
+        </div>
+        <ul class="mem-list scroll" id="task-list"></ul>
+        <p class="empty" id="task-empty">No tracked objectives.</p>
+      </section>
+
       <section class="panel glass grow" aria-labelledby="mem-title">
         <div class="panel-head">
           <h2 id="mem-title" class="panel-title">Memory</h2>
@@ -101,6 +109,15 @@
     </section>
 
     <aside class="column right">
+      <section class="panel glass" aria-labelledby="insight-title">
+        <div class="panel-head">
+          <h2 id="insight-title" class="panel-title">Insights</h2>
+          <span class="count-badge" id="insight-count">0</span>
+        </div>
+        <ul class="mem-list scroll" id="insight-list"></ul>
+        <p class="empty" id="insight-empty">Everything looks normal.</p>
+      </section>
+
       <section class="panel glass" aria-labelledby="auth-title">
         <div class="panel-head">
           <h2 id="auth-title" class="panel-title">Authorization</h2>

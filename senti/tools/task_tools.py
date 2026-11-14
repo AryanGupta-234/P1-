@@ -89,6 +89,24 @@ class TaskBook:
             rows = db.execute(query, (max(1, min(limit, 100)),)).fetchall()
         return [self._row(r) for r in rows]
 
+    def due_insights(self) -> list[dict[str, Any]]:
+        """Insight candidates for tracked objectives whose due time has passed (once each)."""
+        now = datetime.now(timezone.utc)
+        out = []
+        for task in self.list(limit=100):
+            if not task["due_at"]:
+                continue
+            try:
+                due = datetime.fromisoformat(task["due_at"])
+            except ValueError:
+                continue
+            if due.astimezone(timezone.utc) <= now:
+                out.append({"key": f"task_due:{task['task_id']}", "severity": "info",
+                            "title": f"Task due: {task['title']}", "source": "tasks",
+                            "detail": f"Status {task['status']}; due {task['due_at']}.",
+                            "suggestion": {"tool": "senti_list_tasks", "arguments": {}}})
+        return out
+
     def context(self, limit: int = 5) -> list[dict[str, Any]]:
         """Compact open-task view for the model's per-turn context."""
         return [{"task_id": t["task_id"], "title": t["title"], "status": t["status"],

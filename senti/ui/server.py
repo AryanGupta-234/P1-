@@ -262,6 +262,18 @@ class SentiConsole:
         rows.sort(key=lambda r: str(r.get("updated_at") or ""), reverse=True)
         return rows
 
+    def list_insights(self) -> list[dict[str, Any]]:
+        lister = getattr(self.host, "list_insights", None)
+        return lister() if callable(lister) else []
+
+    def dismiss_insight(self, insight_id: str) -> bool:
+        dismiss = getattr(self.host, "dismiss_insight", None)
+        return bool(dismiss(insight_id)) if callable(dismiss) else False
+
+    def list_tasks(self, include_done: bool = False) -> list[dict[str, Any]]:
+        lister = getattr(self.host, "list_tasks", None)
+        return lister(include_done=include_done) if callable(lister) else []
+
     def forget_memory(self, memory_id: str) -> bool:
         removed = bool(self.host.store.forget_memory(memory_id))
         if removed:
@@ -498,6 +510,19 @@ def make_handler(console: SentiConsole) -> type[BaseHTTPRequestHandler]:
                     if not console.forget_memory(memory_id):
                         raise _HttpError(HTTPStatus.NOT_FOUND, "unknown memory")
                     return self._json(HTTPStatus.OK, {"forgotten": memory_id})
+            if route == "insights":
+                if len(segments) == 1 and method == "GET":
+                    return self._json(HTTPStatus.OK, {"insights": console.list_insights()})
+                if len(segments) == 3 and segments[2] == "dismiss" and method == "POST":
+                    self._read_json()
+                    if not 1 <= len(segments[1]) <= 64:
+                        raise _HttpError(HTTPStatus.BAD_REQUEST, "insight_id is invalid")
+                    if not console.dismiss_insight(segments[1]):
+                        raise _HttpError(HTTPStatus.NOT_FOUND, "unknown or already closed insight")
+                    return self._json(HTTPStatus.OK, {"dismissed": segments[1]})
+            if route == "tasks" and len(segments) == 1 and method == "GET":
+                include_done = (query.get("include_done") or ["false"])[0] == "true"
+                return self._json(HTTPStatus.OK, {"tasks": console.list_tasks(include_done)})
             if route == "new-conversation" and len(segments) == 1 and method == "POST":
                 self._read_json()
                 cid = console.new_conversation()

@@ -90,6 +90,15 @@ class SentiHost:
         if not hasattr(self, "tasks"):
             from senti.tools.task_tools import TaskBook
             self.tasks = TaskBook(self.store)
+        from senti.environment import EnvironmentMonitor, register_environment_tools
+        checks = [self.tasks.due_insights]
+        if getattr(self, "productivity", None) is not None:
+            checks.append(self.productivity.due_reminders)
+        self.environment = EnvironmentMonitor(self.store, event_sink=event_sink,
+                                              interval=self.settings.observe_interval_seconds,
+                                              extra_checks=checks)
+        if registry is None:
+            register_environment_tools(self.registry, self.environment)
         self.approval_handler = approval_handler
         self.event_sink = event_sink
         self._system_override = system_prompt
@@ -119,6 +128,10 @@ class SentiHost:
             register_app_tools(self.registry, self.store)
         from senti.tools.task_tools import register_task_tools
         self.tasks = register_task_tools(self.registry, self.store, self.settings)
+        from senti.tools.productivity_tools import register_productivity_tools
+        self.productivity = register_productivity_tools(self.registry, self.store, self.settings)
+        from senti.tools.browser_tools import register_browser_tools
+        register_browser_tools(self.registry, self.store, self.settings)
         from senti.tools.simulations import attach_simulations
         attach_simulations(self.registry)
 
@@ -450,7 +463,7 @@ class SentiHost:
             return session
 
     def _reset_session_if_full(self, conversation: str, session: "_Session") -> "_Session":
-        if session.context_tokens < int(self.settings.context_tokens * 0.8):
+        if session.context_tokens < int(self.settings.context_tokens * 0.8) and len(session.messages) < 300:
             return session
         with self._sessions_lock:
             self._sessions.pop(conversation, None)
@@ -484,6 +497,20 @@ class SentiHost:
             session.context_tokens = (response.prompt_tokens or 0) + (response.completion_tokens or 0)
         return {"status": "primed", "conversation_id": conversation,
                 "seconds": round(time.perf_counter() - started, 1)}
+
+    def start_environment_monitor(self) -> bool:
+        """Begin bounded background observation (opt-out with SENTI_OBSERVE=false)."""
+        if not self.settings.observe_environment:
+            return False
+        self.environment.start()
+        return True
+
+    def list_insights(self, *, status: str = "open") -> list[dict[str, Any]]:
+        """Console facade: proactive insights."""
+        return self.environment.insights(status=status)
+
+    def dismiss_insight(self, insight_id: str) -> bool:
+        return self.environment.dismiss(insight_id)
 
     def list_tasks(self, *, include_done: bool = False) -> list[dict[str, Any]]:
         """Console facade: tracked objectives."""

@@ -369,6 +369,60 @@
     try { return JSON.stringify(payload); } catch (_) { return String(payload); }
   }
 
+  async function loadInsights() {
+    try {
+      const res = await api("GET", "/api/insights");
+      const list = $("insight-list");
+      list.replaceChildren();
+      for (const ins of res.insights || []) {
+        const li = el("li", "mem-item insight " + (ins.severity || "info"));
+        li.appendChild(el("span", "mem-meta", (ins.severity || "info") + " · " + (ins.source || "environment")));
+        const investigate = el("button", "ghost-btn small", "Investigate");
+        investigate.type = "button";
+        investigate.title = "Ask SENTI to look into this (it decides which checks to run)";
+        investigate.addEventListener("click", () => {
+          $("input").value = "Investigate this alert: " + ins.title + " - " + ins.detail;
+          send();
+        });
+        const dismiss = el("button", "forget-btn", "Dismiss");
+        dismiss.type = "button";
+        dismiss.addEventListener("click", async () => {
+          try { await api("POST", "/api/insights/" + encodeURIComponent(ins.insight_id) + "/dismiss", {}); }
+          catch (err) { /* already closed */ }
+          loadInsights();
+        });
+        li.append(investigate, dismiss);
+        li.appendChild(el("div", "mem-body", ins.title + " — " + ins.detail));
+        list.appendChild(li);
+      }
+      const count = list.children.length;
+      $("insight-empty").hidden = count > 0;
+      $("insight-count").textContent = String(count);
+      $("insight-count").classList.toggle("hot", count > 0);
+    } catch (err) {
+      $("insight-empty").hidden = false;
+      $("insight-empty").textContent = "Insights unavailable: " + err.message;
+    }
+  }
+
+  async function loadTasks() {
+    try {
+      const res = await api("GET", "/api/tasks");
+      const list = $("task-list");
+      list.replaceChildren();
+      for (const t of res.tasks || []) {
+        const li = el("li", "mem-item");
+        li.appendChild(el("span", "mem-meta", t.status + (t.due_at ? " · due " + t.due_at : "")));
+        li.appendChild(el("div", "mem-body", t.title + (t.notes && t.notes.length ? " — " + t.notes[t.notes.length - 1].note : "")));
+        list.appendChild(li);
+      }
+      $("task-empty").hidden = list.children.length > 0;
+    } catch (err) {
+      $("task-empty").hidden = false;
+      $("task-empty").textContent = "Tasks unavailable: " + err.message;
+    }
+  }
+
   async function loadMemories() {
     const ns = $("mem-ns").value;
     try {
@@ -470,6 +524,15 @@
             ev.reason && ev.reason !== "operator" ? "Reason: " + ev.reason : "", ev.ts);
         }
         break;
+      case "insight":
+        timeline(ev.severity === "warning" || ev.severity === "critical" ? "warn" : "info",
+          "Insight " + (ev.status || "open"), ev.title + (ev.detail ? " — " + ev.detail : ""), ev.ts);
+        loadInsights();
+        break;
+      case "task":
+        timeline("mem", "Task " + (ev.action || "updated"), ev.title + " (" + ev.status + ")", ev.ts);
+        loadTasks();
+        break;
       case "memory":
         timeline("mem", "Memory " + (ev.action || "event") + (ev.count != null ? " (" + ev.count + ")" : ""), ev.summary, ev.ts);
         if (ev.action === "learned" || ev.action === "forgotten") loadMemories();
@@ -552,6 +615,8 @@
     connect();
     loadManifest();
     loadMemories();
+    loadInsights();
+    loadTasks();
     input.focus();
   }
 

@@ -43,7 +43,7 @@ class ChatMessage(BaseModel):
 
 class ModelRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    messages: list[ChatMessage] = Field(min_length=1, max_length=32)
+    messages: list[ChatMessage] = Field(min_length=1, max_length=400)
     tools: list[dict[str, Any]] = Field(default_factory=list, max_length=80)
     timeout_seconds: float = Field(default=90.0, ge=1.0, le=300.0)
     max_output_tokens: int = Field(default=700, ge=32, le=4096)

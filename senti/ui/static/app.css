@@ -385,3 +385,9 @@ body[data-state="completed"] .core-ring.r1 { animation-duration: 14s; }
   .core-orbit, .core-scan { display: none; }
   .typing i { opacity: .7; }
 }
+
+/* Proactive insights */
+.mem-item.insight { border-left: 3px solid var(--accent, #6cf); }
+.mem-item.insight.warning { border-left-color: var(--warn, #f5b942); }
+.mem-item.insight.critical { border-left-color: var(--bad, #ff5c6c); }
+.mem-item.insight .ghost-btn.small { margin-left: auto; margin-right: 6px; }

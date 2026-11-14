@@ -53,6 +53,8 @@ class SentiSettings:
     persist_conversations: bool = True
     learn_from_outcomes: bool = True
     include_window_titles: bool = False
+    observe_environment: bool = True
+    observe_interval_seconds: float = 30.0
 
     @property
     def think(self) -> bool:
@@ -80,6 +82,8 @@ class SentiSettings:
             persist_conversations=_flag("SENTI_PERSIST_CONVERSATIONS", "true"),
             learn_from_outcomes=_flag("SENTI_LEARN", "true"),
             include_window_titles=_flag("SENTI_INCLUDE_WINDOW_TITLES", "false"),
+            observe_environment=_flag("SENTI_OBSERVE", "true"),
+            observe_interval_seconds=float(os.environ.get("SENTI_OBSERVE_INTERVAL", "30")),
         )
 
     def validate(self) -> None:
@@ -103,5 +107,7 @@ class SentiSettings:
             raise ValueError("temperature must be between 0 and 2")
         if self.think_mode not in {"auto", "on", "off"}:
             raise ValueError("think_mode must be auto, on or off")
+        if not 5 <= self.observe_interval_seconds <= 3600:
+            raise ValueError("observe_interval_seconds must be between 5 and 3600")
         if not self.embedding_model or len(self.embedding_model) > 128:
             raise ValueError("embedding model tag must contain 1 to 128 characters")

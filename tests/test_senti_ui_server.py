@@ -388,3 +388,38 @@ def test_main_module_has_no_shell_surface():
     import senti.__main__ as launcher
 
     assert callable(launcher.main) and callable(launcher.open_window)
+
+
+def test_insights_and_tasks_endpoints(env):
+    console, service, server = env
+    host = console.host
+    host.insights = [{"insight_id": "i1", "severity": "warning", "title": "Memory is running low",
+                      "detail": "95% used", "source": "environment", "suggestion": None, "status": "open"}]
+    host.list_insights = lambda: [i for i in host.insights if i["status"] == "open"]
+
+    def dismiss(insight_id):
+        for item in host.insights:
+            if item["insight_id"] == insight_id and item["status"] == "open":
+                item["status"] = "dismissed"
+                return True
+        return False
+
+    host.dismiss_insight = dismiss
+    host.list_tasks = lambda include_done=False: [{"task_id": "t1", "title": "Fix Wi-Fi", "status": "open",
+                                                   "notes": [], "due_at": None}]
+    status, payload, _ = request(server, "GET", "/api/insights")
+    assert status == 200 and payload["insights"][0]["title"] == "Memory is running low"
+    status, payload, _ = request(server, "POST", "/api/insights/i1/dismiss", {})
+    assert status == 200 and payload == {"dismissed": "i1"}
+    status, _, _ = request(server, "POST", "/api/insights/i1/dismiss", {})
+    assert status == 404
+    status, payload, _ = request(server, "GET", "/api/tasks")
+    assert status == 200 and payload["tasks"][0]["title"] == "Fix Wi-Fi"
+    status, _, _ = request(server, "GET", "/api/insights", token=False)
+    assert status == 401
+
+
+def test_insight_endpoints_degrade_when_host_lacks_monitor(env):
+    console, service, server = env
+    status, payload, _ = request(server, "GET", "/api/insights")
+    assert status == 200 and payload == {"insights": []}
