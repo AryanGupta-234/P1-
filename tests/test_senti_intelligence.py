@@ -187,9 +187,17 @@ def test_conversation_transcript_is_append_only_for_cache_reuse(tmp_path):
     host.chat("set level to 10", conversation_id=conversation)
     host.chat("thanks", conversation_id=conversation)
     first, second, third = fake.requests
-    # Every request starts with exactly the previous request's messages (an append-only prefix).
-    assert [m.model_dump() for m in second.messages[:len(first.messages)]] == [m.model_dump() for m in first.messages]
-    assert [m.model_dump() for m in third.messages[:len(second.messages)]] == [m.model_dump() for m in second.messages]
+
+    def dump(messages):
+        return [m.model_dump() for m in messages]
+
+    # Within a turn the transcript is strictly append-only (cache reuse between tool rounds).
+    assert dump(second.messages[:len(first.messages)]) == dump(first.messages)
+    # After the turn, its tool round-trip is collapsed to question -> final answer.
+    assert dump(third.messages[:len(first.messages)]) == dump(first.messages)
+    turn = third.messages[len(first.messages) - 1:]
+    assert [m.role for m in turn] == ["user", "assistant", "user"]
+    assert not any(m.tool_calls for m in third.messages) and all(m.role != "tool" for m in third.messages)
     assert first.tools == second.tools == third.tools
 
 
@@ -218,3 +226,28 @@ def test_common_mutations_get_current_to_intended_previews(monkeypatch, tmp_path
     assert preview["simulation"] == "provider"
     assert preview["current_state"]["volume_percent"] == 72
     assert preview["intended_state"] == {"volume_percent": 30}
+
+
+def test_catalog_tools_are_reachable_through_senti_invoke_with_full_policy(tmp_path):
+    from senti.runtime import SentiHost as Host
+    seen = {}
+    registry = CapabilityRegistry()
+    for i in range(30):  # large registry -> compact catalog mode
+        registry.register(ToolDefinition(f"senti_probe_{i}", f"probe number {i}", {"type": "object"},
+                                         "read_only", lambda args: {"summary": "ok"}))
+    registry.register(ToolDefinition("senti_set_level", "Set a level", LEVEL_SCHEMA, "low",
+                                     lambda args: {"summary": f"level {args['level']}", "verified": True}))
+
+    def approve(name, arguments, risk, preview):
+        seen["name"], seen["arguments"] = name, arguments
+        return True
+
+    fake = ScriptedOllama(_call("senti_invoke", tool="senti_set_level", arguments={"level": 9}))
+    host = Host(settings=SentiSettings(), ollama=fake, store=UnifiedDataStore(tmp_path / "s.sqlite3"),
+                registry=registry, approval_handler=approve)
+    result = host.chat("set level 9")
+    offered = {t["function"]["name"] for t in fake.requests[0].tools}
+    assert "senti_invoke" in offered and len(offered) <= Host.FULL_SCHEMA_LIMIT
+    assert "senti_set_level(level)" in fake.requests[0].messages[0].content  # catalog line
+    assert seen == {"name": "senti_set_level", "arguments": {"level": 9}}  # real tool hit approval
+    assert result["tool_events"][0]["tool"] == "senti_set_level"

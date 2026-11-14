@@ -90,7 +90,7 @@ def list_processes(limit: int = 15, sort_by: str = "memory", *, sample_seconds: 
         if sort_by == "cpu":
             entry["cpu_percent"] = round(entry["cpu_percent"] + (row.get("cpu_percent") or 0), 1)
     app_key = (lambda a: -(a.get("cpu_percent") or 0)) if sort_by == "cpu" else (lambda a: -a["memory_mb"])
-    top_apps = sorted(apps.values(), key=app_key)[:min(limit, 10)]
+    top_apps = sorted(apps.values(), key=app_key)[:min(limit, 8)]
     vm = psutil.virtual_memory()
     system = {"total_gb": round(vm.total / 1_073_741_824, 1), "used_percent": vm.percent,
               "available_gb": round(vm.available / 1_073_741_824, 1)}
@@ -100,7 +100,7 @@ def list_processes(limit: int = 15, sort_by: str = "memory", *, sample_seconds: 
                   f"{lead['memory_mb']} MB)." if lead else ""))
     return {"summary": summary, "system_memory": system,
             "note": "Entries marked senti_component are SENTI's own runtime/model engine; closing them stops SENTI.", "top_applications": top_apps,
-            "processes": rows[:min(limit, 8)], "count": len(rows), "sorted_by": sort_by,
+            "processes": rows[:min(limit, 5)], "count": len(rows), "sorted_by": sort_by,
             "observed_at": datetime.now(timezone.utc).isoformat(), "source": "SENTI/psutil", "verified": True}
 
 

@@ -284,6 +284,45 @@ class UnifiedDataStore:
             for row in rows
         ]
 
+    def get_memory(self, memory_id: str) -> dict[str, Any] | None:
+        if not isinstance(memory_id, str) or not 1 <= len(memory_id) <= 64:
+            raise ValueError("memory_id is invalid")
+        with self.connect() as db:
+            row = db.execute(
+                "SELECT memory_id, namespace, memory_type, payload_json, source, sensitivity, confidence, "
+                "expires_at, created_at, updated_at, version FROM memories WHERE memory_id=?", (memory_id,),
+            ).fetchone()
+        return {**dict(row), "payload": json.loads(row["payload_json"])} if row else None
+
+    def update_memory(self, memory_id: str, *, payload: dict[str, Any], reason: str,
+                      confidence: float | None = None) -> dict[str, Any]:
+        """Correct a memory in place, keeping the previous payload as provenance.
+
+        The prior value is preserved under ``payload["_previous"]`` (one level, bounded) and
+        the change journal records an ``update``; ``version`` increases by one.
+        """
+        if not isinstance(reason, str) or not 1 <= len(reason.strip()) <= 300:
+            raise ValueError("a correction reason of 1 to 300 characters is required")
+        if confidence is not None and (isinstance(confidence, bool) or not 0.0 <= confidence <= 1.0):
+            raise ValueError("confidence must be between 0 and 1")
+        if not isinstance(payload, dict) or "_previous" in payload:
+            raise ValueError("payload must be an object without a _previous field")
+        current = self.get_memory(memory_id)
+        if current is None:
+            raise ValueError("No memory matched that identifier.")
+        previous = {k: v for k, v in current["payload"].items() if k != "_previous"}
+        corrected = {**payload, "_previous": {"payload": previous, "reason": reason.strip(),
+                                              "corrected_at": utc_now()}}
+        payload_json = self._validate_memory_payload(corrected)
+        with self._lock, self.connect() as db:
+            db.execute(
+                "UPDATE memories SET payload_json=?, confidence=COALESCE(?, confidence), updated_at=?, "
+                "version=version+1, source=? WHERE memory_id=?",
+                (payload_json, confidence, utc_now(), "user_correction", memory_id),
+            )
+            self._change(db, "memory", memory_id, "update")
+        return self.get_memory(memory_id) or {}
+
     def forget_memory(self, memory_id: str) -> bool:
         if not isinstance(memory_id, str) or not 1 <= len(memory_id) <= 64:
             raise ValueError("memory_id is invalid")
@@ -373,6 +412,15 @@ class UnifiedDataStore:
                 "WHERE sequence>? ORDER BY sequence LIMIT ?", (max(0, after_sequence), limit),
             ).fetchall()
         return [dict(row) for row in rows]
+
+    def tool_usage_counts(self, *, limit: int = 10) -> list[tuple[str, int]]:
+        """Most frequently dispatched capabilities, from SENTI's own audit trail."""
+        with self.connect() as db:
+            rows = db.execute(
+                "SELECT json_extract(payload_json, '$.tool') AS tool, COUNT(*) AS n FROM audit_events "
+                "WHERE event_type='tool_dispatch' GROUP BY tool ORDER BY n DESC LIMIT ?", (limit,),
+            ).fetchall()
+        return [(row["tool"], int(row["n"])) for row in rows if row["tool"]]
 
     def append_audit(self, event_type: str, payload: dict[str, Any]) -> str:
         event_id = str(uuid4())

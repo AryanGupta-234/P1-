@@ -35,6 +35,23 @@ def _forget_memory(store, memory_id: str) -> dict[str, Any]:
     }
 
 
+def _update_memory(store, args: dict[str, Any]) -> dict[str, Any]:
+    updated = store.update_memory(args["memory_id"], payload=args["payload"], reason=args["reason"],
+                                  confidence=args.get("confidence"))
+    return {"summary": f"Memory corrected (now version {updated.get('version')}); the previous value is kept "
+                       "as provenance.", "memory_id": updated.get("memory_id"),
+            "version": updated.get("version"), "verified": True}
+
+
+def _simulate_memory_update(store, args: dict[str, Any]) -> dict[str, Any]:
+    current = store.get_memory(args["memory_id"])
+    if current is None:
+        raise ValueError("No memory matched that identifier.")
+    return {"current_state": {k: v for k, v in current["payload"].items() if k != "_previous"},
+            "intended_state": args["payload"], "effect": f"Corrects this memory: {args['reason']}",
+            "recovery": "The previous value is stored with the memory and can be restored."}
+
+
 def register_phase1_tools(registry: CapabilityRegistry, store) -> None:
     """Register native diagnostics, power control and explicit user-directed memory tools."""
     registry.register(ToolDefinition(
@@ -107,6 +124,20 @@ def register_phase1_tools(registry: CapabilityRegistry, store) -> None:
             ),
             "verified": True,
         },
+        available=lambda: store.integrity_check(),
+    ))
+    registry.register(ToolDefinition(
+        name="senti_update_memory",
+        description="Correct one existing SENTI memory by id when sir says something remembered is wrong or outdated; keeps the previous value as provenance.",
+        parameters=_object({
+            "memory_id": {"type": "string", "minLength": 1, "maxLength": 64},
+            "payload": {"type": "object"},
+            "reason": {"type": "string", "minLength": 1, "maxLength": 300},
+            "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+        }, ["memory_id", "payload", "reason"]),
+        risk="controlled",
+        handler=lambda args: _update_memory(store, args),
+        simulate=lambda args: _simulate_memory_update(store, args),
         available=lambda: store.integrity_check(),
     ))
     registry.register(ToolDefinition(

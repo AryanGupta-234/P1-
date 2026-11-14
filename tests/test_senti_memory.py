@@ -54,3 +54,34 @@ def test_memory_store_expiration_and_runtime_flags(tmp_path):
     store.set_runtime_flag("emergency_stop", True)
     assert store.get_runtime_flag("emergency_stop", False) is True
     assert store.integrity_check()
+
+
+def test_memory_correction_keeps_provenance_and_bumps_version(tmp_path):
+    import pytest
+    store = UnifiedDataStore(tmp_path / "senti.sqlite3")
+    memory_id = store.add_memory(namespace="preferences", memory_type="preference",
+                                 payload={"theme": "light"}, source="explicit_user_request")
+    updated = store.update_memory(memory_id, payload={"theme": "dark"}, reason="sir prefers dark mode now")
+    assert updated["payload"]["theme"] == "dark"
+    assert updated["payload"]["_previous"]["payload"] == {"theme": "light"}
+    assert updated["version"] == 2 and updated["source"] == "user_correction"
+    with pytest.raises(ValueError):
+        store.update_memory(memory_id, payload={"theme": "x"}, reason="")
+    with pytest.raises(ValueError):
+        store.update_memory("missing", payload={"theme": "x"}, reason="r")
+
+
+def test_update_memory_tool_is_simulated_with_current_value(tmp_path):
+    from senti.tools.phase1_tools import register_phase1_tools
+    from senti.tools.registry import CapabilityRegistry
+    store = UnifiedDataStore(tmp_path / "senti.sqlite3")
+    memory_id = store.add_memory(namespace="personal", memory_type="fact",
+                                 payload={"city": "Delhi"}, source="explicit_user_request")
+    registry = CapabilityRegistry()
+    register_phase1_tools(registry, store)
+    preview = registry.simulate("senti_update_memory", {"memory_id": memory_id, "payload": {"city": "Lucknow"},
+                                                        "reason": "moved"})
+    assert preview["current_state"] == {"city": "Delhi"} and preview["intended_state"] == {"city": "Lucknow"}
+    result = registry.dispatch("senti_update_memory", {"memory_id": memory_id, "payload": {"city": "Lucknow"},
+                                                       "reason": "moved"}, approval=lambda *a: True)
+    assert result.status == "succeeded" and store.get_memory(memory_id)["payload"]["city"] == "Lucknow"
