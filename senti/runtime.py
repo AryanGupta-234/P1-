@@ -626,7 +626,8 @@ class SentiHost:
                 "prompt_eval_seconds": round(response.prompt_eval_seconds or 0, 2),
                 "generation_seconds": round(response.generation_seconds or 0, 2),
                 "completion_tokens": response.completion_tokens, "tool_calls": len(response.tool_calls)})
-            session.context_tokens += (response.prompt_tokens or 0) + (response.completion_tokens or 0)
+            # Ollama reports the full prompt length per call, so the latest call is the context size.
+            session.context_tokens = (response.prompt_tokens or 0) + (response.completion_tokens or 0)
 
         def finish(answer: str, *, state: str = "completed", extra: dict | None = None,
                    in_transcript: bool = False) -> dict[str, Any]:

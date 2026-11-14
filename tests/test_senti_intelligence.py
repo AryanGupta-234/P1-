@@ -251,3 +251,18 @@ def test_catalog_tools_are_reachable_through_senti_invoke_with_full_policy(tmp_p
     assert "senti_set_level(level)" in fake.requests[0].messages[0].content  # catalog line
     assert seen == {"name": "senti_set_level", "arguments": {"level": 9}}  # real tool hit approval
     assert result["tool_events"][0]["tool"] == "senti_set_level"
+
+
+def test_session_is_not_reset_while_context_is_within_budget(tmp_path):
+    # Ollama reports the *total* prompt length on every call; summing them caused false resets.
+    big = ModelResponse(model="SENTI", content="Fine, sir.", elapsed_seconds=0.01, prompt_tokens=6_000,
+                        completion_tokens=40)
+    fake = ScriptedOllama(big, big, big, big)
+    host = _host(tmp_path, fake)
+    conversation = host.new_conversation()
+    for text in ("one", "two", "three", "four"):
+        host.chat(text, conversation_id=conversation)
+    # every request extends the previous one: no reset happened
+    for earlier, later in zip(fake.requests, fake.requests[1:]):
+        assert [m.model_dump() for m in later.messages[:len(earlier.messages)]] == \
+               [m.model_dump() for m in earlier.messages]
