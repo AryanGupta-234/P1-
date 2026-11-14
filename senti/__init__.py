@@ -5,4 +5,4 @@ from senti.host import SentiService
 from senti.runtime import SentiHost
 
 __all__ = ["SentiHost", "SentiService", "SentiSettings"]
-__version__ = "0.1.0"
+__version__ = "0.2.0"

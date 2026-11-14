@@ -1,6 +1,7 @@
-"""Lifecycle wrapper for embedding SENTI in the future independent Windows desktop application."""
+"""Lifecycle wrapper used by the SENTI desktop console and other embedders."""
 from __future__ import annotations
 
+from senti.events import EventSink
 from senti.runtime import SentiHost
 from senti.tools.registry import ApprovalHandler
 
@@ -9,14 +10,18 @@ class SentiService:
     """In-process facade. The future desktop UI can provide an explicit approval callback."""
 
     def __init__(self, host: SentiHost | None = None, *,
-                 approval_handler: ApprovalHandler | None = None):
-        self.host = host or SentiHost(approval_handler=approval_handler)
+                 approval_handler: ApprovalHandler | None = None,
+                 event_sink: EventSink | None = None):
+        self.host = host or SentiHost(approval_handler=approval_handler, event_sink=event_sink)
         self._started = False
 
-    def start(self) -> dict:
+    def start(self, *, warm_up: bool = True) -> dict:
         self.host.ensure_model_provider()
         manifest = self.host.runtime_manifest()
         self._started = True
+        if warm_up and manifest.get("model_installed"):
+            import threading
+            threading.Thread(target=self.host.warm_up, name="senti-warmup", daemon=True).start()
         return manifest
 
     def send_message(self, message: str, *, conversation_id: str | None = None) -> dict:

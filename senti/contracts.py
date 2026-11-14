@@ -27,7 +27,8 @@ class ChatMessage(BaseModel):
     role: Literal["system", "user", "assistant", "tool"]
     content: str = Field(default="", max_length=40_000)
     tool_name: str | None = Field(default=None, max_length=100)
-    tool_calls: list[ToolCall] = Field(default_factory=list, max_length=2)
+    tool_calls: list[ToolCall] = Field(default_factory=list, max_length=4)
+    thinking: str = Field(default="", max_length=20_000)
 
     @model_validator(mode="after")
     def validate_tool_message(self) -> "ChatMessage":
@@ -47,16 +48,21 @@ class ModelRequest(BaseModel):
     timeout_seconds: float = Field(default=90.0, ge=1.0, le=300.0)
     max_output_tokens: int = Field(default=700, ge=32, le=4096)
     temperature: float = Field(default=0.25, ge=0.0, le=2.0)
+    think: bool = False
+    context_tokens: int | None = Field(default=None, ge=2048, le=131072)
 
 
 class ModelResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
     model: str
     content: str = Field(default="", max_length=40_000)
-    tool_calls: list[ToolCall] = Field(default_factory=list, max_length=2)
+    tool_calls: list[ToolCall] = Field(default_factory=list, max_length=4)
+    thinking: str = Field(default="", max_length=20_000)
     elapsed_seconds: float = Field(ge=0)
     prompt_tokens: int | None = Field(default=None, ge=0)
     completion_tokens: int | None = Field(default=None, ge=0)
+    prompt_eval_seconds: float | None = Field(default=None, ge=0)
+    generation_seconds: float | None = Field(default=None, ge=0)
 
 
 class ToolResult(BaseModel):

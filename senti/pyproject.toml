@@ -4,11 +4,14 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "senti-assistant"
-version = "0.1.0"
+version = "0.2.0"
 description = "Standalone local-first Windows assistant runtime"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = ["pydantic>=2.7,<3", "psutil>=5.9,<8"]
+
+[project.scripts]
+senti = "senti.__main__:main"
 
 [project.optional-dependencies]
 dev = ["pytest>=9.0.3,<10", "pytest-cov>=5,<7", "ruff>=0.5,<1"]
@@ -17,12 +20,18 @@ windows = [
   "pywin32>=306,<400",
   "pycaw>=20260927",
   "send2trash>=2.1.0,<3",
-  "winrt-Windows.Devices.Radios>=3.2.1,<5"
+  "winrt-Windows.Devices.Radios>=3.2.1,<5",
+  "winrt-Windows.Foundation>=3.2.1,<5",
+  "winrt-Windows.ApplicationModel>=3.2.1,<5",
+  "winrt-Windows.Management.Deployment>=3.2.1,<5"
 ]
 
 [tool.setuptools]
-packages = ["senti", "senti.tools", "senti.windows"]
-package-dir = { "senti" = ".", "senti.tools" = "tools", "senti.windows" = "windows" }
+packages = ["senti", "senti.tools", "senti.windows", "senti.ui"]
+package-dir = { "senti" = ".", "senti.tools" = "tools", "senti.windows" = "windows", "senti.ui" = "ui" }
+
+[tool.setuptools.package-data]
+"senti.ui" = ["static/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["../tests"]

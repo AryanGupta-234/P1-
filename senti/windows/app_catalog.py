@@ -1,11 +1,16 @@
 """Metadata-only installed application discovery; never reads user document contents."""
 from __future__ import annotations
+
 import os
+import re
 import threading
 import time
+from collections.abc import Callable, Iterable, Iterator, Sequence
 from dataclasses import dataclass
+from difflib import SequenceMatcher
 from pathlib import Path
-from typing import Iterator
+from typing import Any
+
 
 @dataclass(frozen=True, slots=True)
 class AppRecord:
@@ -194,8 +199,159 @@ class AppDiscovery:
 
     @staticmethod
     def resolve(records: list[AppRecord], name: str) -> list[AppRecord]:
-        query = name.casefold().strip()
-        if not query:
+        """Return the best-ranked records: the exact tier when one exists, else fuzzy matches."""
+        ranked = rank_candidates(name, records, names=record_names,
+                                 publisher=lambda r: r.publisher, limit=50)
+        if not ranked:
             return []
-        exact = [r for r in records if r.display_name.casefold() == query or any(a.casefold() == query for a in r.aliases)]
-        return exact or [r for r in records if query in r.display_name.casefold() or any(query in a.casefold() for a in r.aliases)]
+        exact = [c.item for c in ranked if c.score >= EXACT_SCORE]
+        return exact or [c.item for c in ranked]
+
+
+def record_names(record: Any) -> list[str]:
+    names = [getattr(record, "display_name", "") or ""]
+    names.extend(getattr(record, "aliases", ()) or ())
+    path = getattr(record, "executable_path", None)
+    if path:
+        names.append(Path(path).stem)
+    return [n for n in names if n]
+
+
+# ---------------------------------------------------------------------------
+# Dynamic ranked matching shared by launch and uninstall resolution. No app lists:
+# every signal (tokens, initials, fuzzy ratio, publisher, aliases) comes from metadata.
+# ---------------------------------------------------------------------------
+
+EXACT_SCORE = 0.97
+MIN_SCORE = 0.55
+AMBIGUITY_MARGIN = 0.1
+_NOISE_TOKENS = {"the", "app", "application", "program", "software", "x64", "x86", "64", "32",
+                 "bit", "64bit", "32bit", "edition", "for", "windows", "desktop", "version"}
+_TOKEN_RE = re.compile(r"[^\w]+", re.UNICODE)
+_VERSION_RE = re.compile(r"\bv?\d+(?:\.\d+)+\b")
+
+
+def _tokens(text: str) -> list[str]:
+    lowered = str(text).casefold().replace("_", " ")
+    raw = [t for t in _TOKEN_RE.split(_VERSION_RE.sub(" ", lowered)) if t]
+    kept = [t for t in raw if t not in _NOISE_TOKENS]
+    return kept or [t for t in _TOKEN_RE.split(lowered) if t]
+
+
+def edit_distance(a: str, b: str, limit: int = 3) -> int:
+    """Optimal-string-alignment distance (Damerau-Levenshtein with adjacent transpositions)."""
+    if abs(len(a) - len(b)) > limit:
+        return limit + 1
+    prev2: list[int] = []
+    prev = list(range(len(b) + 1))
+    for i in range(1, len(a) + 1):
+        current = [i] + [0] * len(b)
+        for j in range(1, len(b) + 1):
+            cost = 0 if a[i - 1] == b[j - 1] else 1
+            current[j] = min(prev[j] + 1, current[j - 1] + 1, prev[j - 1] + cost)
+            if i > 1 and j > 1 and a[i - 1] == b[j - 2] and a[i - 2] == b[j - 1]:
+                current[j] = min(current[j], prev2[j - 2] + 1)
+        prev2, prev = prev, current
+    return prev[-1]
+
+
+def _token_match(query_token: str, name_tokens: list[str]) -> float:
+    best = 0.0
+    for index, token in enumerate(name_tokens):
+        if query_token == token:
+            return 1.0
+        if len(query_token) >= 2 and token.startswith(query_token):
+            best = max(best, 0.75 + 0.2 * len(query_token) / len(token))
+        if len(query_token) >= 4 and abs(len(query_token) - len(token)) <= 2:
+            # Typos: one edit (incl. transposition) for short words, two for long ones.
+            allowed = 1 if len(query_token) < 8 else 2
+            distance = edit_distance(query_token, token, allowed)
+            if distance <= allowed:
+                best = max(best, 0.85 - 0.1 * (distance - 1))
+        # Initials of consecutive tokens: "vs" -> "visual studio".
+        if 2 <= len(query_token) <= len(name_tokens) - index:
+            initials = "".join(t[0] for t in name_tokens[index:index + len(query_token)])
+            if initials == query_token:
+                best = max(best, 0.9)
+    return best
+
+
+def name_score(query: str, name: str, publisher: str | None = None) -> float:
+    q_tokens, n_tokens = _tokens(query), _tokens(name)
+    publisher_tokens = set(_tokens(publisher)) if publisher else set()
+    if not q_tokens or not n_tokens:
+        return 0.0
+    q_compact, n_compact = "".join(q_tokens), "".join(n_tokens)
+    if q_tokens == n_tokens:
+        return 1.0
+    if q_compact == n_compact:
+        return 0.98
+    per_token = [_token_match(t, n_tokens) for t in q_tokens]
+    matched = sum(per_token) / len(q_tokens)
+    if min(per_token) == 0.0:
+        matched *= 0.6
+    # Name coverage: how much of the candidate name the query (or the publisher) explains.
+    explained = sum(1 for t in n_tokens if t in publisher_tokens
+                    or any(t == q or t.startswith(q) for q in q_tokens))
+    initials_cover = sum(len(q) for q in q_tokens if len(q) >= 2 and _token_match(q, n_tokens) == 0.9)
+    coverage = min(1.0, (explained + initials_cover) / len(n_tokens))
+    token_score = matched * (0.7 + 0.25 * coverage)
+    fuzzy = SequenceMatcher(None, q_compact, n_compact).ratio() * 0.85
+    return round(min(0.96, max(token_score, fuzzy)), 4)
+
+
+@dataclass(frozen=True, slots=True)
+class Candidate:
+    item: Any
+    score: float
+    matched_name: str
+    reason: str
+
+
+def rank_candidates(query: str, items: Iterable[Any], *, names: Callable[[Any], Sequence[str]],
+                    publisher: Callable[[Any], str | None] | None = None,
+                    limit: int = 10, min_score: float = MIN_SCORE) -> list[Candidate]:
+    query = str(query or "").strip()
+    if not query:
+        return []
+    q_tokens = set(_tokens(query))
+    ranked: list[Candidate] = []
+    for item in items:
+        best, best_name, reason = 0.0, "", "fuzzy"
+        pub = publisher(item) if publisher else None
+        for index, candidate_name in enumerate(names(item)):
+            score = name_score(query, candidate_name, pub)
+            if index > 0:
+                score *= 0.98  # aliases rank just below an equal display-name match
+            if score > best:
+                best, best_name = score, candidate_name
+                reason = ("exact" if score >= EXACT_SCORE else "tokens") if index == 0 else "alias"
+        if pub and q_tokens:
+            pub_tokens = set(_tokens(pub))
+            overlap = q_tokens & pub_tokens
+            if overlap:
+                if best >= MIN_SCORE:
+                    best = min(1.0, best + 0.05)
+                elif overlap == q_tokens:
+                    best, best_name, reason = 0.5, pub, "publisher"
+        if best >= min_score:
+            ranked.append(Candidate(item, round(best, 4), best_name, reason))
+    ranked.sort(key=lambda c: (-c.score, len(c.matched_name)))
+    return ranked[:max(1, limit)]
+
+
+def pick_unambiguous(ranked: list[Candidate], *, same_target: Callable[[Any, Any], bool] | None = None
+                     ) -> Candidate | None:
+    """Return the single winner, or None when the caller must ask the user to choose."""
+    if not ranked or ranked[0].score < 0.6:
+        return None
+    top = ranked[0]
+    rivals = [c for c in ranked[1:] if not (same_target and same_target(top.item, c.item))]
+    if not rivals:
+        return top
+    second = rivals[0]
+    if top.score >= EXACT_SCORE and second.score < EXACT_SCORE:
+        return top
+    if top.score - second.score >= AMBIGUITY_MARGIN:
+        return top
+    return None

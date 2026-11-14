@@ -50,7 +50,7 @@ def test_runtime_manifest_tool_returns_compact_host_authoritative_inventory(tmp_
     result = host.registry.dispatch("senti_get_runtime_manifest", {})
 
     assert result.status == "succeeded"
-    assert result.data["manifest"]["think"] is False
+    assert result.data["manifest"]["think_mode"] == "auto"
     assert "installed_local_models" in result.data["manifest"]
     capabilities = result.data["manifest"]["capabilities"]
     assert any(item["name"] == "senti_get_process_details" for item in capabilities)

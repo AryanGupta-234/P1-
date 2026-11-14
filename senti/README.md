@@ -1,33 +1,14 @@
-# SENTI — Standalone Windows Assistant Runtime
+# senti
 
-SENTI is an independent, local-first Windows assistant. Its Python runtime calls the installed Ollama service through the loopback HTTP API; it does not invoke `ollama run`, CMD, PowerShell, or subprocesses to obtain model responses. Normal inference sends `think: false` explicitly from Python.
-
-## Runtime API
+The SENTI runtime package. See the [project README](../README.md) for features, setup and configuration.
 
 ```python
 from senti import SentiService
 
-assistant = SentiService()
-manifest = assistant.start()
-reply = assistant.send_message("Summarize my current system status")
+assistant = SentiService(approval_handler=my_approval, event_sink=print)
+assistant.start()                      # connects to Ollama and pre-loads the session in the background
+reply = assistant.send_message("What's using my RAM?")
 print(reply["response"])
-assistant.stop()
 ```
 
-The `SentiService` is an in-process API for a future independent Windows desktop client. Phase 1 does not ship the desktop UI. The host connects to `http://127.0.0.1:11434` by default, discovers installed models only, and never pulls one automatically. On Windows, it checks the API first and can launch the installed `ollama app.exe` directly using the Windows shell API if the API is unavailable and auto-start is enabled. It never invokes `ollama run`, CMD, PowerShell or a subprocess for model inference. The configured model tag defaults to `SENTI`.
-
-## Windows dependencies
-
-Install the project with its Windows extra to enable UI Automation, Win32/COM integration, Core Audio and Recycle Bin operations. Capabilities report unavailable when their provider is not present or the host is not running on Windows.
-
-## Data and privacy
-
-SENTI stores data under `%LOCALAPPDATA%\SENTI\senti.sqlite3` by default (override with `SENTI_DATA_DIR`). Conversation persistence is disabled by default; set `SENTI_PERSIST_CONVERSATIONS=true` to opt in. Window titles are not collected by default; set `SENTI_INCLUDE_WINDOW_TITLES=true` to opt in. Clipboard reads are explicit tool calls, never background collection. UIA omits Edit and Document values and blocks password controls.
-
-## Approvals
-
-Read-only operations can run when their provider is available. All mutating actions require an approval callback supplied by the host application. Without one, SENTI returns `approval_required` and makes no change. This source release intentionally does not include a GUI approval prompt.
-
-## Scope limitations
-
-The initial implementation includes registered Windows inventory, EXE and packaged-app discovery/launch, Settings and MMC navigation, process/window inventory, window management, bounded mouse/keyboard/text/drag input, UIA, audio/media, approved-root file operations, clipboard, DNS, adapter/DHCP controls, allowlisted service controls, brightness, scheduled tasks and Event Log metadata. It does not include kernel access, unrestricted shell execution, UAC/secure-desktop bypass, broad security-control changes, arbitrary driver installation, passive keylogging, or universal automation of every third-party application. A dispatched input or opened Settings page is not reported as verified application state.
+`approval_handler(tool_name, arguments, risk, preview) -> bool` is called for every state-changing action after it has been simulated; `event_sink(event)` receives the lifecycle events documented in `senti/events.py`.

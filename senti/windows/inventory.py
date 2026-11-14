@@ -29,25 +29,79 @@ def system_summary() -> dict[str, Any]:
         "observed_at": datetime.now(timezone.utc).isoformat(), "source": "SENTI/psutil"}
 
 
-def list_processes(limit: int = 100) -> dict[str, Any]:
+_SENTI_ENGINE_NAMES = {"ollama.exe", "ollama app.exe", "llama-server.exe"}
+
+
+def _is_senti_component(name: str, pid: int | None, own_pid: int) -> bool:
+    """SENTI's own runtime and local model engine (so it never advises closing itself)."""
+    return pid == own_pid or str(name).casefold() in _SENTI_ENGINE_NAMES
+
+
+def list_processes(limit: int = 15, sort_by: str = "memory", *, sample_seconds: float = 0.5) -> dict[str, Any]:
+    """Top live processes by memory or CPU, plus per-application totals and system memory.
+
+    CPU percentages come from a real short sample (two readings ``sample_seconds`` apart),
+    not the meaningless first-call value of 0.0. Rows are compact to keep model context small.
+    """
     _require_windows()
+    import time
+
     import psutil
     if isinstance(limit, bool) or not 1 <= limit <= 500:
         raise ValueError("limit must be between 1 and 500")
+    if sort_by not in {"memory", "cpu", "name"}:
+        raise ValueError("sort_by must be memory, cpu or name")
+    procs = []
+    for proc in psutil.process_iter(attrs=["pid", "name", "memory_info"]):
+        try:
+            if proc.info.get("pid") == 0:  # System Idle Process is idle time, not a consumer
+                continue
+            proc.cpu_percent(None)
+            procs.append(proc)
+        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+            continue
+    if sort_by == "cpu":
+        time.sleep(max(0.1, min(sample_seconds, 2.0)))
+    cores = psutil.cpu_count() or 1
+    own_pid = os.getpid()
     rows = []
-    for proc in psutil.process_iter(attrs=["pid", "name", "exe", "memory_info", "cpu_percent", "create_time"]):
+    for proc in procs:
         try:
             info = proc.info
             memory = info.get("memory_info")
-            rows.append({"pid": info.get("pid"), "name": info.get("name"), "executable": info.get("exe"),
-                "memory_rss_bytes": getattr(memory, "rss", None), "cpu_percent_sample": info.get("cpu_percent"),
-                "created_at": info.get("create_time")})
+            cpu = proc.cpu_percent(None) / cores if sort_by == "cpu" else None
+            name = info.get("name") or "(system)"
+            rows.append({"pid": info.get("pid"), "name": name,
+                         "memory_mb": round(getattr(memory, "rss", 0) / 1_048_576, 1),
+                         **({"senti_component": True} if _is_senti_component(name, info.get("pid"), own_pid) else {}),
+                         **({"cpu_percent": round(cpu, 1)} if cpu is not None else {})})
         except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
             continue
-        if len(rows) >= limit:
-            break
-    return {"processes": rows, "count": len(rows), "limit": limit,
-            "observed_at": datetime.now(timezone.utc).isoformat(), "source": "SENTI/psutil"}
+    key = {"memory": lambda r: -r["memory_mb"], "cpu": lambda r: -(r.get("cpu_percent") or 0),
+           "name": lambda r: str(r["name"]).casefold()}[sort_by]
+    rows.sort(key=key)
+    apps: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        entry = apps.setdefault(row["name"], {"name": row["name"], "processes": 0, "memory_mb": 0.0,
+                                              **({"senti_component": True} if row.get("senti_component") else {}),
+                                              **({"cpu_percent": 0.0} if sort_by == "cpu" else {})})
+        entry["processes"] += 1
+        entry["memory_mb"] = round(entry["memory_mb"] + row["memory_mb"], 1)
+        if sort_by == "cpu":
+            entry["cpu_percent"] = round(entry["cpu_percent"] + (row.get("cpu_percent") or 0), 1)
+    app_key = (lambda a: -(a.get("cpu_percent") or 0)) if sort_by == "cpu" else (lambda a: -a["memory_mb"])
+    top_apps = sorted(apps.values(), key=app_key)[:min(limit, 10)]
+    vm = psutil.virtual_memory()
+    system = {"total_gb": round(vm.total / 1_073_741_824, 1), "used_percent": vm.percent,
+              "available_gb": round(vm.available / 1_073_741_824, 1)}
+    lead = top_apps[0] if top_apps else None
+    summary = (f"{len(rows)} processes; RAM {system['used_percent']}% used, {system['available_gb']} GB free. "
+               + (f"Largest by {sort_by}: {lead['name']} ({lead['processes']} processes, "
+                  f"{lead['memory_mb']} MB)." if lead else ""))
+    return {"summary": summary, "system_memory": system,
+            "note": "Entries marked senti_component are SENTI's own runtime/model engine; closing them stops SENTI.", "top_applications": top_apps,
+            "processes": rows[:min(limit, 8)], "count": len(rows), "sorted_by": sort_by,
+            "observed_at": datetime.now(timezone.utc).isoformat(), "source": "SENTI/psutil", "verified": True}
 
 
 def list_windows(limit: int = 100, *, include_titles: bool = False) -> dict[str, Any]:

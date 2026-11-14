@@ -1,126 +1,108 @@
-"""Small, deterministic lexical router for task-relevant SENTI tool schemas.
+"""Meaning-based selection of task-relevant SENTI tool schemas.
 
-This is retrieval, not an intent classifier: it narrows the schema context by evidence
-in names, descriptions and typed parameter options. It never authorizes an operation.
+A 4B local model reasons best over a short tool list, so the host retrieves the tools whose
+meaning is closest to the request (local embeddings), falling back to a generic fuzzy
+lexical score. There is no hand-written vocabulary: what a tool is "about" comes only from
+its own name, description and parameter schema.
+
+This is retrieval, never authorization. The model can also ask for more tools at run time
+through ``senti_find_tools`` (see the runtime), so a missed retrieval is recoverable.
 """
 from __future__ import annotations
 
 import json
-import re
 from collections.abc import Iterable
+from dataclasses import dataclass, field
 
-_STOP_WORDS = {
-    "a", "an", "and", "are", "can", "could", "do", "does", "for", "from",
-    "give", "help", "i", "in", "is", "it", "me", "my", "of", "please",
-    "show", "tell", "that", "the", "this", "to", "what", "when", "where",
-    "which", "who", "with", "would", "you", "your",
-}
-
-_SYNONYMS = {
-    "wifi": {"wireless", "network", "adapter"},
-    "wireless": {"wifi", "network", "adapter"},
-    "internet": {"network", "connectivity", "dns"},
-    "connectivity": {"network", "internet", "dns"},
-    "running": {"process", "processes"},
-    "active": {"process", "processes", "window"},
-    "cpu": {"processor", "performance", "process"},
-    "ram": {"memory", "process"},
-    "memory": {"ram", "process"},
-    "disk": {"storage", "volume"},
-    "space": {"storage", "volume"},
-    "sound": {"audio", "volume"},
-    "volume": {"audio", "sound"},
-    "brightness": {"display", "screen"},
-    "screen": {"display", "brightness", "window"},
-    "app": {"application", "launch"},
-    "apps": {"application", "applications", "launch"},
-    "program": {"application", "launch"},
-    "programs": {"application", "launch"},
-    "bluetooth": {"settings", "device"},
-    "scheduler": {"scheduled", "task"},
-    "service": {"services"},
-    "update": {"updates", "hotfix", "windows"},
-    "pc": {"system", "hardware", "computer"},
-    "computer": {"system", "hardware", "pc"},
-    "laptop": {"system", "hardware", "device"},
-    "machine": {"system", "hardware", "device"},
-    "spec": {"specs", "hardware", "system"},
-    "specs": {"spec", "hardware", "system"},
-    "remember": {"memory", "save", "note"},
-    "forget": {"memory", "delete"},
-    "save": {"memory", "store"},
-    "note": {"memory", "save"},
-    "notes": {"memory", "search"},
-    "preference": {"preferences", "profile", "memory"},
-    "preferences": {"preference", "profile", "memory"},
-    "url": {"uri", "uris", "settings", "page"},
-    "urls": {"url", "uri", "settings", "page"},
-    "uri": {"url", "urls", "settings", "page"},
-    "uris": {"url", "urls", "settings", "page"},
-    "catalogue": {"catalog", "list", "settings", "pages"},
-    "catalog": {"catalogue", "list", "settings", "pages"},
-    "all": {"list", "catalogue", "catalog", "pages"},
-    "control": {"panel", "applet", "management"},
-    "applet": {"control", "panel", "legacy"},
-    "profile": {"preferences", "memory"},
-}
+from senti.semantic import Embedder, rank
 
 
-def _tokens(value: str) -> set[str]:
-    normalized = value.casefold().replace("wi-fi", "wifi").replace("wi fi", "wifi")
-    raw = set(re.findall(r"[a-z0-9]+", normalized))
-    result = {item for item in raw if len(item) > 1 and item not in _STOP_WORDS}
-    for token in tuple(result):
-        if token.endswith("ies") and len(token) > 5:
-            result.add(token[:-3] + "y")
-        elif token.endswith("s") and not token.endswith("ss") and len(token) > 4:
-            result.add(token[:-1])
-    return result
+@dataclass(slots=True)
+class ToolSelection:
+    schemas: list[dict]
+    method: str
+    top_score: float
+    scores: dict[str, float] = field(default_factory=dict)
+
+    @property
+    def operational(self) -> bool:
+        """True when the request clearly maps onto at least one capability."""
+        threshold = SEMANTIC_ACTION_THRESHOLD if self.method == "semantic" else LEXICAL_ACTION_THRESHOLD
+        return self.top_score >= threshold
 
 
-def _expand(query_tokens: set[str]) -> set[str]:
-    expanded = set(query_tokens)
-    for token in query_tokens:
-        expanded.update(_SYNONYMS.get(token, ()))
-    return expanded
+# Calibrated on nomic-embed-text with tool documents; lexical scores are overlap ratios.
+SEMANTIC_MIN_SCORE = 0.50
+SEMANTIC_ACTION_THRESHOLD = 0.58
+SEMANTIC_RELATIVE_FLOOR = 0.82
+LEXICAL_MIN_SCORE = 0.30
+LEXICAL_ACTION_THRESHOLD = 0.45
 
 
-def select_tool_schemas(
-    query: str,
-    schemas: Iterable[dict],
-    *,
-    limit: int = 18,
-) -> list[dict]:
-    """Return a stable, bounded set of task-relevant tool schemas.
+def tool_document(schema: dict) -> str:
+    function = schema.get("function", {}) if isinstance(schema, dict) else {}
+    if not isinstance(function, dict):
+        return ""
+    name = str(function.get("name", "")).removeprefix("senti_").replace("_", " ")
+    description = str(function.get("description", ""))
+    parameters = function.get("parameters", {})
+    hints: list[str] = []
+    if isinstance(parameters, dict):
+        for key, prop in (parameters.get("properties") or {}).items():
+            hints.append(str(key).replace("_", " "))
+            if isinstance(prop, dict) and isinstance(prop.get("enum"), list):
+                hints.extend(str(v).replace("_", " ").replace("-", " ") for v in prop["enum"][:40])
+    return f"{name}. {description} Parameters: {', '.join(hints)}" if hints else f"{name}. {description}"
 
-    Exact name matches carry the most weight, followed by descriptions and parameter
-    schemas/enums. When no useful match is found, no tools are sent to the model.
-    """
+
+def schema_name(schema: dict) -> str:
+    function = schema.get("function", {}) if isinstance(schema, dict) else {}
+    return str(function.get("name", "")) if isinstance(function, dict) else ""
+
+
+def rank_tool_schemas(query: str, schemas: Iterable[dict], *, limit: int = 12,
+                      embedder: Embedder | None = None,
+                      always_include: Iterable[str] = ()) -> ToolSelection:
     if not isinstance(query, str) or len(query) > 12_000:
         raise ValueError("query must be a string of at most 12000 characters")
     if isinstance(limit, bool) or not 1 <= limit <= 40:
         raise ValueError("tool schema limit must be between 1 and 40")
+    schemas = [s for s in schemas if isinstance(s, dict)]
+    pinned_names = set(always_include)
+    candidates = [s for s in schemas if schema_name(s) not in pinned_names]
+    pinned = [s for s in schemas if schema_name(s) in pinned_names]
+    if not query.strip() or not candidates:
+        return ToolSelection(schemas=pinned, method="none", top_score=0.0)
 
-    query_tokens = _expand(_tokens(query))
-    if not query_tokens:
-        return []
+    scores, method = rank(query, (tool_document(s) for s in candidates), embedder=embedder)
+    ordered = sorted(zip(scores, range(len(candidates)), candidates), key=lambda x: (-x[0], x[1]))
+    top = ordered[0][0] if ordered else 0.0
+    if method == "semantic":
+        floor = max(SEMANTIC_MIN_SCORE, top * SEMANTIC_RELATIVE_FLOOR)
+    else:
+        floor = LEXICAL_MIN_SCORE
+    chosen = [schema for score, _i, schema in ordered if score >= floor][:limit]
+    return ToolSelection(
+        schemas=chosen + pinned,
+        method=method,
+        top_score=round(top, 4),
+        scores={schema_name(s): round(score, 4) for score, _i, s in ordered[:limit]},
+    )
 
-    ranked: list[tuple[int, int, dict]] = []
-    for position, schema in enumerate(schemas):
+
+def select_tool_schemas(query: str, schemas: Iterable[dict], *, limit: int = 12,
+                        embedder: Embedder | None = None) -> list[dict]:
+    """Return a bounded list of relevant tool schemas (empty for unrelated chat)."""
+    return rank_tool_schemas(query, schemas, limit=limit, embedder=embedder).schemas
+
+
+def describe_tools(schemas: Iterable[dict]) -> list[dict]:
+    """Compact name/description rows for discovery results (no full JSON schema)."""
+    rows = []
+    for schema in schemas:
         function = schema.get("function", {}) if isinstance(schema, dict) else {}
-        name = function.get("name", "") if isinstance(function, dict) else ""
-        description = function.get("description", "") if isinstance(function, dict) else ""
-        parameters = function.get("parameters", {}) if isinstance(function, dict) else {}
-        name_tokens = _tokens(str(name).replace("_", " "))
-        description_tokens = _tokens(str(description))
-        parameter_tokens = _tokens(json.dumps(parameters, ensure_ascii=False, sort_keys=True))
-        score = (
-            6 * len(query_tokens & name_tokens)
-            + 3 * len(query_tokens & description_tokens)
-            + len(query_tokens & parameter_tokens)
-        )
-        if score:
-            ranked.append((score, -position, schema))
-
-    ranked.sort(key=lambda item: (item[0], item[1]), reverse=True)
-    return [schema for _score, _position, schema in ranked[:limit]]
+        if isinstance(function, dict):
+            rows.append({"name": function.get("name"),
+                         "description": str(function.get("description", ""))[:240],
+                         "parameters": sorted((function.get("parameters") or {}).get("properties", {}))})
+    return json.loads(json.dumps(rows, ensure_ascii=False))

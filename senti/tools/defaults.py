@@ -45,9 +45,13 @@ def build_default_registry(store=None, runtime_settings=None) -> CapabilityRegis
         name="senti_get_system_summary", description="Read a basic Windows and hardware summary.",
         parameters=_object(), risk="read_only", handler=lambda _args: inventory.system_summary(), available=windows))
     registry.register(ToolDefinition(
-        name="senti_list_processes", description="List a bounded set of live processes and basic resource metadata.",
-        parameters=_object({"limit": {"type": "integer", "minimum": 1, "maximum": 500}}),
-        risk="read_only", handler=lambda args: inventory.list_processes(args.get("limit", 100)), available=windows))
+        name="senti_list_processes",
+        description="Show what is using the PC's memory (RAM) or CPU right now: top processes, per-application totals and overall system memory.",
+        parameters=_object({"limit": {"type": "integer", "minimum": 1, "maximum": 100},
+                            "sort_by": {"type": "string", "enum": ["memory", "cpu", "name"]}}),
+        risk="read_only",
+        handler=lambda args: inventory.list_processes(args.get("limit", 15), args.get("sort_by", "memory")),
+        available=windows))
     registry.register(ToolDefinition(
         name="senti_get_process_details", description="Inspect one exact PID's owner, parent, threads, memory and CPU times.",
         parameters=_object({"pid": {"type": "integer", "minimum": 1}}, ["pid"]),
@@ -158,25 +162,52 @@ def build_default_registry(store=None, runtime_settings=None) -> CapabilityRegis
         name="senti_close_window", description="Request a graceful close for a user-owned window; never force-terminates the process.",
         parameters=_object(_window_properties(), ["hwnd"]), risk="controlled",
         handler=lambda args: window_ops.close(args["hwnd"]), available=window_ops.provider_available))
+    # Windows settings surfaces: one static catalogue (+ read-only discovery) behind all tools.
+    settings_categories = settings_provider.settings_categories()
+    target_param = {"target": {"type": "string", "minLength": 1, "maxLength": 160}}
+
+    def _surface_tool(name: str, description: str, scope: str, risk: str, handler) -> None:
+        registry.register(ToolDefinition(
+            name=name, description=description, parameters=_object(target_param, ["target"]), risk=risk,
+            handler=lambda args: handler(args["target"]),
+            simulate=lambda args: settings_provider.simulate_open(args["target"], scope),
+            available=settings_provider.provider_available,
+            compensation="Close the opened window; opening a settings surface changes nothing."))
+
     registry.register(ToolDefinition(
-        name="senti_open_settings",
-        description="Open one documented Windows Settings page by exact catalogue ID, page name or alias. Search the Settings catalogue first if the requested page is not obvious. Only Microsoft-documented allowlisted ms-settings URIs are launched; arbitrary URI strings and query parameters are rejected.",
-        parameters=_object({"target": {"type": "string", "minLength": 1, "maxLength": 160}}, ["target"]),
-        risk="low",
-        handler=lambda args: settings_provider.open_settings(args["target"]),
-        available=settings_provider.provider_available,
-    ))
-    registry.register(ToolDefinition(
-        name="senti_search_settings_pages",
-        description="Search the complete SENTI catalogue of documented Windows ms-settings pages by natural-language query, URI keyword or category. Returns page IDs, labels, canonical URIs, lifecycle and hardware/version caveats.",
+        name="senti_search_windows_surfaces",
+        description="Search every Windows settings surface SENTI knows: all ms-settings pages (including hidden and legacy), Control Panel items, .cpl applets, .msc management consoles, built-in utilities, shell: folders and shell namespaces such as God Mode, plus items discovered on this PC. Returns ranked candidates with id, kind, score, risk, present and the tool to open each. Empty query lists the catalogue with offset pagination.",
         parameters=_object({
             "query": {"type": "string", "maxLength": 160},
-            "category": {"type": "string", "enum": [
-                "Accounts", "Apps", "Control Center", "Devices", "Accessibility",
-                "Extras", "Family", "Gaming", "Network and internet", "Personalization",
-                "Phone", "Privacy", "Search", "Sound", "System", "Time and language",
-                "Update and security",
-            ]},
+            "kind": {"type": "string", "enum": list(settings_provider.KINDS)},
+            "category": {"type": "string", "maxLength": 60},
+            "include_deprecated": {"type": "boolean"},
+            "include_discovered": {"type": "boolean"},
+            "limit": {"type": "integer", "minimum": 1, "maximum": 30},
+            "offset": {"type": "integer", "minimum": 0, "maximum": 2000},
+        }),
+        risk="read_only",
+        handler=lambda args: settings_provider.search_windows_surfaces(
+            args.get("query", ""), kind=args.get("kind"), category=args.get("category"),
+            include_deprecated=args.get("include_deprecated", False),
+            include_discovered=args.get("include_discovered", True),
+            limit=args.get("limit", 15), offset=args.get("offset", 0)),
+        available=settings_provider.provider_available,
+    ))
+    _surface_tool(
+        "senti_open_windows_surface",
+        "Open one low-risk Windows settings surface (Settings page, Control Panel item or applet, utility, folder or shell namespace) by the exact id returned from senti_search_windows_surfaces. Only catalogued or verified discovered targets are launched; consoles marked controlled must use senti_open_management_console.",
+        "surface", "low", settings_provider.open_windows_surface)
+    _surface_tool(
+        "senti_open_settings",
+        "Open one Windows Settings page by exact catalogue ID, page name, alias or catalogued ms-settings URI. Search the Settings catalogue first if the requested page is not obvious. Only allowlisted ms-settings URIs are launched; arbitrary URI strings and query parameters are rejected.",
+        "settings", "low", settings_provider.open_settings)
+    registry.register(ToolDefinition(
+        name="senti_search_settings_pages",
+        description="Search the SENTI catalogue of Windows ms-settings pages by natural-language query, URI keyword or category. Returns page IDs, labels, canonical URIs, lifecycle, scores and hardware/version caveats. Use senti_search_windows_surfaces for Control Panel, consoles and folders.",
+        parameters=_object({
+            "query": {"type": "string", "maxLength": 160},
+            "category": {"type": "string", "enum": settings_categories},
             "include_deprecated": {"type": "boolean"},
             "limit": {"type": "integer", "minimum": 1, "maximum": 30},
         }),
@@ -191,14 +222,9 @@ def build_default_registry(store=None, runtime_settings=None) -> CapabilityRegis
     ))
     registry.register(ToolDefinition(
         name="senti_list_settings_pages",
-        description="List documented Windows Settings pages by category with offset pagination. Includes conditional, deprecated and removed entries when requested, along with lifecycle and compatibility caveats.",
+        description="List all Windows Settings pages (ms-settings URLs) by category with offset pagination. Includes conditional, deprecated and removed entries when requested, along with lifecycle and compatibility caveats.",
         parameters=_object({
-            "category": {"type": "string", "enum": [
-                "Accounts", "Apps", "Control Center", "Devices", "Accessibility",
-                "Extras", "Family", "Gaming", "Network and internet", "Personalization",
-                "Phone", "Privacy", "Search", "Sound", "System", "Time and language",
-                "Update and security",
-            ]},
+            "category": {"type": "string", "enum": settings_categories},
             "include_deprecated": {"type": "boolean"},
             "limit": {"type": "integer", "minimum": 1, "maximum": 50},
             "offset": {"type": "integer", "minimum": 0, "maximum": 500},
@@ -212,18 +238,14 @@ def build_default_registry(store=None, runtime_settings=None) -> CapabilityRegis
         ),
         available=settings_provider.provider_available,
     ))
-    registry.register(ToolDefinition(
-        name="senti_open_management_console", description="Open one reviewed Windows management entry point such as an MMC console, Control Panel applet or built-in management utility.",
-        parameters=_object({"target": {"type": "string", "enum": sorted(settings_provider.CONSOLE_TARGETS)}}, ["target"]),
-        risk="low", handler=lambda args: settings_provider.open_console(args["target"]), available=windows))
-    registry.register(ToolDefinition(
-        name="senti_open_control_panel",
-        description="Open one fixed allowlisted legacy Control Panel applet such as Network and Sharing Center, Devices and Printers, Credential Manager, Power Options, Programs and Features, Mouse, Keyboard or System properties. No arbitrary control.exe arguments are accepted.",
-        parameters=_object({"target": {"type": "string", "enum": sorted(settings_provider.CONTROL_PANEL_TARGETS)}}, ["target"]),
-        risk="low",
-        handler=lambda args: settings_provider.open_control_panel(args["target"]),
-        available=settings_provider.provider_available,
-    ))
+    _surface_tool(
+        "senti_open_management_console",
+        "Open one catalogued Windows management entry point such as an MMC console (Device Manager, Services, Disk Management, Group Policy), a built-in management utility (Registry Editor, System Configuration) or a Control Panel applet, by exact id from senti_search_windows_surfaces. Includes controlled-tier consoles that can change system state; SENTI only opens them.",
+        "console", "controlled", settings_provider.open_console)
+    _surface_tool(
+        "senti_open_control_panel",
+        "Open one catalogued legacy Control Panel item or applet such as Network and Sharing Center, Devices and Printers, Credential Manager, Power Options, Programs and Features, Mouse, Keyboard or System properties, by exact id or name. No arbitrary control.exe arguments are accepted.",
+        "control_panel", "low", settings_provider.open_control_panel)
     registry.register(ToolDefinition(
         name="senti_list_directory", description="List direct metadata for a directory inside an approved user file root.",
         parameters=_object({"path": {"type": "string", "minLength": 3, "maxLength": 500},
@@ -288,10 +310,7 @@ def build_default_registry(store=None, runtime_settings=None) -> CapabilityRegis
                             "max_files": {"type": "integer", "minimum": 1, "maximum": 50000},
                             "max_seconds": {"type": "number", "minimum": 1, "maximum": 300}}, ["root"]),
         risk="controlled", handler=lambda args: _scan_volume(args), available=windows))
-    registry.register(ToolDefinition(
-        name="senti_launch_application", description="Launch an installed application only after unambiguous registry-based resolution and host approval.",
-        parameters=_object({"application": {"type": "string", "minLength": 1, "maxLength": 120}}, ["application"]),
-        risk="controlled", handler=lambda args: launch.launch_application(args["application"], store=store), available=windows))
+    # senti_launch_application is registered by senti.tools.app_tools.register_app_tools.
     registry.register(ToolDefinition(
         name="senti_get_master_volume", description="Read Windows master output volume and mute state.",
         parameters=_object(), risk="read_only", handler=lambda _args: audio.get_master_volume(), available=windows))

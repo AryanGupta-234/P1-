@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <meta name="color-scheme" content="dark">
+  <title>SENTI</title>
+  <link rel="stylesheet" href="/static/app.css">
+  <script src="/static/markdown.js" defer></script>
+  <script src="/static/app.js" defer></script>
+</head>
+<body data-state="idle">
+  <div class="backdrop" aria-hidden="true">
+    <div class="aurora a1"></div><div class="aurora a2"></div><div class="grid-lines"></div>
+  </div>
+
+  <header class="topbar glass">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true"></span>
+      <span class="brand-name">SENTI</span>
+      <span class="brand-sub">operating console</span>
+    </div>
+    <div class="status-strip" role="status" aria-live="polite">
+      <span class="dot" id="link-dot" title="Event stream"></span>
+      <span id="link-label">Connecting</span>
+      <span class="sep"></span>
+      <span id="state-chip" class="state-chip">Idle</span>
+      <span id="elapsed" class="elapsed" hidden></span>
+    </div>
+    <div class="top-actions">
+      <button type="button" id="new-conv" class="ghost-btn" title="Start a new conversation">New conversation</button>
+      <button type="button" id="estop" class="estop" role="switch" aria-checked="false"
+              title="Emergency stop: blocks every state-changing action">
+        <span class="estop-ring" aria-hidden="true"></span>
+        <span class="estop-text"><strong>Emergency stop</strong><small id="estop-sub">Disengaged</small></span>
+      </button>
+    </div>
+  </header>
+
+  <main class="layout">
+    <aside class="column left">
+      <section class="panel glass" aria-labelledby="sys-title">
+        <h2 id="sys-title" class="panel-title">System</h2>
+        <dl class="kv" id="manifest">
+          <div><dt>Model</dt><dd id="m-model">—</dd></div>
+          <div><dt>Ollama</dt><dd id="m-ollama">—</dd></div>
+          <div><dt>Tools</dt><dd id="m-tools">—</dd></div>
+          <div><dt>Mutations</dt><dd id="m-mutations">—</dd></div>
+          <div><dt>Database</dt><dd id="m-db">—</dd></div>
+          <div><dt>Conversation</dt><dd id="m-conv" class="mono">—</dd></div>
+        </dl>
+        <button type="button" id="refresh-manifest" class="ghost-btn small">Refresh</button>
+      </section>
+
+      <section class="panel glass grow" aria-labelledby="mem-title">
+        <div class="panel-head">
+          <h2 id="mem-title" class="panel-title">Memory</h2>
+          <select id="mem-ns" aria-label="Memory namespace">
+            <option value="">All</option>
+            <option value="preferences">Preferences</option>
+            <option value="personal">Personal</option>
+            <option value="project">Project</option>
+            <option value="technical">Technical</option>
+            <option value="procedures">Procedures</option>
+          </select>
+        </div>
+        <ul class="mem-list scroll" id="mem-list"></ul>
+        <p class="empty" id="mem-empty">No memories stored.</p>
+      </section>
+    </aside>
+
+    <section class="column center">
+      <div class="core-wrap" aria-hidden="true">
+        <div class="core" id="core">
+          <div class="core-halo"></div>
+          <div class="core-ring r1"></div>
+          <div class="core-ring r2"></div>
+          <div class="core-ring r3"></div>
+          <div class="core-orbit"><span></span><span></span><span></span></div>
+          <div class="core-sphere"></div>
+          <div class="core-scan"></div>
+        </div>
+      </div>
+      <div class="core-caption"><span id="core-state">Idle</span><span id="core-detail" class="muted"></span></div>
+
+      <section class="panel glass conversation" aria-label="Conversation">
+        <div class="messages scroll" id="messages" aria-live="polite">
+          <div class="welcome" id="welcome">
+            <p class="welcome-title">Standing by.</p>
+            <p class="muted">Ask a question or give an instruction. Actions that change your system are simulated first and wait for your authorization.</p>
+          </div>
+        </div>
+        <form class="composer" id="composer" autocomplete="off">
+          <textarea id="input" rows="1" maxlength="12000" placeholder="Message SENTI…  (Enter to send, Shift+Enter for a new line)" aria-label="Message"></textarea>
+          <button type="submit" id="send" class="send-btn" aria-label="Send">
+            <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M4 12l15-7-6 15-2-6-7-2z" fill="currentColor"/></svg>
+          </button>
+        </form>
+      </section>
+    </section>
+
+    <aside class="column right">
+      <section class="panel glass" aria-labelledby="auth-title">
+        <div class="panel-head">
+          <h2 id="auth-title" class="panel-title">Authorization</h2>
+          <span class="count-badge" id="auth-count">0</span>
+        </div>
+        <div class="auth-list scroll" id="auth-list"></div>
+        <p class="empty" id="auth-empty">No actions awaiting authorization.</p>
+      </section>
+
+      <section class="panel glass grow" aria-labelledby="ops-title">
+        <div class="panel-head">
+          <h2 id="ops-title" class="panel-title">Operations</h2>
+          <button type="button" id="ops-clear" class="ghost-btn small">Clear</button>
+        </div>
+        <ol class="timeline scroll" id="timeline"></ol>
+        <p class="empty" id="ops-empty">No operations yet.</p>
+      </section>
+    </aside>
+  </main>
+
+  <div class="toast" id="toast" role="alert" hidden></div>
+</body>
+</html>

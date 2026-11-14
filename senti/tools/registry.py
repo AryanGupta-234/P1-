@@ -172,6 +172,12 @@ class CapabilityRegistry:
                 if key in properties:
                     CapabilityRegistry._validate_value(item, properties[key], f"{path}.{key}")
 
+    def replace(self, tool: ToolDefinition) -> None:
+        """Swap in an updated definition for an already-registered capability (e.g. add a preview)."""
+        if tool.name not in self._tools:
+            raise ValueError(f"unknown SENTI tool: {tool.name}")
+        self._tools[tool.name] = tool
+
     def tool(self, name: str) -> ToolDefinition | None:
         return self._tools.get(name)
 
