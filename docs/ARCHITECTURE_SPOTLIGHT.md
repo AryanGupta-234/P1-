@@ -240,30 +240,30 @@ Language freedom is not execution authority. Existing AIE capability manifests, 
 **First rebuild commit:** `f6e1c2b07bec7169d31f3b83526b14301dc93ead` on `dev`. The exact prior PRIXON prototype head is retained on `archive/dev-before-prixon-rebuild-20261102`. Kaggle execution, Windows CI tests and target-machine validation remain pending.
 
 
-## APEX standalone Windows assistant — planning branch
+## SENTI standalone Windows assistant — planning branch
 
 **Status:** Architecture and implementation plan documented; application implementation has not started.  
-**Branch:** `feature/apex-standalone-assistant-plan` (created from `dev`).
+**Branch:** `feature/senti-standalone-assistant-plan` (created from `dev`).
 
-APEX is planned as a separate Windows desktop assistant with its own host lifecycle, conversational identity, user profile, unified memory adapter, capability registry and future desktop shell. It is **not** being added to the SENTINEL dashboard.
+SENTI is planned as a separate Windows desktop assistant with its own host lifecycle, conversational identity, user profile, unified memory adapter, capability registry and future desktop shell. It is **not** being added to the SENTINEL dashboard.
 
-APEX will reuse existing AIE model contracts/router, memory, planning/orchestration, policy and audit foundations wherever compatible. AIE Windows observation and SENTINEL diagnostics will be consumed through provider contracts; APEX must not duplicate collectors or write directly into SENTINEL's private database. The current Ollama model tag `APEX` is the initial local model target, not the entire assistant runtime.
+SENTI will reuse existing AIE model contracts/router, memory, planning/orchestration, policy and audit foundations wherever compatible. AIE Windows observation and SENTINEL diagnostics will be consumed through provider contracts; SENTI must not duplicate collectors or write directly into SENTINEL's private database. The current Ollama model tag `SENTI` is the initial local model target, not the entire assistant runtime.
 
 Planning documents:
-- [APEX standalone implementation plan](APEX_STANDALONE_IMPLEMENTATION_PLAN.md)
-- [APEX follow-up TODO backlog](APEX_FOLLOW_UP_TODOS.md)
-- [ADR-0015: standalone APEX boundary](adr/0015-apex-standalone-assistant-boundary.md)
+- [SENTI standalone implementation plan](SENTI_STANDALONE_IMPLEMENTATION_PLAN.md)
+- [SENTI follow-up TODO backlog](SENTI_FOLLOW_UP_TODOS.md)
+- [ADR-0015: standalone SENTI boundary](adr/0015-senti-standalone-assistant-boundary.md)
 
-The first coding milestone is a headless APEX host and runtime manifest. Desktop UI work is deliberately deferred until the host contracts stabilize. No APEX implementation code or SENTINEL UI changes are included in this planning milestone.
+The first coding milestone is a headless SENTI host and runtime manifest. Desktop UI work is deliberately deferred until the host contracts stabilize. No SENTI implementation code or SENTINEL UI changes are included in this planning milestone.
 
-## APEX Phase 1 commitment — whole-Windows automation first
+## SENTI Phase 1 commitment — whole-Windows automation first
 
-**Status:** Planned only; no APEX implementation code is present in this planning branch.
+**Status:** Planned only; no SENTI implementation code is present in this planning branch.
 
-APEX is a separate Windows assistant, not a SENTINEL dashboard feature. Its first coding phase must include the Windows automation engine rather than postponing action execution to a later milestone.
+SENTI is a separate Windows assistant, not a SENTINEL dashboard feature. Its first coding phase must include the Windows automation engine rather than postponing action execution to a later milestone.
 
 Phase 1 includes:
-- The standalone local APEX host, existing Ollama model integration, truthful runtime/capability manifest and structured multi-turn tool dispatch.
+- The standalone local SENTI host, existing Ollama model integration, truthful runtime/capability manifest and structured multi-turn tool dispatch.
 - A typed Windows capability catalogue spanning applications/windows, files/folders, supported settings, process lifecycle, services/startup/scheduled tasks, networking, devices/peripherals, audio/display/power and selected maintenance/security workflows.
 - Native Windows/API adapters first, fixed-parameter PowerShell/CIM recipes where needed, and opt-in bounded UI Automation for explicitly allowlisted applications.
 - AIE policy/approval/execution/audit reuse, risk tiers, exact target revalidation, least privilege, before/after evidence, independent postcondition verification and rollback/compensation where feasible.
@@ -271,13 +271,13 @@ Phase 1 includes:
 
 “Whole-Windows automation” means broad, explicit coverage through registered and testable capabilities. It does not mean arbitrary shell strings, unrestricted Administrator access, hidden changes or blanket automation of every third-party application's UI. Unsupported or unavailable actions must be reported as such.
 
-Phase 2 expands live Windows perception and telemetry coverage. It does not introduce the automation engine: Phase 1 already establishes that engine and its initial action coverage. Later phases add memory, advanced diagnostics, bounded background autonomy and the independent APEX desktop UI.
+Phase 2 expands live Windows perception and telemetry coverage. It does not introduce the automation engine: Phase 1 already establishes that engine and its initial action coverage. Later phases add memory, advanced diagnostics, bounded background autonomy and the independent SENTI desktop UI.
 
-Planning source: [APEX standalone implementation plan](APEX_STANDALONE_IMPLEMENTATION_PLAN.md) and [APEX follow-up TODOs](APEX_FOLLOW_UP_TODOS.md).
+Planning source: [SENTI standalone implementation plan](SENTI_STANDALONE_IMPLEMENTATION_PLAN.md) and [SENTI follow-up TODOs](SENTI_FOLLOW_UP_TODOS.md).
 
 ### Dynamic application discovery and launch resolution
 
-APEX Phase 1 includes a dynamic, rebuildable Installed Application Catalogue. It must resolve friendly app names without hardcoded executable paths by merging:
+SENTI Phase 1 includes a dynamic, rebuildable Installed Application Catalogue. It must resolve friendly app names without hardcoded executable paths by merging:
 - HKCU/HKLM App Paths registrations in both registry views.
 - Uninstall registry metadata as discovery hints, not direct executable truth.
 - User/all-users Start Menu Shell Link targets.
@@ -285,7 +285,7 @@ APEX Phase 1 includes a dynamic, rebuildable Installed Application Catalogue. It
 - Executable paths observed from live process inventory.
 - An explicit full fixed-local-volume scan for `.exe` and supported shortcut metadata to find custom install locations.
 
-The full scan examines application metadata only, not file contents. It skips reparse points and protected OS servicing/cache stores, discovers packaged apps through package metadata, reports ACL/volume gaps, and runs cancellably at low priority. Windows Search is an optional metadata accelerator only; APEX does not turn on Enhanced indexing or index document/email content. Registry/package/root notifications and scheduled reconciliation maintain the cache without continuous full-volume scans.
+The full scan examines application metadata only, not file contents. It skips reparse points and protected OS servicing/cache stores, discovers packaged apps through package metadata, reports ACL/volume gaps, and runs cancellably at low priority. Windows Search is an optional metadata accelerator only; SENTI does not turn on Enhanced indexing or index document/email content. Registry/package/root notifications and scheduled reconciliation maintain the cache without continuous full-volume scans.
 
 The resolver ranks candidates using provenance, path existence, publisher/signature and user trust. It rejects temporary/download/cache executables by default, asks when stable/beta/portable copies are ambiguous, launches only validated canonical paths or AUMIDs, and verifies the resulting process/window. The catalogue is a replaceable app-metadata cache, not user memory.
 
@@ -312,15 +312,15 @@ Official implementation references:
 
 ### Model-assisted app metadata enrichment
 
-Windows discovery is deterministic and model enrichment is advisory. Registry, Start Menu, package/AUMID, process and file metadata produce the executable path and package identity. The installed local APEX model may receive minimized extracted metadata to suggest normalized app/product names, aliases, vendor/product family, category and a short description. Strict schema validation, candidate IDs, confidence and provenance are required. The model cannot create or alter executable paths, AUMIDs, publisher/signature evidence, trust state, launch arguments or permission decisions. Batch/deduplicate enrichment at low priority; do not invoke the LLM per executable. Store model tag, prompt/schema version and review state with the app record.
+Windows discovery is deterministic and model enrichment is advisory. Registry, Start Menu, package/AUMID, process and file metadata produce the executable path and package identity. The installed local SENTI model may receive minimized extracted metadata to suggest normalized app/product names, aliases, vendor/product family, category and a short description. Strict schema validation, candidate IDs, confidence and provenance are required. The model cannot create or alter executable paths, AUMIDs, publisher/signature evidence, trust state, launch arguments or permission decisions. Batch/deduplicate enrichment at low priority; do not invoke the LLM per executable. Store model tag, prompt/schema version and review state with the app record.
 
-### One canonical APEX Unified Data Store
+### One canonical SENTI Unified Data Store
 
-APEX durable memory and knowledge use one physical SQLite database file, targeted at the existing per-user AIE data directory as apex-unified.sqlite3. It contains logically separated tables for profile, conversation history, all five memory kinds, embeddings/lineage, application discovery and model enrichment, task/session context, normalized observations/state references and diagnostic knowledge. The application catalogue is a separate table domain in this same file; it is not injected into personal-memory retrieval by default.
+SENTI durable memory and knowledge use one physical SQLite database file, targeted at the existing per-user AIE data directory as senti.sqlite3. It contains logically separated tables for profile, conversation history, all five memory kinds, embeddings/lineage, application discovery and model enrichment, task/session context, normalized observations/state references and diagnostic knowledge. The application catalogue is a separate table domain in this same file; it is not injected into personal-memory retrieval by default.
 
 The current separate AIE events.sqlite3, memory.sqlite3, task-runs.sqlite3 and task-sessions.sqlite3 sources are migrated with an idempotent, loss-checked migration, source backups and post-migration verification. One UnifiedDataStore factory/repository layer owns connections for every domain. Profile, memories, app records and task context are live-readable from the latest committed transaction.
 
 Use stable typed columns plus versioned JSON payloads/extension fields and a schema registry for adaptable fields. Each record has a schema version; migrations are transactional and backward-compatible where possible. SQLite WAL, foreign keys, busy timeout, a serialized/batched writer queue, bounded transactions, optimistic versions and a monotonic change journal support real-time access without allowing the scanner to monopolize writes. Dynamic fields are validated, not arbitrary schema mutation.
 
-Separate append-only policy and remote-egress audit databases remain isolated when their integrity model requires it; the emergency execution kill-switch remains independent of database health. SENTINEL's private database is never merged or written by APEX.
+Separate append-only policy and remote-egress audit databases remain isolated when their integrity model requires it; the emergency execution kill-switch remains independent of database health. SENTINEL's private database is never merged or written by SENTI.
 

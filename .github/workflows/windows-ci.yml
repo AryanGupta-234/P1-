@@ -28,8 +28,8 @@ jobs:
           cache: pip
       - name: Install AIE package and test dependencies
         run: python -m pip install -e ".[dev,windows]"
-      - name: Install independent APEX package and test dependencies
-        run: python -m pip install -e "./apex[dev,windows]"
+      - name: Install independent SENTI package and test dependencies
+        run: python -m pip install -e "./senti[dev,windows]"
       - name: Audit installed Python dependencies
         run: |
           python -m pip install --upgrade "setuptools>=83.0.0,<100"
@@ -43,8 +43,8 @@ jobs:
         run: dotnet build desktop/P1Dashboard/P1Dashboard.csproj --configuration Release
       - name: Lint
         run: python -m ruff check . --config pyproject.toml
-      - name: Validate independent APEX imports
-        run: python -c "from apex import ApexService; from apex.ollama import OllamaClient; from apex.tools.defaults import build_default_registry"
+      - name: Validate independent SENTI imports
+        run: python -c "from senti import SentiService; from senti.ollama import OllamaClient; from senti.tools.defaults import build_default_registry"
       - name: Validate Windows-only optional imports
         run: python -c "import pywinauto; from winrt.windows.devices.radios import Radio, RadioKind, RadioState; import win32evtlog; from aie.providers.process_resources import WindowsProcessResourceProvider; from aie.browser.native_host import event_from_browser_payload; from aie.providers.uia import WindowsUIATreeProvider; from aie.providers.eventlog import WindowsEventLogProvider; from aie.providers.etw_process import WindowsETWProcessProvider"
       - name: Validate PowerShell helper syntax
@@ -67,14 +67,14 @@ jobs:
           node --check browser_extension/content.js
           node --check browser_extension/service_worker.js
           node --check browser_extension/popup.js
-      - name: Run APEX-focused tests
-        run: python -m pytest tests -k apex
+      - name: Run SENTI-focused tests
+        run: python -m pytest tests -k senti
       - name: Build and validate independent Python distributions
         run: |
           python -m pip install --disable-pip-version-check build twine
           python -m build --sdist --wheel
-          python -m build --sdist --wheel --outdir dist/apex ./apex
-          python -m twine check dist/*.whl dist/*.tar.gz dist/apex/*.whl dist/apex/*.tar.gz
+          python -m build --sdist --wheel --outdir dist/senti ./senti
+          python -m twine check dist/*.whl dist/*.tar.gz dist/senti/*.whl dist/senti/*.tar.gz
       - name: Upload Python distributions
         uses: actions/upload-artifact@v4
         with:
@@ -82,8 +82,8 @@ jobs:
           path: |
             dist/*.whl
             dist/*.tar.gz
-            dist/apex/*.whl
-            dist/apex/*.tar.gz
+            dist/senti/*.whl
+            dist/senti/*.tar.gz
           if-no-files-found: error
           retention-days: 7
       - name: Run full repository tests
